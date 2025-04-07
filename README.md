@@ -1,6 +1,6 @@
-# Calicolabs Open-CPR Python Library
+# Napistu Python Library
 
-This Python package hosts the majority of the algorithmic code for the Open-CPR project.
+This Python package hosts the majority of the algorithmic code for the [Napistu project](https://github.com/napistu/napistu).
 
 ## Setup
 
