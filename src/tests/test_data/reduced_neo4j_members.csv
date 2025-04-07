@@ -1,0 +1,69 @@
+,set_name,set_id,member_name,member_id,identifier,ontology
+659,glucokinase and hexokinases [cytosol],R-HSA-450097,HK3 [cytosol],R-HSA-70412,P52790,UniProt
+660,glucokinase and hexokinases [cytosol],R-HSA-450097,HK2 [cytosol],R-HSA-70378,P52789,UniProt
+661,glucokinase and hexokinases [cytosol],R-HSA-450097,HK1 [cytosol],R-HSA-70395,P19367,UniProt
+662,glucokinase and hexokinases [cytosol],R-HSA-450097,GCK [cytosol],R-HSA-450094,P35557,UniProt
+1626,POM121 [nuclear envelope],R-HSA-6805169,POM121C [nuclear envelope],R-HSA-6805165,A8CG34,UniProt
+1627,POM121 [nuclear envelope],R-HSA-6805169,POM121 [nuclear envelope],R-HSA-157747,Q96HA1,UniProt
+1727,"PRKACA,(PRKACB,PRKACG,PRKX) [nucleoplasm]",R-HSA-9615387,PRKACA [nucleoplasm],R-HSA-111936,P17612,UniProt
+1728,PKA catalytic subunit [cytosol],R-HSA-111920,PRKACG [cytosol],R-HSA-57848,P22612,UniProt
+1729,PKA catalytic subunit [cytosol],R-HSA-111920,PRKACB [cytosol],R-HSA-57846,P22694,UniProt
+1730,PKA catalytic subunit [cytosol],R-HSA-111920,PRKACA [cytosol],R-HSA-57844,P17612,UniProt
+1731,"Protein Kinase A, catalytic subunits [nucleoplasm]",R-HSA-111917,PRKACG [nucleoplasm],R-HSA-111938,P22612,UniProt
+1732,"Protein Kinase A, catalytic subunits [nucleoplasm]",R-HSA-111917,PRKACA [nucleoplasm],R-HSA-111936,P17612,UniProt
+1733,"Protein Kinase A, catalytic subunits [nucleoplasm]",R-HSA-111917,PRKACB [nucleoplasm],R-HSA-111937,P22694,UniProt
+3844,"SLC25A12,13 [mitochondrial inner membrane]",R-HSA-372469,SLC25A12 [mitochondrial inner membrane],R-HSA-372470,O75746,UniProt
+3845,"SLC25A12,13 [mitochondrial inner membrane]",R-HSA-372469,SLC25A13 [mitochondrial inner membrane],R-HSA-372485,Q9UJS0,UniProt
+4726,"SLC37A1,2 [endoplasmic reticulum membrane]",R-HSA-3257118,SLC37A1 [endoplasmic reticulum membrane],R-HSA-3257123,P57057,UniProt
+5787,Ficolin-rich granule lumen proteins [ficolin-1-rich granule lumen],R-HSA-6800431,PFKL [ficolin-1-rich granule lumen],R-HSA-6801030,P17858,UniProt
+5822,Ficolin-rich granule lumen proteins [ficolin-1-rich granule lumen],R-HSA-6800431,ALDOC [ficolin-1-rich granule lumen],R-HSA-6801464,P09972,UniProt
+5850,Ficolin-rich granule lumen proteins [ficolin-1-rich granule lumen],R-HSA-6800431,GPI [ficolin-1-rich granule lumen],R-HSA-6801506,P06744,UniProt
+5853,Ficolin-rich granule lumen proteins [ficolin-1-rich granule lumen],R-HSA-6800431,PGAM1 [ficolin-1-rich granule lumen],R-HSA-6803309,P18669,UniProt
+5858,Ficolin-rich granule lumen proteins [ficolin-1-rich granule lumen],R-HSA-6800431,HK3 [ficolin-1-rich granule lumen],R-HSA-6801527,P52790,UniProt
+5861,Ficolin-rich granule lumen proteins [ficolin-1-rich granule lumen],R-HSA-6800431,ALDOA [ficolin-1-rich granule lumen],R-HSA-6801521,P04075,UniProt
+5897,Ficolin-rich granule lumen proteins [extracellular region],R-HSA-6806481,ALDOC [extracellular region],R-HSA-6801553,P09972,UniProt
+5906,Ficolin-rich granule lumen proteins [extracellular region],R-HSA-6806481,HK3 [extracellular region],R-HSA-6806457,P52790,UniProt
+5953,Ficolin-rich granule lumen proteins [extracellular region],R-HSA-6806481,PGAM1 [extracellular region],R-HSA-6806482,P18669,UniProt
+5968,Ficolin-rich granule lumen proteins [extracellular region],R-HSA-6806481,GPI [extracellular region],R-HSA-6806478,P06744,UniProt
+5978,Ficolin-rich granule lumen proteins [extracellular region],R-HSA-6806481,ALDOA [extracellular region],R-HSA-349735,P04075,UniProt
+6011,Ficolin-rich granule lumen proteins [extracellular region],R-HSA-6806481,PFKL [extracellular region],R-HSA-6806471,P17858,UniProt
+6039,Tertiary granule lumen proteins [tertiary granule lumen],R-HSA-6800171,ALDOC [tertiary granule lumen],R-HSA-6801526,P09972,UniProt
+6048,Tertiary granule lumen proteins [tertiary granule lumen],R-HSA-6800171,ALDOA [tertiary granule lumen],R-HSA-6801485,P04075,UniProt
+6081,Tertiary granule lumen proteins [extracellular region],R-HSA-6806432,ALDOC [extracellular region],R-HSA-6801553,P09972,UniProt
+6095,Tertiary granule lumen proteins [extracellular region],R-HSA-6806432,ALDOA [extracellular region],R-HSA-349735,P04075,UniProt
+6734,Secretory granule lumen proteins [secretory granule lumen],R-HSA-6800970,PFKL [secretory granule lumen],R-HSA-6800876,P17858,UniProt
+6747,Secretory granule lumen proteins [secretory granule lumen],R-HSA-6800970,ALDOA [secretory granule lumen],R-HSA-6801469,P04075,UniProt
+6758,Secretory granule lumen proteins [secretory granule lumen],R-HSA-6800970,HK3 [secretory granule lumen],R-HSA-6801511,P52790,UniProt
+6792,Secretory granule lumen proteins [secretory granule lumen],R-HSA-6800970,ALDOC [secretory granule lumen],R-HSA-6801483,P09972,UniProt
+6795,Secretory granule lumen proteins [secretory granule lumen],R-HSA-6800970,GPI [secretory granule lumen],R-HSA-6801495,P06744,UniProt
+6802,Secretory granule lumen proteins [secretory granule lumen],R-HSA-6800970,PGAM1 [secretory granule lumen],R-HSA-6803293,P18669,UniProt
+6810,Secretory granule lumen proteins [extracellular region],R-HSA-6806526,ALDOC [extracellular region],R-HSA-6801553,P09972,UniProt
+6813,Secretory granule lumen proteins [extracellular region],R-HSA-6806526,HK3 [extracellular region],R-HSA-6806457,P52790,UniProt
+6849,Secretory granule lumen proteins [extracellular region],R-HSA-6806526,PGAM1 [extracellular region],R-HSA-6806482,P18669,UniProt
+6863,Secretory granule lumen proteins [extracellular region],R-HSA-6806526,ALDOA [extracellular region],R-HSA-349735,P04075,UniProt
+6900,Secretory granule lumen proteins [extracellular region],R-HSA-6806526,PFKL [extracellular region],R-HSA-6806471,P17858,UniProt
+6910,Secretory granule lumen proteins [extracellular region],R-HSA-6806526,GPI [extracellular region],R-HSA-6806478,P06744,UniProt
+7490,PKA catalytic subunit [ciliary base],R-HSA-5610569,PRKACA [ciliary base],R-HSA-5610402,P17612,UniProt
+7491,PKA catalytic subunit [ciliary base],R-HSA-5610569,PRKACB [ciliary base],R-HSA-5610404,P22694,UniProt
+7492,PKA catalytic subunit [ciliary base],R-HSA-5610569,PRKACG [ciliary base],R-HSA-5610405,P22612,UniProt
+8802,"Active PRKACA,CaMK IV [nucleoplasm]",R-HSA-9005587,PRKACA [nucleoplasm],R-HSA-111936,P17612,UniProt
+10837,G6PC mutants [endoplasmic reticulum membrane],R-HSA-3274535,G6PC R170Q [endoplasmic reticulum membrane],R-HSA-3274556,P35575,UniProt
+10838,G6PC mutants [endoplasmic reticulum membrane],R-HSA-3274535,G6PC H119L [endoplasmic reticulum membrane],R-HSA-3274553,P35575,UniProt
+10839,G6PC mutants [endoplasmic reticulum membrane],R-HSA-3274535,G6PC R83C [endoplasmic reticulum membrane],R-HSA-3274529,P35575,UniProt
+10844,G6PC3 mutants [endoplasmic reticulum membrane],R-HSA-3282874,G6PC3 R253H [endoplasmic reticulum membrane],R-HSA-3276572,Q9BUM1,UniProt
+10845,G6PC3 mutants [endoplasmic reticulum membrane],R-HSA-3282874,G6PC3 G260R [endoplasmic reticulum membrane],R-HSA-3276581,Q9BUM1,UniProt
+10846,SLC37A4 mutants [endoplasmic reticulum membrane],R-HSA-3229129,SLC37A4 G88D [endoplasmic reticulum membrane],R-HSA-3229135,O43826,UniProt
+10847,SLC37A4 mutants [endoplasmic reticulum membrane],R-HSA-3229129,SLC37A4 G20D [endoplasmic reticulum membrane],R-HSA-3229123,O43826,UniProt
+11424,HK1 mutants [cytosol],R-HSA-5621920,HK1 T680S [cytosol],R-HSA-5621880,P19367,UniProt
+11425,HK1 mutants [cytosol],R-HSA-5621920,HK1 577-672del [cytosol],R-HSA-5621873,P19367,UniProt
+11426,HK1 mutants [cytosol],R-HSA-5621920,HK1 L529S [cytosol],R-HSA-5621861,P19367,UniProt
+11601,GCK mutants [cytosol],R-HSA-5621837,GCK A378T [cytosol],R-HSA-5621850,P35557,UniProt
+11602,GCK mutants [cytosol],R-HSA-5621837,GCK G261R [cytosol],R-HSA-5621848,P35557,UniProt
+11603,GCK mutants [cytosol],R-HSA-5621837,GCK E339K [cytosol],R-HSA-5621913,P35557,UniProt
+11604,GCK mutants [cytosol],R-HSA-5621837,GCK E279* [cytosol],R-HSA-5621903,P35557,UniProt
+11605,GCK mutants [cytosol],R-HSA-5621837,GCK T228M [cytosol],R-HSA-5621852,P35557,UniProt
+11606,GCK mutants [cytosol],R-HSA-5621837,GCK G229R [cytosol],R-HSA-5621863,P35557,UniProt
+11653,TPR mutants [nucleoplasm],R-HSA-5661416,TPR M489P [nucleoplasm],R-HSA-5661477,P12270,UniProt
+11654,TPR mutants [nucleoplasm],R-HSA-5661416,TPR L458P [nucleoplasm],R-HSA-5661460,P12270,UniProt
+14261,Platelet alpha granule contents [platelet alpha granule lumen],R-HSA-481003,ALDOA [platelet alpha granule lumen],R-HSA-349738,P04075,UniProt
+14328,Platelet alpha granule contents [extracellular region],R-HSA-481033,ALDOA [extracellular region],R-HSA-349735,P04075,UniProt

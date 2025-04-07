@@ -1,0 +1,2534 @@
+<?xml version='1.0' encoding='utf-8' standalone='no'?>
+<sbml xmlns="http://www.sbml.org/sbml/level3/version1/core" level="3" version="1">
+  <annotation>
+    <p xmlns="http://www.w3.org/1999/xhtml">SBML generated from Reactome version 73 on 6/10/20 2:20 PM using JSBML version 1.3.1.</p>
+  </annotation>
+  <model id="pathway_71403" metaid="metaid_0" name="Citric acid cycle (TCA cycle)">
+    <notes>
+      <p xmlns="http://www.w3.org/1999/xhtml">In the citric acid or tricarboxylic acid (TCA) cycle, the acetyl group of acetyl CoA (derived primarily from oxidative decarboxylation of pyruvate, beta-oxidation of long-chain fatty acids, and catabolism of ketone bodies and several amino acids) can be completely oxidized to CO2 in reactions that also yield one high-energy phosphate bond (as GTP or ATP) and four reducing equivalents (three NADH + H+, and one FADH2). The NADH and FADH2 are then oxidized by the electron transport chain to yield nine more high-energy phosphate bonds (as ATP). All reactions of the citric acid cycle take place in the mitochondrion.Eight canonical reactions mediate the synthesis of citrate from acetyl-CoA and oxaloacetate and the metabolism of citrate to re-form oxaloacetate. Six additional reactions are included here. Three reversible reactions, the interconversions of citrate and isocitrate, of fumarate and malate, and of malate and oxaloacetate are annotated in both their canonical (forward) and reverse directions. The synthesis of succinate from succinyl-CoA can be coupled to the phosphorylation of either GDP (the canonical reaction) or ADP; both reactions are annotated. Two mitochondrial isocitrate dehydrogenase isozymes catalyze the oxidative decarboxylation of isocitrate to form alpha-ketoglutarate (2-oxoglutarate): IDH3 catalyzes the canonical reaction coupled to the reduction of NAD+, while IDH2 catalyzes the same reaction coupled to reduction of NADP+, a reaction whose normal physiological function is unclear. Both reactions are annotated. Finally, a reaction is annotated in which reducing equivalents are transferred from NADPH to NAD+ coupled to proton import across the inner mitochondrial membrane.The cyclical nature of the reactions responsible for the oxidation of acetate was first suggested by Hans Krebs, from biochemical studies of pigeon breast muscle (Krebs et al. 1938; Krebs and Eggleston 1940). Many of the molecular details of individual reactions were worked out by Ochoa and colleagues, largely through studies of enzymes purified from pig heart (Ochoa 1980). While the human homologues of these enzymes have all been identified, their biochemical characterization has in general been limited and many molecular details of the human reactions are inferred from those worked out in studies of the model systems.</p>
+    </notes>
+    <annotation>
+      <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+        <rdf:Description rdf:about="#metaid_0">
+          <dc:creator>
+            <rdf:Bag>
+              <rdf:li rdf:parseType="Resource">
+                <vCard:N rdf:parseType="Resource">
+                  <vCard:Family>Cook</vCard:Family>
+                  <vCard:Given>Justin</vCard:Given>
+                </vCard:N>
+                <vCard:ORG rdf:parseType="Resource">
+                  <vCard:Orgname>OICR</vCard:Orgname>
+                </vCard:ORG>
+              </rdf:li>
+              <rdf:li rdf:parseType="Resource">
+                <vCard:N rdf:parseType="Resource">
+                  <vCard:Family>D'Eustachio</vCard:Family>
+                  <vCard:Given>Peter</vCard:Given>
+                </vCard:N>
+                <vCard:ORG rdf:parseType="Resource">
+                  <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                </vCard:ORG>
+              </rdf:li>
+              <rdf:li rdf:parseType="Resource">
+                <vCard:N rdf:parseType="Resource">
+                  <vCard:Family>Birney</vCard:Family>
+                  <vCard:Given>Ewan</vCard:Given>
+                </vCard:N>
+                <vCard:ORG rdf:parseType="Resource">
+                  <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                </vCard:ORG>
+              </rdf:li>
+            </rdf:Bag>
+          </dc:creator>
+          <dcterms:modified rdf:parseType="Resource">
+            <dcterms:W3CDTF>2020-06-04T21:43:24Z</dcterms:W3CDTF>
+          </dcterms:modified>
+          <dcterms:modified rdf:parseType="Resource">
+            <dcterms:W3CDTF>2003-01-28T05:00:00Z</dcterms:W3CDTF>
+          </dcterms:modified>
+          <dcterms:modified rdf:parseType="Resource">
+            <dcterms:W3CDTF>2009-12-26T22:23:23Z</dcterms:W3CDTF>
+          </dcterms:modified>
+          <bqbiol:is>
+            <rdf:Bag>
+              <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-71403" />
+              <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0006099" />
+            </rdf:Bag>
+          </bqbiol:is>
+          <bqbiol:isDescribedBy>
+            <rdf:Bag>
+              <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/16747180" />
+              <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/16746585" />
+              <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/6773467" />
+            </rdf:Bag>
+          </bqbiol:isDescribedBy>
+        </rdf:Description>
+      </rdf:RDF>
+    </annotation>
+    <listOfCompartments>
+      <compartment constant="true" id="compartment_5460" metaid="metaid_2" name="mitochondrial matrix" sboTerm="SBO:0000290">
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_2">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0005759" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </compartment>
+      <compartment constant="true" id="compartment_70616" metaid="metaid_24" name="mitochondrial inner membrane" sboTerm="SBO:0000290">
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_24">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0005743" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </compartment>
+      <compartment constant="true" id="compartment_70101" metaid="metaid_36" name="cytosol" sboTerm="SBO:0000290">
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_36">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0005829" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </compartment>
+      <compartment constant="true" id="compartment_5462" metaid="metaid_56" name="mitochondrion" sboTerm="SBO:0000290">
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_56">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0005739" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </compartment>
+    </listOfCompartments>
+    <listOfSpecies>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_198511" metaid="metaid_1" name="MDH2 dimer [mitochondrial matrix]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (2xP40926). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_1">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-198511" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P40926" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-198511" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-198511" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-198511" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-198511" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-198511" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-198511" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-198511" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-198511" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-198511" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SPO-198511" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SCE-198511" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-PFA-198511" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113526" metaid="metaid_3" name="NAD+ [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_3">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:57540" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113526" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113544" metaid="metaid_4" name="MAL [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_4">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:30797" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113544" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113587" metaid="metaid_5" name="OAA [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_5">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:30744" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113587" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_29362" metaid="metaid_6" name="NADH [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_6">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:57945" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-29362" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113529" metaid="metaid_7" name="H+ [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_7">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:15378" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113529" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_9012264" metaid="metaid_8" name="ME2:Mg2+ tetramer [mitochondrial matrix]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (4xP23368, 4x18420). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_8">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-9012264" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P23368" />
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:18420" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-9012264" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-9012264" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-9012264" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-9012264" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SSC-9012264" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-9012264" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-9012264" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-9012264" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_29376" metaid="metaid_9" name="CO2 [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_9">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:16526" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-29376" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113557" metaid="metaid_10" name="PYR [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_10">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:15361" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113557" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113593" metaid="metaid_11" name="ATP [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_11">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:30616" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113593" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113588" metaid="metaid_12" name="FUMA [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_12">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:18012" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113588" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_451041" metaid="metaid_13" name="FH tetramer [mitochondrial matrix]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (4xP07954). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_13">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-451041" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P07954" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-451041" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-451041" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-451041" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-451041" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-451041" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-451041" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-451041" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-451041" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-451041" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-451041" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SPO-451041" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SCE-451041" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113521" metaid="metaid_14" name="H2O [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_14">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:15377" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113521" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_69996" metaid="metaid_15" name="lipo-aKGDH [mitochondrial matrix]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (24x58937, 24xQ02218, 24x17460, 24xP36957, 12xP09622, 12x16238). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_15">
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/2188967" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/9727038" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-69996" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:58937" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/Q02218" />
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:17460" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P36957" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P09622" />
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:16238" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-69996" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-69996" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SSC-69996" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-69996" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-69996" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-69996" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-69996" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-69996" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-69996" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SPO-69996" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SCE-69996" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-PFA-69996" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113594" metaid="metaid_16" name="2OG [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_16">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:16810" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113594" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_29374" metaid="metaid_17" name="CoA-SH [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_17">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:15346" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-29374" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_70958" metaid="metaid_18" name="SUCC-CoA [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_18">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:57292" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-70958" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_450982" metaid="metaid_19" name="IDH2 dimer [mitochondrial matrix]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (2x29035, 2xP48735). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_19">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-450982" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:29035" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P48735" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-450982" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-450982" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-450982" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-450982" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-450982" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-450982" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-450982" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-PFA-450982" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_29938" metaid="metaid_20" name="ISCIT [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_20">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:151" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-29938" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113563" metaid="metaid_21" name="NADP+ [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_21">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:18009" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113563" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113600" metaid="metaid_22" name="NADPH [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_22">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:16474" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113600" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_70616" constant="false" hasOnlySubstanceUnits="false" id="species_70990" metaid="metaid_23" name="SDH complex (ox.) [mitochondrial inner membrane]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (P31040, 16238, P21912, O14521, Q99643). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_23">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70990" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P31040" />
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:16238" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P21912" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/O14521" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/Q99643" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-70990" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-70990" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-70990" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-70990" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-70990" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-70990" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-70990" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-70990" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-70990" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SPO-70990" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SCE-70990" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113536" metaid="metaid_25" name="SUCCA [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_25">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:30031" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113536" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_156625" metaid="metaid_26" name="SUCLA2:SUCLG1 [mitochondrial matrix]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (Q9P2R7, P53597). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_26">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-156625" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/Q9P2R7" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P53597" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-156625" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-156625" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-156625" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-156625" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-156625" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-156625" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-156625" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-156625" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SPO-156625" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SCE-156625" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-PFA-156625" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113581" metaid="metaid_27" name="ADP [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_27">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:456216" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113581" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113548" metaid="metaid_28" name="Pi [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_28">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:18367" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113548" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_9012356" metaid="metaid_29" name="ME3:Mg2+ tetramer [mitochondrial matrix]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (4x18420, 4xQ16798). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_29">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-9012356" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:18420" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/Q16798" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-9012356" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-9012356" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-9012356" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-9012356" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SSC-9012356" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-9012356" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-9012356" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-9012356" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-9012356" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-9012356" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-9012356" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_70965" metaid="metaid_30" name="IDH3 complex [mitochondrial matrix]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (O43837, 2xP50213, P51553, 2x29035). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_30">
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/20435888" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70965" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/O43837" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P50213" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P51553" />
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:29035" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-70965" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-70965" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-70965" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-70965" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-70965" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-70965" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-70965" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SPO-70965" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SCE-70965" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_70968" metaid="metaid_31" name="ACO2 [mitochondrial matrix]" sboTerm="SBO:0000297">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome EntityWithAccessionedSequence. This is a protein</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_31">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/Q99798" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70968" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-70968" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-70968" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-70968" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-70968" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SSC-70968" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-70968" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-70968" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-70968" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-70968" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-70968" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-70968" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SPO-70968" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SCE-70968" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_29654" metaid="metaid_32" name="CIT [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_32">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:30769" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-29654" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_9012057" metaid="metaid_33" name="FAHD1:Mg2+ dimer [mitochondrial matrix]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (2xQ6P587, 2x18420). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_33">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-9012057" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/Q6P587" />
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:18420" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-9012057" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-9012057" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-9012057" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SSC-9012057" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-9012057" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-9012057" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-9012057" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-9012057" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-9012057" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-9012057" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SPO-9012057" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SCE-9012057" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_70616" constant="false" hasOnlySubstanceUnits="false" id="species_451008" metaid="metaid_34" name="NNT dimer [mitochondrial inner membrane]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (2xQ13423). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_34">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-451008" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/Q13423" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-451008" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-451008" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-451008" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-451008" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-451008" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-451008" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-451008" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-451008" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-451008" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-PFA-451008" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_70101" constant="false" hasOnlySubstanceUnits="false" id="species_70106" metaid="metaid_35" name="H+ [cytosol]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_35">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:15378" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-70106" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_70973" metaid="metaid_37" name="CS dimer [mitochondrial matrix]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (2xO75390). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_37">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70973" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/O75390" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-70973" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-70973" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-70973" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-70973" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SSC-70973" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-70973" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-70973" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-70973" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-70973" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-70973" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-70973" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SPO-70973" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SCE-70973" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-PFA-70973" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113559" metaid="metaid_38" name="Ac-CoA [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_38">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:15351" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113559" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_156627" metaid="metaid_39" name="SUCLG1:SUCLG2 [mitochondrial matrix]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (Q96I99, P53597). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_39">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-156627" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/Q96I99" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P53597" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-156627" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-156627" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-156627" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-156627" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-156627" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-156627" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-156627" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-156627" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-156627" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-PFA-156627" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113525" metaid="metaid_40" name="GDP [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_40">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:17552" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113525" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_5460" constant="false" hasOnlySubstanceUnits="false" id="species_113573" metaid="metaid_41" name="GTP [mitochondrial matrix]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_41">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:15996" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-113573" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+    </listOfSpecies>
+    <listOfReactions>
+      <reaction compartment="compartment_5460" fast="false" id="reaction_70979" metaid="metaid_42" name="(S)-Malate + NAD+ &lt;=&gt; Oxaloacetate + NADH + H+" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Mitochondrial malate dehydrogenase catalyzes the reversible reaction of malate and NAD+ to form oxaloacetate and NADH + H+ (Luo et al. 2006). This reaction is highly endergonic but is pulled in the direction annotated here when the TCA cycle is operating. Unpublished crystallographic data indicate that the protein is a dimer (PDB 3E04).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqmodel="http://biomodels.net/model-qualifiers/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_42">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Shorser</vCard:Family>
+                      <vCard:Given>Solomon</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-06-02T23:06:53Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-26T22:23:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70979" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/16740313" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70979" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0030060" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/1.1.1.37" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqmodel:hasInstance>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.rhea-db.org/reaction?id=21433" />
+                </rdf:Bag>
+              </bqmodel:hasInstance>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_70979_input_113544" sboTerm="SBO:0000010" species="species_113544" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_70979_input_113526" sboTerm="SBO:0000010" species="species_113526" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_70979_output_113529" sboTerm="SBO:0000011" species="species_113529" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_70979_output_29362" sboTerm="SBO:0000011" species="species_29362" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_70979_output_113587" sboTerm="SBO:0000011" species="species_113587" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_70979_catalyst_198511" sboTerm="SBO:0000013" species="species_198511" />
+        </listOfModifiers>
+      </reaction>
+      <reaction compartment="compartment_5460" fast="false" id="reaction_9012268" metaid="metaid_43" name="ME2:Mg2+ tetramer oxidatively decarboxylates MAL to PYR" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">One hallmark of cancer is altered cellular metabolism. Malic enzymes (MEs) are a family of homotetrameric enzymes that catalyse the reversible oxidative decarboxylation of L-malate to pyruvate, with a simultaneous reduction of NAD(P)+ to NAD(P)H. As MEs generate NADPH and NADH, they may play dual roles in energy production and reductive biosynthesis. Humans possess three ME isoforms; ME1 is cytosolic and utilises NADP+, ME3 is mitochondrial and can utilise NADP+ and ME2 is mitochondrial and can utililse either NAD+ or NADP+ (Chang and Tong 2003).Mitochondrial NAD-dependent malic enzyme (ME2, aka m-NAD(P)-ME) oxidatively decarboxylates (s)-malate (MAL) to pyruvate (PYR) and CO2 using NAD+ (or NADP+) as cofactor (Loeber et al. 1991, Tao et al. 2003). ME2 exists as a dimer of dimers and requires a divalent metal such as Mg2+ for catalysis (Chang and Tong 2003, Murugan and Hung 2012). Unlike the other MEs, ME2's enzymatic activity can be allosterically activated by fumarate (FUMA) and inhibited by ATP (Yang et al. 2002). ME2 could play a critical role in cutaneous melanoma progression, the most life-threatening neoplasm of the skin. Targeting ME2 could be a novel approach to inhibiting melanoma cell proliferation and growth (Chang et al. 2015). ME2 has also been demonstrated to be involved in glioblastoma multiforme (GBM) growth, invasion and migration. Inhibition of ME2 could potentially be therapeutic in the treatment of GBM (Cheng et al. 2016).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqmodel="http://biomodels.net/model-qualifiers/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_43">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Jassal</vCard:Family>
+                      <vCard:Given>Bijay</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Jassal</vCard:Family>
+                      <vCard:Given>Bijay</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Shorser</vCard:Family>
+                      <vCard:Given>Solomon</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:created rdf:parseType="Resource">
+                <dcterms:W3CDTF>2017-07-12T19:24:30Z</dcterms:W3CDTF>
+              </dcterms:created>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-06-02T23:06:53Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2017-07-12T19:24:30Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-9012268" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/1993674" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/12962632" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/14596586" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-9012268" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0004471" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/1.1.1.38" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqmodel:hasInstance>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.rhea-db.org/reaction?id=12654" />
+                </rdf:Bag>
+              </bqmodel:hasInstance>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_9012268_input_113544" sboTerm="SBO:0000010" species="species_113544" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_9012268_input_113526" sboTerm="SBO:0000010" species="species_113526" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_9012268_output_113529" sboTerm="SBO:0000011" species="species_113529" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_9012268_output_113557" sboTerm="SBO:0000011" species="species_113557" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_9012268_output_29362" sboTerm="SBO:0000011" species="species_29362" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_9012268_output_29376" sboTerm="SBO:0000011" species="species_29376" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_9012268_catalyst_9012264" sboTerm="SBO:0000013" species="species_9012264" />
+          <modifierSpeciesReference id="modifierspeciesreference_9012268_positiveregulator_113588" sboTerm="SBO:0000459" species="species_113588">
+            <notes>
+              <p xmlns="http://www.w3.org/1999/xhtml">This describes an Event/CatalystActivity that is positively regulated by the Regulator (e.g., allosteric activation)</p>
+            </notes>
+          </modifierSpeciesReference>
+          <modifierSpeciesReference id="modifierspeciesreference_9012268_negativeregulator_113593" sboTerm="SBO:0000020" species="species_113593">
+            <notes>
+              <p xmlns="http://www.w3.org/1999/xhtml">This describes an Event/CatalystActivity that is negatively regulated by the Regulator (e.g., allosteric inhibition, competitive inhibition</p>
+            </notes>
+          </modifierSpeciesReference>
+        </listOfModifiers>
+      </reaction>
+      <reaction compartment="compartment_5460" fast="false" id="reaction_71783" metaid="metaid_44" name="Oxaloacetate + NADH + H+ &lt;=&gt; (S)-Malate + NAD+" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Mitochondrial malate dehydrogenase catalyzes the reversible reaction of oxaloacetate and NADH + H+ to form malate and NAD+ (Luo et al. 2006). Unpublished crystallographic data indicate that the protein is a dimer (PDB 3E04).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqmodel="http://biomodels.net/model-qualifiers/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_44">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Shorser</vCard:Family>
+                      <vCard:Given>Solomon</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-06-02T23:06:53Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-26T22:23:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-71783" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/16740313" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-71783" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0030060" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/1.1.1.37" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqmodel:hasInstance>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.rhea-db.org/reaction?id=21434" />
+                </rdf:Bag>
+              </bqmodel:hasInstance>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_71783_input_113529" sboTerm="SBO:0000010" species="species_113529" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_71783_input_29362" sboTerm="SBO:0000010" species="species_29362" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_71783_input_113587" sboTerm="SBO:0000010" species="species_113587" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_71783_output_113544" sboTerm="SBO:0000011" species="species_113544" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_71783_output_113526" sboTerm="SBO:0000011" species="species_113526" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_71783_catalyst_198511" sboTerm="SBO:0000013" species="species_198511" />
+        </listOfModifiers>
+      </reaction>
+      <reaction compartment="compartment_5460" fast="false" id="reaction_70982" metaid="metaid_45" name="Fumarate + H2O &lt;=&gt; (S)-Malate" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Mitochondrial fumarate hydratase catalyzes the reversible reaction of fumarate and water to form malate, the seventh step of the TCA cycle (Bourgeron et al. 1994). Unpublished crystallographic data indicate that the protein is a tetramer (PDB 3E04).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqmodel="http://biomodels.net/model-qualifiers/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_45">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Shorser</vCard:Family>
+                      <vCard:Given>Solomon</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-06-02T23:06:53Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-26T22:23:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70982" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/8200987" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70982" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0004333" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/4.2.1.2" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqmodel:hasInstance>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.rhea-db.org/reaction?id=12462" />
+                </rdf:Bag>
+              </bqmodel:hasInstance>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_70982_input_113588" sboTerm="SBO:0000010" species="species_113588" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_70982_input_113521" sboTerm="SBO:0000010" species="species_113521" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_70982_output_113544" sboTerm="SBO:0000011" species="species_113544" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_70982_catalyst_451041" sboTerm="SBO:0000013" species="species_451041" />
+        </listOfModifiers>
+      </reaction>
+      <reaction compartment="compartment_5460" fast="false" id="reaction_71401" metaid="metaid_46" name="alpha-ketoglutarate + CoASH + NAD+ =&gt; succinyl-CoA + CO2 + NADH + H+" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">The mitochondrial alpha-ketoglutarate dehydrogenase complex catalyzes the reaction of alpha-ketoglutarate, CoASH, and NAD+ to form succinyl-CoA, CO2, and NADH. The enzyme complex contains multiple copies of three different proteins, E1 (OGDH), E2 (DLST), and E3 (DLD), each with distinct catalytic activities (Reed and Hackert 1990; Zhou et al 2001). The reaction starts with the oxidative decarboxylation of alpha ketoglutarate catalyzed by E1alpha and beta (alpha ketoglutarate dehydrogenase). Lipoamide cofactor associated with E1 is reduced at the same time. Next, the succinyl group derived from alpha ketoglutarate is transferred to coenzyme A in two steps catalyzed E2 (dihydrolipolyl transacetylase). Finally, the oxidized form of lipoamide is regenerated and electrons are transferred to NAD+ in two steps catalyzed by E3 (dihydrolipoyl dehydrogenase). The biochemical details of this reaction have been worked out with alpha ketoglutarate dehydrogenase complex and subunits purified from bovine tissue (McCartney et al. 1998). While all of the human proteins are known as predicted protein products of cloned genes, direct experimental evidence for their functions is available only for E3 (DLD) (Brautigam et al. 2005).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqmodel="http://biomodels.net/model-qualifiers/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_46">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Shorser</vCard:Family>
+                      <vCard:Given>Solomon</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-06-02T23:06:53Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-26T22:23:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-71401" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/15946682" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/9727038" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/2188967" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/11752427" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-71401" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0034602" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/1.2.1" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqmodel:hasInstance>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.rhea-db.org/reaction?id=27787" />
+                </rdf:Bag>
+              </bqmodel:hasInstance>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_71401_input_29374" sboTerm="SBO:0000010" species="species_29374" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_71401_input_113594" sboTerm="SBO:0000010" species="species_113594" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_71401_input_113526" sboTerm="SBO:0000010" species="species_113526" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_71401_output_70958" sboTerm="SBO:0000011" species="species_70958" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_71401_output_29362" sboTerm="SBO:0000011" species="species_29362" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_71401_output_29376" sboTerm="SBO:0000011" species="species_29376" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_71401_catalyst_69996" sboTerm="SBO:0000013" species="species_69996" />
+        </listOfModifiers>
+      </reaction>
+      <reaction compartment="compartment_5460" fast="false" id="reaction_450984" metaid="metaid_47" name="isocitrate + NADP+ =&gt; alpha-ketoglutarate + CO2 + NADPH + H+ [IDH2]" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Mitochondrial isocitrate dehydrogenase IDH2 catalyzes the irreversible reaction of isocitrate and NADP+ to form alpha ketoglutarate, CO2, and NADPH + H+ (Hartong et al. 2008). The structure of the active human enzyme has not been determined experimentally, but is inferred to be a homodimer with one Mn++ bound to each subunit based on detailed studies of the homologous pig enzyme (Ceccarelli et al. 2002). NADP-specific IDH2 was the first isocitrate dehydrogenase isoenzyme to be characterized in biochemical studies of the mammalian TCA cycle (Ochoa 1948). Later work with yeast revealed the existence of both NADP-specific (IDH2-homologous) and NAD-specific (IDH3-homologous) enzymes and demonstrated the ADP-dependence of the latter (Kornberg and Pricer 1951), consistent with the now widely accepted view that IDH3 mediates the conversion of isocitrate to alpha-ketoglutarate in the TCA cycle. The physiological function of IDH2 is thus unclear. The recent observation that individuals homozygous for IDH3 mutations that sharply reduce its activity do not show symptoms of deficient energy metabolism in most tissues raises the possibility that the IDH2 reaction may play an accessory role in the TCA cycle (Hartong et al. 2008).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_47">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Cook</vCard:Family>
+                      <vCard:Given>Justin</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:created rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-25T02:28:22Z</dcterms:W3CDTF>
+              </dcterms:created>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-05-29T10:03:33Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-26T22:23:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-450984" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/12207025" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/18806796" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/14832224" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/18914071" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-450984" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0004450" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/1.1.1.42" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_450984_input_113563" sboTerm="SBO:0000010" species="species_113563" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_450984_input_29938" sboTerm="SBO:0000010" species="species_29938" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_450984_output_113594" sboTerm="SBO:0000011" species="species_113594" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_450984_output_113529" sboTerm="SBO:0000011" species="species_113529" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_450984_output_113600" sboTerm="SBO:0000011" species="species_113600" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_450984_output_29376" sboTerm="SBO:0000011" species="species_29376" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_450984_catalyst_450982" sboTerm="SBO:0000013" species="species_450982" />
+        </listOfModifiers>
+      </reaction>
+      <reaction compartment="compartment_5460" fast="false" id="reaction_70994" metaid="metaid_48" name="Succinate &lt;=&gt; Fumarate (with FAD redox reaction on enzyme)" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">The succinate dehydrogenase complex, associated with the inner mitochondrial membrane, catalyzes the dehydrogenation of succinate to fumarate, reducing the FAD cofactor bound to the enzyme. This redox potential is then used in the electron transfer chain to drive a proton motive force to generate ATP.</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_48">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Cook</vCard:Family>
+                      <vCard:Given>Justin</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-05-29T09:18:22Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-26T22:23:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70994" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/16143825" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70994" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0008177" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/1.3.5.1" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_70994_input_113536" sboTerm="SBO:0000010" species="species_113536" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_70994_output_113588" sboTerm="SBO:0000011" species="species_113588" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_70994_catalyst_70990" sboTerm="SBO:0000013" species="species_70990" />
+        </listOfModifiers>
+      </reaction>
+      <reaction compartment="compartment_5460" fast="false" id="reaction_70997" metaid="metaid_49" name="ADP + Orthophosphate + Succinyl-CoA &lt;=&gt; ATP + Succinate + CoA" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Mitochondrial succinate CoA ligase (ADP-forming) catalyzes the reversible conversion of succinyl CoA to succinate plus Coenzyme A, coupled to the conversion of ADP and orthophosphate to ATP. The enzyme is a heterodimer containing SUCLG1 and SUCLA2 monomers.The enzyme catalyzing the reaction in vertebrates is a heterodimer that occurs in two isoforms. The enzymes have been purified from pigeon and rat tissue and characterized in detail. Both isoforms, an alpha:betaA heterodimer and an alpha:betaG heterodimer, catalyze the reversible conversion of succinyl CoA to succinate plus Coenzyme A. The alpha:betaA heterodimer couples this conversion to the synthesis of ATP from ADP and orthophosphate, while the alpha:betaG heterodimer couples it to the synthesis of GTP from GDP and orthophosphate (Johnson et al. 1998a,b; Lambeth et al. 2004). Consistent with these results in model systems, patients homozygous for a mutant allele of the gene encoding the ADP enzyme beta subunit, SUCLA2, are deficient in succinyl CoA ligase activity (Elpeleg et al. 2005).Both isoforms are found in vivo, and appear to be expressed at different levels in various tissues. Their relative contributions to the flux of carbon atoms through the TCA cycle are unknown. Genetic and biochemical data suggest that the alpha:betaA isoform may be required to catalyze the reverse reaction, conversion of succinate, Coenzyme A, and ATP to succinyl CoA, ADP, and orthophosphate for heme biosynthesis (Furuyama and Sassa 2000).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqmodel="http://biomodels.net/model-qualifiers/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_49">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Shorser</vCard:Family>
+                      <vCard:Given>Solomon</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-06-02T23:06:53Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-26T22:23:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70997" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/15877282" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/10727444" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/9765291" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/9765290" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/15234968" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/13181903" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70997" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0004775" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/6.2.1.5" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqmodel:hasInstance>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.rhea-db.org/reaction?id=17663" />
+                </rdf:Bag>
+              </bqmodel:hasInstance>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_70997_input_70958" sboTerm="SBO:0000010" species="species_70958" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_70997_input_113548" sboTerm="SBO:0000010" species="species_113548" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_70997_input_113581" sboTerm="SBO:0000010" species="species_113581" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_70997_output_29374" sboTerm="SBO:0000011" species="species_29374" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_70997_output_113593" sboTerm="SBO:0000011" species="species_113593" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_70997_output_113536" sboTerm="SBO:0000011" species="species_113536" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_70997_catalyst_156625" sboTerm="SBO:0000013" species="species_156625" />
+        </listOfModifiers>
+      </reaction>
+      <reaction compartment="compartment_5460" fast="false" id="reaction_9012349" metaid="metaid_50" name="ME3:Mg2+ tetramer oxidatively decarboxylates MAL to PYR" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">One hallmark of cancer is altered cellular metabolism. Malic enzymes (MEs) are a family of homotetrameric enzymes that catalyse the reversible oxidative decarboxylation of L-malate to pyruvate, with a simultaneous reduction of NAD(P)+ to NAD(P)H. As MEs generate NADPH and NADH, they may play roles in energy production and reductive biosynthesis. Humans possess three ME isoforms; ME1 is cytosolic and utilises NADP+, ME3 is mitochondrial and can utilise NADP+ and ME2 is mitochondrial and can utililse either NAD+ or NADP+ (Chang and Tong 2003, Murugan and Hung 2012).NADP-dependent malic enzyme (ME3, aka m-NADP-ME) is a mitochondrial enzyme that oxidatively decarboxylates (s)-malate (MAL) to pyruvate (PYR) and CO2 using NADP+ as cofactor (Loeber et al. 1994). ME1 exists as a dimer of dimers (Murugan and Hung 2012) and a divalent metal such as Mg2+ is essential for catalysis (Chang and Tong 2003). ME3 may play a role in insulin secretion (Hasan et al. 2015) but how it does this in panceratic beta cells has not been established yet.</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqmodel="http://biomodels.net/model-qualifiers/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_50">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Jassal</vCard:Family>
+                      <vCard:Given>Bijay</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Jassal</vCard:Family>
+                      <vCard:Given>Bijay</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Shorser</vCard:Family>
+                      <vCard:Given>Solomon</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:created rdf:parseType="Resource">
+                <dcterms:W3CDTF>2017-07-13T15:59:15Z</dcterms:W3CDTF>
+              </dcterms:created>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-06-02T23:06:53Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2017-07-13T15:59:15Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-9012349" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/7818469" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-9012349" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0004473" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/1.1.1.40" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqmodel:hasInstance>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.rhea-db.org/reaction?id=18254" />
+                </rdf:Bag>
+              </bqmodel:hasInstance>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_9012349_input_113563" sboTerm="SBO:0000010" species="species_113563" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_9012349_input_113544" sboTerm="SBO:0000010" species="species_113544" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_9012349_output_113529" sboTerm="SBO:0000011" species="species_113529" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_9012349_output_113557" sboTerm="SBO:0000011" species="species_113557" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_9012349_output_113600" sboTerm="SBO:0000011" species="species_113600" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_9012349_output_29376" sboTerm="SBO:0000011" species="species_29376" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_9012349_catalyst_9012356" sboTerm="SBO:0000013" species="species_9012356" />
+        </listOfModifiers>
+      </reaction>
+      <reaction compartment="compartment_5460" fast="false" id="reaction_70967" metaid="metaid_51" name="isocitrate + NAD+ =&gt; alpha-ketoglutarate + CO2 + NADH + H+ [IDH3]" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Mitochondrial isocitrate dehydrogenase IDH3 catalyzes the irreversible reaction of isocitrate and NAD+ to form alpha ketoglutarate, CO2, and NADH + H+. The enzyme is a heteromer containing four polypeptide chains, two IDH3A, one IDH3B, and one IDH3G, and two Mn++ (Dange and Colman 2010). It is activated by ADP (Soundar et al. 2003, 2006; Bzymek and Colman 2007). This is the first of four oxidation reactions in the citric acid cycle, and the first decarboxylation.</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqmodel="http://biomodels.net/model-qualifiers/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_51">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Shorser</vCard:Family>
+                      <vCard:Given>Solomon</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-06-02T23:06:53Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-26T22:23:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70967" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/17432878" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/20435888" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/14555658" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/16737955" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70967" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0004449" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/1.1.1.41" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqmodel:hasInstance>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.rhea-db.org/reaction?id=23633" />
+                </rdf:Bag>
+              </bqmodel:hasInstance>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_70967_input_113526" sboTerm="SBO:0000010" species="species_113526" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_70967_input_29938" sboTerm="SBO:0000010" species="species_29938" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_70967_output_113594" sboTerm="SBO:0000011" species="species_113594" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_70967_output_113529" sboTerm="SBO:0000011" species="species_113529" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_70967_output_29362" sboTerm="SBO:0000011" species="species_29362" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_70967_output_29376" sboTerm="SBO:0000011" species="species_29376" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_70967_catalyst_70965" sboTerm="SBO:0000013" species="species_70965" />
+          <modifierSpeciesReference id="modifierspeciesreference_70967_positiveregulator_113581" sboTerm="SBO:0000459" species="species_113581">
+            <notes>
+              <p xmlns="http://www.w3.org/1999/xhtml">This describes an Event/CatalystActivity that is positively regulated by the Regulator (e.g., allosteric activation)</p>
+            </notes>
+          </modifierSpeciesReference>
+        </listOfModifiers>
+      </reaction>
+      <reaction compartment="compartment_5460" fast="false" id="reaction_450975" metaid="metaid_52" name="isocitrate &lt;=&gt; citrate" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Mitochondrial aconitase reversibly converts isocitrate to citrate via a cis-aconitate intermediate. Mitochondrial aconitase activity has been demonstrated in diverse human tissue extracts (Slaughter et al. 1975) and a protein homologous to the well-characterized porcine enzyme has been purified from human tissues (Baldwin et al. 1991).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_52">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Cook</vCard:Family>
+                      <vCard:Given>Justin</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:created rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-25T02:28:22Z</dcterms:W3CDTF>
+              </dcterms:created>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-05-29T09:18:22Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-26T22:23:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-450975" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/1946331" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/1052766" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-450975" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0003994" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/4.2.1.3" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_450975_input_29938" sboTerm="SBO:0000010" species="species_29938" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_450975_output_29654" sboTerm="SBO:0000011" species="species_29654" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_450975_catalyst_70968" sboTerm="SBO:0000013" species="species_70968" />
+        </listOfModifiers>
+      </reaction>
+      <reaction compartment="compartment_5460" fast="false" id="reaction_9012016" metaid="metaid_53" name="FAHD1:Zn2+ dimer hydrolyses OA to PYR" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Fumarylacetoacetate hydrolase domain containing protein 1 (FAHD1) (Pircher et al. 2011, 2015, Jansen-Duerr et al. 2016) was identified to display a bi-functional catalytic mechanism (Weiss et al. 2018), being able to hydrolyse acylpyruvates (Pircher et al. 2011) similar to fumarylpyruvate hydrolase NagK of Ralstonia sp. (acetylpyruvate: vmax = 0,135 µmol/min/mg, KM = 4,6 µM), and to cleave oxaloacetate (OAA) via decarboxylation (Pircher et al. 2015) (OAA: vmax = 0,21 µmol/min/mg, KM = 32 µM). The enzyme is of dimeric form (Manjasetty et al. 2004) and uses Mg2+ or Mn2+ as cofactor. It is localized in the mitochondrial matrix (Pircher et al. 2011, Trukhina et al. 2002, Di Berardino et al. 1996). Its identification as ODx (Pircher et al. 2015) renders FAHD1 a possible antagonist to pyruvate carboxylase (PC) at a central position in the TCA cycle(Jansen-Duerr et al. 2016). It is believed that the ability of FAHD1 to decarboxylate OAA provides the basis of its requirement for maintaining healthy mitochondria in certain cells and tissues (Taferner et al. 2015, Petit et al. 2017). However, further studies of this topic are warranted.</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqmodel="http://biomodels.net/model-qualifiers/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_53">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Jassal</vCard:Family>
+                      <vCard:Given>Bijay</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Jassal</vCard:Family>
+                      <vCard:Given>Bijay</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Shorser</vCard:Family>
+                      <vCard:Given>Solomon</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:created rdf:parseType="Resource">
+                <dcterms:W3CDTF>2017-07-10T18:46:21Z</dcterms:W3CDTF>
+              </dcterms:created>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-06-02T23:06:53Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2017-07-10T18:46:21Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-9012016" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/15551868" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/25575590" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-9012016" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0008948" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/1.1.1.38" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqmodel:hasInstance>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.rhea-db.org/reaction?id=15642" />
+                </rdf:Bag>
+              </bqmodel:hasInstance>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_9012016_input_113587" sboTerm="SBO:0000010" species="species_113587" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_9012016_output_113557" sboTerm="SBO:0000011" species="species_113557" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_9012016_output_29376" sboTerm="SBO:0000011" species="species_29376" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_9012016_catalyst_9012057" sboTerm="SBO:0000013" species="species_9012057" />
+        </listOfModifiers>
+      </reaction>
+      <reaction compartment="compartment_5460" fast="false" id="reaction_70971" metaid="metaid_54" name="citrate &lt;=&gt; isocitrate" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Mitochondrial aconitase reversibly converts citrate to isocitrate via a cis-aconitate intermediate. Mitochondrial aconitase activity has been demonstrated in diverse human tissue extracts (Slaughter et al. 1975) and a protein homologous to the well-characterized porcine enzyme has been purified from human tissues (Baldwin et al. 1991).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_54">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Cook</vCard:Family>
+                      <vCard:Given>Justin</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-05-29T09:18:22Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-26T22:23:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70971" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/1946331" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/1052766" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70971" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0003994" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/4.2.1.3" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_70971_input_29654" sboTerm="SBO:0000010" species="species_29654" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_70971_output_29938" sboTerm="SBO:0000011" species="species_29938" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_70971_catalyst_70968" sboTerm="SBO:0000013" species="species_70968" />
+        </listOfModifiers>
+      </reaction>
+      <reaction compartment="compartment_5462" fast="false" id="reaction_450971" metaid="metaid_55" name="NADPH + NAD+ + H+ [cytosol] =&gt; NADP+ + NADH + H+ [mitochondrial matrix]" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">NNT (nicotinamide nucleotide transhydrogenase) associated with the inner mitochondrial membrane catalyzes the reaction of mitochondrial NADPH and NAD+ to form NADP+ and NADH. The reaction is coupled to the translocation of a proton across the inner mitochondrial membrane into the mitochondrial matrix (White et al, 2000). The active form of NNT is inferred to be a homodimer based on the known structure of its bovine homolog (Yamaguchi and Hatefi 1991).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_55">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Cook</vCard:Family>
+                      <vCard:Given>Justin</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:created rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-25T02:28:22Z</dcterms:W3CDTF>
+              </dcterms:created>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-05-29T10:03:33Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-26T22:23:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-450971" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/10673423" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/2005110" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-450971" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0008746" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/1.6.1.1" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_450971_input_70106" sboTerm="SBO:0000010" species="species_70106" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_450971_input_113526" sboTerm="SBO:0000010" species="species_113526" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_450971_input_113600" sboTerm="SBO:0000010" species="species_113600" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_450971_output_113563" sboTerm="SBO:0000011" species="species_113563" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_450971_output_113529" sboTerm="SBO:0000011" species="species_113529" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_450971_output_29362" sboTerm="SBO:0000011" species="species_29362" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_450971_catalyst_451008" sboTerm="SBO:0000013" species="species_451008" />
+        </listOfModifiers>
+      </reaction>
+      <reaction compartment="compartment_5460" fast="false" id="reaction_70975" metaid="metaid_57" name="Acetyl-CoA + H2O + Oxaloacetate =&gt; Citrate + CoA" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Mitochondrial citrate synthase dimer catalyzes the irreversible reaction of acetyl-CoA, water, and oxaloacetate to form citrate and coenzyme A. This reaction is the entry point of two-carbon units into the citric acid cycle. The reaction is subject to allosteric regulation. The gene encoding the human enzyme has been cloned (Goldenthal et al. 1998), but the enzyme has not been characterized in detail - its properties are inferred from those of the well-studied homologous pig enzyme (e.g., Morgunov and Srere 1998).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqmodel="http://biomodels.net/model-qualifiers/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_57">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Shorser</vCard:Family>
+                      <vCard:Given>Solomon</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-06-02T23:06:53Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-26T22:23:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70975" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/9809442" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/9792662" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-70975" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0004108" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/2.3.3.1" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqmodel:hasInstance>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.rhea-db.org/reaction?id=16846" />
+                </rdf:Bag>
+              </bqmodel:hasInstance>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_70975_input_113559" sboTerm="SBO:0000010" species="species_113559" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_70975_input_113587" sboTerm="SBO:0000010" species="species_113587" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_70975_input_113521" sboTerm="SBO:0000010" species="species_113521" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_70975_output_29374" sboTerm="SBO:0000011" species="species_29374" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_70975_output_29654" sboTerm="SBO:0000011" species="species_29654" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_70975_catalyst_70973" sboTerm="SBO:0000013" species="species_70973" />
+        </listOfModifiers>
+      </reaction>
+      <reaction compartment="compartment_5460" fast="false" id="reaction_71775" metaid="metaid_58" name="GDP + Orthophosphate + Succinyl-CoA &lt;=&gt; GTP + Succinate + CoA" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Mitochondrial succinate CoA ligase (ADP-forming) catalyzes the reversible conversion of succinyl CoA to succinate plus Coenzyme A, coupled to the conversion of ADP and orthophosphate to ATP. The enzyme is a heterodimer containing SUCLG1 and SUCLA2 monomers.The enzyme catalyzing the reaction in vertebrates is a heterodimer that occurs in two isoforms. The enzymes have been purified from pigeon and rat tissue and characterized in detail. Both isoforms, an alpha:betaA heterodimer and an alpha:betaG heterodimer, catalyze the reversible conversion of succinyl CoA to succinate plus Coenzyme A. The alpha:betaA heterodimer couples this conversion to the synthesis of ATP from ADP and orthophosphate, while the alpha:betaG heterodimer couples it to the synthesis of GTP from GDP and orthophosphate (Johnson et al. 1998a,b; Lambeth et al. 2004). Consistent with these results in model systems, patients homozygous for a mutant allele of the gene encoding the ADP enzyme beta subunit, SUCLA2, are deficient in succinyl CoA ligase activity (Elpeleg et al. 2005).Both isoforms are found in vivo, and appear to be expressed at different levels in various tissues. Their relative contributions to the flux of carbon atoms through the TCA cycle are unknown. Genetic and biochemical data suggest that the alpha:betaA isoform may be required to catalyze the reverse reaction, conversion of succinate, Coenzyme A, and ATP to succinyl CoA, ADP, and orthophosphate for heme biosynthesis (Furuyama and Sassa 2000).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqmodel="http://biomodels.net/model-qualifiers/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_58">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Shorser</vCard:Family>
+                      <vCard:Given>Solomon</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-06-02T23:06:53Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-26T22:23:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-71775" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/10727444" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/9765291" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/9765290" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/15234968" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/17668387" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/13181903" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-71775" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0004776" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/6.2.1.4" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqmodel:hasInstance>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.rhea-db.org/reaction?id=22122" />
+                </rdf:Bag>
+              </bqmodel:hasInstance>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_71775_input_70958" sboTerm="SBO:0000010" species="species_70958" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_71775_input_113548" sboTerm="SBO:0000010" species="species_113548" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_71775_input_113525" sboTerm="SBO:0000010" species="species_113525" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_71775_output_29374" sboTerm="SBO:0000011" species="species_29374" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_71775_output_113573" sboTerm="SBO:0000011" species="species_113573" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_71775_output_113536" sboTerm="SBO:0000011" species="species_113536" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_71775_catalyst_156627" sboTerm="SBO:0000013" species="species_156627" />
+        </listOfModifiers>
+      </reaction>
+      <reaction compartment="compartment_5460" fast="false" id="reaction_451033" metaid="metaid_59" name="(S)-Malate &lt;=&gt; Fumarate + H2O" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Mitochondrial fumarate hydratase catalyzes the reversible reaction of malate to form fumarate and water (Bourgeron et al. 1994). Unpublished crystallographic data indicate that the protein is a tetramer (PDB 3E04).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqmodel="http://biomodels.net/model-qualifiers/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_59">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>D'Eustachio</vCard:Family>
+                      <vCard:Given>Peter</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>NYU School of Medicine, Department of Biochemistry</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Shorser</vCard:Family>
+                      <vCard:Given>Solomon</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:created rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-26T22:48:56Z</dcterms:W3CDTF>
+              </dcterms:created>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-06-02T23:06:53Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2009-12-26T22:23:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-451033" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/8200987" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-451033" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0004333" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://identifiers.org/ec-code/4.2.1.2" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqmodel:hasInstance>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.rhea-db.org/reaction?id=12461" />
+                </rdf:Bag>
+              </bqmodel:hasInstance>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_451033_input_113544" sboTerm="SBO:0000010" species="species_113544" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_451033_output_113588" sboTerm="SBO:0000011" species="species_113588" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_451033_output_113521" sboTerm="SBO:0000011" species="species_113521" stoichiometry="1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference id="modifierspeciesreference_451033_catalyst_451041" sboTerm="SBO:0000013" species="species_451041" />
+        </listOfModifiers>
+      </reaction>
+    </listOfReactions>
+  </model>
+</sbml>

@@ -1,0 +1,825 @@
+<?xml version='1.0' encoding='utf-8' standalone='no'?>
+<sbml xmlns="http://www.sbml.org/sbml/level3/version1/core" level="3" version="1">
+  <annotation>
+    <p xmlns="http://www.w3.org/1999/xhtml">SBML generated from Reactome version 73 on 6/10/20 2:18 PM using JSBML version 1.3.1.</p>
+  </annotation>
+  <model id="pathway_8937144" metaid="metaid_0" name="Aryl hydrocarbon receptor signalling">
+    <notes>
+      <p xmlns="http://www.w3.org/1999/xhtml">The aryl hydrocarbon receptor (AHR) is a ligand-activated transcription factor that belongs to the basic helix-loop-helix/PER-ARNT-SIM family of DNA binding proteins and controls the expression of a diverse set of genes. Two major types of environmental compounds can activate AHR signaling: halogenated aromatic hydrocarbons such as 2,3,7,8-tetrachlorodibenzo-p-dioxin (TCDD) and polycyclic aromatic hydrocarbons (PAH) such as benzo(a)pyrene. Unliganded AHR forms a complex in the cytosol with two copies of 90kD heat shock protein (HSP90AB1), one X-associated protein (AIP), and one p23 molecular chaperone protein (PTGES3). After ligand binding and activation, the AHR complex translocates to the nucleus, disassociates from the chaperone subunits, dimerises with the aryl hydrocarbon receptor nuclear translocator (ARNT) and transactivates target genes via binding to xenobiotic response elements (XREs) in their promoter regions. AHR targets genes of Phase I and Phase II metabolism, such as cytochrome P450 1A1 (CYP1A1), cytochorme P450 1B1 (CYP1B1), NAD(P)H:quinone oxidoreductase I (NQO1) and aldehyde dehydrogenase 3 (ALHD3A1). This is thought to be an organism's response to foreign chemical exposure and normally, foreign chemicals are made less reactive by the induction and therefore increased activity of these enzymes (Beischlag et al. 2008).AHR itself is regulated by the aryl hydrocarbon receptor repressor (AHRR, aka BHLHE77, KIAA1234), an evolutionarily conserved bHLH-PAS protein that inhibits both xenobiotic-induced and constitutively active AHR transcriptional activity in many species. AHRR resides predominantly in the nuclear compartment where it competes with AHR for binding to ARNT. As a result, there is competition between AHR:ARNT and AHRR:ARNT complexes for binding to XREs in target genes and AHRR can repress the transcription activity of AHR (Hahn et al. 2009, Haarmann-Stemmann and Abel 2006).</p>
+    </notes>
+    <annotation>
+      <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+        <rdf:Description rdf:about="#metaid_0">
+          <dc:creator>
+            <rdf:Bag>
+              <rdf:li rdf:parseType="Resource">
+                <vCard:N rdf:parseType="Resource">
+                  <vCard:Family>Jassal</vCard:Family>
+                  <vCard:Given>Bijay</vCard:Given>
+                </vCard:N>
+                <vCard:ORG rdf:parseType="Resource">
+                  <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                </vCard:ORG>
+              </rdf:li>
+              <rdf:li rdf:parseType="Resource">
+                <vCard:N rdf:parseType="Resource">
+                  <vCard:Family>Jassal</vCard:Family>
+                  <vCard:Given>Bijay</vCard:Given>
+                </vCard:N>
+                <vCard:ORG rdf:parseType="Resource">
+                  <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                </vCard:ORG>
+              </rdf:li>
+              <rdf:li rdf:parseType="Resource">
+                <vCard:N rdf:parseType="Resource">
+                  <vCard:Family>Cook</vCard:Family>
+                  <vCard:Given>Justin</vCard:Given>
+                </vCard:N>
+                <vCard:ORG rdf:parseType="Resource">
+                  <vCard:Orgname>OICR</vCard:Orgname>
+                </vCard:ORG>
+              </rdf:li>
+            </rdf:Bag>
+          </dc:creator>
+          <dcterms:created rdf:parseType="Resource">
+            <dcterms:W3CDTF>2016-08-30T13:13:23Z</dcterms:W3CDTF>
+          </dcterms:created>
+          <dcterms:modified rdf:parseType="Resource">
+            <dcterms:W3CDTF>2020-05-29T07:11:15Z</dcterms:W3CDTF>
+          </dcterms:modified>
+          <dcterms:modified rdf:parseType="Resource">
+            <dcterms:W3CDTF>2016-08-30T13:13:23Z</dcterms:W3CDTF>
+          </dcterms:modified>
+          <bqbiol:is>
+            <rdf:Bag>
+              <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8937144" />
+            </rdf:Bag>
+          </bqbiol:is>
+          <bqbiol:isDescribedBy>
+            <rdf:Bag>
+              <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/18540824" />
+              <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/18848529" />
+              <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/16972786" />
+            </rdf:Bag>
+          </bqbiol:isDescribedBy>
+        </rdf:Description>
+      </rdf:RDF>
+    </annotation>
+    <listOfCompartments>
+      <compartment constant="true" id="compartment_7660" metaid="metaid_2" name="nucleoplasm" sboTerm="SBO:0000290">
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_2">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0005654" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </compartment>
+      <compartment constant="true" id="compartment_70101" metaid="metaid_6" name="cytosol" sboTerm="SBO:0000290">
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_6">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://www.ebi.ac.uk/QuickGO/term/GO:0005829" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </compartment>
+    </listOfCompartments>
+    <listOfSpecies>
+      <species boundaryCondition="false" compartment="compartment_7660" constant="false" hasOnlySubstanceUnits="false" id="species_8937150" metaid="metaid_1" name="AHR:TCDD [nucleoplasm]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (28119, P35869). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_1">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8937150" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:28119" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P35869" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-8937150" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-8937150" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-8937150" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-8937150" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SSC-8937150" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-8937150" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-8937150" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-8937150" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-8937150" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-8937150" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-8937150" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_7660" constant="false" hasOnlySubstanceUnits="false" id="species_8936837" metaid="metaid_3" name="ARNT, ARNT2 [nucleoplasm]">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome DefinedSet. This is a list of alternative entities, any of which can perform the given function</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_3">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8936837" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P27540" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/Q9HBZ2" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-8936837" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-8936837" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-8936837" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-8936837" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SSC-8936837" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-8936838" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-8936837" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-8936837" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-1234098" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-1234098" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_7660" constant="false" hasOnlySubstanceUnits="false" id="species_8937203" metaid="metaid_4" name="AHR:TCDD:ARNT [nucleoplasm]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (28119, P35869, P27540, Q9HBZ2). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_4">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8937203" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:28119" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P35869" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P27540" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/Q9HBZ2" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-8937203" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-8937203" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-8937203" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-8937203" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SSC-8937203" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-8937203" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-8937203" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-8937203" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-8937203" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-8937203" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_70101" constant="false" hasOnlySubstanceUnits="false" id="species_8936844" metaid="metaid_5" name="AHR:2xHSP90AB1:AIP:PTGES3 [cytosol]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (Q15185, P35869, 2xP08238, O00170). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_5">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8936844" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/Q15185" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P35869" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P08238" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/O00170" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-8936844" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-8936844" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-8936844" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-8936844" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SSC-8936844" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-8936844" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-8936844" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-8936844" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-8936844" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-8936844" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-8936844" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_70101" constant="false" hasOnlySubstanceUnits="false" id="species_8936852" metaid="metaid_7" name="TCDD [cytosol]" sboTerm="SBO:0000247">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome SimpleEntity. This is a small compound</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_7">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:28119" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-ALL-8936852" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_70101" constant="false" hasOnlySubstanceUnits="false" id="species_8936846" metaid="metaid_8" name="AHR:TCDD:2xHSP90AB1:AIP:PTGES3 [cytosol]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (Q15185, P35869, 2xP08238, O00170, 28119). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_8">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8936846" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/Q15185" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P35869" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P08238" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/O00170" />
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:28119" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-8936846" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-8936846" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-8936846" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-8936846" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SSC-8936846" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-8936846" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-8936846" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-8936846" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-8936846" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-8936846" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-8936846" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_7660" constant="false" hasOnlySubstanceUnits="false" id="species_8937154" metaid="metaid_9" name="AHR:TCDD:2xHSP90AB1:AIP:PTGES3 [nucleoplasm]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (2xP08238, O00170, P35869, Q15185, 28119). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_9">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8937154" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P08238" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/O00170" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P35869" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/Q15185" />
+                  <rdf:li rdf:resource="http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:28119" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-8937154" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-8937154" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-8937154" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-8937154" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SSC-8937154" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-8937154" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-8937154" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-8937154" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-8937154" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-8937154" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-8937154" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_7660" constant="false" hasOnlySubstanceUnits="false" id="species_8936841" metaid="metaid_10" name="AHRR [nucleoplasm]" sboTerm="SBO:0000297">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome EntityWithAccessionedSequence. This is a protein</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_10">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/A9YTQ3" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8936841" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-8936841" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-8936841" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-8936841" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-8936841" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SSC-8936841" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-8936841" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-8936841" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-8936841" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-8936841" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-8936841" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-8936841" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_7660" constant="false" hasOnlySubstanceUnits="false" id="species_8936835" metaid="metaid_11" name="AHRR:ARNT [nucleoplasm]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (A9YTQ3, P27540, Q9HBZ2). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_11">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8936835" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/A9YTQ3" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P27540" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/Q9HBZ2" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-8936835" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-8936835" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-8936835" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-BTA-8936835" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SSC-8936835" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-8936835" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-8936835" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-GGA-8936835" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-8936835" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-8936835" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+      <species boundaryCondition="false" compartment="compartment_7660" constant="false" hasOnlySubstanceUnits="false" id="species_8937201" metaid="metaid_12" name="2xHSP90AB1:AIP:PTGES3 [nucleoplasm]" sboTerm="SBO:0000253">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Derived from a Reactome Complex. Here is Reactomes nested structure for this complex: (2xP08238, O00170, Q15185). Reactome uses a nested structure for complexes, which cannot be fully represented in SBML Level 3 Version 1 core</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_12">
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8937201" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:hasPart>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/P08238" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/O00170" />
+                  <rdf:li rdf:resource="https://purl.uniprot.org/uniprot/Q15185" />
+                </rdf:Bag>
+              </bqbiol:hasPart>
+              <bqbiol:isHomologTo>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-MMU-8937201" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-RNO-8937201" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CFA-8937201" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-SSC-8937201" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DRE-8937201" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-XTR-8937201" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DME-8937201" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-CEL-8937201" />
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-DDI-8937201" />
+                </rdf:Bag>
+              </bqbiol:isHomologTo>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+      </species>
+    </listOfSpecies>
+    <listOfReactions>
+      <reaction compartment="compartment_7660" fast="false" id="reaction_8937177" metaid="metaid_13" name="AHR:TCDD binds ARNT" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">Ligand-bound aryl hydrocarbon receptor (AHR:TCDD) disassociates from the chaperone subunits to then dimerise with the aryl hydrocarbon receptor nuclear translocator (ARNT) (Lees and Whitelaw 1999).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_13">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Jassal</vCard:Family>
+                      <vCard:Given>Bijay</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Jassal</vCard:Family>
+                      <vCard:Given>Bijay</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Cook</vCard:Family>
+                      <vCard:Given>Justin</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:created rdf:parseType="Resource">
+                <dcterms:W3CDTF>2016-08-30T13:13:23Z</dcterms:W3CDTF>
+              </dcterms:created>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-05-29T05:31:56Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2016-08-30T13:13:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8937177" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/10409767" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8937177" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_8937177_input_8936837" sboTerm="SBO:0000010" species="species_8936837" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_8937177_input_8937150" sboTerm="SBO:0000010" species="species_8937150" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_8937177_output_8937203" sboTerm="SBO:0000011" species="species_8937203" stoichiometry="1" />
+        </listOfProducts>
+      </reaction>
+      <reaction compartment="compartment_70101" fast="false" id="reaction_8936849" metaid="metaid_14" name="AHR:2xHSP90:AIP:PTGES3 binds TCDD" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">The aryl hydrocarbon receptor (AHR) is a ligand-activated transcription factor that can control the expression of a diverse set of genes. Two major types of environmental compounds can activate AHR signaling: halogenated aromatic hydrocarbons such as 2,3,7,8-tetrachlorodibenzo-p-dioxin (TCDD) and polycyclic aromatic hydrocarbons (PAH) such as benzo(a)pyrene. Unliganded AHR forms a complex in the cytosol with two copies of 90kD heat shock protein (HSP90AB1) (Forsythe et al. 2001), one X-associated protein (AIP) (Meyer et al. 1998), and one p23 molecular chaperone protein (PTGES3) (Nguyen et al. 2012, Beischlag et al. 2008). Here, the binding of TCDD is shown.</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_14">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Jassal</vCard:Family>
+                      <vCard:Given>Bijay</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Jassal</vCard:Family>
+                      <vCard:Given>Bijay</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Cook</vCard:Family>
+                      <vCard:Given>Justin</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:created rdf:parseType="Resource">
+                <dcterms:W3CDTF>2016-08-24T17:20:03Z</dcterms:W3CDTF>
+              </dcterms:created>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-05-29T07:11:15Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2016-08-24T17:20:03Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8936849" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/22759865" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/11274138" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/7961644" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/12573486" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/18540824" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/9447995" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8936849" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_8936849_input_8936852" sboTerm="SBO:0000010" species="species_8936852" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_8936849_input_8936844" sboTerm="SBO:0000010" species="species_8936844" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_8936849_output_8936846" sboTerm="SBO:0000011" species="species_8936846" stoichiometry="1" />
+        </listOfProducts>
+      </reaction>
+      <reaction compartment="compartment_70101" fast="false" id="reaction_8937169" metaid="metaid_15" name="AHR:TCDD:2xHSP90AB1:AIP:PTGES3 translocates from cytosol to nucleoplasm" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">After ligand binding and activation, the AHR complex translocates to the nucleus by an unknown mechanism (Beischlag et al. 2008) but it has been hypothesised that ligand binding to AHR promoted p23-associated hsp90 complex-mediated interaction of AHR with the nuclear import receptor protein pendulin and subsequent nuclear translocation of the receptor (Kazlauskas et al. 2001).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_15">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Jassal</vCard:Family>
+                      <vCard:Given>Bijay</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Jassal</vCard:Family>
+                      <vCard:Given>Bijay</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Cook</vCard:Family>
+                      <vCard:Given>Justin</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:created rdf:parseType="Resource">
+                <dcterms:W3CDTF>2016-08-30T13:13:23Z</dcterms:W3CDTF>
+              </dcterms:created>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-05-29T07:11:15Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2016-08-30T13:13:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8937169" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/18540824" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/11259606" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8937169" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_8937169_input_8936846" sboTerm="SBO:0000010" species="species_8936846" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_8937169_output_8937154" sboTerm="SBO:0000011" species="species_8937154" stoichiometry="1" />
+        </listOfProducts>
+      </reaction>
+      <reaction compartment="compartment_70101" fast="false" id="reaction_8936851" metaid="metaid_16" name="AHRR binds ARNT" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">The aryl hydrocarbon receptor repressor (AHRR) is predominantly localised in the nucleus of cells (Kanno et al. 2007) and can bind AHR nuclear translocator (ARNT). The resultant AHRR:ARNT complex can compete with AHR:ARNT for binding to the xenobiotic response element (XRE) on target genes such CYP1A1 (Evans et al. 2008, Hahn et al. 2009).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_16">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Jassal</vCard:Family>
+                      <vCard:Given>Bijay</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Jassal</vCard:Family>
+                      <vCard:Given>Bijay</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Cook</vCard:Family>
+                      <vCard:Given>Justin</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:created rdf:parseType="Resource">
+                <dcterms:W3CDTF>2016-08-24T17:20:03Z</dcterms:W3CDTF>
+              </dcterms:created>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-05-29T05:31:56Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2016-08-24T17:20:03Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8936851" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/17980155" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/18848529" />
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/18000031" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8936851" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_8936851_input_8936837" sboTerm="SBO:0000010" species="species_8936837" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_8936851_input_8936841" sboTerm="SBO:0000010" species="species_8936841" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_8936851_output_8936835" sboTerm="SBO:0000011" species="species_8936835" stoichiometry="1" />
+        </listOfProducts>
+      </reaction>
+      <reaction compartment="compartment_7660" fast="false" id="reaction_8937191" metaid="metaid_17" name="AHR:TCDD:2xHSP90AB1:AIP:PTGES3 dissociates" reversible="false">
+        <notes>
+          <p xmlns="http://www.w3.org/1999/xhtml">After ligand binding and activation, the AHR complex translocates to the nucleus where it disassociates from the chaperone subunits to then dimerise with the aryl hydrocarbon receptor nuclear translocator (ARNT) (Lees and Whitelaw 1999).</p>
+        </notes>
+        <annotation>
+          <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:vCard="http://www.w3.org/2001/vcard-rdf/3.0#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+            <rdf:Description rdf:about="#metaid_17">
+              <dc:creator>
+                <rdf:Bag>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Jassal</vCard:Family>
+                      <vCard:Given>Bijay</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Jassal</vCard:Family>
+                      <vCard:Given>Bijay</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>European Bioinformatics Institute</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <vCard:N rdf:parseType="Resource">
+                      <vCard:Family>Cook</vCard:Family>
+                      <vCard:Given>Justin</vCard:Given>
+                    </vCard:N>
+                    <vCard:ORG rdf:parseType="Resource">
+                      <vCard:Orgname>OICR</vCard:Orgname>
+                    </vCard:ORG>
+                  </rdf:li>
+                </rdf:Bag>
+              </dc:creator>
+              <dcterms:created rdf:parseType="Resource">
+                <dcterms:W3CDTF>2016-08-30T13:13:23Z</dcterms:W3CDTF>
+              </dcterms:created>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2020-05-29T07:11:15Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <dcterms:modified rdf:parseType="Resource">
+                <dcterms:W3CDTF>2016-08-30T13:13:23Z</dcterms:W3CDTF>
+              </dcterms:modified>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8937191" />
+                </rdf:Bag>
+              </bqbiol:is>
+              <bqbiol:isDescribedBy>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="http://www.ncbi.nlm.nih.gov/pubmed/10409767" />
+                </rdf:Bag>
+              </bqbiol:isDescribedBy>
+              <bqbiol:is>
+                <rdf:Bag>
+                  <rdf:li rdf:resource="https://reactome.org/content/detail/R-HSA-8937191" />
+                </rdf:Bag>
+              </bqbiol:is>
+            </rdf:Description>
+          </rdf:RDF>
+        </annotation>
+        <listOfReactants>
+          <speciesReference constant="true" id="speciesreference_8937191_input_8937154" sboTerm="SBO:0000010" species="species_8937154" stoichiometry="1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference constant="true" id="speciesreference_8937191_output_8937201" sboTerm="SBO:0000011" species="species_8937201" stoichiometry="1" />
+          <speciesReference constant="true" id="speciesreference_8937191_output_8937150" sboTerm="SBO:0000011" species="species_8937150" stoichiometry="1" />
+        </listOfProducts>
+      </reaction>
+    </listOfReactions>
+  </model>
+</sbml>

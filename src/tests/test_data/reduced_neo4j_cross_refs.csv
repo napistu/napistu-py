@@ -1,0 +1,656 @@
+,member_name,reactome_id,uniprot,identifier,ontology,url
+23025,RANBP2 [cytosol],R-HSA-157703,P49792,P49792,Pharos - Targets,https://pharos.nih.gov/targets/P49792
+23027,RANBP2 [cytosol],R-HSA-157703,P49792,P49792,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P49792
+23033,RANBP2 [cytosol],R-HSA-157703,P49792,P49792,PRO,https://proconsortium.org/app/entry/PR:P49792
+23041,RANBP2 [cytosol],R-HSA-157703,P49792,P49792,GlyGen,https://www.glygen.org/protein/P49792#Glycosylation
+23729,NUP107 [cytosol],R-HSA-376241,P57740,P57740,Pharos - Targets,https://pharos.nih.gov/targets/P57740
+23733,NUP107 [cytosol],R-HSA-376241,P57740,P57740,GlyGen,https://www.glygen.org/protein/P57740#Glycosylation
+23739,NUP107 [cytosol],R-HSA-376241,P57740,P57740,PRO,https://proconsortium.org/app/entry/PR:P57740
+23746,NUP107 [cytosol],R-HSA-376241,P57740,P57740,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P57740
+23747,NUP43 [cytosol],R-HSA-376243,Q8NFH3,Q8NFH3,PRO,https://proconsortium.org/app/entry/PR:Q8NFH3
+23758,NUP43 [cytosol],R-HSA-376243,Q8NFH3,Q8NFH3,GlyGen,https://www.glygen.org/protein/Q8NFH3#Glycosylation
+23759,NUP43 [cytosol],R-HSA-376243,Q8NFH3,Q8NFH3,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q8NFH3
+23760,NUP43 [cytosol],R-HSA-376243,Q8NFH3,Q8NFH3,Pharos - Targets,https://pharos.nih.gov/targets/Q8NFH3
+23761,NUP160 [cytosol],R-HSA-376253,Q12769,Q12769,PRO,https://proconsortium.org/app/entry/PR:Q12769
+23770,NUP160 [cytosol],R-HSA-376253,Q12769,Q12769,Pharos - Targets,https://pharos.nih.gov/targets/Q12769
+23771,NUP160 [cytosol],R-HSA-376253,Q12769,Q12769,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q12769
+23774,NUP160 [cytosol],R-HSA-376253,Q12769,Q12769,GlyGen,https://www.glygen.org/protein/Q12769#Glycosylation
+23776,NUP37 [cytosol],R-HSA-376237,Q8NFH4,Q8NFH4,Pharos - Targets,https://pharos.nih.gov/targets/Q8NFH4
+23777,NUP37 [cytosol],R-HSA-376237,Q8NFH4,Q8NFH4,GlyGen,https://www.glygen.org/protein/Q8NFH4#Glycosylation
+23782,NUP37 [cytosol],R-HSA-376237,Q8NFH4,Q8NFH4,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q8NFH4
+23785,NUP37 [cytosol],R-HSA-376237,Q8NFH4,Q8NFH4,PRO,https://proconsortium.org/app/entry/PR:Q8NFH4
+23790,NUP85 [cytosol],R-HSA-376238,Q9BW27,Q9BW27,PRO,https://proconsortium.org/app/entry/PR:Q9BW27
+23791,NUP85 [cytosol],R-HSA-376238,Q9BW27,Q9BW27,Pharos - Targets,https://pharos.nih.gov/targets/Q9BW27
+23792,NUP85 [cytosol],R-HSA-376238,Q9BW27,Q9BW27,GlyGen,https://www.glygen.org/protein/Q9BW27#Glycosylation
+23794,NUP85 [cytosol],R-HSA-376238,Q9BW27,Q9BW27,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q9BW27
+23808,NUP133 [cytosol],R-HSA-376251,Q8WUM0,Q8WUM0,PRO,https://proconsortium.org/app/entry/PR:Q8WUM0
+23809,NUP133 [cytosol],R-HSA-376251,Q8WUM0,Q8WUM0,Pharos - Targets,https://pharos.nih.gov/targets/Q8WUM0
+23810,NUP133 [cytosol],R-HSA-376251,Q8WUM0,Q8WUM0,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q8WUM0
+23818,NUP133 [cytosol],R-HSA-376251,Q8WUM0,Q8WUM0,GlyGen,https://www.glygen.org/protein/Q8WUM0#Glycosylation
+23819,SEC13 [cytosol],R-HSA-203981,P55735,P55735,PRO,https://proconsortium.org/app/entry/PR:P55735
+23822,SEC13 [cytosol],R-HSA-203981,P55735,P55735,GlyGen,https://www.glygen.org/protein/P55735#Glycosylation
+23828,SEC13 [cytosol],R-HSA-203981,P55735,P55735,Pharos - Targets,https://pharos.nih.gov/targets/P55735
+23832,SEC13 [cytosol],R-HSA-203981,P55735,P55735,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P55735
+24313,PPP2R5D [cytosol],R-HSA-3008950,Q14738,Q14738,GlyGen,https://www.glygen.org/protein/Q14738#Glycosylation
+24320,PPP2R5D [cytosol],R-HSA-3008950,Q14738,Q14738,PRO,https://proconsortium.org/app/entry/PR:Q14738
+24322,PPP2R5D [cytosol],R-HSA-3008950,Q14738,Q14738,Pharos - Targets,https://pharos.nih.gov/targets/Q14738
+24324,PPP2R5D [cytosol],R-HSA-3008950,Q14738,Q14738,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q14738
+80400,PPP2R5D [nucleoplasm],R-HSA-3008956,Q14738,Q14738,GlyGen,https://www.glygen.org/protein/Q14738#Glycosylation
+80407,PPP2R5D [nucleoplasm],R-HSA-3008956,Q14738,Q14738,PRO,https://proconsortium.org/app/entry/PR:Q14738
+80409,PPP2R5D [nucleoplasm],R-HSA-3008956,Q14738,Q14738,Pharos - Targets,https://pharos.nih.gov/targets/Q14738
+80411,PPP2R5D [nucleoplasm],R-HSA-3008956,Q14738,Q14738,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q14738
+80601,GPI [cytosol],R-HSA-70468,P06744,P06744,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P06744
+80606,GPI [cytosol],R-HSA-70468,P06744,P06744,Pharos - Targets,https://pharos.nih.gov/targets/P06744
+80610,GPI [cytosol],R-HSA-70468,P06744,P06744,PRO,https://proconsortium.org/app/entry/PR:P06744
+80617,GPI [cytosol],R-HSA-70468,P06744,P06744,GlyGen,https://www.glygen.org/protein/P06744#Glycosylation
+80621,FBP2 [cytosol],R-HSA-71500,O00757,O00757,Pharos - Targets,https://pharos.nih.gov/targets/O00757
+80630,FBP2 [cytosol],R-HSA-71500,O00757,O00757,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=O00757
+80641,FBP2 [cytosol],R-HSA-71500,O00757,O00757,PRO,https://proconsortium.org/app/entry/PR:O00757
+80673,FBP1 [cytosol],R-HSA-70476,P09467,P09467,GlyGen,https://www.glygen.org/protein/P09467#Glycosylation
+80676,FBP1 [cytosol],R-HSA-70476,P09467,P09467,PRO,https://proconsortium.org/app/entry/PR:P09467
+80686,FBP1 [cytosol],R-HSA-70476,P09467,P09467,Pharos - Targets,https://pharos.nih.gov/targets/P09467
+80689,FBP1 [cytosol],R-HSA-70476,P09467,P09467,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P09467
+80697,FBP1 [cytosol],R-HSA-70476,P09467,P09467,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P09467
+80705,ALDOA [cytosol],R-HSA-71492,P04075,P04075,GlyGen,https://www.glygen.org/protein/P04075#Glycosylation
+80716,ALDOA [cytosol],R-HSA-71492,P04075,P04075,Pharos - Targets,https://pharos.nih.gov/targets/P04075
+80723,ALDOA [cytosol],R-HSA-71492,P04075,P04075,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P04075
+80731,ALDOA [cytosol],R-HSA-71492,P04075,P04075,PRO,https://proconsortium.org/app/entry/PR:P04075
+80736,ALDOB [cytosol],R-HSA-70339,P05062,P05062,PRO,https://proconsortium.org/app/entry/PR:P05062
+80741,ALDOB [cytosol],R-HSA-70339,P05062,P05062,Pharos - Targets,https://pharos.nih.gov/targets/P05062
+80747,ALDOB [cytosol],R-HSA-70339,P05062,P05062,GlyGen,https://www.glygen.org/protein/P05062#Glycosylation
+80751,ALDOB [cytosol],R-HSA-70339,P05062,P05062,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P05062
+80758,ALDOC [cytosol],R-HSA-70455,P09972,P09972,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P09972
+80761,ALDOC [cytosol],R-HSA-70455,P09972,P09972,PRO,https://proconsortium.org/app/entry/PR:P09972
+80763,ALDOC [cytosol],R-HSA-70455,P09972,P09972,Pharos - Targets,https://pharos.nih.gov/targets/P09972
+80765,ALDOC [cytosol],R-HSA-70455,P09972,P09972,GlyGen,https://www.glygen.org/protein/P09972#Glycosylation
+80768,PFKL [cytosol],R-HSA-70459,P17858,P17858,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P17858
+80773,PFKL [cytosol],R-HSA-70459,P17858,P17858,GlyGen,https://www.glygen.org/protein/P17858#Glycosylation
+80777,PFKL [cytosol],R-HSA-70459,P17858,P17858,PRO,https://proconsortium.org/app/entry/PR:P17858
+80779,PFKL [cytosol],R-HSA-70459,P17858,P17858,Pharos - Targets,https://pharos.nih.gov/targets/P17858
+80781,PFKM [cytosol],R-HSA-70460,P08237,P08237,GlyGen,https://www.glygen.org/protein/P08237#Glycosylation
+80782,PFKM [cytosol],R-HSA-70460,P08237,P08237,Pharos - Targets,https://pharos.nih.gov/targets/P08237
+80784,PFKM [cytosol],R-HSA-70460,P08237,P08237,PRO,https://proconsortium.org/app/entry/PR:P08237
+80787,PFKM [cytosol],R-HSA-70460,P08237,P08237,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P08237
+80802,PFKM [cytosol],R-HSA-70460,P08237,P08237,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P08237
+80819,PFKP [cytosol],R-HSA-71452,Q01813,Q01813,Pharos - Targets,https://pharos.nih.gov/targets/Q01813
+80821,PFKP [cytosol],R-HSA-71452,Q01813,Q01813,GlyGen,https://www.glygen.org/protein/Q01813#Glycosylation
+80824,PFKP [cytosol],R-HSA-71452,Q01813,Q01813,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q01813
+80829,PFKP [cytosol],R-HSA-71452,Q01813,Q01813,PRO,https://proconsortium.org/app/entry/PR:Q01813
+80847,GCK [cytosol],R-HSA-450094,P35557,P35557,Pharos - Targets,https://pharos.nih.gov/targets/P35557
+80873,GCK [cytosol],R-HSA-450094,P35557,P35557,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P35557
+80883,GCK [cytosol],R-HSA-450094,P35557,P35557,PRO,https://proconsortium.org/app/entry/PR:P35557
+80893,GCK [cytosol],R-HSA-450094,P35557,P35557,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P35557
+80896,HK1 [cytosol],R-HSA-70395,P19367,P19367,PRO,https://proconsortium.org/app/entry/PR:P19367
+80914,HK1 [cytosol],R-HSA-70395,P19367,P19367,GlyGen,https://www.glygen.org/protein/P19367#Glycosylation
+80916,HK1 [cytosol],R-HSA-70395,P19367,P19367,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P19367
+80926,HK1 [cytosol],R-HSA-70395,P19367,P19367,Pharos - Targets,https://pharos.nih.gov/targets/P19367
+80938,HK2 [cytosol],R-HSA-70378,P52789,P52789,GlyGen,https://www.glygen.org/protein/P52789#Glycosylation
+80941,HK2 [cytosol],R-HSA-70378,P52789,P52789,PRO,https://proconsortium.org/app/entry/PR:P52789
+80943,HK2 [cytosol],R-HSA-70378,P52789,P52789,Pharos - Targets,https://pharos.nih.gov/targets/P52789
+80945,HK2 [cytosol],R-HSA-70378,P52789,P52789,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P52789
+80946,HK2 [cytosol],R-HSA-70378,P52789,P52789,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P52789
+80953,HK3 [cytosol],R-HSA-70412,P52790,P52790,Pharos - Targets,https://pharos.nih.gov/targets/P52790
+80961,HK3 [cytosol],R-HSA-70412,P52790,P52790,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P52790
+80962,HK3 [cytosol],R-HSA-70412,P52790,P52790,PRO,https://proconsortium.org/app/entry/PR:P52790
+81079,GNPDA1 [cytosol],R-HSA-6799597,P46926,P46926,Pharos - Targets,https://pharos.nih.gov/targets/P46926
+81081,GNPDA1 [cytosol],R-HSA-6799597,P46926,P46926,PRO,https://proconsortium.org/app/entry/PR:P46926
+81085,GNPDA1 [cytosol],R-HSA-6799597,P46926,P46926,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P46926
+81095,GNPDA1 [cytosol],R-HSA-6799597,P46926,P46926,GlyGen,https://www.glygen.org/protein/P46926#Glycosylation
+81104,GNPDA2 [cytosol],R-HSA-6799601,Q8TDQ7,Q8TDQ7,PRO,https://proconsortium.org/app/entry/PR:Q8TDQ7
+81108,GNPDA2 [cytosol],R-HSA-6799601,Q8TDQ7,Q8TDQ7,Pharos - Targets,https://pharos.nih.gov/targets/Q8TDQ7
+81113,GNPDA2 [cytosol],R-HSA-6799601,Q8TDQ7,Q8TDQ7,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q8TDQ7
+81121,TPI1 [cytosol],R-HSA-70451,P60174,P60174,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P60174
+81124,TPI1 [cytosol],R-HSA-70451,P60174,P60174,Pharos - Targets,https://pharos.nih.gov/targets/P60174
+81143,TPI1 [cytosol],R-HSA-70451,P60174,P60174,GlyGen,https://www.glygen.org/protein/P60174#Glycosylation
+81151,TPI1 [cytosol],R-HSA-70451,P60174,P60174,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P60174
+81161,TPI1 [cytosol],R-HSA-70451,P60174,P60174,PRO,https://proconsortium.org/app/entry/PR:P60174
+81207,GAPDHS [cytosol],R-HSA-372873,O14556,O14556,Pharos - Targets,https://pharos.nih.gov/targets/O14556
+81209,GAPDHS [cytosol],R-HSA-372873,O14556,O14556,PRO,https://proconsortium.org/app/entry/PR:O14556
+81214,GAPDHS [cytosol],R-HSA-372873,O14556,O14556,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=O14556
+81224,GAPDH [cytosol],R-HSA-70428,P04406,P04406,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P04406
+81232,GAPDH [cytosol],R-HSA-70428,P04406,P04406,Pharos - Targets,https://pharos.nih.gov/targets/P04406
+81242,GAPDH [cytosol],R-HSA-70428,P04406,P04406,PRO,https://proconsortium.org/app/entry/PR:P04406
+81251,GAPDH [cytosol],R-HSA-70428,P04406,P04406,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P04406
+81257,GAPDH [cytosol],R-HSA-70428,P04406,P04406,GlyGen,https://www.glygen.org/protein/P04406#Glycosylation
+81291,PGK1 [cytosol],R-HSA-70483,P00558,P00558,PRO,https://proconsortium.org/app/entry/PR:P00558
+81298,PGK1 [cytosol],R-HSA-70483,P00558,P00558,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P00558
+81307,PGK1 [cytosol],R-HSA-70483,P00558,P00558,GlyGen,https://www.glygen.org/protein/P00558#Glycosylation
+81324,PGK1 [cytosol],R-HSA-70483,P00558,P00558,Pharos - Targets,https://pharos.nih.gov/targets/P00558
+81328,PGAM1 [cytosol],R-HSA-71442,P18669,P18669,PRO,https://proconsortium.org/app/entry/PR:P18669
+81338,PGAM1 [cytosol],R-HSA-71442,P18669,P18669,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P18669
+81340,PGAM1 [cytosol],R-HSA-71442,P18669,P18669,Pharos - Targets,https://pharos.nih.gov/targets/P18669
+81344,PGAM1 [cytosol],R-HSA-71442,P18669,P18669,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P18669
+81353,PGAM1 [cytosol],R-HSA-71442,P18669,P18669,GlyGen,https://www.glygen.org/protein/P18669#Glycosylation
+81356,PGAM2 [cytosol],R-HSA-70487,P15259,P15259,PRO,https://proconsortium.org/app/entry/PR:P15259
+81359,PGAM2 [cytosol],R-HSA-70487,P15259,P15259,Pharos - Targets,https://pharos.nih.gov/targets/P15259
+81365,PGAM2 [cytosol],R-HSA-70487,P15259,P15259,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P15259
+81370,ENO2 [cytosol],R-HSA-71429,P09104,P09104,PRO,https://proconsortium.org/app/entry/PR:P09104
+81380,ENO2 [cytosol],R-HSA-71429,P09104,P09104,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P09104
+81384,ENO2 [cytosol],R-HSA-71429,P09104,P09104,Pharos - Targets,https://pharos.nih.gov/targets/P09104
+81387,ENO2 [cytosol],R-HSA-71429,P09104,P09104,GlyGen,https://www.glygen.org/protein/P09104#Glycosylation
+81401,ENO3 [cytosol],R-HSA-71433,P13929,P13929,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P13929
+81407,ENO3 [cytosol],R-HSA-71433,P13929,P13929,PRO,https://proconsortium.org/app/entry/PR:P13929
+81415,ENO3 [cytosol],R-HSA-71433,P13929,P13929,Pharos - Targets,https://pharos.nih.gov/targets/P13929
+81416,ENO3 [cytosol],R-HSA-71433,P13929,P13929,GlyGen,https://www.glygen.org/protein/P13929#Glycosylation
+81427,ENO1 [cytosol],R-HSA-71437,P06733,P06733,Pharos - Targets,https://pharos.nih.gov/targets/P06733
+81431,ENO1 [cytosol],R-HSA-71437,P06733,P06733,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P06733
+81436,ENO1 [cytosol],R-HSA-71437,P06733,P06733,GlyGen,https://www.glygen.org/protein/P06733#Glycosylation
+81439,ENO1 [cytosol],R-HSA-71437,P06733,P06733,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P06733
+81443,ENO1 [cytosol],R-HSA-71437,P06733,P06733,PRO,https://proconsortium.org/app/entry/PR:P06733
+81460,PCK1 [cytosol],R-HSA-70495,P35558,P35558,Pharos - Targets,https://pharos.nih.gov/targets/P35558
+81461,PCK1 [cytosol],R-HSA-70495,P35558,P35558,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P35558
+81463,PCK1 [cytosol],R-HSA-70495,P35558,P35558,PRO,https://proconsortium.org/app/entry/PR:P35558
+81464,PCK1 [cytosol],R-HSA-70495,P35558,P35558,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P35558
+81476,PXLP-K259-GOT1 [cytosol],R-HSA-1295497,P17174,P17174,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P17174
+81484,PXLP-K259-GOT1 [cytosol],R-HSA-1295497,P17174,P17174,PRO,https://proconsortium.org/app/entry/PR:P17174
+81485,PXLP-K259-GOT1 [cytosol],R-HSA-1295497,P17174,P17174,Pharos - Targets,https://pharos.nih.gov/targets/P17174
+81499,PXLP-K279-GOT2 [mitochondrial matrix],R-HSA-9608413,P00505,P00505,GlyGen,https://www.glygen.org/protein/P00505#Glycosylation
+81502,PXLP-K279-GOT2 [mitochondrial matrix],R-HSA-9608413,P00505,P00505,Pharos - Targets,https://pharos.nih.gov/targets/P00505
+81504,PXLP-K279-GOT2 [mitochondrial matrix],R-HSA-9608413,P00505,P00505,PRO,https://proconsortium.org/app/entry/PR:P00505
+81506,PXLP-K279-GOT2 [mitochondrial matrix],R-HSA-9608413,P00505,P00505,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P00505
+81525,PC [mitochondrial matrix],R-HSA-70498,P11498,P11498,PRO,https://proconsortium.org/app/entry/PR:P11498
+81536,PC [mitochondrial matrix],R-HSA-70498,P11498,P11498,Pharos - Targets,https://pharos.nih.gov/targets/P11498
+81551,PC [mitochondrial matrix],R-HSA-70498,P11498,P11498,GlyGen,https://www.glygen.org/protein/P11498#Glycosylation
+81554,PC [mitochondrial matrix],R-HSA-70498,P11498,P11498,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P11498
+81976,MDH1 [cytosol],R-HSA-198471,P40925,P40925,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P40925
+81979,MDH1 [cytosol],R-HSA-198471,P40925,P40925,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P40925
+81983,MDH1 [cytosol],R-HSA-198471,P40925,P40925,PRO,https://proconsortium.org/app/entry/PR:P40925
+81989,MDH1 [cytosol],R-HSA-198471,P40925,P40925,Pharos - Targets,https://pharos.nih.gov/targets/P40925
+81995,MDH1 [cytosol],R-HSA-198471,P40925,P40925,GlyGen,https://www.glygen.org/protein/P40925#Glycosylation
+81997,SLC25A10 [mitochondrial inner membrane],R-HSA-372848,Q9UBX3,Q9UBX3,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q9UBX3
+81999,SLC25A10 [mitochondrial inner membrane],R-HSA-372848,Q9UBX3,Q9UBX3,PRO,https://proconsortium.org/app/entry/PR:Q9UBX3
+82009,SLC25A10 [mitochondrial inner membrane],R-HSA-372848,Q9UBX3,Q9UBX3,Pharos - Targets,https://pharos.nih.gov/targets/Q9UBX3
+82013,MDH2 [mitochondrial matrix],R-HSA-70977,P40926,P40926,GlyGen,https://www.glygen.org/protein/P40926#Glycosylation
+82023,MDH2 [mitochondrial matrix],R-HSA-70977,P40926,P40926,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P40926
+82026,MDH2 [mitochondrial matrix],R-HSA-70977,P40926,P40926,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P40926
+82028,MDH2 [mitochondrial matrix],R-HSA-70977,P40926,P40926,PRO,https://proconsortium.org/app/entry/PR:P40926
+82031,MDH2 [mitochondrial matrix],R-HSA-70977,P40926,P40926,Pharos - Targets,https://pharos.nih.gov/targets/P40926
+83515,SLC25A11 [mitochondrial inner membrane],R-HSA-198451,Q02978,Q02978,PRO,https://proconsortium.org/app/entry/PR:Q02978
+83517,SLC25A11 [mitochondrial inner membrane],R-HSA-198451,Q02978,Q02978,Pharos - Targets,https://pharos.nih.gov/targets/Q02978
+83526,SLC25A11 [mitochondrial inner membrane],R-HSA-198451,Q02978,Q02978,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q02978
+83527,SLC25A11 [mitochondrial inner membrane],R-HSA-198451,Q02978,Q02978,GlyGen,https://www.glygen.org/protein/Q02978#Glycosylation
+83531,SLC25A1 [mitochondrial inner membrane],R-HSA-372445,P53007,P53007,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P53007
+83536,SLC25A1 [mitochondrial inner membrane],R-HSA-372445,P53007,P53007,Pharos - Targets,https://pharos.nih.gov/targets/P53007
+83539,SLC25A1 [mitochondrial inner membrane],R-HSA-372445,P53007,P53007,PRO,https://proconsortium.org/app/entry/PR:P53007
+83541,PCK2 [mitochondrial matrix],R-HSA-372815,Q16822,Q16822,GlyGen,https://www.glygen.org/protein/Q16822#Glycosylation
+83543,PCK2 [mitochondrial matrix],R-HSA-372815,Q16822,Q16822,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q16822
+83551,PCK2 [mitochondrial matrix],R-HSA-372815,Q16822,Q16822,PRO,https://proconsortium.org/app/entry/PR:Q16822
+83566,PCK2 [mitochondrial matrix],R-HSA-372815,Q16822,Q16822,Pharos - Targets,https://pharos.nih.gov/targets/Q16822
+83693,PGM2L1 [cytosol],R-HSA-8955671,Q6PCE3,Q6PCE3,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q6PCE3
+83695,PGM2L1 [cytosol],R-HSA-8955671,Q6PCE3,Q6PCE3,PRO,https://proconsortium.org/app/entry/PR:Q6PCE3
+83698,PGM2L1 [cytosol],R-HSA-8955671,Q6PCE3,Q6PCE3,Pharos - Targets,https://pharos.nih.gov/targets/Q6PCE3
+132970,NUPL2 [cytosol],R-HSA-157697,O15504,O15504,Pharos - Targets,https://pharos.nih.gov/targets/O15504
+132972,NUPL2 [cytosol],R-HSA-157697,O15504,O15504,GlyGen,https://www.glygen.org/protein/O15504#Glycosylation
+132977,NUPL2 [cytosol],R-HSA-157697,O15504,O15504,PRO,https://proconsortium.org/app/entry/PR:O15504
+132982,NUPL2 [cytosol],R-HSA-157697,O15504,O15504,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=O15504
+132985,AAAS [nuclear envelope],R-HSA-157738,Q9NRG9,Q9NRG9,GlyGen,https://www.glygen.org/protein/Q9NRG9#Glycosylation
+132989,AAAS [nuclear envelope],R-HSA-157738,Q9NRG9,Q9NRG9,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q9NRG9
+132991,AAAS [nuclear envelope],R-HSA-157738,Q9NRG9,Q9NRG9,PRO,https://proconsortium.org/app/entry/PR:Q9NRG9
+132994,AAAS [nuclear envelope],R-HSA-157738,Q9NRG9,Q9NRG9,Pharos - Targets,https://pharos.nih.gov/targets/Q9NRG9
+133003,NUP50 [nucleoplasm],R-HSA-157740,Q9UKX7,Q9UKX7,Pharos - Targets,https://pharos.nih.gov/targets/Q9UKX7
+133004,NUP50 [nucleoplasm],R-HSA-157740,Q9UKX7,Q9UKX7,PRO,https://proconsortium.org/app/entry/PR:Q9UKX7
+133005,NUP50 [nucleoplasm],R-HSA-157740,Q9UKX7,Q9UKX7,GlyGen,https://www.glygen.org/protein/Q9UKX7#Glycosylation
+133020,NUP50 [nucleoplasm],R-HSA-157740,Q9UKX7,Q9UKX7,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q9UKX7
+133026,NUP62 [nuclear envelope],R-HSA-157713,P37198,P37198,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P37198
+133034,NUP62 [nuclear envelope],R-HSA-157713,P37198,P37198,PRO,https://proconsortium.org/app/entry/PR:P37198
+133039,NUP62 [nuclear envelope],R-HSA-157713,P37198,P37198,Pharos - Targets,https://pharos.nih.gov/targets/P37198
+133040,NUP62 [nuclear envelope],R-HSA-157713,P37198,P37198,GlyGen,https://www.glygen.org/protein/P37198#Glycosylation
+133085,NUP54 [nuclear envelope],R-HSA-157724,Q7Z3B4,Q7Z3B4,Pharos - Targets,https://pharos.nih.gov/targets/Q7Z3B4
+133096,NUP54 [nuclear envelope],R-HSA-157724,Q7Z3B4,Q7Z3B4,GlyGen,https://www.glygen.org/protein/Q7Z3B4#Glycosylation
+133097,NUP54 [nuclear envelope],R-HSA-157724,Q7Z3B4,Q7Z3B4,PRO,https://proconsortium.org/app/entry/PR:Q7Z3B4
+133101,NUP54 [nuclear envelope],R-HSA-157724,Q7Z3B4,Q7Z3B4,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q7Z3B4
+133162,RAE1 [nuclear envelope],R-HSA-157718,P78406,P78406,GlyGen,https://www.glygen.org/protein/P78406#Glycosylation
+133163,RAE1 [nuclear envelope],R-HSA-157718,P78406,P78406,PRO,https://proconsortium.org/app/entry/PR:P78406
+133164,RAE1 [nuclear envelope],R-HSA-157718,P78406,P78406,Pharos - Targets,https://pharos.nih.gov/targets/P78406
+133168,RAE1 [nuclear envelope],R-HSA-157718,P78406,P78406,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P78406
+133199,NUP35 [nuclear envelope],R-HSA-157748,Q8NFH5,Q8NFH5,Pharos - Targets,https://pharos.nih.gov/targets/Q8NFH5
+133200,NUP35 [nuclear envelope],R-HSA-157748,Q8NFH5,Q8NFH5,GlyGen,https://www.glygen.org/protein/Q8NFH5#Glycosylation
+133202,NUP35 [nuclear envelope],R-HSA-157748,Q8NFH5,Q8NFH5,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q8NFH5
+133204,NUP35 [nuclear envelope],R-HSA-157748,Q8NFH5,Q8NFH5,PRO,https://proconsortium.org/app/entry/PR:Q8NFH5
+133214,NUP93 [nuclear envelope],R-HSA-157749,Q8N1F7,Q8N1F7,Pharos - Targets,https://pharos.nih.gov/targets/Q8N1F7
+133220,NUP93 [nuclear envelope],R-HSA-157749,Q8N1F7,Q8N1F7,PRO,https://proconsortium.org/app/entry/PR:Q8N1F7
+133221,NUP93 [nuclear envelope],R-HSA-157749,Q8N1F7,Q8N1F7,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q8N1F7
+133224,NUP93 [nuclear envelope],R-HSA-157749,Q8N1F7,Q8N1F7,GlyGen,https://www.glygen.org/protein/Q8N1F7#Glycosylation
+133236,NUP155 [nuclear envelope],R-HSA-157690,O75694,O75694,PRO,https://proconsortium.org/app/entry/PR:O75694
+133237,NUP155 [nuclear envelope],R-HSA-157690,O75694,O75694,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=O75694
+133243,NUP155 [nuclear envelope],R-HSA-157690,O75694,O75694,GlyGen,https://www.glygen.org/protein/O75694#Glycosylation
+133245,NUP155 [nuclear envelope],R-HSA-157690,O75694,O75694,Pharos - Targets,https://pharos.nih.gov/targets/O75694
+133249,NUP205 [nuclear envelope],R-HSA-157754,Q92621,Q92621,PRO,https://proconsortium.org/app/entry/PR:Q92621
+133251,NUP205 [nuclear envelope],R-HSA-157754,Q92621,Q92621,GlyGen,https://www.glygen.org/protein/Q92621#Glycosylation
+133252,NUP205 [nuclear envelope],R-HSA-157754,Q92621,Q92621,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q92621
+133257,NUP205 [nuclear envelope],R-HSA-157754,Q92621,Q92621,Pharos - Targets,https://pharos.nih.gov/targets/Q92621
+133264,POM121 [nuclear envelope],R-HSA-157747,Q96HA1,Q96HA1,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q96HA1
+133268,POM121 [nuclear envelope],R-HSA-157747,Q96HA1,Q96HA1,Pharos - Targets,https://pharos.nih.gov/targets/Q96HA1
+133280,POM121 [nuclear envelope],R-HSA-157747,Q96HA1,Q96HA1,PRO,https://proconsortium.org/app/entry/PR:Q96HA1
+133284,POM121 [nuclear envelope],R-HSA-157747,Q96HA1,Q96HA1,GlyGen,https://www.glygen.org/protein/Q96HA1#Glycosylation
+133289,POM121C [nuclear envelope],R-HSA-6805165,A8CG34,A8CG34,PRO,https://proconsortium.org/app/entry/PR:A8CG34
+133292,POM121C [nuclear envelope],R-HSA-6805165,A8CG34,A8CG34,GlyGen,https://www.glygen.org/protein/A8CG34#Glycosylation
+133294,POM121C [nuclear envelope],R-HSA-6805165,A8CG34,A8CG34,Pharos - Targets,https://pharos.nih.gov/targets/A8CG34
+133296,POM121C [nuclear envelope],R-HSA-6805165,A8CG34,A8CG34,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=A8CG34
+133299,NUP210 [nuclear envelope],R-HSA-157722,Q8TEM1,Q8TEM1,GlyGen,https://www.glygen.org/protein/Q8TEM1#Glycosylation
+133302,NUP210 [nuclear envelope],R-HSA-157722,Q8TEM1,Q8TEM1,PRO,https://proconsortium.org/app/entry/PR:Q8TEM1
+133305,NUP210 [nuclear envelope],R-HSA-157722,Q8TEM1,Q8TEM1,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q8TEM1
+133306,NUP210 [nuclear envelope],R-HSA-157722,Q8TEM1,Q8TEM1,Pharos - Targets,https://pharos.nih.gov/targets/Q8TEM1
+133307,NDC1 [nuclear envelope],R-HSA-6805183,Q9BTX1,Q9BTX1,PRO,https://proconsortium.org/app/entry/PR:Q9BTX1
+133309,NDC1 [nuclear envelope],R-HSA-6805183,Q9BTX1,Q9BTX1,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q9BTX1
+133312,NDC1 [nuclear envelope],R-HSA-6805183,Q9BTX1,Q9BTX1,GlyGen,https://www.glygen.org/protein/Q9BTX1#Glycosylation
+133317,NDC1 [nuclear envelope],R-HSA-6805183,Q9BTX1,Q9BTX1,Pharos - Targets,https://pharos.nih.gov/targets/Q9BTX1
+133329,NUP214 [cytosol],R-HSA-157691,P35658,P35658,GlyGen,https://www.glygen.org/protein/P35658#Glycosylation
+133331,NUP214 [cytosol],R-HSA-157691,P35658,P35658,Pharos - Targets,https://pharos.nih.gov/targets/P35658
+133332,NUP214 [cytosol],R-HSA-157691,P35658,P35658,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P35658
+133333,NUP214 [cytosol],R-HSA-157691,P35658,P35658,PRO,https://proconsortium.org/app/entry/PR:P35658
+133342,NUP188 [nuclear envelope],R-HSA-157752,Q5SRE5,Q5SRE5,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q5SRE5
+133347,NUP188 [nuclear envelope],R-HSA-157752,Q5SRE5,Q5SRE5,GlyGen,https://www.glygen.org/protein/Q5SRE5#Glycosylation
+133348,NUP188 [nuclear envelope],R-HSA-157752,Q5SRE5,Q5SRE5,PRO,https://proconsortium.org/app/entry/PR:Q5SRE5
+133349,NUP188 [nuclear envelope],R-HSA-157752,Q5SRE5,Q5SRE5,Pharos - Targets,https://pharos.nih.gov/targets/Q5SRE5
+133357,NUP88 [cytosol],R-HSA-157753,Q99567,Q99567,Pharos - Targets,https://pharos.nih.gov/targets/Q99567
+133358,NUP88 [cytosol],R-HSA-157753,Q99567,Q99567,GlyGen,https://www.glygen.org/protein/Q99567#Glycosylation
+133359,NUP88 [cytosol],R-HSA-157753,Q99567,Q99567,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q99567
+133360,NUP88 [cytosol],R-HSA-157753,Q99567,Q99567,PRO,https://proconsortium.org/app/entry/PR:Q99567
+133367,NUP153 [nucleoplasm],R-HSA-157695,P49790,P49790,PRO,https://proconsortium.org/app/entry/PR:P49790
+133370,NUP153 [nucleoplasm],R-HSA-157695,P49790,P49790,Pharos - Targets,https://pharos.nih.gov/targets/P49790
+133374,NUP153 [nucleoplasm],R-HSA-157695,P49790,P49790,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P49790
+133385,NUP153 [nucleoplasm],R-HSA-157695,P49790,P49790,GlyGen,https://www.glygen.org/protein/P49790#Glycosylation
+133387,TPR [nucleoplasm],R-HSA-157692,P12270,P12270,Pharos - Targets,https://pharos.nih.gov/targets/P12270
+133397,TPR [nucleoplasm],R-HSA-157692,P12270,P12270,GlyGen,https://www.glygen.org/protein/P12270#Glycosylation
+133400,TPR [nucleoplasm],R-HSA-157692,P12270,P12270,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P12270
+133402,TPR [nucleoplasm],R-HSA-157692,P12270,P12270,PRO,https://proconsortium.org/app/entry/PR:P12270
+139745,PRKACB [nucleoplasm],R-HSA-111937,P22694,P22694,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P22694
+139746,PRKACB [nucleoplasm],R-HSA-111937,P22694,P22694,GlyGen,https://www.glygen.org/protein/P22694#Glycosylation
+139771,PRKACB [nucleoplasm],R-HSA-111937,P22694,P22694,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P22694
+139773,PRKACB [nucleoplasm],R-HSA-111937,P22694,P22694,PRO,https://proconsortium.org/app/entry/PR:P22694
+139774,PRKACB [nucleoplasm],R-HSA-111937,P22694,P22694,Pharos - Targets,https://pharos.nih.gov/targets/P22694
+139792,PRKACG [nucleoplasm],R-HSA-111938,P22612,P22612,Pharos - Targets,https://pharos.nih.gov/targets/P22612
+139799,PRKACG [nucleoplasm],R-HSA-111938,P22612,P22612,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P22612
+139801,PRKACG [nucleoplasm],R-HSA-111938,P22612,P22612,PRO,https://proconsortium.org/app/entry/PR:P22612
+139832,PRKACA [nucleoplasm],R-HSA-111936,P17612,P17612,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P17612
+139840,PRKACA [nucleoplasm],R-HSA-111936,P17612,P17612,PRO,https://proconsortium.org/app/entry/PR:P17612
+139848,PRKACA [nucleoplasm],R-HSA-111936,P17612,P17612,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P17612
+139865,PRKACA [nucleoplasm],R-HSA-111936,P17612,P17612,Pharos - Targets,https://pharos.nih.gov/targets/P17612
+139884,PRKACA [nucleoplasm],R-HSA-111936,P17612,P17612,GlyGen,https://www.glygen.org/protein/P17612#Glycosylation
+139904,PRKACA [cytosol],R-HSA-57844,P17612,P17612,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P17612
+139912,PRKACA [cytosol],R-HSA-57844,P17612,P17612,PRO,https://proconsortium.org/app/entry/PR:P17612
+139920,PRKACA [cytosol],R-HSA-57844,P17612,P17612,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P17612
+139937,PRKACA [cytosol],R-HSA-57844,P17612,P17612,Pharos - Targets,https://pharos.nih.gov/targets/P17612
+139956,PRKACA [cytosol],R-HSA-57844,P17612,P17612,GlyGen,https://www.glygen.org/protein/P17612#Glycosylation
+139967,PRKACB [cytosol],R-HSA-57846,P22694,P22694,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P22694
+139968,PRKACB [cytosol],R-HSA-57846,P22694,P22694,GlyGen,https://www.glygen.org/protein/P22694#Glycosylation
+139993,PRKACB [cytosol],R-HSA-57846,P22694,P22694,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P22694
+139995,PRKACB [cytosol],R-HSA-57846,P22694,P22694,PRO,https://proconsortium.org/app/entry/PR:P22694
+139996,PRKACB [cytosol],R-HSA-57846,P22694,P22694,Pharos - Targets,https://pharos.nih.gov/targets/P22694
+140014,PRKACG [cytosol],R-HSA-57848,P22612,P22612,Pharos - Targets,https://pharos.nih.gov/targets/P22612
+140021,PRKACG [cytosol],R-HSA-57848,P22612,P22612,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P22612
+140023,PRKACG [cytosol],R-HSA-57848,P22612,P22612,PRO,https://proconsortium.org/app/entry/PR:P22612
+269427,NUP93 [cytosol],R-HSA-9634167,Q8N1F7,Q8N1F7,Pharos - Targets,https://pharos.nih.gov/targets/Q8N1F7
+269433,NUP93 [cytosol],R-HSA-9634167,Q8N1F7,Q8N1F7,PRO,https://proconsortium.org/app/entry/PR:Q8N1F7
+269434,NUP93 [cytosol],R-HSA-9634167,Q8N1F7,Q8N1F7,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q8N1F7
+269437,NUP93 [cytosol],R-HSA-9634167,Q8N1F7,Q8N1F7,GlyGen,https://www.glygen.org/protein/Q8N1F7#Glycosylation
+269450,NUP35 [cytosol],R-HSA-9634171,Q8NFH5,Q8NFH5,Pharos - Targets,https://pharos.nih.gov/targets/Q8NFH5
+269451,NUP35 [cytosol],R-HSA-9634171,Q8NFH5,Q8NFH5,GlyGen,https://www.glygen.org/protein/Q8NFH5#Glycosylation
+269453,NUP35 [cytosol],R-HSA-9634171,Q8NFH5,Q8NFH5,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q8NFH5
+269455,NUP35 [cytosol],R-HSA-9634171,Q8NFH5,Q8NFH5,PRO,https://proconsortium.org/app/entry/PR:Q8NFH5
+269467,NUP155 [cytosol],R-HSA-9634170,O75694,O75694,PRO,https://proconsortium.org/app/entry/PR:O75694
+269468,NUP155 [cytosol],R-HSA-9634170,O75694,O75694,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=O75694
+269474,NUP155 [cytosol],R-HSA-9634170,O75694,O75694,GlyGen,https://www.glygen.org/protein/O75694#Glycosylation
+269476,NUP155 [cytosol],R-HSA-9634170,O75694,O75694,Pharos - Targets,https://pharos.nih.gov/targets/O75694
+269480,NUP205 [cytosol],R-HSA-9634168,Q92621,Q92621,PRO,https://proconsortium.org/app/entry/PR:Q92621
+269482,NUP205 [cytosol],R-HSA-9634168,Q92621,Q92621,GlyGen,https://www.glygen.org/protein/Q92621#Glycosylation
+269483,NUP205 [cytosol],R-HSA-9634168,Q92621,Q92621,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q92621
+269488,NUP205 [cytosol],R-HSA-9634168,Q92621,Q92621,Pharos - Targets,https://pharos.nih.gov/targets/Q92621
+269498,NUP188 [cytosol],R-HSA-9634172,Q5SRE5,Q5SRE5,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q5SRE5
+269503,NUP188 [cytosol],R-HSA-9634172,Q5SRE5,Q5SRE5,GlyGen,https://www.glygen.org/protein/Q5SRE5#Glycosylation
+269504,NUP188 [cytosol],R-HSA-9634172,Q5SRE5,Q5SRE5,PRO,https://proconsortium.org/app/entry/PR:Q5SRE5
+269505,NUP188 [cytosol],R-HSA-9634172,Q5SRE5,Q5SRE5,Pharos - Targets,https://pharos.nih.gov/targets/Q5SRE5
+269511,NUP62 [cytosol],R-HSA-9634226,P37198,P37198,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P37198
+269519,NUP62 [cytosol],R-HSA-9634226,P37198,P37198,PRO,https://proconsortium.org/app/entry/PR:P37198
+269524,NUP62 [cytosol],R-HSA-9634226,P37198,P37198,Pharos - Targets,https://pharos.nih.gov/targets/P37198
+269525,NUP62 [cytosol],R-HSA-9634226,P37198,P37198,GlyGen,https://www.glygen.org/protein/P37198#Glycosylation
+269570,NUP54 [cytosol],R-HSA-9634221,Q7Z3B4,Q7Z3B4,Pharos - Targets,https://pharos.nih.gov/targets/Q7Z3B4
+269581,NUP54 [cytosol],R-HSA-9634221,Q7Z3B4,Q7Z3B4,GlyGen,https://www.glygen.org/protein/Q7Z3B4#Glycosylation
+269582,NUP54 [cytosol],R-HSA-9634221,Q7Z3B4,Q7Z3B4,PRO,https://proconsortium.org/app/entry/PR:Q7Z3B4
+269586,NUP54 [cytosol],R-HSA-9634221,Q7Z3B4,Q7Z3B4,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q7Z3B4
+317241,SLC25A13 [mitochondrial inner membrane],R-HSA-372485,Q9UJS0,Q9UJS0,PRO,https://proconsortium.org/app/entry/PR:Q9UJS0
+317243,SLC25A13 [mitochondrial inner membrane],R-HSA-372485,Q9UJS0,Q9UJS0,Pharos - Targets,https://pharos.nih.gov/targets/Q9UJS0
+317248,SLC25A13 [mitochondrial inner membrane],R-HSA-372485,Q9UJS0,Q9UJS0,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q9UJS0
+317250,SLC25A13 [mitochondrial inner membrane],R-HSA-372485,Q9UJS0,Q9UJS0,GlyGen,https://www.glygen.org/protein/Q9UJS0#Glycosylation
+317251,SLC25A12 [mitochondrial inner membrane],R-HSA-372470,O75746,O75746,PRO,https://proconsortium.org/app/entry/PR:O75746
+317253,SLC25A12 [mitochondrial inner membrane],R-HSA-372470,O75746,O75746,GlyGen,https://www.glygen.org/protein/O75746#Glycosylation
+317255,SLC25A12 [mitochondrial inner membrane],R-HSA-372470,O75746,O75746,Pharos - Targets,https://pharos.nih.gov/targets/O75746
+317264,SLC25A12 [mitochondrial inner membrane],R-HSA-372470,O75746,O75746,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=O75746
+330129,SEC13 [ER to Golgi transport vesicle membrane],R-HSA-204012,P55735,P55735,PRO,https://proconsortium.org/app/entry/PR:P55735
+330132,SEC13 [ER to Golgi transport vesicle membrane],R-HSA-204012,P55735,P55735,GlyGen,https://www.glygen.org/protein/P55735#Glycosylation
+330138,SEC13 [ER to Golgi transport vesicle membrane],R-HSA-204012,P55735,P55735,Pharos - Targets,https://pharos.nih.gov/targets/P55735
+330142,SEC13 [ER to Golgi transport vesicle membrane],R-HSA-204012,P55735,P55735,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P55735
+342707,G6PC3 [endoplasmic reticulum membrane],R-HSA-981605,Q9BUM1,Q9BUM1,Pharos - Targets,https://pharos.nih.gov/targets/Q9BUM1
+342708,G6PC3 [endoplasmic reticulum membrane],R-HSA-981605,Q9BUM1,Q9BUM1,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q9BUM1
+342712,G6PC3 [endoplasmic reticulum membrane],R-HSA-981605,Q9BUM1,Q9BUM1,PRO,https://proconsortium.org/app/entry/PR:Q9BUM1
+342714,G6PC [endoplasmic reticulum membrane],R-HSA-71823,P35575,P35575,PRO,https://proconsortium.org/app/entry/PR:P35575
+342716,G6PC [endoplasmic reticulum membrane],R-HSA-71823,P35575,P35575,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P35575
+342719,G6PC [endoplasmic reticulum membrane],R-HSA-71823,P35575,P35575,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P35575
+342724,G6PC [endoplasmic reticulum membrane],R-HSA-71823,P35575,P35575,GlyGen,https://www.glygen.org/protein/P35575#Glycosylation
+342726,G6PC [endoplasmic reticulum membrane],R-HSA-71823,P35575,P35575,Pharos - Targets,https://pharos.nih.gov/targets/P35575
+342733,SLC37A4 [endoplasmic reticulum membrane],R-HSA-3006348,O43826,O43826,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=O43826
+342734,SLC37A4 [endoplasmic reticulum membrane],R-HSA-3006348,O43826,O43826,PRO,https://proconsortium.org/app/entry/PR:O43826
+342742,SLC37A4 [endoplasmic reticulum membrane],R-HSA-3006348,O43826,O43826,Pharos - Targets,https://pharos.nih.gov/targets/O43826
+342743,SLC37A4 [endoplasmic reticulum membrane],R-HSA-3006348,O43826,O43826,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=O43826
+342758,SLC37A1 [endoplasmic reticulum membrane],R-HSA-3257123,P57057,P57057,PRO,https://proconsortium.org/app/entry/PR:P57057
+342764,SLC37A1 [endoplasmic reticulum membrane],R-HSA-3257123,P57057,P57057,Pharos - Targets,https://pharos.nih.gov/targets/P57057
+342765,SLC37A1 [endoplasmic reticulum membrane],R-HSA-3257123,P57057,P57057,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P57057
+342768,SLC37A1 [endoplasmic reticulum membrane],R-HSA-3257123,P57057,P57057,GlyGen,https://www.glygen.org/protein/P57057#Glycosylation
+342788,G6PC2 [endoplasmic reticulum membrane],R-HSA-981603,Q9NQR9,Q9NQR9,PRO,https://proconsortium.org/app/entry/PR:Q9NQR9
+342790,G6PC2 [endoplasmic reticulum membrane],R-HSA-981603,Q9NQR9,Q9NQR9,Pharos - Targets,https://pharos.nih.gov/targets/Q9NQR9
+342802,G6PC2 [endoplasmic reticulum membrane],R-HSA-981603,Q9NQR9,Q9NQR9,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q9NQR9
+342808,G6PC2 [endoplasmic reticulum membrane],R-HSA-981603,Q9NQR9,Q9NQR9,GlyGen,https://www.glygen.org/protein/Q9NQR9#Glycosylation
+342817,ADPGK [endoplasmic reticulum membrane],R-HSA-5696062,Q9BRR6,Q9BRR6,Pharos - Targets,https://pharos.nih.gov/targets/Q9BRR6
+342819,ADPGK [endoplasmic reticulum membrane],R-HSA-5696062,Q9BRR6,Q9BRR6,PRO,https://proconsortium.org/app/entry/PR:Q9BRR6
+342822,ADPGK [endoplasmic reticulum membrane],R-HSA-5696062,Q9BRR6,Q9BRR6,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q9BRR6
+342838,GCK [nucleoplasm],R-HSA-450102,P35557,P35557,Pharos - Targets,https://pharos.nih.gov/targets/P35557
+342864,GCK [nucleoplasm],R-HSA-450102,P35557,P35557,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P35557
+342874,GCK [nucleoplasm],R-HSA-450102,P35557,P35557,PRO,https://proconsortium.org/app/entry/PR:P35557
+342884,GCK [nucleoplasm],R-HSA-450102,P35557,P35557,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P35557
+342887,GCKR [nucleoplasm],R-HSA-170805,Q14397,Q14397,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=Q14397
+342898,GCKR [nucleoplasm],R-HSA-170805,Q14397,Q14397,Pharos - Targets,https://pharos.nih.gov/targets/Q14397
+342903,GCKR [nucleoplasm],R-HSA-170805,Q14397,Q14397,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q14397
+342912,GCKR [nucleoplasm],R-HSA-170805,Q14397,Q14397,PRO,https://proconsortium.org/app/entry/PR:Q14397
+342918,GCKR [cytosol],R-HSA-170818,Q14397,Q14397,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=Q14397
+342929,GCKR [cytosol],R-HSA-170818,Q14397,Q14397,Pharos - Targets,https://pharos.nih.gov/targets/Q14397
+342934,GCKR [cytosol],R-HSA-170818,Q14397,Q14397,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q14397
+342943,GCKR [cytosol],R-HSA-170818,Q14397,Q14397,PRO,https://proconsortium.org/app/entry/PR:Q14397
+342968,BPGM [cytosol],R-HSA-6798334,P07738,P07738,PRO,https://proconsortium.org/app/entry/PR:P07738
+342971,BPGM [cytosol],R-HSA-6798334,P07738,P07738,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P07738
+342975,BPGM [cytosol],R-HSA-6798334,P07738,P07738,Pharos - Targets,https://pharos.nih.gov/targets/P07738
+342979,PGP [cytosol],R-HSA-9608450,A6NDG6,A6NDG6,Pharos - Targets,https://pharos.nih.gov/targets/A6NDG6
+342980,PGP [cytosol],R-HSA-9608450,A6NDG6,A6NDG6,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=A6NDG6
+342981,PGP [cytosol],R-HSA-9608450,A6NDG6,A6NDG6,PRO,https://proconsortium.org/app/entry/PR:A6NDG6
+342986,PGP [cytosol],R-HSA-9608450,A6NDG6,A6NDG6,GlyGen,https://www.glygen.org/protein/A6NDG6#Glycosylation
+342992,p-S33-PFKFB1 [cytosol],R-HSA-163749,P16118,P16118,Pharos - Targets,https://pharos.nih.gov/targets/P16118
+342996,p-S33-PFKFB1 [cytosol],R-HSA-163749,P16118,P16118,PRO,https://proconsortium.org/app/entry/PR:P16118
+342998,p-S33-PFKFB1 [cytosol],R-HSA-163749,P16118,P16118,GlyGen,https://www.glygen.org/protein/P16118#Glycosylation
+342999,p-S33-PFKFB1 [cytosol],R-HSA-163749,P16118,P16118,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P16118
+343003,p-S33-PFKFB1 [cytosol],R-HSA-163749,P16118,P16118,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P16118
+343009,PFKFB1 [cytosol],R-HSA-71785,P16118,P16118,Pharos - Targets,https://pharos.nih.gov/targets/P16118
+343013,PFKFB1 [cytosol],R-HSA-71785,P16118,P16118,PRO,https://proconsortium.org/app/entry/PR:P16118
+343015,PFKFB1 [cytosol],R-HSA-71785,P16118,P16118,GlyGen,https://www.glygen.org/protein/P16118#Glycosylation
+343016,PFKFB1 [cytosol],R-HSA-71785,P16118,P16118,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P16118
+343020,PFKFB1 [cytosol],R-HSA-71785,P16118,P16118,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P16118
+343034,PFKFB3 [cytosol],R-HSA-71794,Q16875,Q16875,PRO,https://proconsortium.org/app/entry/PR:Q16875
+343041,PFKFB3 [cytosol],R-HSA-71794,Q16875,Q16875,GlyGen,https://www.glygen.org/protein/Q16875#Glycosylation
+343051,PFKFB3 [cytosol],R-HSA-71794,Q16875,Q16875,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=Q16875
+343055,PFKFB3 [cytosol],R-HSA-71794,Q16875,Q16875,Pharos - Targets,https://pharos.nih.gov/targets/Q16875
+343056,PFKFB3 [cytosol],R-HSA-71794,Q16875,Q16875,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q16875
+343074,PFKFB4 [cytosol],R-HSA-71798,Q16877,Q16877,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q16877
+343077,PFKFB4 [cytosol],R-HSA-71798,Q16877,Q16877,PRO,https://proconsortium.org/app/entry/PR:Q16877
+343085,PFKFB4 [cytosol],R-HSA-71798,Q16877,Q16877,Pharos - Targets,https://pharos.nih.gov/targets/Q16877
+343092,PFKFB2 [cytosol],R-HSA-71790,O60825,O60825,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=O60825
+343099,PFKFB2 [cytosol],R-HSA-71790,O60825,O60825,Pharos - Targets,https://pharos.nih.gov/targets/O60825
+343100,PFKFB2 [cytosol],R-HSA-71790,O60825,O60825,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=O60825
+343101,PFKFB2 [cytosol],R-HSA-71790,O60825,O60825,PRO,https://proconsortium.org/app/entry/PR:O60825
+424680,SEC13 [endoplasmic reticulum membrane],R-HSA-203994,P55735,P55735,PRO,https://proconsortium.org/app/entry/PR:P55735
+424683,SEC13 [endoplasmic reticulum membrane],R-HSA-203994,P55735,P55735,GlyGen,https://www.glygen.org/protein/P55735#Glycosylation
+424689,SEC13 [endoplasmic reticulum membrane],R-HSA-203994,P55735,P55735,Pharos - Targets,https://pharos.nih.gov/targets/P55735
+424693,SEC13 [endoplasmic reticulum membrane],R-HSA-203994,P55735,P55735,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P55735
+482032,GPI [ficolin-1-rich granule lumen],R-HSA-6801506,P06744,P06744,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P06744
+482037,GPI [ficolin-1-rich granule lumen],R-HSA-6801506,P06744,P06744,Pharos - Targets,https://pharos.nih.gov/targets/P06744
+482041,GPI [ficolin-1-rich granule lumen],R-HSA-6801506,P06744,P06744,PRO,https://proconsortium.org/app/entry/PR:P06744
+482048,GPI [ficolin-1-rich granule lumen],R-HSA-6801506,P06744,P06744,GlyGen,https://www.glygen.org/protein/P06744#Glycosylation
+482106,PGAM1 [ficolin-1-rich granule lumen],R-HSA-6803309,P18669,P18669,PRO,https://proconsortium.org/app/entry/PR:P18669
+482116,PGAM1 [ficolin-1-rich granule lumen],R-HSA-6803309,P18669,P18669,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P18669
+482118,PGAM1 [ficolin-1-rich granule lumen],R-HSA-6803309,P18669,P18669,Pharos - Targets,https://pharos.nih.gov/targets/P18669
+482122,PGAM1 [ficolin-1-rich granule lumen],R-HSA-6803309,P18669,P18669,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P18669
+482131,PGAM1 [ficolin-1-rich granule lumen],R-HSA-6803309,P18669,P18669,GlyGen,https://www.glygen.org/protein/P18669#Glycosylation
+482475,HK3 [ficolin-1-rich granule lumen],R-HSA-6801527,P52790,P52790,Pharos - Targets,https://pharos.nih.gov/targets/P52790
+482483,HK3 [ficolin-1-rich granule lumen],R-HSA-6801527,P52790,P52790,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P52790
+482484,HK3 [ficolin-1-rich granule lumen],R-HSA-6801527,P52790,P52790,PRO,https://proconsortium.org/app/entry/PR:P52790
+482531,ALDOA [ficolin-1-rich granule lumen],R-HSA-6801521,P04075,P04075,GlyGen,https://www.glygen.org/protein/P04075#Glycosylation
+482542,ALDOA [ficolin-1-rich granule lumen],R-HSA-6801521,P04075,P04075,Pharos - Targets,https://pharos.nih.gov/targets/P04075
+482549,ALDOA [ficolin-1-rich granule lumen],R-HSA-6801521,P04075,P04075,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P04075
+482557,ALDOA [ficolin-1-rich granule lumen],R-HSA-6801521,P04075,P04075,PRO,https://proconsortium.org/app/entry/PR:P04075
+485428,ALDOC [ficolin-1-rich granule lumen],R-HSA-6801464,P09972,P09972,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P09972
+485431,ALDOC [ficolin-1-rich granule lumen],R-HSA-6801464,P09972,P09972,PRO,https://proconsortium.org/app/entry/PR:P09972
+485433,ALDOC [ficolin-1-rich granule lumen],R-HSA-6801464,P09972,P09972,Pharos - Targets,https://pharos.nih.gov/targets/P09972
+485435,ALDOC [ficolin-1-rich granule lumen],R-HSA-6801464,P09972,P09972,GlyGen,https://www.glygen.org/protein/P09972#Glycosylation
+486367,PFKL [ficolin-1-rich granule lumen],R-HSA-6801030,P17858,P17858,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P17858
+486372,PFKL [ficolin-1-rich granule lumen],R-HSA-6801030,P17858,P17858,GlyGen,https://www.glygen.org/protein/P17858#Glycosylation
+486376,PFKL [ficolin-1-rich granule lumen],R-HSA-6801030,P17858,P17858,PRO,https://proconsortium.org/app/entry/PR:P17858
+486378,PFKL [ficolin-1-rich granule lumen],R-HSA-6801030,P17858,P17858,Pharos - Targets,https://pharos.nih.gov/targets/P17858
+487449,ALDOA [extracellular region],R-HSA-349735,P04075,P04075,GlyGen,https://www.glygen.org/protein/P04075#Glycosylation
+487460,ALDOA [extracellular region],R-HSA-349735,P04075,P04075,Pharos - Targets,https://pharos.nih.gov/targets/P04075
+487467,ALDOA [extracellular region],R-HSA-349735,P04075,P04075,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P04075
+487475,ALDOA [extracellular region],R-HSA-349735,P04075,P04075,PRO,https://proconsortium.org/app/entry/PR:P04075
+488550,PFKL [extracellular region],R-HSA-6806471,P17858,P17858,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P17858
+488555,PFKL [extracellular region],R-HSA-6806471,P17858,P17858,GlyGen,https://www.glygen.org/protein/P17858#Glycosylation
+488559,PFKL [extracellular region],R-HSA-6806471,P17858,P17858,PRO,https://proconsortium.org/app/entry/PR:P17858
+488561,PFKL [extracellular region],R-HSA-6806471,P17858,P17858,Pharos - Targets,https://pharos.nih.gov/targets/P17858
+488884,GPI [extracellular region],R-HSA-6806478,P06744,P06744,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P06744
+488889,GPI [extracellular region],R-HSA-6806478,P06744,P06744,Pharos - Targets,https://pharos.nih.gov/targets/P06744
+488893,GPI [extracellular region],R-HSA-6806478,P06744,P06744,PRO,https://proconsortium.org/app/entry/PR:P06744
+488900,GPI [extracellular region],R-HSA-6806478,P06744,P06744,GlyGen,https://www.glygen.org/protein/P06744#Glycosylation
+489337,PGAM1 [extracellular region],R-HSA-6806482,P18669,P18669,PRO,https://proconsortium.org/app/entry/PR:P18669
+489347,PGAM1 [extracellular region],R-HSA-6806482,P18669,P18669,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P18669
+489349,PGAM1 [extracellular region],R-HSA-6806482,P18669,P18669,Pharos - Targets,https://pharos.nih.gov/targets/P18669
+489353,PGAM1 [extracellular region],R-HSA-6806482,P18669,P18669,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P18669
+489362,PGAM1 [extracellular region],R-HSA-6806482,P18669,P18669,GlyGen,https://www.glygen.org/protein/P18669#Glycosylation
+491008,HK3 [extracellular region],R-HSA-6806457,P52790,P52790,Pharos - Targets,https://pharos.nih.gov/targets/P52790
+491016,HK3 [extracellular region],R-HSA-6806457,P52790,P52790,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P52790
+491017,HK3 [extracellular region],R-HSA-6806457,P52790,P52790,PRO,https://proconsortium.org/app/entry/PR:P52790
+491361,ALDOC [extracellular region],R-HSA-6801553,P09972,P09972,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P09972
+491364,ALDOC [extracellular region],R-HSA-6801553,P09972,P09972,PRO,https://proconsortium.org/app/entry/PR:P09972
+491366,ALDOC [extracellular region],R-HSA-6801553,P09972,P09972,Pharos - Targets,https://pharos.nih.gov/targets/P09972
+491368,ALDOC [extracellular region],R-HSA-6801553,P09972,P09972,GlyGen,https://www.glygen.org/protein/P09972#Glycosylation
+491880,ALDOC [tertiary granule lumen],R-HSA-6801526,P09972,P09972,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P09972
+491883,ALDOC [tertiary granule lumen],R-HSA-6801526,P09972,P09972,PRO,https://proconsortium.org/app/entry/PR:P09972
+491885,ALDOC [tertiary granule lumen],R-HSA-6801526,P09972,P09972,Pharos - Targets,https://pharos.nih.gov/targets/P09972
+491887,ALDOC [tertiary granule lumen],R-HSA-6801526,P09972,P09972,GlyGen,https://www.glygen.org/protein/P09972#Glycosylation
+492058,ALDOA [tertiary granule lumen],R-HSA-6801485,P04075,P04075,GlyGen,https://www.glygen.org/protein/P04075#Glycosylation
+492069,ALDOA [tertiary granule lumen],R-HSA-6801485,P04075,P04075,Pharos - Targets,https://pharos.nih.gov/targets/P04075
+492076,ALDOA [tertiary granule lumen],R-HSA-6801485,P04075,P04075,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P04075
+492084,ALDOA [tertiary granule lumen],R-HSA-6801485,P04075,P04075,PRO,https://proconsortium.org/app/entry/PR:P04075
+506589,HK3 [secretory granule lumen],R-HSA-6801511,P52790,P52790,Pharos - Targets,https://pharos.nih.gov/targets/P52790
+506597,HK3 [secretory granule lumen],R-HSA-6801511,P52790,P52790,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P52790
+506598,HK3 [secretory granule lumen],R-HSA-6801511,P52790,P52790,PRO,https://proconsortium.org/app/entry/PR:P52790
+508337,ALDOC [secretory granule lumen],R-HSA-6801483,P09972,P09972,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P09972
+508340,ALDOC [secretory granule lumen],R-HSA-6801483,P09972,P09972,PRO,https://proconsortium.org/app/entry/PR:P09972
+508342,ALDOC [secretory granule lumen],R-HSA-6801483,P09972,P09972,Pharos - Targets,https://pharos.nih.gov/targets/P09972
+508344,ALDOC [secretory granule lumen],R-HSA-6801483,P09972,P09972,GlyGen,https://www.glygen.org/protein/P09972#Glycosylation
+508424,GPI [secretory granule lumen],R-HSA-6801495,P06744,P06744,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P06744
+508429,GPI [secretory granule lumen],R-HSA-6801495,P06744,P06744,Pharos - Targets,https://pharos.nih.gov/targets/P06744
+508433,GPI [secretory granule lumen],R-HSA-6801495,P06744,P06744,PRO,https://proconsortium.org/app/entry/PR:P06744
+508440,GPI [secretory granule lumen],R-HSA-6801495,P06744,P06744,GlyGen,https://www.glygen.org/protein/P06744#Glycosylation
+508872,PGAM1 [secretory granule lumen],R-HSA-6803293,P18669,P18669,PRO,https://proconsortium.org/app/entry/PR:P18669
+508882,PGAM1 [secretory granule lumen],R-HSA-6803293,P18669,P18669,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P18669
+508884,PGAM1 [secretory granule lumen],R-HSA-6803293,P18669,P18669,Pharos - Targets,https://pharos.nih.gov/targets/P18669
+508888,PGAM1 [secretory granule lumen],R-HSA-6803293,P18669,P18669,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P18669
+508897,PGAM1 [secretory granule lumen],R-HSA-6803293,P18669,P18669,GlyGen,https://www.glygen.org/protein/P18669#Glycosylation
+509223,ALDOA [secretory granule lumen],R-HSA-6801469,P04075,P04075,GlyGen,https://www.glygen.org/protein/P04075#Glycosylation
+509234,ALDOA [secretory granule lumen],R-HSA-6801469,P04075,P04075,Pharos - Targets,https://pharos.nih.gov/targets/P04075
+509241,ALDOA [secretory granule lumen],R-HSA-6801469,P04075,P04075,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P04075
+509249,ALDOA [secretory granule lumen],R-HSA-6801469,P04075,P04075,PRO,https://proconsortium.org/app/entry/PR:P04075
+509588,PFKL [secretory granule lumen],R-HSA-6800876,P17858,P17858,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P17858
+509593,PFKL [secretory granule lumen],R-HSA-6800876,P17858,P17858,GlyGen,https://www.glygen.org/protein/P17858#Glycosylation
+509597,PFKL [secretory granule lumen],R-HSA-6800876,P17858,P17858,PRO,https://proconsortium.org/app/entry/PR:P17858
+509599,PFKL [secretory granule lumen],R-HSA-6800876,P17858,P17858,Pharos - Targets,https://pharos.nih.gov/targets/P17858
+532560,PRKACG [ciliary base],R-HSA-5610405,P22612,P22612,Pharos - Targets,https://pharos.nih.gov/targets/P22612
+532567,PRKACG [ciliary base],R-HSA-5610405,P22612,P22612,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P22612
+532569,PRKACG [ciliary base],R-HSA-5610405,P22612,P22612,PRO,https://proconsortium.org/app/entry/PR:P22612
+532572,PRKACB [ciliary base],R-HSA-5610404,P22694,P22694,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P22694
+532573,PRKACB [ciliary base],R-HSA-5610404,P22694,P22694,GlyGen,https://www.glygen.org/protein/P22694#Glycosylation
+532598,PRKACB [ciliary base],R-HSA-5610404,P22694,P22694,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P22694
+532600,PRKACB [ciliary base],R-HSA-5610404,P22694,P22694,PRO,https://proconsortium.org/app/entry/PR:P22694
+532601,PRKACB [ciliary base],R-HSA-5610404,P22694,P22694,Pharos - Targets,https://pharos.nih.gov/targets/P22694
+532628,PRKACA [ciliary base],R-HSA-5610402,P17612,P17612,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P17612
+532636,PRKACA [ciliary base],R-HSA-5610402,P17612,P17612,PRO,https://proconsortium.org/app/entry/PR:P17612
+532644,PRKACA [ciliary base],R-HSA-5610402,P17612,P17612,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P17612
+532661,PRKACA [ciliary base],R-HSA-5610402,P17612,P17612,Pharos - Targets,https://pharos.nih.gov/targets/P17612
+532680,PRKACA [ciliary base],R-HSA-5610402,P17612,P17612,GlyGen,https://www.glygen.org/protein/P17612#Glycosylation
+549036,SEC13 [lysosomal membrane],R-HSA-9638246,P55735,P55735,PRO,https://proconsortium.org/app/entry/PR:P55735
+549039,SEC13 [lysosomal membrane],R-HSA-9638246,P55735,P55735,GlyGen,https://www.glygen.org/protein/P55735#Glycosylation
+549045,SEC13 [lysosomal membrane],R-HSA-9638246,P55735,P55735,Pharos - Targets,https://pharos.nih.gov/targets/P55735
+549049,SEC13 [lysosomal membrane],R-HSA-9638246,P55735,P55735,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P55735
+698603,TPR(2-629)-ALK(1058-1620) fusion [cytosol],R-HSA-9711979,P12270,P12270,Pharos - Targets,https://pharos.nih.gov/targets/P12270
+698613,TPR(2-629)-ALK(1058-1620) fusion [cytosol],R-HSA-9711979,P12270,P12270,GlyGen,https://www.glygen.org/protein/P12270#Glycosylation
+698616,TPR(2-629)-ALK(1058-1620) fusion [cytosol],R-HSA-9711979,P12270,P12270,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P12270
+698618,TPR(2-629)-ALK(1058-1620) fusion [cytosol],R-HSA-9711979,P12270,P12270,PRO,https://proconsortium.org/app/entry/PR:P12270
+698874,RANBP2(1-867)-ALK(1058-1620) fusion [cytosol],R-HSA-9702002,P49792,P49792,Pharos - Targets,https://pharos.nih.gov/targets/P49792
+698876,RANBP2(1-867)-ALK(1058-1620) fusion [cytosol],R-HSA-9702002,P49792,P49792,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P49792
+698882,RANBP2(1-867)-ALK(1058-1620) fusion [cytosol],R-HSA-9702002,P49792,P49792,PRO,https://proconsortium.org/app/entry/PR:P49792
+698890,RANBP2(1-867)-ALK(1058-1620) fusion [cytosol],R-HSA-9702002,P49792,P49792,GlyGen,https://www.glygen.org/protein/P49792#Glycosylation
+699414,TPR(2-629)-p-7Y ALK(1058-1620) fusion [cytosol],R-HSA-9711958,P12270,P12270,Pharos - Targets,https://pharos.nih.gov/targets/P12270
+699424,TPR(2-629)-p-7Y ALK(1058-1620) fusion [cytosol],R-HSA-9711958,P12270,P12270,GlyGen,https://www.glygen.org/protein/P12270#Glycosylation
+699427,TPR(2-629)-p-7Y ALK(1058-1620) fusion [cytosol],R-HSA-9711958,P12270,P12270,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P12270
+699429,TPR(2-629)-p-7Y ALK(1058-1620) fusion [cytosol],R-HSA-9711958,P12270,P12270,PRO,https://proconsortium.org/app/entry/PR:P12270
+699668,RANBP2(1-867)-p-7Y ALK(1058-1620) fusion [cytosol],R-HSA-9718443,P49792,P49792,Pharos - Targets,https://pharos.nih.gov/targets/P49792
+699670,RANBP2(1-867)-p-7Y ALK(1058-1620) fusion [cytosol],R-HSA-9718443,P49792,P49792,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P49792
+699676,RANBP2(1-867)-p-7Y ALK(1058-1620) fusion [cytosol],R-HSA-9718443,P49792,P49792,PRO,https://proconsortium.org/app/entry/PR:P49792
+699684,RANBP2(1-867)-p-7Y ALK(1058-1620) fusion [cytosol],R-HSA-9718443,P49792,P49792,GlyGen,https://www.glygen.org/protein/P49792#Glycosylation
+704475,PC [cytosol],R-HSA-3323119,P11498,P11498,PRO,https://proconsortium.org/app/entry/PR:P11498
+704486,PC [cytosol],R-HSA-3323119,P11498,P11498,Pharos - Targets,https://pharos.nih.gov/targets/P11498
+704501,PC [cytosol],R-HSA-3323119,P11498,P11498,GlyGen,https://www.glygen.org/protein/P11498#Glycosylation
+704504,PC [cytosol],R-HSA-3323119,P11498,P11498,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P11498
+704515,Btn-PC [cytosol],R-HSA-3323170,P11498,P11498,PRO,https://proconsortium.org/app/entry/PR:P11498
+704526,Btn-PC [cytosol],R-HSA-3323170,P11498,P11498,Pharos - Targets,https://pharos.nih.gov/targets/P11498
+704541,Btn-PC [cytosol],R-HSA-3323170,P11498,P11498,GlyGen,https://www.glygen.org/protein/P11498#Glycosylation
+704544,Btn-PC [cytosol],R-HSA-3323170,P11498,P11498,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P11498
+706178,Btn-PC [mitochondrial matrix],R-HSA-2993804,P11498,P11498,PRO,https://proconsortium.org/app/entry/PR:P11498
+706189,Btn-PC [mitochondrial matrix],R-HSA-2993804,P11498,P11498,Pharos - Targets,https://pharos.nih.gov/targets/P11498
+706204,Btn-PC [mitochondrial matrix],R-HSA-2993804,P11498,P11498,GlyGen,https://www.glygen.org/protein/P11498#Glycosylation
+706207,Btn-PC [mitochondrial matrix],R-HSA-2993804,P11498,P11498,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P11498
+732049,G6PC R83C [endoplasmic reticulum membrane],R-HSA-3274529,P35575,P35575,PRO,https://proconsortium.org/app/entry/PR:P35575
+732051,G6PC R83C [endoplasmic reticulum membrane],R-HSA-3274529,P35575,P35575,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P35575
+732054,G6PC R83C [endoplasmic reticulum membrane],R-HSA-3274529,P35575,P35575,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P35575
+732059,G6PC R83C [endoplasmic reticulum membrane],R-HSA-3274529,P35575,P35575,GlyGen,https://www.glygen.org/protein/P35575#Glycosylation
+732061,G6PC R83C [endoplasmic reticulum membrane],R-HSA-3274529,P35575,P35575,Pharos - Targets,https://pharos.nih.gov/targets/P35575
+732067,G6PC H119L [endoplasmic reticulum membrane],R-HSA-3274553,P35575,P35575,PRO,https://proconsortium.org/app/entry/PR:P35575
+732069,G6PC H119L [endoplasmic reticulum membrane],R-HSA-3274553,P35575,P35575,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P35575
+732072,G6PC H119L [endoplasmic reticulum membrane],R-HSA-3274553,P35575,P35575,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P35575
+732077,G6PC H119L [endoplasmic reticulum membrane],R-HSA-3274553,P35575,P35575,GlyGen,https://www.glygen.org/protein/P35575#Glycosylation
+732079,G6PC H119L [endoplasmic reticulum membrane],R-HSA-3274553,P35575,P35575,Pharos - Targets,https://pharos.nih.gov/targets/P35575
+732085,G6PC R170Q [endoplasmic reticulum membrane],R-HSA-3274556,P35575,P35575,PRO,https://proconsortium.org/app/entry/PR:P35575
+732087,G6PC R170Q [endoplasmic reticulum membrane],R-HSA-3274556,P35575,P35575,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P35575
+732090,G6PC R170Q [endoplasmic reticulum membrane],R-HSA-3274556,P35575,P35575,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P35575
+732095,G6PC R170Q [endoplasmic reticulum membrane],R-HSA-3274556,P35575,P35575,GlyGen,https://www.glygen.org/protein/P35575#Glycosylation
+732097,G6PC R170Q [endoplasmic reticulum membrane],R-HSA-3274556,P35575,P35575,Pharos - Targets,https://pharos.nih.gov/targets/P35575
+732222,G6PC3 G260R [endoplasmic reticulum membrane],R-HSA-3276581,Q9BUM1,Q9BUM1,Pharos - Targets,https://pharos.nih.gov/targets/Q9BUM1
+732223,G6PC3 G260R [endoplasmic reticulum membrane],R-HSA-3276581,Q9BUM1,Q9BUM1,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q9BUM1
+732227,G6PC3 G260R [endoplasmic reticulum membrane],R-HSA-3276581,Q9BUM1,Q9BUM1,PRO,https://proconsortium.org/app/entry/PR:Q9BUM1
+732233,G6PC3 R253H [endoplasmic reticulum membrane],R-HSA-3276572,Q9BUM1,Q9BUM1,Pharos - Targets,https://pharos.nih.gov/targets/Q9BUM1
+732234,G6PC3 R253H [endoplasmic reticulum membrane],R-HSA-3276572,Q9BUM1,Q9BUM1,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q9BUM1
+732238,G6PC3 R253H [endoplasmic reticulum membrane],R-HSA-3276572,Q9BUM1,Q9BUM1,PRO,https://proconsortium.org/app/entry/PR:Q9BUM1
+732241,SLC37A4 G20D [endoplasmic reticulum membrane],R-HSA-3229123,O43826,O43826,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=O43826
+732242,SLC37A4 G20D [endoplasmic reticulum membrane],R-HSA-3229123,O43826,O43826,PRO,https://proconsortium.org/app/entry/PR:O43826
+732250,SLC37A4 G20D [endoplasmic reticulum membrane],R-HSA-3229123,O43826,O43826,Pharos - Targets,https://pharos.nih.gov/targets/O43826
+732251,SLC37A4 G20D [endoplasmic reticulum membrane],R-HSA-3229123,O43826,O43826,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=O43826
+732261,SLC37A4 G88D [endoplasmic reticulum membrane],R-HSA-3229135,O43826,O43826,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=O43826
+732262,SLC37A4 G88D [endoplasmic reticulum membrane],R-HSA-3229135,O43826,O43826,PRO,https://proconsortium.org/app/entry/PR:O43826
+732270,SLC37A4 G88D [endoplasmic reticulum membrane],R-HSA-3229135,O43826,O43826,Pharos - Targets,https://pharos.nih.gov/targets/O43826
+732271,SLC37A4 G88D [endoplasmic reticulum membrane],R-HSA-3229135,O43826,O43826,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=O43826
+733459,ALDOB A149P [cytosol],R-HSA-5656457,P05062,P05062,PRO,https://proconsortium.org/app/entry/PR:P05062
+733464,ALDOB A149P [cytosol],R-HSA-5656457,P05062,P05062,Pharos - Targets,https://pharos.nih.gov/targets/P05062
+733470,ALDOB A149P [cytosol],R-HSA-5656457,P05062,P05062,GlyGen,https://www.glygen.org/protein/P05062#Glycosylation
+733474,ALDOB A149P [cytosol],R-HSA-5656457,P05062,P05062,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P05062
+733478,ALDOB A174D [cytosol],R-HSA-5656456,P05062,P05062,PRO,https://proconsortium.org/app/entry/PR:P05062
+733483,ALDOB A174D [cytosol],R-HSA-5656456,P05062,P05062,Pharos - Targets,https://pharos.nih.gov/targets/P05062
+733489,ALDOB A174D [cytosol],R-HSA-5656456,P05062,P05062,GlyGen,https://www.glygen.org/protein/P05062#Glycosylation
+733493,ALDOB A174D [cytosol],R-HSA-5656456,P05062,P05062,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P05062
+1120728,HK1 L529S [cytosol],R-HSA-5621861,P19367,P19367,PRO,https://proconsortium.org/app/entry/PR:P19367
+1120746,HK1 L529S [cytosol],R-HSA-5621861,P19367,P19367,GlyGen,https://www.glygen.org/protein/P19367#Glycosylation
+1120748,HK1 L529S [cytosol],R-HSA-5621861,P19367,P19367,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P19367
+1120758,HK1 L529S [cytosol],R-HSA-5621861,P19367,P19367,Pharos - Targets,https://pharos.nih.gov/targets/P19367
+1120766,HK1 577-672del [cytosol],R-HSA-5621873,P19367,P19367,PRO,https://proconsortium.org/app/entry/PR:P19367
+1120784,HK1 577-672del [cytosol],R-HSA-5621873,P19367,P19367,GlyGen,https://www.glygen.org/protein/P19367#Glycosylation
+1120786,HK1 577-672del [cytosol],R-HSA-5621873,P19367,P19367,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P19367
+1120796,HK1 577-672del [cytosol],R-HSA-5621873,P19367,P19367,Pharos - Targets,https://pharos.nih.gov/targets/P19367
+1120804,HK1 T680S [cytosol],R-HSA-5621880,P19367,P19367,PRO,https://proconsortium.org/app/entry/PR:P19367
+1120822,HK1 T680S [cytosol],R-HSA-5621880,P19367,P19367,GlyGen,https://www.glygen.org/protein/P19367#Glycosylation
+1120824,HK1 T680S [cytosol],R-HSA-5621880,P19367,P19367,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P19367
+1120834,HK1 T680S [cytosol],R-HSA-5621880,P19367,P19367,Pharos - Targets,https://pharos.nih.gov/targets/P19367
+1127311,GCK G229R [cytosol],R-HSA-5621863,P35557,P35557,Pharos - Targets,https://pharos.nih.gov/targets/P35557
+1127337,GCK G229R [cytosol],R-HSA-5621863,P35557,P35557,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P35557
+1127347,GCK G229R [cytosol],R-HSA-5621863,P35557,P35557,PRO,https://proconsortium.org/app/entry/PR:P35557
+1127357,GCK G229R [cytosol],R-HSA-5621863,P35557,P35557,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P35557
+1127370,GCK T228M [cytosol],R-HSA-5621852,P35557,P35557,Pharos - Targets,https://pharos.nih.gov/targets/P35557
+1127396,GCK T228M [cytosol],R-HSA-5621852,P35557,P35557,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P35557
+1127406,GCK T228M [cytosol],R-HSA-5621852,P35557,P35557,PRO,https://proconsortium.org/app/entry/PR:P35557
+1127416,GCK T228M [cytosol],R-HSA-5621852,P35557,P35557,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P35557
+1127429,GCK E279* [cytosol],R-HSA-5621903,P35557,P35557,Pharos - Targets,https://pharos.nih.gov/targets/P35557
+1127455,GCK E279* [cytosol],R-HSA-5621903,P35557,P35557,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P35557
+1127465,GCK E279* [cytosol],R-HSA-5621903,P35557,P35557,PRO,https://proconsortium.org/app/entry/PR:P35557
+1127475,GCK E279* [cytosol],R-HSA-5621903,P35557,P35557,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P35557
+1127488,GCK E339K [cytosol],R-HSA-5621913,P35557,P35557,Pharos - Targets,https://pharos.nih.gov/targets/P35557
+1127514,GCK E339K [cytosol],R-HSA-5621913,P35557,P35557,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P35557
+1127524,GCK E339K [cytosol],R-HSA-5621913,P35557,P35557,PRO,https://proconsortium.org/app/entry/PR:P35557
+1127534,GCK E339K [cytosol],R-HSA-5621913,P35557,P35557,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P35557
+1127547,GCK G261R [cytosol],R-HSA-5621848,P35557,P35557,Pharos - Targets,https://pharos.nih.gov/targets/P35557
+1127573,GCK G261R [cytosol],R-HSA-5621848,P35557,P35557,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P35557
+1127583,GCK G261R [cytosol],R-HSA-5621848,P35557,P35557,PRO,https://proconsortium.org/app/entry/PR:P35557
+1127593,GCK G261R [cytosol],R-HSA-5621848,P35557,P35557,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P35557
+1127606,GCK A378T [cytosol],R-HSA-5621850,P35557,P35557,Pharos - Targets,https://pharos.nih.gov/targets/P35557
+1127632,GCK A378T [cytosol],R-HSA-5621850,P35557,P35557,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P35557
+1127642,GCK A378T [cytosol],R-HSA-5621850,P35557,P35557,PRO,https://proconsortium.org/app/entry/PR:P35557
+1127652,GCK A378T [cytosol],R-HSA-5621850,P35557,P35557,ZINC target,http://zinc15.docking.org/orthologs/?uniprot=P35557
+1128681,TPR L458P [nucleoplasm],R-HSA-5661460,P12270,P12270,Pharos - Targets,https://pharos.nih.gov/targets/P12270
+1128691,TPR L458P [nucleoplasm],R-HSA-5661460,P12270,P12270,GlyGen,https://www.glygen.org/protein/P12270#Glycosylation
+1128694,TPR L458P [nucleoplasm],R-HSA-5661460,P12270,P12270,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P12270
+1128696,TPR L458P [nucleoplasm],R-HSA-5661460,P12270,P12270,PRO,https://proconsortium.org/app/entry/PR:P12270
+1128698,TPR M489P [nucleoplasm],R-HSA-5661477,P12270,P12270,Pharos - Targets,https://pharos.nih.gov/targets/P12270
+1128708,TPR M489P [nucleoplasm],R-HSA-5661477,P12270,P12270,GlyGen,https://www.glygen.org/protein/P12270#Glycosylation
+1128711,TPR M489P [nucleoplasm],R-HSA-5661477,P12270,P12270,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P12270
+1128713,TPR M489P [nucleoplasm],R-HSA-5661477,P12270,P12270,PRO,https://proconsortium.org/app/entry/PR:P12270
+1178641,ALDOA [platelet alpha granule lumen],R-HSA-349738,P04075,P04075,GlyGen,https://www.glygen.org/protein/P04075#Glycosylation
+1178652,ALDOA [platelet alpha granule lumen],R-HSA-349738,P04075,P04075,Pharos - Targets,https://pharos.nih.gov/targets/P04075
+1178659,ALDOA [platelet alpha granule lumen],R-HSA-349738,P04075,P04075,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P04075
+1178667,ALDOA [platelet alpha granule lumen],R-HSA-349738,P04075,P04075,PRO,https://proconsortium.org/app/entry/PR:P04075
+1228498,RANBP2 [nuclear envelope],R-HSA-2993756,P49792,P49792,Pharos - Targets,https://pharos.nih.gov/targets/P49792
+1228500,RANBP2 [nuclear envelope],R-HSA-2993756,P49792,P49792,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P49792
+1228506,RANBP2 [nuclear envelope],R-HSA-2993756,P49792,P49792,PRO,https://proconsortium.org/app/entry/PR:P49792
+1228514,RANBP2 [nuclear envelope],R-HSA-2993756,P49792,P49792,GlyGen,https://www.glygen.org/protein/P49792#Glycosylation
+1239289,NUP37 [nuclear envelope],R-HSA-157745,Q8NFH4,Q8NFH4,Pharos - Targets,https://pharos.nih.gov/targets/Q8NFH4
+1239290,NUP37 [nuclear envelope],R-HSA-157745,Q8NFH4,Q8NFH4,GlyGen,https://www.glygen.org/protein/Q8NFH4#Glycosylation
+1239295,NUP37 [nuclear envelope],R-HSA-157745,Q8NFH4,Q8NFH4,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q8NFH4
+1239298,NUP37 [nuclear envelope],R-HSA-157745,Q8NFH4,Q8NFH4,PRO,https://proconsortium.org/app/entry/PR:Q8NFH4
+1239305,NUP107 [nuclear envelope],R-HSA-157717,P57740,P57740,Pharos - Targets,https://pharos.nih.gov/targets/P57740
+1239309,NUP107 [nuclear envelope],R-HSA-157717,P57740,P57740,GlyGen,https://www.glygen.org/protein/P57740#Glycosylation
+1239315,NUP107 [nuclear envelope],R-HSA-157717,P57740,P57740,PRO,https://proconsortium.org/app/entry/PR:P57740
+1239322,NUP107 [nuclear envelope],R-HSA-157717,P57740,P57740,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P57740
+1239351,NUP160 [nuclear envelope],R-HSA-157721,Q12769,Q12769,PRO,https://proconsortium.org/app/entry/PR:Q12769
+1239360,NUP160 [nuclear envelope],R-HSA-157721,Q12769,Q12769,Pharos - Targets,https://pharos.nih.gov/targets/Q12769
+1239361,NUP160 [nuclear envelope],R-HSA-157721,Q12769,Q12769,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q12769
+1239364,NUP160 [nuclear envelope],R-HSA-157721,Q12769,Q12769,GlyGen,https://www.glygen.org/protein/Q12769#Glycosylation
+1239371,NUP133 [nuclear envelope],R-HSA-157743,Q8WUM0,Q8WUM0,PRO,https://proconsortium.org/app/entry/PR:Q8WUM0
+1239372,NUP133 [nuclear envelope],R-HSA-157743,Q8WUM0,Q8WUM0,Pharos - Targets,https://pharos.nih.gov/targets/Q8WUM0
+1239373,NUP133 [nuclear envelope],R-HSA-157743,Q8WUM0,Q8WUM0,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q8WUM0
+1239381,NUP133 [nuclear envelope],R-HSA-157743,Q8WUM0,Q8WUM0,GlyGen,https://www.glygen.org/protein/Q8WUM0#Glycosylation
+1239382,NUP43 [nuclear envelope],R-HSA-157739,Q8NFH3,Q8NFH3,PRO,https://proconsortium.org/app/entry/PR:Q8NFH3
+1239393,NUP43 [nuclear envelope],R-HSA-157739,Q8NFH3,Q8NFH3,GlyGen,https://www.glygen.org/protein/Q8NFH3#Glycosylation
+1239394,NUP43 [nuclear envelope],R-HSA-157739,Q8NFH3,Q8NFH3,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q8NFH3
+1239395,NUP43 [nuclear envelope],R-HSA-157739,Q8NFH3,Q8NFH3,Pharos - Targets,https://pharos.nih.gov/targets/Q8NFH3
+1239455,NUP85 [nuclear envelope],R-HSA-157741,Q9BW27,Q9BW27,PRO,https://proconsortium.org/app/entry/PR:Q9BW27
+1239456,NUP85 [nuclear envelope],R-HSA-157741,Q9BW27,Q9BW27,Pharos - Targets,https://pharos.nih.gov/targets/Q9BW27
+1239457,NUP85 [nuclear envelope],R-HSA-157741,Q9BW27,Q9BW27,GlyGen,https://www.glygen.org/protein/Q9BW27#Glycosylation
+1239459,NUP85 [nuclear envelope],R-HSA-157741,Q9BW27,Q9BW27,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q9BW27
+1245509,"SUMO1-K2592,K2650,K2723-RANBP2 [nuclear envelope]",R-HSA-4551599,P49792,P49792,Pharos - Targets,https://pharos.nih.gov/targets/P49792
+1245511,"SUMO1-K2592,K2650,K2723-RANBP2 [nuclear envelope]",R-HSA-4551599,P49792,P49792,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P49792
+1245517,"SUMO1-K2592,K2650,K2723-RANBP2 [nuclear envelope]",R-HSA-4551599,P49792,P49792,PRO,https://proconsortium.org/app/entry/PR:P49792
+1245525,"SUMO1-K2592,K2650,K2723-RANBP2 [nuclear envelope]",R-HSA-4551599,P49792,P49792,GlyGen,https://www.glygen.org/protein/P49792#Glycosylation
+1245961,"SUMO2-K2652,K2725-RANBP2 [nuclear envelope]",R-HSA-4551720,P49792,P49792,Pharos - Targets,https://pharos.nih.gov/targets/P49792
+1245963,"SUMO2-K2652,K2725-RANBP2 [nuclear envelope]",R-HSA-4551720,P49792,P49792,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P49792
+1245969,"SUMO2-K2652,K2725-RANBP2 [nuclear envelope]",R-HSA-4551720,P49792,P49792,PRO,https://proconsortium.org/app/entry/PR:P49792
+1245977,"SUMO2-K2652,K2725-RANBP2 [nuclear envelope]",R-HSA-4551720,P49792,P49792,GlyGen,https://www.glygen.org/protein/P49792#Glycosylation
+1280659,Unfolded GAPDHS [cytosol],R-HSA-6813805,O14556,O14556,Pharos - Targets,https://pharos.nih.gov/targets/O14556
+1280661,Unfolded GAPDHS [cytosol],R-HSA-6813805,O14556,O14556,PRO,https://proconsortium.org/app/entry/PR:O14556
+1280666,Unfolded GAPDHS [cytosol],R-HSA-6813805,O14556,O14556,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=O14556
+1302403,NUP214 [nucleoplasm],R-HSA-451222,P35658,P35658,GlyGen,https://www.glygen.org/protein/P35658#Glycosylation
+1302405,NUP214 [nucleoplasm],R-HSA-451222,P35658,P35658,Pharos - Targets,https://pharos.nih.gov/targets/P35658
+1302406,NUP214 [nucleoplasm],R-HSA-451222,P35658,P35658,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=P35658
+1302407,NUP214 [nucleoplasm],R-HSA-451222,P35658,P35658,PRO,https://proconsortium.org/app/entry/PR:P35658
+1315607,SLC25A12 [mitochondrial intermembrane space],R-HSA-1307794,O75746,O75746,PRO,https://proconsortium.org/app/entry/PR:O75746
+1315609,SLC25A12 [mitochondrial intermembrane space],R-HSA-1307794,O75746,O75746,GlyGen,https://www.glygen.org/protein/O75746#Glycosylation
+1315611,SLC25A12 [mitochondrial intermembrane space],R-HSA-1307794,O75746,O75746,Pharos - Targets,https://pharos.nih.gov/targets/O75746
+1315620,SLC25A12 [mitochondrial intermembrane space],R-HSA-1307794,O75746,O75746,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=O75746
+1315629,SLC25A13 [mitochondrial intermembrane space],R-HSA-1307784,Q9UJS0,Q9UJS0,PRO,https://proconsortium.org/app/entry/PR:Q9UJS0
+1315631,SLC25A13 [mitochondrial intermembrane space],R-HSA-1307784,Q9UJS0,Q9UJS0,Pharos - Targets,https://pharos.nih.gov/targets/Q9UJS0
+1315636,SLC25A13 [mitochondrial intermembrane space],R-HSA-1307784,Q9UJS0,Q9UJS0,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q9UJS0
+1315638,SLC25A13 [mitochondrial intermembrane space],R-HSA-1307784,Q9UJS0,Q9UJS0,GlyGen,https://www.glygen.org/protein/Q9UJS0#Glycosylation
+1328561,AAAS [cytosol],R-HSA-9714323,Q9NRG9,Q9NRG9,GlyGen,https://www.glygen.org/protein/Q9NRG9#Glycosylation
+1328565,AAAS [cytosol],R-HSA-9714323,Q9NRG9,Q9NRG9,GeneCards,https://www.genecards.org/cgi-bin/carddisp.pl?gene=Q9NRG9
+1328567,AAAS [cytosol],R-HSA-9714323,Q9NRG9,Q9NRG9,PRO,https://proconsortium.org/app/entry/PR:Q9NRG9
+1328570,AAAS [cytosol],R-HSA-9714323,Q9NRG9,Q9NRG9,Pharos - Targets,https://pharos.nih.gov/targets/Q9NRG9
