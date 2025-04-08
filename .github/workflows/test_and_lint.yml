@@ -1,8 +1,6 @@
 name: Python Package CI/CD
 
 on:
-  push:
-    branches: main
   pull_request:
     branches: main
   workflow_dispatch:  # Allows manual triggering from GitHub UI
@@ -81,4 +79,3 @@ jobs:
       with:
         name: coverage-report
         path: ./coverage.xml
-        
