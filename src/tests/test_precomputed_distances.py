@@ -4,12 +4,12 @@ import os
 
 import numpy as np
 import pandas as pd
-from cpr import sbml_dfs_core
-from cpr.ingestion import sbml
-from cpr.network import neighborhoods
-from cpr.network import net_create
-from cpr.network import paths
-from cpr.network import precompute
+from napistu import sbml_dfs_core
+from napistu.ingestion import sbml
+from napistu.network import neighborhoods
+from napistu.network import net_create
+from napistu.network import paths
+from napistu.network import precompute
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 sbml_path = os.path.join(test_path, "test_data", "reactome_glucose_metabolism.sbml")

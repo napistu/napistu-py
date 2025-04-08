@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from cpr.constants import SBML_DFS
-from cpr.constants import SBOTERM_NAMES
+from napistu.constants import SBML_DFS
+from napistu.constants import SBOTERM_NAMES
 
 CPR_GRAPH_NODES = SimpleNamespace(NAME="name")
 

@@ -3,27 +3,27 @@ from __future__ import annotations
 import logging
 
 import pandas as pd
-from cpr import consensus
-from cpr import constants
-from cpr import identifiers
-from cpr import sbml_dfs_core
-from cpr import source
-from cpr import utils
-from cpr.rpy2 import callr
-from cpr.rpy2 import report_r_exceptions
-from cpr.rpy2 import warn_if_no_rpy2
+from napistu import consensus
+from napistu import constants
+from napistu import identifiers
+from napistu import sbml_dfs_core
+from napistu import source
+from napistu import utils
+from napistu.rpy2 import callr
+from napistu.rpy2 import report_r_exceptions
+from napistu.rpy2 import warn_if_no_rpy2
 
-from cpr.constants import SBML_DFS
-from cpr.constants import BQB
-from cpr.constants import IDENTIFIERS
-from cpr.constants import ONTOLOGIES
-from cpr.constants import ONTOLOGY_ALIASES
-from cpr.rpy2.constants import BIOC_VALID_EXPANDED_SPECIES_ONTOLOGIES
-from cpr.rpy2.constants import BIOC_DOGMATIC_MAPPING_ONTOLOGIES
-from cpr.rpy2.constants import BIOC_PROTEIN_ONTOLOGIES
-from cpr.rpy2.constants import BIOC_NAME_ONTOLOGIES
-from cpr.rpy2.constants import BIOC_GENE_ONTOLOGIES  # noqa
-from cpr.rpy2.constants import BIOC_NOMENCLATURE
+from napistu.constants import SBML_DFS
+from napistu.constants import BQB
+from napistu.constants import IDENTIFIERS
+from napistu.constants import ONTOLOGIES
+from napistu.constants import ONTOLOGY_ALIASES
+from napistu.rpy2.constants import BIOC_VALID_EXPANDED_SPECIES_ONTOLOGIES
+from napistu.rpy2.constants import BIOC_DOGMATIC_MAPPING_ONTOLOGIES
+from napistu.rpy2.constants import BIOC_PROTEIN_ONTOLOGIES
+from napistu.rpy2.constants import BIOC_NAME_ONTOLOGIES
+from napistu.rpy2.constants import BIOC_GENE_ONTOLOGIES  # noqa
+from napistu.rpy2.constants import BIOC_NOMENCLATURE
 
 logger = logging.getLogger(__name__)
 

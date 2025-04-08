@@ -4,11 +4,11 @@ import os
 
 import pandas as pd
 import pytest
-from cpr import consensus
-from cpr import indices
-from cpr import source
-from cpr.ingestion import sbml
-from cpr.modify import pathwayannot
+from napistu import consensus
+from napistu import indices
+from napistu import source
+from napistu.ingestion import sbml
+from napistu.modify import pathwayannot
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")

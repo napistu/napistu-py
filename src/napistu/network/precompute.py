@@ -7,7 +7,7 @@ import igraph as ig
 import numpy as np
 import pandas as pd
 
-from cpr.network import net_utils
+from napistu.network import net_utils
 
 logger = logging.getLogger(__name__)
 

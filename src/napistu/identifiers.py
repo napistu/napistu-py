@@ -9,15 +9,15 @@ from urllib.parse import urlparse
 
 import libsbml
 import pandas as pd
-from cpr import utils
+from napistu import utils
 from pydantic import BaseModel
 
-from cpr.constants import IDENTIFIERS
-from cpr.constants import BIOLOGICAL_QUALIFIER_CODES
-from cpr.constants import ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY
-from cpr.constants import ENSEMBL_MOLECULE_TYPES_FROM_ONTOLOGY
-from cpr.constants import ENSEMBL_SPECIES_FROM_CODE
-from cpr.constants import ENSEMBL_SPECIES_TO_CODE
+from napistu.constants import IDENTIFIERS
+from napistu.constants import BIOLOGICAL_QUALIFIER_CODES
+from napistu.constants import ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY
+from napistu.constants import ENSEMBL_MOLECULE_TYPES_FROM_ONTOLOGY
+from napistu.constants import ENSEMBL_SPECIES_FROM_CODE
+from napistu.constants import ENSEMBL_SPECIES_TO_CODE
 
 logger = logging.getLogger(__name__)
 

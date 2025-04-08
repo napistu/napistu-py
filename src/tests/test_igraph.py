@@ -3,14 +3,14 @@ from __future__ import annotations
 import os
 
 import pandas as pd
-from cpr import sbml_dfs_core
-from cpr.constants import DEFAULT_WT_TRANS
-from cpr.constants import MINI_SBO_FROM_NAME
-from cpr.ingestion import sbml
-from cpr.network import neighborhoods
-from cpr.network import net_create
-from cpr.network import net_utils
-from cpr.network import paths
+from napistu import sbml_dfs_core
+from napistu.constants import DEFAULT_WT_TRANS
+from napistu.constants import MINI_SBO_FROM_NAME
+from napistu.ingestion import sbml
+from napistu.network import neighborhoods
+from napistu.network import net_create
+from napistu.network import net_utils
+from napistu.network import paths
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")

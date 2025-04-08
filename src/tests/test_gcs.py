@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 
-from cpr.gcs.downloads import load_public_cpr_asset
+from napistu.gcs.downloads import load_public_cpr_asset
 
 
 def test_download_and_load_gcs_asset():

@@ -4,16 +4,16 @@ import logging
 
 import igraph as ig
 import pandas as pd
-from cpr import sbml_dfs_core
-from cpr import utils
-from cpr.constants import SBML_DFS
-from cpr.constants import CPR_EDGELIST
-from cpr.constants import CPR_EDGELIST_REQ_VARS
-from cpr.constants import IDENTIFIERS
-from cpr.constants import IDENTIFIER_EDGELIST_REQ_VARS
-from cpr.constants import SPECIES_IDENTIFIERS_REQUIRED_VARS
-from cpr.network.constants import CPR_GRAPH_EDGES
-from cpr.network import paths
+from napistu import sbml_dfs_core
+from napistu import utils
+from napistu.constants import SBML_DFS
+from napistu.constants import CPR_EDGELIST
+from napistu.constants import CPR_EDGELIST_REQ_VARS
+from napistu.constants import IDENTIFIERS
+from napistu.constants import IDENTIFIER_EDGELIST_REQ_VARS
+from napistu.constants import SPECIES_IDENTIFIERS_REQUIRED_VARS
+from napistu.network.constants import CPR_GRAPH_EDGES
+from napistu.network import paths
 
 logger = logging.getLogger(__name__)
 

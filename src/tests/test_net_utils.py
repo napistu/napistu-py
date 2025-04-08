@@ -4,8 +4,8 @@ import pytest
 
 import igraph as ig
 import pandas as pd
-from cpr.network import net_utils
-from cpr.network import net_create
+from napistu.network import net_utils
+from napistu.network import net_create
 
 
 def test_safe_fill():

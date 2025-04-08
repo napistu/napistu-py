@@ -11,15 +11,15 @@ from typing import Sequence
 import igraph as ig
 import numpy as np
 import pandas as pd
-from cpr import sbml_dfs_core
-from cpr import source
-from cpr.network import net_create
+from napistu import sbml_dfs_core
+from napistu import source
+from napistu.network import net_create
 
-from cpr.constants import SBML_DFS
-from cpr.constants import SOURCE_SPEC
+from napistu.constants import SBML_DFS
+from napistu.constants import SOURCE_SPEC
 
-from cpr.network.constants import CPR_GRAPH_NODES
-from cpr.network.constants import CPR_GRAPH_TYPES
+from napistu.network.constants import CPR_GRAPH_NODES
+from napistu.network.constants import CPR_GRAPH_TYPES
 
 logger = logging.getLogger(__name__)
 

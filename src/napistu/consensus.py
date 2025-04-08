@@ -7,18 +7,18 @@ import random
 import pandas as pd
 from tqdm import tqdm
 
-from cpr import identifiers
-from cpr import indices
-from cpr import sbml_dfs_core
-from cpr import sbml_dfs_utils
-from cpr import source
-from cpr import utils
-from cpr.ingestion import sbml
+from napistu import identifiers
+from napistu import indices
+from napistu import sbml_dfs_core
+from napistu import sbml_dfs_utils
+from napistu import source
+from napistu import utils
+from napistu.ingestion import sbml
 
-from cpr.constants import SBML_DFS
-from cpr.constants import IDENTIFIERS
-from cpr.constants import SOURCE_SPEC
-from cpr.constants import BQB_DEFINING_ATTRS
+from napistu.constants import SBML_DFS
+from napistu.constants import IDENTIFIERS
+from napistu.constants import SOURCE_SPEC
+from napistu.constants import BQB_DEFINING_ATTRS
 
 logger = logging.getLogger(__name__)
 # set the level to show logger.info message

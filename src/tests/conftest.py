@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import os
 
-from cpr import consensus
-from cpr import indices
-from cpr import sbml_dfs_core
-from cpr.ingestion import sbml
+from napistu import consensus
+from napistu import indices
+from napistu import sbml_dfs_core
+from napistu.ingestion import sbml
 from pytest import fixture
 
 

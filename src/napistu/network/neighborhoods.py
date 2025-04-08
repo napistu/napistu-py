@@ -13,18 +13,18 @@ from typing import Any
 import igraph as ig
 import numpy as np
 import pandas as pd
-from cpr import sbml_dfs_core
-from cpr import utils
-from cpr.network import net_utils
-from cpr.network import paths
+from napistu import sbml_dfs_core
+from napistu import utils
+from napistu.network import net_utils
+from napistu.network import paths
 
-from cpr.constants import SBML_DFS
-from cpr.constants import MINI_SBO_NAME_TO_POLARITY
-from cpr.constants import MINI_SBO_TO_NAME
+from napistu.constants import SBML_DFS
+from napistu.constants import MINI_SBO_NAME_TO_POLARITY
+from napistu.constants import MINI_SBO_TO_NAME
 
-from cpr.network.constants import CPR_GRAPH_TYPES
-from cpr.network.constants import NEIGHBORHOOD_NETWORK_TYPES
-from cpr.network.constants import VALID_NEIGHBORHOOD_NETWORK_TYPES
+from napistu.network.constants import CPR_GRAPH_TYPES
+from napistu.network.constants import NEIGHBORHOOD_NETWORK_TYPES
+from napistu.network.constants import VALID_NEIGHBORHOOD_NETWORK_TYPES
 
 logger = logging.getLogger(__name__)
 

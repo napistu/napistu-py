@@ -5,10 +5,10 @@ import re
 
 import pandas as pd
 import requests
-from cpr.ingestion.constants import IDENTIFIERS_ETL_SBO_URL
-from cpr.ingestion.constants import IDENTIFIERS_ETL_YEAST_FIELDS
-from cpr.ingestion.constants import IDENTIFIERS_ETL_YEAST_URL
-from cpr.ingestion.constants import IDENTIFIERS_ETL_YEAST_HEADER_REGEX
+from napistu.ingestion.constants import IDENTIFIERS_ETL_SBO_URL
+from napistu.ingestion.constants import IDENTIFIERS_ETL_YEAST_FIELDS
+from napistu.ingestion.constants import IDENTIFIERS_ETL_YEAST_URL
+from napistu.ingestion.constants import IDENTIFIERS_ETL_YEAST_HEADER_REGEX
 
 
 def read_yeast_identifiers(url: str = IDENTIFIERS_ETL_YEAST_URL):

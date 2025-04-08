@@ -10,13 +10,13 @@ from fs import open_fs
 
 import numpy as np
 import pandas as pd
-from cpr import utils
-from cpr import indices
+from napistu import utils
+from napistu import indices
 
-from cpr.constants import SBML_DFS
-from cpr.constants import IDENTIFIERS
-from cpr.constants import BQB_DEFINING_ATTRS
-from cpr.constants import BQB_DEFINING_ATTRS_LOOSE
+from napistu.constants import SBML_DFS
+from napistu.constants import IDENTIFIERS
+from napistu.constants import BQB_DEFINING_ATTRS
+from napistu.constants import BQB_DEFINING_ATTRS_LOOSE
 
 logger = logging.getLogger(__name__)
 

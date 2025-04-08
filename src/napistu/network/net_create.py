@@ -11,31 +11,31 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
-from cpr import sbml_dfs_core
-from cpr import utils
+from napistu import sbml_dfs_core
+from napistu import utils
 
-from cpr.constants import DEFAULT_WT_TRANS
-from cpr.constants import DEFINED_WEIGHT_TRANSFORMATION
-from cpr.constants import MINI_SBO_FROM_NAME
-from cpr.constants import MINI_SBO_TO_NAME
-from cpr.constants import SBML_DFS
-from cpr.constants import SBO_MODIFIER_NAMES
-from cpr.constants import SCORE_CALIBRATION_POINTS_DICT
-from cpr.constants import ENTITIES_W_DATA
-from cpr.constants import SOURCE_VARS_DICT
+from napistu.constants import DEFAULT_WT_TRANS
+from napistu.constants import DEFINED_WEIGHT_TRANSFORMATION
+from napistu.constants import MINI_SBO_FROM_NAME
+from napistu.constants import MINI_SBO_TO_NAME
+from napistu.constants import SBML_DFS
+from napistu.constants import SBO_MODIFIER_NAMES
+from napistu.constants import SCORE_CALIBRATION_POINTS_DICT
+from napistu.constants import ENTITIES_W_DATA
+from napistu.constants import SOURCE_VARS_DICT
 
-from cpr.network.constants import CPR_GRAPH_NODES
-from cpr.network.constants import CPR_GRAPH_EDGES
-from cpr.network.constants import CPR_GRAPH_EDGE_DIRECTIONS
-from cpr.network.constants import CPR_GRAPH_REQUIRED_EDGE_VARS
-from cpr.network.constants import CPR_GRAPH_NODE_TYPES
-from cpr.network.constants import CPR_GRAPH_TYPES
-from cpr.network.constants import CPR_WEIGHTING_STRATEGIES
-from cpr.network.constants import SBOTERM_NAMES
-from cpr.network.constants import REGULATORY_GRAPH_HIERARCHY
-from cpr.network.constants import SURROGATE_GRAPH_HIERARCHY
-from cpr.network.constants import VALID_CPR_GRAPH_TYPES
-from cpr.network.constants import VALID_WEIGHTING_STRATEGIES
+from napistu.network.constants import CPR_GRAPH_NODES
+from napistu.network.constants import CPR_GRAPH_EDGES
+from napistu.network.constants import CPR_GRAPH_EDGE_DIRECTIONS
+from napistu.network.constants import CPR_GRAPH_REQUIRED_EDGE_VARS
+from napistu.network.constants import CPR_GRAPH_NODE_TYPES
+from napistu.network.constants import CPR_GRAPH_TYPES
+from napistu.network.constants import CPR_WEIGHTING_STRATEGIES
+from napistu.network.constants import SBOTERM_NAMES
+from napistu.network.constants import REGULATORY_GRAPH_HIERARCHY
+from napistu.network.constants import SURROGATE_GRAPH_HIERARCHY
+from napistu.network.constants import VALID_CPR_GRAPH_TYPES
+from napistu.network.constants import VALID_WEIGHTING_STRATEGIES
 
 logger = logging.getLogger(__name__)
 

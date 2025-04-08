@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from cpr.ingestion import obo
+from napistu.ingestion import obo
 
 
 def test_formatting_obo_attributes():
