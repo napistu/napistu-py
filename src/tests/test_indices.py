@@ -4,7 +4,7 @@ import os
 
 import pandas as pd
 import pytest
-from cpr import indices
+from napistu import indices
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")

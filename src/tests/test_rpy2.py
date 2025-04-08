@@ -11,8 +11,8 @@ import pytest
 # Patch rpy2_arrow.arrow to avoid ImportError
 # if the R env is not properly set up during testing
 sys.modules["rpy2_arrow.arrow"] = Mock()
-import cpr.rpy2.callr  # noqa: E402
-import cpr.rpy2.rids  # noqa: E402
+import napistu.rpy2.callr  # noqa: E402
+import napistu.rpy2.rids  # noqa: E402
 
 
 def test_rpy2_has_rpy2_false():

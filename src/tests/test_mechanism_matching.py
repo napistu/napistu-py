@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pandas as pd
 
-from cpr import mechanism_matching
-from cpr.network import net_create
-from cpr.network import precompute
+from napistu import mechanism_matching
+from napistu.network import net_create
+from napistu.network import precompute
 
 
 def test_features_to_pathway_species(sbml_dfs):

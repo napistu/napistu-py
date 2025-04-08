@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from cpr import sbml_dfs_utils
+from napistu import sbml_dfs_utils
 
 
 def test_id_formatter():

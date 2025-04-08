@@ -10,25 +10,25 @@ from typing import Callable
 from typing import Iterable
 
 import pandas as pd
-from cpr import sbml_dfs_core
-from cpr import utils
-from cpr.rpy2 import has_rpy2
-from cpr.rpy2 import warn_if_no_rpy2
+from napistu import sbml_dfs_core
+from napistu import utils
+from napistu.rpy2 import has_rpy2
+from napistu.rpy2 import warn_if_no_rpy2
 
-from cpr.rpy2.constants import COL_GENE
-from cpr.rpy2.constants import COL_PROTEIN_1
-from cpr.rpy2.constants import COL_PROTEIN_2
-from cpr.rpy2.constants import FIELD_INTERACTIONS
-from cpr.rpy2.constants import FIELD_GENES
-from cpr.rpy2.constants import FIELD_REACTIONS
-from cpr.rpy2.constants import COL_ROLE
-from cpr.rpy2.constants import COL_REACTION_ID
-from cpr.rpy2.constants import COL_STOICHIOMETRY
-from cpr.rpy2.constants import NETCONTEXTR_ONTOLOGY
-from cpr.rpy2.constants import NETCONTEXTR_SBO_MAP
+from napistu.rpy2.constants import COL_GENE
+from napistu.rpy2.constants import COL_PROTEIN_1
+from napistu.rpy2.constants import COL_PROTEIN_2
+from napistu.rpy2.constants import FIELD_INTERACTIONS
+from napistu.rpy2.constants import FIELD_GENES
+from napistu.rpy2.constants import FIELD_REACTIONS
+from napistu.rpy2.constants import COL_ROLE
+from napistu.rpy2.constants import COL_REACTION_ID
+from napistu.rpy2.constants import COL_STOICHIOMETRY
+from napistu.rpy2.constants import NETCONTEXTR_ONTOLOGY
+from napistu.rpy2.constants import NETCONTEXTR_SBO_MAP
 
 if has_rpy2:
-    from cpr.rpy2.callr import pandas_to_r_dataframe
+    from napistu.rpy2.callr import pandas_to_r_dataframe
     from rpy2.robjects import ListVector
     import rpy2.robjects as robjs
 

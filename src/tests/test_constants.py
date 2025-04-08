@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from cpr import constants
+from napistu import constants
 
 
 def test_sbo_constants():

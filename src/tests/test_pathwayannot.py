@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import os
 
-from cpr.modify import pathwayannot
+from napistu.modify import pathwayannot
 
-from cpr.constants import SBML_DFS
-from cpr.modify.constants import COFACTOR_SCHEMA
-from cpr.modify.constants import COFACTOR_CHEBI_IDS
+from napistu.constants import SBML_DFS
+from napistu.modify.constants import COFACTOR_SCHEMA
+from napistu.modify.constants import COFACTOR_CHEBI_IDS
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")

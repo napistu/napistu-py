@@ -7,19 +7,19 @@ from fs import open_fs
 import numpy as np
 import pandas as pd
 
-from cpr import identifiers
-from cpr import sbml_dfs_core
-from cpr import sbml_dfs_utils
-from cpr import source
+from napistu import identifiers
+from napistu import sbml_dfs_core
+from napistu import sbml_dfs_utils
+from napistu import source
 
-from cpr.constants import BQB
-from cpr.constants import SBML_DFS
-from cpr.constants import SBML_DFS_SCHEMA
-from cpr.constants import IDENTIFIERS
-from cpr.constants import MINI_SBO_FROM_NAME
-from cpr.constants import SBOTERM_NAMES
+from napistu.constants import BQB
+from napistu.constants import SBML_DFS
+from napistu.constants import SBML_DFS_SCHEMA
+from napistu.constants import IDENTIFIERS
+from napistu.constants import MINI_SBO_FROM_NAME
+from napistu.constants import SBOTERM_NAMES
 
-from cpr.modify.constants import VALID_ANNOTATION_TYPES
+from napistu.modify.constants import VALID_ANNOTATION_TYPES
 
 
 def curate_sbml_dfs(

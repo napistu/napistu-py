@@ -4,9 +4,9 @@ import os
 
 import pandas as pd
 import pytest
-from cpr import sbml_dfs_core
-from cpr.ingestion import sbml
-from cpr.modify import pathwayannot
+from napistu import sbml_dfs_core
+from napistu.ingestion import sbml
+from napistu.modify import pathwayannot
 
 
 def test_drop_cofactors(sbml_dfs):

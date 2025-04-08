@@ -5,11 +5,11 @@ import os
 import xml.etree.ElementTree as ET
 from typing import Any
 
-from cpr import utils
-from cpr.ingestion.constants import PSI_MI_INTACT_DEFAULT_OUTPUT_DIR
-from cpr.ingestion.constants import PSI_MI_INTACT_FTP_URL
-from cpr.ingestion.constants import PSI_MI_INTACT_SPECIES_TO_BASENAME
-from cpr.ingestion.constants import PSI_MI_INTACT_XML_NAMESPACE
+from napistu import utils
+from napistu.ingestion.constants import PSI_MI_INTACT_DEFAULT_OUTPUT_DIR
+from napistu.ingestion.constants import PSI_MI_INTACT_FTP_URL
+from napistu.ingestion.constants import PSI_MI_INTACT_SPECIES_TO_BASENAME
+from napistu.ingestion.constants import PSI_MI_INTACT_XML_NAMESPACE
 
 
 logger = logging.getLogger(__name__)

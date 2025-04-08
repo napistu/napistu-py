@@ -9,9 +9,9 @@ from typing import Iterable
 from fs import open_fs
 import pandas as pd
 
-from cpr.utils import path_exists
-from cpr.constants import EXPECTED_PW_INDEX_COLUMNS
-from cpr.constants import SOURCE_SPEC
+from napistu.utils import path_exists
+from napistu.constants import EXPECTED_PW_INDEX_COLUMNS
+from napistu.constants import SOURCE_SPEC
 
 
 class PWIndex:

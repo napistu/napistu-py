@@ -9,7 +9,7 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 import pytest
-from cpr import utils
+from napistu import utils
 from fs.tarfs import TarFS
 from fs.zipfs import ZipFS
 from google.cloud import storage

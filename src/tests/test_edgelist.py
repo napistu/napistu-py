@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
-from cpr.ingestion import cpr_edgelist
+from napistu.ingestion import cpr_edgelist
 
 
 def test_edgelist_remove_reciprocal_reactions():

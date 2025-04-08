@@ -4,7 +4,7 @@ import os
 
 import numpy as np
 import pandas as pd
-from cpr import identifiers
+from napistu import identifiers
 
 # logger = logging.getLogger()
 # logger.setLevel("DEBUG")

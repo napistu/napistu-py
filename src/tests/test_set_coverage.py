@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from cpr import source
-from cpr.network import net_utils
+from napistu import source
+from napistu.network import net_utils
 
 
 def test_get_minimal_source_edges(sbml_dfs_metabolism):
@@ -36,8 +36,8 @@ def test_greedy_set_coverge_of_sources(sbml_dfs_metabolism):
 
 if __name__ == "__main__":
     import os
-    from cpr import indices
-    from cpr import consensus
+    from napistu import indices
+    from napistu import consensus
 
     test_path = os.path.abspath(os.path.join(__file__, os.pardir))
     test_data = os.path.join(test_path, "test_data")

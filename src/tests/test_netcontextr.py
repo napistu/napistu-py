@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
-from cpr import sbml_dfs_core
-from cpr.identifiers import Identifiers
-from cpr.rpy2 import netcontextr
-from cpr.source import Source
+from napistu import sbml_dfs_core
+from napistu.identifiers import Identifiers
+from napistu.rpy2 import netcontextr
+from napistu.source import Source
 
 
 @pytest.fixture

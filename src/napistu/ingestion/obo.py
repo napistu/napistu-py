@@ -7,9 +7,9 @@ from typing import Any
 
 import igraph as ig
 import pandas as pd
-from cpr import utils
-from cpr.ingestion.constants import OBO_GO_BASIC_LOCAL_TMP
-from cpr.ingestion.constants import OBO_GO_BASIC_URL
+from napistu import utils
+from napistu.ingestion.constants import OBO_GO_BASIC_LOCAL_TMP
+from napistu.ingestion.constants import OBO_GO_BASIC_URL
 
 
 def create_go_parents_df(go_basic_obo_df: pd.DataFrame) -> pd.DataFrame:

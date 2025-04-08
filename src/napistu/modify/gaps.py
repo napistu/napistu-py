@@ -7,19 +7,19 @@ import igraph as ig
 import numpy as np
 import pandas as pd
 
-from cpr import identifiers
-from cpr import sbml_dfs_core
-from cpr import sbml_dfs_utils
-from cpr import source
-from cpr import utils
-from cpr.network import net_create
+from napistu import identifiers
+from napistu import sbml_dfs_core
+from napistu import sbml_dfs_utils
+from napistu import source
+from napistu import utils
+from napistu.network import net_create
 
-from cpr.constants import SBML_DFS
-from cpr.constants import COMPARTMENTS
-from cpr.constants import IDENTIFIERS
-from cpr.constants import MINI_SBO_FROM_NAME
-from cpr.constants import SBOTERM_NAMES
-from cpr.constants import SOURCE_SPEC
+from napistu.constants import SBML_DFS
+from napistu.constants import COMPARTMENTS
+from napistu.constants import IDENTIFIERS
+from napistu.constants import MINI_SBO_FROM_NAME
+from napistu.constants import SBOTERM_NAMES
+from napistu.constants import SOURCE_SPEC
 
 logger = logging.getLogger(__name__)
 

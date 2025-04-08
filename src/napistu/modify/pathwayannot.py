@@ -9,21 +9,21 @@ from fs import open_fs
 import numpy as np
 import pandas as pd
 
-from cpr import identifiers
-from cpr import sbml_dfs_core
-from cpr import sbml_dfs_utils
-from cpr import source
-from cpr import utils
+from napistu import identifiers
+from napistu import sbml_dfs_core
+from napistu import sbml_dfs_utils
+from napistu import source
+from napistu import utils
 
-from cpr.constants import SBML_DFS
-from cpr.constants import BQB
-from cpr.constants import IDENTIFIERS
-from cpr.constants import SBOTERM_NAMES
-from cpr.constants import MINI_SBO_FROM_NAME
-from cpr.constants import ONTOLOGIES
-from cpr.constants import ENSEMBL_PREFIX_TO_ONTOLOGY
-from cpr.modify.constants import COFACTOR_SCHEMA
-from cpr.modify.constants import COFACTOR_CHEBI_IDS
+from napistu.constants import SBML_DFS
+from napistu.constants import BQB
+from napistu.constants import IDENTIFIERS
+from napistu.constants import SBOTERM_NAMES
+from napistu.constants import MINI_SBO_FROM_NAME
+from napistu.constants import ONTOLOGIES
+from napistu.constants import ENSEMBL_PREFIX_TO_ONTOLOGY
+from napistu.modify.constants import COFACTOR_SCHEMA
+from napistu.modify.constants import COFACTOR_CHEBI_IDS
 
 logger = logging.getLogger(__name__)
 

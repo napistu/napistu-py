@@ -3,31 +3,31 @@ from __future__ import annotations
 import logging
 
 import pandas as pd
-from cpr import identifiers
-from cpr import sbml_dfs_core
-from cpr import source
-from cpr import utils
-from cpr.constants import BQB
-from cpr.constants import COMPARTMENTS
-from cpr.constants import MINI_SBO_FROM_NAME
-from cpr.ingestion import cpr_edgelist
-from cpr.ingestion.constants import SBML_SPECIES_DICT_IDENTIFIERS
-from cpr.ingestion.constants import SBML_SPECIES_DICT_NAME
-from cpr.ingestion.constants import SMBL_REACTION_DICT_IDENTIFIERS
-from cpr.ingestion.constants import SMBL_REACTION_DICT_IS_REVERSIBLE
-from cpr.ingestion.constants import SMBL_REACTION_DICT_NAME
-from cpr.ingestion.constants import SMBL_REACTION_SPEC_SBO_TERM
-from cpr.ingestion.constants import STRING_DOWNSTREAM_COMPARTMENT
-from cpr.ingestion.constants import STRING_DOWNSTREAM_NAME
-from cpr.ingestion.constants import STRING_PROTEIN_ID
-from cpr.ingestion.constants import STRING_PROTEIN_ID_RAW
-from cpr.ingestion.constants import STRING_SOURCE
-from cpr.ingestion.constants import STRING_TARGET
-from cpr.ingestion.constants import STRING_TAX_IDS
-from cpr.ingestion.constants import STRING_UPSTREAM_COMPARTMENT
-from cpr.ingestion.constants import STRING_UPSTREAM_NAME
-from cpr.ingestion.constants import STRING_URL_EXPRESSIONS
-from cpr.ingestion.constants import STRING_VERSION
+from napistu import identifiers
+from napistu import sbml_dfs_core
+from napistu import source
+from napistu import utils
+from napistu.constants import BQB
+from napistu.constants import COMPARTMENTS
+from napistu.constants import MINI_SBO_FROM_NAME
+from napistu.ingestion import cpr_edgelist
+from napistu.ingestion.constants import SBML_SPECIES_DICT_IDENTIFIERS
+from napistu.ingestion.constants import SBML_SPECIES_DICT_NAME
+from napistu.ingestion.constants import SMBL_REACTION_DICT_IDENTIFIERS
+from napistu.ingestion.constants import SMBL_REACTION_DICT_IS_REVERSIBLE
+from napistu.ingestion.constants import SMBL_REACTION_DICT_NAME
+from napistu.ingestion.constants import SMBL_REACTION_SPEC_SBO_TERM
+from napistu.ingestion.constants import STRING_DOWNSTREAM_COMPARTMENT
+from napistu.ingestion.constants import STRING_DOWNSTREAM_NAME
+from napistu.ingestion.constants import STRING_PROTEIN_ID
+from napistu.ingestion.constants import STRING_PROTEIN_ID_RAW
+from napistu.ingestion.constants import STRING_SOURCE
+from napistu.ingestion.constants import STRING_TARGET
+from napistu.ingestion.constants import STRING_TAX_IDS
+from napistu.ingestion.constants import STRING_UPSTREAM_COMPARTMENT
+from napistu.ingestion.constants import STRING_UPSTREAM_NAME
+from napistu.ingestion.constants import STRING_URL_EXPRESSIONS
+from napistu.ingestion.constants import STRING_VERSION
 from fs import open_fs
 
 logger = logging.getLogger(__name__)

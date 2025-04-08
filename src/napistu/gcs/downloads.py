@@ -7,9 +7,9 @@ import re
 from pydantic import BaseModel
 from typing import Optional
 
-from cpr import utils
-from cpr.gcs.constants import GCS_ASSETS
-from cpr.gcs.constants import INIT_DATA_DIR_MSG
+from napistu import utils
+from napistu.gcs.constants import GCS_ASSETS
+from napistu.gcs.constants import INIT_DATA_DIR_MSG
 
 logger = logging.getLogger(__name__)
 

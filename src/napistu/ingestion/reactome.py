@@ -9,17 +9,17 @@ from typing import Iterable
 
 import pandas as pd
 import requests
-from cpr import indices
-from cpr import sbml_dfs_core
-from cpr import utils
-from cpr.consensus import construct_consensus_model
-from cpr.consensus import construct_sbml_dfs_dict
-from cpr.ingestion.constants import REACTOME_PATHWAY_INDEX_COLUMNS
-from cpr.ingestion.constants import REACTOME_PATHWAY_LIST_COLUMNS
-from cpr.ingestion.constants import REACTOME_PATHWAYS_URL
-from cpr.ingestion.constants import REACTOME_SBGN_URL
-from cpr.ingestion.constants import REACTOME_SMBL_URL
-from cpr.ingestion.constants import SPECIES_FULL_NAME_HUMAN
+from napistu import indices
+from napistu import sbml_dfs_core
+from napistu import utils
+from napistu.consensus import construct_consensus_model
+from napistu.consensus import construct_sbml_dfs_dict
+from napistu.ingestion.constants import REACTOME_PATHWAY_INDEX_COLUMNS
+from napistu.ingestion.constants import REACTOME_PATHWAY_LIST_COLUMNS
+from napistu.ingestion.constants import REACTOME_PATHWAYS_URL
+from napistu.ingestion.constants import REACTOME_SBGN_URL
+from napistu.ingestion.constants import REACTOME_SMBL_URL
+from napistu.ingestion.constants import SPECIES_FULL_NAME_HUMAN
 from fs import open_fs
 
 logger = logging.getLogger(__name__)

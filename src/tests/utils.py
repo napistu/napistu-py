@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 
-from cpr import indices
+from napistu import indices
 
 
 def test_setup(test_data_path="/home/sean/cpr/lib/python/cpr/tests/test_data"):

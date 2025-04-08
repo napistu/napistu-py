@@ -19,8 +19,8 @@ from urllib.parse import urlparse
 import igraph as ig
 import pandas as pd
 import requests
-from cpr.constants import FILE_EXT_GZ
-from cpr.constants import FILE_EXT_ZIP
+from napistu.constants import FILE_EXT_GZ
+from napistu.constants import FILE_EXT_ZIP
 from fs import open_fs
 from fs.copy import copy_dir
 from fs.copy import copy_file

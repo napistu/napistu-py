@@ -3,8 +3,8 @@ from __future__ import annotations
 import os
 
 import pandas as pd
-from cpr import sbml_dfs_core
-from cpr.ingestion import sbml
+from napistu import sbml_dfs_core
+from napistu.ingestion import sbml
 
 
 def test_sbml_dfs(sbml_path):

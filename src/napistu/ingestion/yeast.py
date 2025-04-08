@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import pandas as pd
-from cpr import identifiers
-from cpr import sbml_dfs_core
-from cpr import source
-from cpr import utils
-from cpr.constants import BQB
-from cpr.constants import MINI_SBO_FROM_NAME
-from cpr.ingestion.constants import YEAST_IDEA_KINETICS_URL
-from cpr.ingestion.constants import YEAST_IDEA_PUBMED_ID
-from cpr.ingestion.constants import YEAST_IDEA_SOURCE
-from cpr.ingestion.constants import YEAST_IDEA_TARGET
+from napistu import identifiers
+from napistu import sbml_dfs_core
+from napistu import source
+from napistu import utils
+from napistu.constants import BQB
+from napistu.constants import MINI_SBO_FROM_NAME
+from napistu.ingestion.constants import YEAST_IDEA_KINETICS_URL
+from napistu.ingestion.constants import YEAST_IDEA_PUBMED_ID
+from napistu.ingestion.constants import YEAST_IDEA_SOURCE
+from napistu.ingestion.constants import YEAST_IDEA_TARGET
 
 
 def download_idea(output_dir: str) -> None:

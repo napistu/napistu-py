@@ -3,8 +3,8 @@ from __future__ import annotations
 import os
 
 import pandas as pd
-from cpr import indices
-from cpr import source
+from napistu import indices
+from napistu import source
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")

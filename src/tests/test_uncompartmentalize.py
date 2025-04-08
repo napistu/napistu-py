@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import os
 
-from cpr import sbml_dfs_core
-from cpr.ingestion import sbml
-from cpr.modify import uncompartmentalize
+from napistu import sbml_dfs_core
+from napistu.ingestion import sbml
+from napistu.modify import uncompartmentalize
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 sbml_path = os.path.join(test_path, "test_data", "reactome_glucose_metabolism.sbml")

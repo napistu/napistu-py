@@ -6,19 +6,19 @@ import os
 from typing import Iterable
 
 import pandas as pd
-from cpr import indices
-from cpr import sbml_dfs_core
-from cpr import utils
-from cpr.consensus import construct_sbml_dfs_dict
-from cpr.ingestion import sbml
-from cpr.ingestion.constants import BIGG_MODEL_FIELD_SPECIES
-from cpr.ingestion.constants import BIGG_MODEL_FIELD_URL
-from cpr.ingestion.constants import BIGG_MODEL_KEYS
-from cpr.ingestion.constants import BIGG_MODEL_URLS
-from cpr.ingestion.constants import BIGG_RECON3D_FIELD_ANNOTATION
-from cpr.ingestion.constants import SPECIES_FULL_NAME_HUMAN
-from cpr.ingestion.constants import SPECIES_FULL_NAME_MOUSE
-from cpr.ingestion.constants import SPECIES_FULL_NAME_YEAST
+from napistu import indices
+from napistu import sbml_dfs_core
+from napistu import utils
+from napistu.consensus import construct_sbml_dfs_dict
+from napistu.ingestion import sbml
+from napistu.ingestion.constants import BIGG_MODEL_FIELD_SPECIES
+from napistu.ingestion.constants import BIGG_MODEL_FIELD_URL
+from napistu.ingestion.constants import BIGG_MODEL_KEYS
+from napistu.ingestion.constants import BIGG_MODEL_URLS
+from napistu.ingestion.constants import BIGG_RECON3D_FIELD_ANNOTATION
+from napistu.ingestion.constants import SPECIES_FULL_NAME_HUMAN
+from napistu.ingestion.constants import SPECIES_FULL_NAME_MOUSE
+from napistu.ingestion.constants import SPECIES_FULL_NAME_YEAST
 from fs import open_fs
 
 logger = logging.getLogger(__name__)

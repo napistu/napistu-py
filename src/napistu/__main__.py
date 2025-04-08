@@ -9,32 +9,32 @@ from typing import Sequence
 
 import click
 import click_logging
-import cpr
+import napistu
 import igraph as ig
 import pandas as pd
-from cpr import consensus as cpr_consensus
-from cpr import constants
-from cpr import indices
-from cpr import sbml_dfs_core
-from cpr import utils
-from cpr.ingestion import bigg
-from cpr.ingestion import reactome
-from cpr.ingestion import sbml
-from cpr.ingestion import string
-from cpr.ingestion import trrust
-from cpr.modify import curation
-from cpr.modify import gaps
-from cpr.modify import pathwayannot
-from cpr.modify import uncompartmentalize
-from cpr.network import net_create
-from cpr.network import net_utils
-from cpr.network import precompute
-from cpr.rpy2 import has_rpy2
+from napistu import consensus as cpr_consensus
+from napistu import constants
+from napistu import indices
+from napistu import sbml_dfs_core
+from napistu import utils
+from napistu.ingestion import bigg
+from napistu.ingestion import reactome
+from napistu.ingestion import sbml
+from napistu.ingestion import string
+from napistu.ingestion import trrust
+from napistu.modify import curation
+from napistu.modify import gaps
+from napistu.modify import pathwayannot
+from napistu.modify import uncompartmentalize
+from napistu.network import net_create
+from napistu.network import net_utils
+from napistu.network import precompute
+from napistu.rpy2 import has_rpy2
 from fs import open_fs
 
 if has_rpy2:
-    from cpr.rpy2 import rids
-    from cpr.rpy2 import netcontextr, callr
+    from napistu.rpy2 import rids
+    from napistu.rpy2 import netcontextr, callr
 
 logger = logging.getLogger(cpr.__name__)
 click_logging.basic_config(logger)

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import pandas as pd
-from cpr.rpy2 import has_rpy2
-from cpr.rpy2 import report_r_exceptions
-from cpr.rpy2 import rsession_info
-from cpr.rpy2 import warn_if_no_rpy2
+from napistu.rpy2 import has_rpy2
+from napistu.rpy2 import report_r_exceptions
+from napistu.rpy2 import rsession_info
+from napistu.rpy2 import warn_if_no_rpy2
 
 if has_rpy2:
     from rpy2.robjects import pandas2ri

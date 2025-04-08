@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import pandas as pd
-from cpr import indices
-from cpr.constants import SOURCE_SPEC
+from napistu import indices
+from napistu.constants import SOURCE_SPEC
 
 
 class Source:
