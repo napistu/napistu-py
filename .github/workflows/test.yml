@@ -1,0 +1,41 @@
+name: Feature Branch Test
+
+on:
+  push:
+    branches:
+      # Runs on any branch that's not main or develop
+      - '**'
+      - '!main'
+    paths:
+      # Only trigger when Python files or common config files change
+      - '**/*.py'
+      - 'pyproject.toml'
+      - 'setup.py'
+      - 'setup.cfg'
+      - 'requirements*.txt'
+      - '.flake8'
+      - 'pytest.ini'
+      - 'conftest.py'
+
+jobs:
+  quick-test:
+    name: Quick Test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest
+        pip install -e ".[dev]"
+        
+    - name: Run pytest
+      run: |
+        pytest -v
