@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import pytest
 import shutil
 
 from napistu.gcs.downloads import load_public_cpr_asset
