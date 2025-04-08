@@ -259,6 +259,7 @@ def test_save_load_pickle_existing_folder(tmp_path):
     assert utils.load_pickle(fn) == payload
 
 
+@pytest.mark.skip_on_windows
 def test_save_load_pickle_new_folder(tmp_new_subdir):
     fn = tmp_new_subdir / "test.pkl"
     payload = "test"
@@ -285,6 +286,7 @@ def test_save_load_pickle_new_folder_gcs(gcs_bucket_subdir_uri):
     assert utils.load_pickle(fn) == payload
 
 
+@pytest.mark.skip_on_windows
 def test_copy_uri_file(tmp_path, tmp_new_subdir):
     basename = "test.txt"
     fn = tmp_path / basename
@@ -294,6 +296,7 @@ def test_copy_uri_file(tmp_path, tmp_new_subdir):
     assert fn_out.read_text() == "test"
 
 
+@pytest.mark.skip_on_windows
 def test_copy_uri_fol(tmp_path, tmp_new_subdir):
     tmp_new_subdir.mkdir()
     (tmp_new_subdir / "test").touch()
@@ -328,6 +331,7 @@ def test_copy_uri_fol_gcs(gcs_bucket_uri, gcs_bucket_subdir_uri):
     assert utils.path_exists(out_file)
 
 
+@pytest.mark.skip_on_windows
 def test_pickle_cache(tmp_path):
     fn = tmp_path / "test.pkl"
 
