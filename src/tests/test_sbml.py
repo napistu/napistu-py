@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import pytest
 
 import pandas as pd
 from napistu import sbml_dfs_core
