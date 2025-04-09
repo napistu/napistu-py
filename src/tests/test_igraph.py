@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import pytest
 
 import pandas as pd
 from napistu import sbml_dfs_core
@@ -113,6 +114,7 @@ def test_igraph_construction():
     _ = net_create.process_cpr_graph(sbml_dfs)
 
 
+@pytest.mark.skip_on_windows
 def test_igraph_loading():
     # test read/write of an igraph network
     directeds = [True, False]

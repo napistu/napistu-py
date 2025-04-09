@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import pytest
 
 import pandas as pd
 from napistu import sbml_dfs_core
@@ -19,6 +20,7 @@ def test_sbml_dfs(sbml_path):
     assert type(dfs.get_identifiers("species")) is pd.DataFrame
 
 
+@pytest.mark.skip_on_windows
 def test_adding_sbml_annotations(sbml_model):
     annotations = pd.DataFrame(
         [

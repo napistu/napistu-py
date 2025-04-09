@@ -36,7 +36,7 @@ if has_rpy2:
     from napistu.rpy2 import rids
     from napistu.rpy2 import netcontextr, callr
 
-logger = logging.getLogger(cpr.__name__)
+logger = logging.getLogger(napistu.__name__)
 click_logging.basic_config(logger)
 
 ALL = "all"
