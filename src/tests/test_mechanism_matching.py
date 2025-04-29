@@ -400,9 +400,11 @@ def test_match_features_to_wide_pathway_species(sbml_dfs_glucose_metabolism):
 
     example_data["results_a"] = np.random.randn(len(example_data))
     example_data["results_b"] = np.random.randn(len(example_data))
+    # add a feature_id column to the example_data which tracks the row of the original data
+    example_data["feature_id"] = range(0, len(example_data))
 
     # pivot (identifier, ontology) to columns for each ontology
-    example_data_wide = example_data.pivot(columns = "ontology", values = "identifier", index = ["results_a", "results_b"]).reset_index().rename_axis(None, axis = 1)
+    example_data_wide = example_data.pivot(columns = "ontology", values = "identifier", index = ["feature_id", "results_a", "results_b"]).reset_index().rename_axis(None, axis = 1)
 
     # options, for matching
     # 1. match by identifier and a set of ontologies (provided by arg).
