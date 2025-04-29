@@ -133,7 +133,7 @@ def features_to_pathway_species(
 
 
 def edgelist_to_pathway_species(
-    formatted_edgelist: pd.DataFrame, species_identifiers: pd.DataFrame, ontologies: set
+    formatted_edgelist: pd.DataFrame, species_identifiers: pd.DataFrame, ontologies: set, verbose: bool = False
 ) -> pd.DataFrame:
     """
     Edgelist to Pathway Species
@@ -148,6 +148,8 @@ def edgelist_to_pathway_species(
         sbml_dfs_core.export_sbml_dfs()
     ontologies: set
         A set of ontologies used to match features to pathway species
+    verbose: bool, default=False
+        Whether to print verbose output
 
     Returns:
     edges_on_pathway: pd.DataFrame
@@ -193,6 +195,7 @@ def edgelist_to_pathway_species(
         species_identifiers=species_identifiers,
         ontologies=ontologies,
         feature_identifiers_var="feature_id",
+        verbose=verbose
     )
 
     # add s_ids of both upstream and downstream edges to pathway
@@ -316,6 +319,7 @@ def match_by_ontology_and_identifier(
     species_identifiers: pd.DataFrame,
     ontologies: Union[str, Set[str], List[str]],
     feature_identifiers_var: str = "identifier",
+    verbose: bool = False
 ) -> pd.DataFrame:
     """
     Match features to pathway species based on both ontology and identifier matches.
@@ -336,6 +340,8 @@ def match_by_ontology_and_identifier(
         - A list of ontology strings
     feature_identifiers_var : str, default="identifier"
         Name of the identifier column in feature_identifiers
+    verbose : bool, default=False
+        Whether to print verbose output
 
     Returns
     -------
@@ -404,7 +410,8 @@ def match_by_ontology_and_identifier(
             feature_identifiers=ont_features,
             species_identifiers=ont_species,
             ontologies={ont},
-            feature_identifiers_var=feature_identifiers_var
+            feature_identifiers_var=feature_identifiers_var,
+            verbose=verbose
         )
 
         if matched.empty:
