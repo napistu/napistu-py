@@ -27,6 +27,66 @@ def test_features_to_pathway_species(sbml_dfs):
     assert matching_df.tolist() == [2, 3, 2]
 
 
+def test_features_to_pathway_species_basic_and_expansion():
+    
+    # Mock species_identifiers table
+    species_identifiers = pd.DataFrame({
+        "ontology": ["chebi", "chebi", "uniprot", "uniprot"],
+        "identifier": ["A", "B", "X", "Y"],
+        "s_id": [1, 2, 3, 4],
+        "s_name": ["foo", "bar", "baz", "qux"],
+        "bqb": ["BQB_IS", "BQB_IS", "BQB_IS", "BQB_IS"]
+    })
+    # Basic: no expansion, single identifier per row
+    features = pd.DataFrame({
+        "my_id": ["A", "B", "X"],
+        "other_col": [10, 20, 30]
+    })
+    result = mechanism_matching.features_to_pathway_species(
+        feature_identifiers=features,
+        species_identifiers=species_identifiers,
+        ontologies={"chebi", "uniprot"},
+        feature_identifiers_var="my_id",
+        expand_identifiers=False
+    )
+    # Should map all three
+    assert set(result["my_id"]) == {"A", "B", "X"}
+    assert set(result["identifier"]) == {"A", "B", "X"}
+    assert set(result["s_name"]) == {"foo", "bar", "baz"}
+    # Expansion: one row with multiple IDs
+    features2 = pd.DataFrame({
+        "my_id": ["A / B / X", "Y"],
+        "other_col": [100, 200]
+    })
+    result2 = mechanism_matching.features_to_pathway_species(
+        feature_identifiers=features2,
+        species_identifiers=species_identifiers,
+        ontologies={"chebi", "uniprot"},
+        feature_identifiers_var="my_id",
+        expand_identifiers=True,
+        identifier_delimiter="/"
+    )
+    # Should expand to 4 rows (A, B, X, Y)
+    assert set(result2["identifier"]) == {"A", "B", "X", "Y"}
+    assert set(result2["s_name"]) == {"foo", "bar", "baz", "qux"}
+    # Whitespace trimming
+    features3 = pd.DataFrame({
+        "my_id": ["  A  /  B  /X  ", " Y"],
+        "other_col": [1, 2]
+    })
+    result3 = mechanism_matching.features_to_pathway_species(
+        feature_identifiers=features3,
+        species_identifiers=species_identifiers,
+        ontologies={"chebi", "uniprot"},
+        feature_identifiers_var="my_id",
+        expand_identifiers=True,
+        identifier_delimiter="/"
+    )
+    # Should expand and trim whitespace
+    assert set(result3["identifier"]) == {"A", "B", "X", "Y"}
+    assert set(result3["s_name"]) == {"foo", "bar", "baz", "qux"}
+
+
 def test_edgelist_to_pathway_species(sbml_dfs):
 
     edgelist = pd.DataFrame(
@@ -285,7 +345,7 @@ def test_match_by_ontology_and_identifier():
     )
     assert len(result) == 0
 
-    # Test with custom feature_id_var
+    # Test with custom feature_identifiers_var
     feature_identifiers_custom = feature_identifiers.rename(
         columns={"identifier": "custom_id"}
     )
@@ -293,7 +353,7 @@ def test_match_by_ontology_and_identifier():
         feature_identifiers=feature_identifiers_custom,
         species_identifiers=species_identifiers,
         ontologies={"chebi"},
-        feature_id_var="custom_id"
+        feature_identifiers_var="custom_id"
     )
     assert len(result) == 1
     assert result.iloc[0]["custom_id"] == "15377"
@@ -350,7 +410,7 @@ def test_match_features_to_wide_pathway_species(sbml_dfs_glucose_metabolism):
         feature_identifiers = example_data.drop(columns = "ontology"), 
         species_identifiers = species_identifiers,
         ontologies = {"uniprot", "chebi"},
-        feature_id_var = "identifier",
+        feature_identifiers_var = "identifier",
     )
 
     # 2. match by identifier and ontology.
@@ -358,7 +418,7 @@ def test_match_features_to_wide_pathway_species(sbml_dfs_glucose_metabolism):
         feature_identifiers = example_data, 
         species_identifiers = species_identifiers,
         ontologies = {"uniprot", "chebi"},
-        feature_id_var = "identifier",
+        feature_identifiers_var = "identifier",
     )
 
     # 3. format wide identifier sets into a table with a single identifier column and apply strategy #2.
@@ -366,7 +426,7 @@ def test_match_features_to_wide_pathway_species(sbml_dfs_glucose_metabolism):
         example_data_wide,
         species_identifiers,
         ontologies = {"uniprot", "chebi"},
-        feature_id_var = "identifier",
+        feature_identifiers_var = "identifier",
     )
 
     compare_frame_contents(matched_s_ids.drop(columns = "s_Source"), matched_s_ids_w_ontologies.drop(columns = "s_Source"))

@@ -18,7 +18,7 @@ from napistu.network import net_create
 from napistu.constants import SBML_DFS
 from napistu.constants import SOURCE_SPEC
 
-from napistu.sbml_dfs_utils import _validate_assets_sbml_ids
+from napistu.identifiers import _validate_assets_sbml_ids
 from napistu.network.constants import CPR_GRAPH_NODES
 from napistu.network.constants import CPR_GRAPH_TYPES
 

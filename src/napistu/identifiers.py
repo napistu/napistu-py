@@ -9,8 +9,11 @@ from urllib.parse import urlparse
 
 import libsbml
 import pandas as pd
-from napistu import utils
 from pydantic import BaseModel
+
+from napistu import sbml_dfs_core
+from napistu import sbml_dfs_utils
+from napistu import utils
 
 from napistu.constants import IDENTIFIERS
 from napistu.constants import BIOLOGICAL_QUALIFIER_CODES
@@ -18,6 +21,7 @@ from napistu.constants import ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY
 from napistu.constants import ENSEMBL_MOLECULE_TYPES_FROM_ONTOLOGY
 from napistu.constants import ENSEMBL_SPECIES_FROM_CODE
 from napistu.constants import ENSEMBL_SPECIES_TO_CODE
+from napistu.constants import SPECIES_IDENTIFIERS_REQUIRED_VARS
 
 logger = logging.getLogger(__name__)
 
@@ -792,6 +796,78 @@ def _format_Identifiers_pubmed(pubmed_id: str) -> Identifiers:
     id_entry = format_uri(uri=url, biological_qualifier_type="BQB_IS_DESCRIBED_BY")
 
     return Identifiers([id_entry])
+
+
+def _check_species_identifiers_table(
+    species_identifiers: pd.DataFrame,
+    required_vars: set = SPECIES_IDENTIFIERS_REQUIRED_VARS,
+):
+    missing_required_vars = required_vars.difference(
+        set(species_identifiers.columns.tolist())
+    )
+    if len(missing_required_vars) > 0:
+        raise ValueError(
+            f"{len(missing_required_vars)} required variables "
+            "were missing from the species_identifiers table: "
+            f"{', '.join(missing_required_vars)}"
+        )
+
+    return None
+
+
+def _prepare_species_identifiers(
+    sbml_dfs : sbml_dfs_core.SBML_dfs,
+    dogmatic : bool = False,
+    species_identifiers : Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    """Accepts and validates species_identifiers, or extracts a fresh table if None."""
+
+    if species_identifiers is None:
+        species_identifiers = sbml_dfs_utils.get_characteristic_species_ids(sbml_dfs, dogmatic = dogmatic)
+    else:
+        # check for compatibility
+        try:
+            # check species_identifiers format
+            
+            _check_species_identifiers_table(species_identifiers)
+            # quick check for compatibility between sbml_dfs and species_identifiers
+            _validate_assets_sbml_ids(sbml_dfs, species_identifiers)
+        except ValueError as e:
+            logger.warning(f"The provided identifiers are not compatible with your `sbml_dfs` object. Extracting a fresh species identifier table. {e}")
+            species_identifiers = sbml_dfs_utils.get_characteristic_species_ids(sbml_dfs, dogmatic = dogmatic)
+
+    return species_identifiers
+
+
+def _validate_assets_sbml_ids(
+    sbml_dfs: sbml_dfs_core.SBML_dfs, identifiers_df: pd.DataFrame
+) -> None:
+    """Check an sbml_dfs file and identifiers table for inconsistencies."""
+
+    joined_species_w_ids = sbml_dfs.species.merge(
+        identifiers_df[["s_id", "s_name"]].drop_duplicates(),
+        left_index=True,
+        right_on="s_id",
+    )
+
+    inconsistent_names_df = joined_species_w_ids.query("s_name_x != s_name_y").dropna()
+    inconsistent_names_list = [
+        f"{x} != {y}"
+        for x, y in zip(
+            inconsistent_names_df["s_name_x"], inconsistent_names_df["s_name_y"]
+        )
+    ]
+
+    if len(inconsistent_names_list):
+        example_inconsistent_names = inconsistent_names_list[
+            0 : min(10, len(inconsistent_names_list))
+        ]
+
+        raise ValueError(
+            f"{len(inconsistent_names_list)} species names do not match between "
+            f"sbml_dfs and identifiers_df including: {', '.join(example_inconsistent_names)}"
+        )
+
+    return None
 
 
 class _IdentifierValidator(BaseModel):

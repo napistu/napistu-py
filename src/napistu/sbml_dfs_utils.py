@@ -340,35 +340,3 @@ def _stub_ids(ids):
         )
     else:
         return pd.DataFrame(ids)
-
-
-def _validate_assets_sbml_ids(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, identifiers_df: pd.DataFrame
-) -> None:
-    """Check an sbml_dfs file and identifiers table for inconsistencies."""
-
-    joined_species_w_ids = sbml_dfs.species.merge(
-        identifiers_df[["s_id", "s_name"]].drop_duplicates(),
-        left_index=True,
-        right_on="s_id",
-    )
-
-    inconsistent_names_df = joined_species_w_ids.query("s_name_x != s_name_y").dropna()
-    inconsistent_names_list = [
-        f"{x} != {y}"
-        for x, y in zip(
-            inconsistent_names_df["s_name_x"], inconsistent_names_df["s_name_y"]
-        )
-    ]
-
-    if len(inconsistent_names_list):
-        example_inconsistent_names = inconsistent_names_list[
-            0 : min(10, len(inconsistent_names_list))
-        ]
-
-        raise ValueError(
-            f"{len(inconsistent_names_list)} species names do not match between "
-            f"sbml_dfs and identifiers_df including: {', '.join(example_inconsistent_names)}"
-        )
-
-    return None

@@ -4,7 +4,10 @@ import logging
 from typing import Optional, Union, Set, Dict, List
 
 import igraph as ig
+import numpy as np
 import pandas as pd
+
+from napistu import identifiers
 from napistu import sbml_dfs_core
 from napistu import utils
 from napistu.constants import SBML_DFS
@@ -13,7 +16,6 @@ from napistu.constants import CPR_EDGELIST_REQ_VARS
 from napistu.constants import IDENTIFIERS
 from napistu.constants import IDENTIFIER_EDGELIST_REQ_VARS
 from napistu.constants import ONTOLOGIES_LIST
-from napistu.constants import SPECIES_IDENTIFIERS_REQUIRED_VARS
 from napistu.network.constants import CPR_GRAPH_EDGES
 from napistu.network import paths
 
@@ -24,7 +26,10 @@ def features_to_pathway_species(
     feature_identifiers: pd.DataFrame,
     species_identifiers: pd.DataFrame,
     ontologies: set,
-    feature_id_var: str,
+    feature_identifiers_var: str,
+    expand_identifiers: bool = False,
+    identifier_delimiter: str = "/",
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
     Features to Pathway Species
@@ -33,29 +38,58 @@ def features_to_pathway_species(
 
     Parameters:
     feature_identifiers: pd.DataFrame
-        pd.Dataframe containing a "feature_id_var" variable used to match entries
+        pd.Dataframe containing a "feature_identifiers_var" variable used to match entries
     species_identifiers: pd.DataFrame
         A table of molecular species identifiers produced from sbml_dfs.get_identifiers("species")
         generally using sbml_dfs_core.export_sbml_dfs()
     ontologies: set
         A set of ontologies used to match features to pathway species
-    feature_id_var: str
+    feature_identifiers_var: str
         Variable in "feature_identifiers" containing identifiers
+    expand_identifiers: bool, default=False
+        If True, split identifiers in feature_identifiers_var by identifier_delimiter and explode into multiple rows
+    identifier_delimiter: str, default="/"
+        Delimiter to use for splitting identifiers if expand_identifiers is True
+    verbose: bool, default=False
+        If True, log mapping statistics at the end of the function
 
     Returns:
     pathway_species: pd.DataFrame
         species_identifiers joined to feature_identifiers based on shared identifiers
     """
 
-    # map features to molecular features in the pathway
-    if feature_id_var not in feature_identifiers.columns.to_list():
+    # Check for identifier column
+    if feature_identifiers_var not in feature_identifiers.columns.to_list():
         raise ValueError(
-            f"{feature_id_var} must be a variable in 'feature_identifiers', "
+            f"{feature_identifiers_var} must be a variable in 'feature_identifiers', "
             f"possible variables are {', '.join(feature_identifiers.columns.tolist())}"
         )
 
+    # Respect or create feature_id column
+    if "feature_id" not in feature_identifiers.columns:
+        logger.warning("No feature_id column found in feature_identifiers, creating one")
+        feature_identifiers = feature_identifiers.copy()
+        feature_identifiers["feature_id"] = np.arange(len(feature_identifiers))
+
+    # Optionally expand identifiers into multiple rows
+    if expand_identifiers:
+        # Count the number of expansions by counting delimiters
+        n_expansions = feature_identifiers[feature_identifiers_var].astype(str).str.count(identifier_delimiter).sum()
+        if n_expansions > 0:
+            logger.info(f"Expanding identifiers: {n_expansions} delimiters found in '{feature_identifiers_var}', will expand to more rows.")
+
+        # Split, strip whitespace, and explode
+        feature_identifiers = feature_identifiers.copy()
+        feature_identifiers[feature_identifiers_var] = (
+            feature_identifiers[feature_identifiers_var]
+            .astype(str)
+            .str.split(identifier_delimiter)
+            .apply(lambda lst: [x.strip() for x in lst])
+        )
+        feature_identifiers = feature_identifiers.explode(feature_identifiers_var, ignore_index=True)
+
     # check identifiers table
-    _check_species_identifiers_table(species_identifiers)
+    identifiers._check_species_identifiers_table(species_identifiers)
 
     available_ontologies = set(species_identifiers[IDENTIFIERS.ONTOLOGY].tolist())
     unavailable_ontologies = ontologies.difference(available_ontologies)
@@ -82,7 +116,7 @@ def features_to_pathway_species(
 
     # map features to pathway species
     pathway_species = feature_identifiers.merge(
-        relevant_identifiers, left_on=feature_id_var, right_on=IDENTIFIERS.IDENTIFIER
+        relevant_identifiers, left_on=feature_identifiers_var, right_on=IDENTIFIERS.IDENTIFIER
     )
 
     if pathway_species.shape[0] == 0:
@@ -92,6 +126,8 @@ def features_to_pathway_species(
         None
 
     # report the fraction of unmapped species
+    if verbose:
+        _log_feature_species_mapping_stats(pathway_species)
 
     return pathway_species
 
@@ -156,7 +192,7 @@ def edgelist_to_pathway_species(
         feature_identifiers=distinct_identifiers,
         species_identifiers=species_identifiers,
         ontologies=ontologies,
-        feature_id_var="feature_id",
+        feature_identifiers_var="feature_id",
     )
 
     # add s_ids of both upstream and downstream edges to pathway
@@ -185,7 +221,7 @@ def match_features_to_wide_pathway_species(
     wide_df: pd.DataFrame,
     species_identifiers: pd.DataFrame,
     ontologies: Optional[Union[Set[str], Dict[str, str]]] = None,
-    feature_id_var: str = "identifier"
+    feature_identifiers_var: str = "identifier"
 ) -> pd.DataFrame:
     """
     Convert a wide-format DataFrame with multiple ontology columns to long format,
@@ -203,7 +239,7 @@ def match_features_to_wide_pathway_species(
         - Set of columns to treat as ontologies
         - Dict mapping wide column names to ontology names
         - None to automatically detect ontology columns based on ONTOLOGIES_LIST
-    feature_id_var : str, default="identifier"
+    feature_identifiers_var : str, default="identifier"
         Name for the identifier column in the long format
 
     Returns
@@ -261,8 +297,8 @@ def match_features_to_wide_pathway_species(
         id_vars=results_cols,
         value_vars=melt_cols,
         var_name="ontology",
-        value_name=feature_id_var
-    ).dropna(subset=[feature_id_var])    
+        value_name=feature_identifiers_var
+    ).dropna(subset=[feature_identifiers_var])    
 
     logger.debug(f"Final long format shape: {long_df.shape}")
 
@@ -271,7 +307,7 @@ def match_features_to_wide_pathway_species(
         feature_identifiers=long_df,
         species_identifiers=species_identifiers,
         ontologies=ontology_cols,
-        feature_id_var=feature_id_var
+        feature_identifiers_var=feature_identifiers_var
     )
 
 
@@ -279,7 +315,7 @@ def match_by_ontology_and_identifier(
     feature_identifiers: pd.DataFrame,
     species_identifiers: pd.DataFrame,
     ontologies: Union[str, Set[str], List[str]],
-    feature_id_var: str = "identifier",
+    feature_identifiers_var: str = "identifier",
 ) -> pd.DataFrame:
     """
     Match features to pathway species based on both ontology and identifier matches.
@@ -289,7 +325,7 @@ def match_by_ontology_and_identifier(
     ----------
     feature_identifiers : pd.DataFrame
         DataFrame containing feature identifiers and results.
-        Must have columns [ontology, feature_id_var, results]
+        Must have columns [ontology, feature_identifiers_var, results]
     species_identifiers : pd.DataFrame
         DataFrame containing species identifiers from pathway.
         Must have columns [ontology, identifier]
@@ -298,7 +334,7 @@ def match_by_ontology_and_identifier(
         - A single ontology string
         - A set of ontology strings
         - A list of ontology strings
-    feature_id_var : str, default="identifier"
+    feature_identifiers_var : str, default="identifier"
         Name of the identifier column in feature_identifiers
 
     Returns
@@ -368,7 +404,7 @@ def match_by_ontology_and_identifier(
             feature_identifiers=ont_features,
             species_identifiers=ont_species,
             ontologies={ont},
-            feature_id_var=feature_id_var
+            feature_identifiers_var=feature_identifiers_var
         )
 
         if matched.empty:
@@ -422,7 +458,7 @@ def edgelist_to_scids(
         downstream species mapped to "sc_id_downstream"
     """
 
-    _check_species_identifiers_table(species_identifiers)
+    identifiers._check_species_identifiers_table(species_identifiers)
 
     # map edges onto pathway entities based on shared identifiers
     edges_on_pathway = edgelist_to_pathway_species(
@@ -780,7 +816,7 @@ def _edgelist_to_scids_if_needed(
     else:
         utils.match_pd_vars(edgelist, IDENTIFIER_EDGELIST_REQ_VARS).assert_present()
 
-        _check_species_identifiers_table(species_identifiers)
+        identifiers._check_species_identifiers_table(species_identifiers)
 
         edgelist_w_scids = edgelist_to_scids(
             edgelist,
@@ -790,23 +826,6 @@ def _edgelist_to_scids_if_needed(
         )
 
         return edgelist_w_scids
-
-
-def _check_species_identifiers_table(
-    species_identifiers: pd.DataFrame,
-    required_vars: set = SPECIES_IDENTIFIERS_REQUIRED_VARS,
-):
-    missing_required_vars = required_vars.difference(
-        set(species_identifiers.columns.tolist())
-    )
-    if len(missing_required_vars) > 0:
-        raise ValueError(
-            f"{len(missing_required_vars)} required variables "
-            "were missing from the species_identifiers table: "
-            f"{', '.join(missing_required_vars)}"
-        )
-
-    return None
 
 
 def _validate_wide_ontologies(
@@ -886,3 +905,31 @@ def _validate_wide_ontologies(
     
     logger.debug(f"Validated ontology columns: {ontology_cols}")
     return ontology_cols
+
+
+def _log_feature_species_mapping_stats(pathway_species: pd.DataFrame):
+    """
+    Log statistics about the mapping between feature_id and s_id in the pathway_species DataFrame.
+    """
+    
+    # Percent of feature_ids present one or more times in the output
+    n_feature_ids = pathway_species['feature_id'].nunique()
+    n_input_feature_ids = pathway_species['feature_id'].max() + 1 if 'feature_id' in pathway_species.columns else 0
+    percent_present = 100 * n_feature_ids / n_input_feature_ids if n_input_feature_ids else 0
+    logger.info(f"{percent_present:.1f}% of feature_ids are present one or more times in the output ({n_feature_ids}/{n_input_feature_ids})")
+
+    # Number of times an s_id maps to 1+ feature_ids (with s_name)
+    s_id_counts = pathway_species.groupby('s_id')['feature_id'].nunique()
+    s_id_multi = s_id_counts[s_id_counts > 1]
+    logger.info(f"{len(s_id_multi)} s_id(s) map to more than one feature_id.")
+    if not s_id_multi.empty:
+        examples = pathway_species[pathway_species['s_id'].isin(s_id_multi.index)][['s_id', 's_name', 'feature_id']]
+        logger.info(f"Examples of s_id mapping to multiple feature_ids (showing up to 3):\n{examples.groupby(['s_id', 's_name'])['feature_id'].apply(list).head(3)}")
+
+    # Number of times a feature_id maps to 1+ s_ids (with s_name)
+    feature_id_counts = pathway_species.groupby('feature_id')['s_id'].nunique()
+    feature_id_multi = feature_id_counts[feature_id_counts > 1]
+    logger.info(f"{len(feature_id_multi)} feature_id(s) map to more than one s_id.")
+    if not feature_id_multi.empty:
+        examples = pathway_species[pathway_species['feature_id'].isin(feature_id_multi.index)][['feature_id', 's_id', 's_name']]
+        logger.info(f"Examples of feature_id mapping to multiple s_ids (showing up to 3):\n{examples.groupby(['feature_id'])[['s_id', 's_name']].apply(lambda df: list(df.itertuples(index=False, name=None))).head(3)}")
