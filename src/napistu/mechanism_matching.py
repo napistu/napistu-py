@@ -224,7 +224,8 @@ def match_features_to_wide_pathway_species(
     wide_df: pd.DataFrame,
     species_identifiers: pd.DataFrame,
     ontologies: Optional[Union[Set[str], Dict[str, str]]] = None,
-    feature_identifiers_var: str = "identifier"
+    feature_identifiers_var: str = "identifier",
+    verbose: bool = False
 ) -> pd.DataFrame:
     """
     Convert a wide-format DataFrame with multiple ontology columns to long format,
@@ -244,6 +245,8 @@ def match_features_to_wide_pathway_species(
         - None to automatically detect ontology columns based on ONTOLOGIES_LIST
     feature_identifiers_var : str, default="identifier"
         Name for the identifier column in the long format
+    verbose : bool, default=False
+        Whether to print verbose output
 
     Returns
     -------
@@ -306,12 +309,17 @@ def match_features_to_wide_pathway_species(
     logger.debug(f"Final long format shape: {long_df.shape}")
 
     # Call the matching function with the validated ontologies
-    return match_by_ontology_and_identifier(
+    out = match_by_ontology_and_identifier(
         feature_identifiers=long_df,
         species_identifiers=species_identifiers,
         ontologies=ontology_cols,
         feature_identifiers_var=feature_identifiers_var
     )
+
+    if verbose:
+        _log_feature_species_mapping_stats(out)
+
+    return out
 
 
 def match_by_ontology_and_identifier(
