@@ -13,6 +13,7 @@ import pandas as pd
 from napistu import utils
 from napistu import indices
 
+from napistu import sbml_dfs_core
 from napistu.constants import SBML_DFS
 from napistu.constants import IDENTIFIERS
 from napistu.constants import BQB_DEFINING_ATTRS
@@ -266,6 +267,43 @@ def check_entity_data_index_matching(sbml_dfs, table):
             sbml_dfs.species_data = entity_data_dict_checked
 
     return sbml_dfs
+
+
+def get_characteristic_species_ids(
+    sbml_dfs : sbml_dfs_core.SBML_dfs,
+    dogmatic : bool = True
+) -> pd.DataFrame:
+    """
+    Get Characteristic Species IDs
+
+    List the systematic identifiers which are characteristic of molecular species, e.g., excluding subcomponents, and optionally, treating proteins, transcripts, and genes equiavlently.
+
+    Parameters
+    ----------
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The SBML_dfs object.
+    dogmatic : bool, default=True
+        Whether to use the dogmatic flag to determine which BQB attributes are valid.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame containing the systematic identifiers which are characteristic of molecular species.
+    """
+
+    # select valid BQB attributes based on dogmatic flag
+    defining_biological_qualifiers = _dogmatic_to_defining_bqbs(dogmatic)
+
+    # pre-summarize ontologies
+    species_identifiers = sbml_dfs.get_identifiers(SBML_DFS.SPECIES)
+    
+    # drop some BQB_HAS_PART annotations
+    species_identifiers = sbml_dfs_core.filter_to_characteristic_species_ids(
+        species_identifiers,
+        defining_biological_qualifiers=defining_biological_qualifiers,
+    )
+
+    return species_identifiers
 
 
 def _dogmatic_to_defining_bqbs(dogmatic: bool = False) -> str:
