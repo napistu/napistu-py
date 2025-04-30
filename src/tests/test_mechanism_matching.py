@@ -245,6 +245,50 @@ def test_validate_wide_ontologies():
     with pytest.raises(ValueError, match="No valid ontology columns found in DataFrame.*"):
         _validate_wide_ontologies(invalid_df)
 
+
+def test_ensure_feature_id_var():
+    """Test the _ensure_feature_id_var function with various input cases."""
+    from napistu.mechanism_matching import _ensure_feature_id_var
+    from napistu.constants import FEATURE_ID_VAR_DEFAULT
+
+    # Test case 1: DataFrame already has feature_id column
+    df1 = pd.DataFrame({
+        'feature_id': [100, 200, 300],
+        'data': ['a', 'b', 'c']
+    })
+    result1 = _ensure_feature_id_var(df1)
+    # Should return unchanged DataFrame
+    pd.testing.assert_frame_equal(df1, result1)
+    
+    # Test case 2: DataFrame missing feature_id column
+    df2 = pd.DataFrame({
+        'data': ['x', 'y', 'z']
+    })
+    result2 = _ensure_feature_id_var(df2)
+    # Should add feature_id column with sequential integers
+    assert FEATURE_ID_VAR_DEFAULT in result2.columns
+    assert list(result2[FEATURE_ID_VAR_DEFAULT]) == [0, 1, 2]
+    assert list(result2['data']) == ['x', 'y', 'z']  # Original data preserved
+    
+    # Test case 3: Custom feature_id column name
+    df3 = pd.DataFrame({
+        'data': ['p', 'q', 'r']
+    })
+    custom_id = 'custom_feature_id'
+    result3 = _ensure_feature_id_var(df3, feature_id_var=custom_id)
+    # Should add custom named feature_id column
+    assert custom_id in result3.columns
+    assert list(result3[custom_id]) == [0, 1, 2]
+    assert list(result3['data']) == ['p', 'q', 'r']  # Original data preserved
+    
+    # Test case 4: Empty DataFrame
+    df4 = pd.DataFrame()
+    result4 = _ensure_feature_id_var(df4)
+    # Should handle empty DataFrame gracefully
+    assert FEATURE_ID_VAR_DEFAULT in result4.columns
+    assert len(result4) == 0
+
+
 def test_match_by_ontology_and_identifier():
     """Test the match_by_ontology_and_identifier function with various input types."""
     # Setup test data

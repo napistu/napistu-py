@@ -332,6 +332,8 @@ CPR_EDGELIST_REQ_VARS = {
 
 CPR_PATH_REQ_VARS = {CPR_EDGELIST.SC_ID_ORIGIN, CPR_EDGELIST.SC_ID_DEST}
 
+FEATURE_ID_VAR_DEFAULT = "feature_id"
+
 # specifying weighting schemes schema
 
 DEFAULT_WT_TRANS = "identity"
