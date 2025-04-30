@@ -25,6 +25,88 @@ from napistu.network import paths
 logger = logging.getLogger(__name__)
 
 
+def bind_wide_results(
+    sbml_dfs : sbml_dfs_core.SBML_dfs,
+    results_df : pd.DataFrame,
+    results_name : str,
+    ontologies : Optional[Union[Set[str], Dict[str, str]]] = None,
+    dogmatic : bool = False,
+    species_identifiers : Optional[pd.DataFrame] = None,
+    feature_id_var : str = FEATURE_ID_VAR_DEFAULT,
+    numeric_agg : str = RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN,
+    keep_id_col : bool = True,
+    verbose : bool = False
+) -> sbml_dfs_core.SBML_dfs:
+    """
+    Binds wide results to a sbml_dfs object.
+
+    Take a table with molecular species-level attributes tied to systematic identifiers and match them to an sbml_dfs_model transferring these attributes to species_data
+
+    Parameters
+    ----------
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The sbml_dfs object to bind the results to.
+    results_df : pd.DataFrame
+        The table containing the results to bind.
+    results_name : str
+        The name of the results to bind.
+    ontologies : Optional[Union[Set[str], Dict[str, str]]]
+        The ontologies to use for matching.
+    dogmatic : bool
+        Whether to respect differences between genes, transcripts, and proteins (True) or ignore them (False).
+    species_identifiers : Optional[pd.DataFrame]
+        Systematic identifiers for the molecular species "sbml_dfs". If None this will be generate on-the-fly.
+    feature_id_var : str
+        The name of the column in the results_df that contains the feature identifiers. If this does not exist it will be created.
+    numeric_agg : str
+        The aggregation method to use for resolving degeneracy.
+    keep_id_col : bool
+        Whether to keep the identifier column in the results_df.
+    verbose : bool
+        Whether to log cases of 1-to-many and many-to-one mapping and to indicate the behavior for resolving degeneracy
+    
+    Returns
+    -------
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The sbml_dfs object with the results bound.
+    """
+
+    species_identifiers = identifiers._prepare_species_identifiers(
+        sbml_dfs,
+        dogmatic = dogmatic,
+        species_identifiers = species_identifiers
+        )
+    
+    # match
+    matched_s_ids_from_wide = match_features_to_wide_pathway_species(
+        results_df,
+        species_identifiers,
+        ontologies = ontologies,
+        feature_id_var = feature_id_var,
+        verbose = verbose
+    )
+
+    disambiguated_matches = resolve_matches(
+        matched_data = matched_s_ids_from_wide,
+        feature_id_var = feature_id_var,
+        numeric_agg = numeric_agg,
+        keep_id_col = keep_id_col
+        )
+
+    clean_species_data = utils.drop_extra_cols(
+        results_df,
+        disambiguated_matches,
+        always_include = [feature_id_var]
+    )
+
+    sbml_dfs.add_species_data(
+        results_name,
+        clean_species_data
+        )
+
+    return sbml_dfs
+
+
 def features_to_pathway_species(
     feature_identifiers: pd.DataFrame,
     species_identifiers: pd.DataFrame,
