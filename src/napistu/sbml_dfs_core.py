@@ -1265,6 +1265,7 @@ def filter_to_characteristic_species_ids(
         data=[True] * len(promiscuous_component_identifiers_index),
         index=promiscuous_component_identifiers_index,
         name="is_shared_component",
+        dtype=bool,
     )
 
     if len(promiscuous_component_identifiers) == 0:
