@@ -1583,15 +1583,11 @@ def export_sbml_dfs(
         raise TypeError(
             f"sbml_dfs was a {type(sbml_dfs)} and must" " be an sbml.SBML_dfs"
         )
-    # select valid BQB attributes based on dogmatic flag
-    defining_biological_qualifiers = sbml_dfs_utils._dogmatic_to_defining_bqbs(dogmatic)
-
-    # pre-summarize ontologies
-    species_identifiers = sbml_dfs.get_identifiers(SBML_DFS.SPECIES)
-    # drop some BQB_HAS_PART annotations
-    species_identifiers = filter_to_characteristic_species_ids(
-        species_identifiers,
-        defining_biological_qualifiers=defining_biological_qualifiers,
+    
+    # filter to identifiers which make sense when mapping from ids -> species 
+    species_identifiers = sbml_dfs_utils.get_characteristic_species_ids(
+        sbml_dfs,
+        dogmatic=dogmatic,
     )
 
     try:

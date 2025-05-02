@@ -332,6 +332,17 @@ CPR_EDGELIST_REQ_VARS = {
 
 CPR_PATH_REQ_VARS = {CPR_EDGELIST.SC_ID_ORIGIN, CPR_EDGELIST.SC_ID_DEST}
 
+FEATURE_ID_VAR_DEFAULT = "feature_id"
+
+RESOLVE_MATCHES_AGGREGATORS = SimpleNamespace(
+    WEIGHTED_MEAN = "weighted_mean",
+    MEAN = "mean",
+    FIRST = "first",
+    MAX = "max"
+)
+
+RESOLVE_MATCHES_TMP_WEIGHT_COL = "__tmp_weight_for_aggregation__"
+
 # specifying weighting schemes schema
 
 DEFAULT_WT_TRANS = "identity"
@@ -388,6 +399,8 @@ ONTOLOGIES = SimpleNamespace(
     SYMBOL="symbol",
     UNIPROT="uniprot",
 )
+
+ONTOLOGIES_LIST = list(ONTOLOGIES.__dict__.values())
 
 CHARACTERISTIC_COMPLEX_ONTOLOGIES = [
     ONTOLOGIES.ENSEMBL_GENE,
