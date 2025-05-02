@@ -47,6 +47,7 @@ def create_cpr_graph(
     edge_reversed: bool = False,
     graph_type: str = CPR_GRAPH_TYPES.BIPARTITE,
     verbose: bool = False,
+    custom_transformations: Optional[dict] = None,
 ) -> ig.Graph:
     """
     Create CPR Graph
@@ -73,6 +74,8 @@ def create_cpr_graph(
               not modified by a substrate per-se).
     verbose : bool
         Extra reporting
+    custom_transformations : dict, optional
+        Dictionary of custom transformation functions to use for attribute transformation.
 
     Returns:
     ----------
@@ -168,7 +171,7 @@ def create_cpr_graph(
 
     logger.info("Adding reversibility and other meta-data from reactions_data")
     augmented_network_edges = _augment_network_edges(
-        network_edges, working_sbml_dfs, reaction_graph_attrs
+        network_edges, working_sbml_dfs, reaction_graph_attrs, custom_transformations=custom_transformations
     )
 
     logger.info(
@@ -270,6 +273,7 @@ def process_cpr_graph(
     graph_type: str = CPR_GRAPH_TYPES.BIPARTITE,
     weighting_strategy: str = CPR_WEIGHTING_STRATEGIES.UNWEIGHTED,
     verbose: bool = False,
+    custom_transformations: dict = None,
 ) -> ig.Graph:
     """
     Process Consensus Graph
@@ -294,6 +298,8 @@ def process_cpr_graph(
             - calibrated: transforme edges with a quantitative score based on reaction_attrs and combine them
                 with topology scores to generate a consensus.
         verbose (bool): Extra reporting
+        custom_transformations (dict, optional):
+            Dictionary of custom transformation functions to use for attribute transformation.
 
     Returns:
         weighted_graph (ig.Graph): An Igraph network
@@ -307,6 +313,7 @@ def process_cpr_graph(
         edge_reversed=edge_reversed,
         graph_type=graph_type,
         verbose=verbose,
+        custom_transformations=custom_transformations,
     )
 
     if "reactions" in reaction_graph_attrs.keys():
@@ -326,7 +333,10 @@ def process_cpr_graph(
 
 
 def pluck_entity_data(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, graph_attrs: dict[str, dict], data_type: str
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    graph_attrs: dict[str, dict],
+    data_type: str,
+    custom_transformations: Optional[dict[str, callable]] = None,
 ) -> pd.DataFrame | None:
     """
     Pluck Entity Attributes
@@ -338,13 +348,21 @@ def pluck_entity_data(
     sbml_dfs: sbml_dfs_core.SBML_dfs
         A mechanistic model
     graph_attrs: dict
-        A dictionary of species/reaction attributes to pull out
+        A dictionary of species/reaction attributes to pull out. If the requested
+        data_type ("species" or "reactions") is not present as a key, or if the value
+        is an empty dict, this function will return None (no error).
     data_type: str
         "species" or "reactions" to pull out species_data or reactions_data
+    custom_transformations: dict[str, callable], optional
+        A dictionary mapping transformation names to functions. If provided, these
+        will be checked before built-in transformations. Example:
+            custom_transformations = {"square": lambda x: x**2}
 
     Returns:
         A table where all extracted attributes are merged based on a common index or None
-        if no attributes were extracted.
+        if no attributes were extracted. If the requested data_type is not present in
+        graph_attrs, or if the attribute dict is empty, returns None. This is intended
+        to allow optional annotation blocks.
 
     """
 
@@ -361,30 +379,43 @@ def pluck_entity_data(
 
     entity_attrs = graph_attrs[data_type]
     # validating dict
-    _validate_entity_attrs(entity_attrs)
+    _validate_entity_attrs(entity_attrs, custom_transformations=custom_transformations)
+
+    if len(entity_attrs) == 0:
+        logger.info(f'No attributes defined for "{data_type}" in graph_attrs; returning None')
+        return None
 
     data_type_attr = data_type + "_data"
     entity_data_tbls = getattr(sbml_dfs, data_type_attr)
 
     data_list = list()
     for k, v in entity_attrs.items():
-        if v["table"] is not None:
-            # does the data table exist?
-            if v["table"] not in entity_data_tbls.keys():
-                raise ValueError(
-                    f"{v['table']} was defined as a table in \"graph_attrs\" but "
-                    f'it is not present in the "{data_type_attr}" of the sbml_dfs'
-                )
+        # v["table"] is always present if entity_attrs is non-empty and validated
+        if v["table"] not in entity_data_tbls.keys():
+            raise ValueError(
+                f"{v['table']} was defined as a table in \"graph_attrs\" but "
+                f'it is not present in the "{data_type_attr}" of the sbml_dfs'
+            )
 
-            if v["variable"] not in entity_data_tbls[v["table"]].columns.tolist():
-                raise ValueError(
-                    f"{v['variable']} was defined as a variable in \"graph_attrs\" but "
-                    f"it is not present in the {v['table']} of the \"{data_type_attr}\" of "
-                    "the sbml_dfs"
-                )
+        if v["variable"] not in entity_data_tbls[v["table"]].columns.tolist():
+            raise ValueError(
+                f"{v['variable']} was defined as a variable in \"graph_attrs\" but "
+                f"it is not present in the {v['table']} of the \"{data_type_attr}\" of "
+                "the sbml_dfs"
+            )
 
-            entity_series = entity_data_tbls[v["table"]][v["variable"]].rename(k)
-            data_list.append(entity_series)
+        entity_series = entity_data_tbls[v["table"]][v["variable"]].rename(k)
+        trans_name = v.get("trans", DEFAULT_WT_TRANS)
+        # Look up transformation
+        if custom_transformations and trans_name in custom_transformations:
+            trans_fxn = custom_transformations[trans_name]
+        elif trans_name in DEFINED_WEIGHT_TRANSFORMATION:
+            trans_fxn = globals()[DEFINED_WEIGHT_TRANSFORMATION[trans_name]]
+        else:
+            # This should never be hit if _validate_entity_attrs is called correctly.
+            raise ValueError(f"Transformation '{trans_name}' not found in custom_transformations or DEFINED_WEIGHT_TRANSFORMATION.")
+        entity_series = entity_series.apply(trans_fxn)
+        data_list.append(entity_series)
 
     if len(data_list) == 0:
         return None
@@ -392,7 +423,7 @@ def pluck_entity_data(
     return pd.concat(data_list, axis=1)
 
 
-def apply_weight_transformations(edges_df: pd.DataFrame, reaction_attrs: dict):
+def apply_weight_transformations(edges_df: pd.DataFrame, reaction_attrs: dict, custom_transformations: dict = None):
     """
     Apply Weight Transformations
 
@@ -403,22 +434,33 @@ def apply_weight_transformations(edges_df: pd.DataFrame, reaction_attrs: dict):
             A dictionary of attributes identifying weighting attributes within
             an sbml_df's reaction_data, how they will be named in edges_df (the keys),
             and how they should be transformed (the "trans" aliases")
+        custom_transformations (dict, optional):
+            A dictionary mapping transformation names to functions. If provided, these
+            will be checked before built-in transformations.
 
     Returns:
         transformed_edges_df (pd.DataFrame): edges_df with weight variables transformed.
 
     """
 
-    _validate_entity_attrs(reaction_attrs)
+    _validate_entity_attrs(reaction_attrs, custom_transformations=custom_transformations)
 
     transformed_edges_df = copy.deepcopy(edges_df)
     for k, v in reaction_attrs.items():
         if k not in transformed_edges_df.columns:
             raise ValueError(f"A weighting variable {k} was missing from edges_df")
 
-        trans_fxn = DEFINED_WEIGHT_TRANSFORMATION[v["trans"]]
+        trans_name = v["trans"]
+        # Look up transformation
+        if custom_transformations and trans_name in custom_transformations:
+            trans_fxn = custom_transformations[trans_name]
+        elif trans_name in DEFINED_WEIGHT_TRANSFORMATION:
+            trans_fxn = globals()[DEFINED_WEIGHT_TRANSFORMATION[trans_name]]
+        else:
+            # This should never be hit if _validate_entity_attrs is called correctly.
+            raise ValueError(f"Transformation '{trans_name}' not found in custom_transformations or DEFINED_WEIGHT_TRANSFORMATION.")
 
-        transformed_edges_df[k] = transformed_edges_df[k].apply(globals()[trans_fxn])
+        transformed_edges_df[k] = transformed_edges_df[k].apply(trans_fxn)
 
     return transformed_edges_df
 
@@ -1275,9 +1317,34 @@ def _add_graph_species_attribute(
     cpr_graph: ig.Graph,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     species_graph_attrs: dict,
+    custom_transformations: Optional[dict] = None,
 ) -> ig.Graph:
-    """Add meta-data from species_data to existing igraph's vertices."""
+    """
+    Add meta-data from species_data to existing igraph's vertices.
 
+    This function augments the vertices of an igraph network with additional attributes
+    derived from the species-level data in the provided SBML_dfs object. The attributes
+    to add are specified in the species_graph_attrs dictionary, and can be transformed
+    using either built-in or user-supplied transformation functions.
+
+    Parameters
+    ----------
+    cpr_graph : ig.Graph
+        The igraph network to augment.
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The SBML_dfs object containing species data.
+    species_graph_attrs : dict
+        Dictionary specifying which attributes to pull from species_data and how to transform them.
+        The structure should be {attribute_name: {"table": ..., "variable": ..., "trans": ...}}.
+    custom_transformations : dict, optional
+        Dictionary mapping transformation names to functions. If provided, these will be checked
+        before built-in transformations. Example: {"square": lambda x: x**2}
+
+    Returns
+    -------
+    ig.Graph
+        The input igraph network with additional vertex attributes added from species_data.
+    """
     if not isinstance(species_graph_attrs, dict):
         raise TypeError(
             f"species_graph_attrs must be a dict, but was {type(species_graph_attrs)}"
@@ -1288,7 +1355,7 @@ def _add_graph_species_attribute(
     sp_graph_key_list = []
     sp_node_attr_list = []
     for k in species_graph_attrs.keys():
-        _validate_entity_attrs(species_graph_attrs[k])
+        _validate_entity_attrs(species_graph_attrs[k], custom_transformations=custom_transformations)
 
         sp_graph_key_list.append(k)
         sp_node_attr_list.append(list(species_graph_attrs[k].keys()))
@@ -1305,6 +1372,7 @@ def _add_graph_species_attribute(
         curr_network_nodes_df,
         sbml_dfs,
         species_graph_attrs,
+        custom_transformations=custom_transformations,
     )
 
     for vs_attr in flat_sp_node_attr_list:
@@ -1319,9 +1387,33 @@ def _augment_network_nodes(
     network_nodes: pd.DataFrame,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     species_graph_attrs: dict = dict(),
+    custom_transformations: Optional[dict] = None,
 ) -> pd.DataFrame:
-    """Add species-level attributes, expand network_nodes with s_id and c_id and then map to species-level attributes by s_id."""
+    """
+    Add species-level attributes, expand network_nodes with s_id and c_id and then map to species-level attributes by s_id.
 
+    This function merges species-level attributes from sbml_dfs into the provided network_nodes DataFrame,
+    using the mapping in species_graph_attrs. Optionally, custom transformation functions can be provided
+    to transform the attributes as they are added.
+
+    Parameters
+    ----------
+    network_nodes : pd.DataFrame
+        DataFrame of network nodes. Must include columns 'name', 'node_name', and 'node_type'.
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The SBML_dfs object containing species data.
+    species_graph_attrs : dict
+        Dictionary specifying which attributes to pull from species_data and how to transform them.
+        The structure should be {attribute_name: {"table": ..., "variable": ..., "trans": ...}}.
+    custom_transformations : dict, optional
+        Dictionary mapping transformation names to functions. If provided, these will be checked
+        before built-in transformations. Example: {"square": lambda x: x**2}
+
+    Returns
+    -------
+    pd.DataFrame
+        The input network_nodes DataFrame with additional columns for each extracted and transformed attribute.
+    """
     REQUIRED_NETWORK_NODE_ATTRS = {
         "name",
         "node_name",
@@ -1349,13 +1441,15 @@ def _augment_network_nodes(
     )
 
     # assign species_data related attributes to s_id
-    species_graph_data = pluck_entity_data(sbml_dfs, species_graph_attrs, "species")
+    species_graph_data = pluck_entity_data(sbml_dfs, species_graph_attrs, "species", custom_transformations=custom_transformations)
 
     if species_graph_data is not None:
         # add species_graph_data to the network_nodes df, based on s_id
         network_nodes_wdata = network_nodes_sid.merge(
             species_graph_data, left_on="s_id", right_index=True, how="left"
         )
+    else:
+        network_nodes_wdata = network_nodes_sid
 
     # Note: multiple sc_ids with the same s_id will be assign with the same species_graph_data
 
@@ -1369,9 +1463,21 @@ def _augment_network_edges(
     network_edges: pd.DataFrame,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     reaction_graph_attrs: dict = dict(),
+    custom_transformations: Optional[dict] = None,
 ) -> pd.DataFrame:
-    """Add reversibility and other metadata from reactions."""
+    """Add reversibility and other metadata from reactions.
 
+    Parameters
+    ----------
+    network_edges : pd.DataFrame
+        DataFrame of network edges.
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The SBML_dfs object containing reaction data.
+    reaction_graph_attrs : dict
+        Dictionary of reaction attributes to add.
+    custom_transformations : dict, optional
+        Dictionary of custom transformation functions to use for attribute transformation.
+    """
     REQUIRED_NETWORK_EDGE_ATTRS = {
         "from",
         "to",
@@ -1406,7 +1512,7 @@ def _augment_network_edges(
 
     # add other attributes based on reactions data
     reaction_graph_data = pluck_entity_data(
-        sbml_dfs, reaction_graph_attrs, SBML_DFS.REACTIONS
+        sbml_dfs, reaction_graph_attrs, SBML_DFS.REACTIONS, custom_transformations=custom_transformations
     )
     if reaction_graph_data is not None:
         network_edges = network_edges.merge(
@@ -1621,7 +1727,7 @@ def _create_topology_weights(
 
 
 def _validate_entity_attrs(
-    entity_attrs: dict, validate_transformations: bool = True
+    entity_attrs: dict, validate_transformations: bool = True, custom_transformations: Optional[dict] = None
 ) -> None:
     """Validate that graph attributes are a valid format."""
 
@@ -1631,11 +1737,15 @@ def _validate_entity_attrs(
         entity_attrs = _EntityAttrValidator(**v).model_dump()
 
         if validate_transformations:
-            if v["trans"] not in DEFINED_WEIGHT_TRANSFORMATION.keys():
+            trans_name = v["trans"]
+            valid_trans = set(DEFINED_WEIGHT_TRANSFORMATION.keys())
+            if custom_transformations:
+                valid_trans = valid_trans.union(set(custom_transformations.keys()))
+            if trans_name not in valid_trans:
                 raise ValueError(
-                    f"transformation {v['trans']} was not defined as an alias in "
-                    "DEFINED_WEIGHT_TRANSFORMATION. The defined transformations "
-                    f"are {', '.join(DEFINED_WEIGHT_TRANSFORMATION.keys())}"
+                    f"transformation {trans_name} was not defined as an alias in "
+                    "DEFINED_WEIGHT_TRANSFORMATION or custom_transformations. The defined transformations "
+                    f"are {', '.join(valid_trans)}"
                 )
 
     return None
