@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 def create_cpr_graph(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    reaction_graph_attrs: dict = dict(),
+    reaction_graph_attrs: Optional[dict] = None,
     directed: bool = True,
     edge_reversed: bool = False,
     graph_type: str = CPR_GRAPH_TYPES.BIPARTITE,
@@ -81,6 +81,9 @@ def create_cpr_graph(
     ----------
     An Igraph network
     """
+
+    if reaction_graph_attrs is None:
+        reaction_graph_attrs = {}
 
     if not isinstance(sbml_dfs, sbml_dfs_core.SBML_dfs):
         raise TypeError(
@@ -267,7 +270,7 @@ def create_cpr_graph(
 
 def process_cpr_graph(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    reaction_graph_attrs: dict = dict(),
+    reaction_graph_attrs: Optional[dict] = None,
     directed: bool = True,
     edge_reversed: bool = False,
     graph_type: str = CPR_GRAPH_TYPES.BIPARTITE,
@@ -304,6 +307,9 @@ def process_cpr_graph(
     Returns:
         weighted_graph (ig.Graph): An Igraph network
     """
+
+    if reaction_graph_attrs is None:
+        reaction_graph_attrs = {}
 
     logging.info("Constructing network")
     cpr_graph = create_cpr_graph(
