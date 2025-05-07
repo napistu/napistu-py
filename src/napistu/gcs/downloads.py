@@ -14,14 +14,14 @@ from napistu.gcs.constants import INIT_DATA_DIR_MSG
 logger = logging.getLogger(__name__)
 
 
-def load_public_cpr_asset(
+def load_public_napistu_asset(
     asset: str,
     data_dir: str,
     subasset: str | None = None,
     init_msg: str = INIT_DATA_DIR_MSG,
 ) -> str:
     """
-    Load Public CPR Asset
+    Load Public Napistu Asset
 
     Download the `asset` asset to `data_dir` if it doesn't
     already exist and return a path
@@ -49,7 +49,7 @@ def load_public_cpr_asset(
         data_dir, os.path.basename(GCS_ASSETS.ASSETS[asset]["file"])
     )
     if not os.path.isfile(download_path):
-        download_public_cpr_asset(asset, download_path)
+        download_public_napistu_asset(asset, download_path)
 
     # gunzip if needed
     extn = utils.get_extn_from_url(download_path)
@@ -70,12 +70,12 @@ def load_public_cpr_asset(
     return asset_path
 
 
-def download_public_cpr_asset(asset: str, out_path: str) -> None:
+def download_public_napistu_asset(asset: str, out_path: str) -> None:
     """
-    Download Public CPR Asset
+    Download Public Napistu Asset
 
     Args:
-        asset (str): The name of a CPR public asset stored in Google Cloud Storage (GCS)
+        asset (str): The name of a Napistu public asset stored in Google Cloud Storage (GCS)
         out_path (list): Local location where the file should be saved.
 
     Returns:
@@ -109,7 +109,7 @@ def _initialize_data_dir(data_dir: str, init_msg: str = INIT_DATA_DIR_MSG) -> No
 def _validate_gcs_asset(asset: str) -> None:
     """Validate a GCS asset by name."""
 
-    assets = _CprAssetsValidator(assets=GCS_ASSETS.ASSETS).assets
+    assets = _NapistuAssetsValidator(assets=GCS_ASSETS.ASSETS).assets
     valid_gcs_assets = assets.keys()
     if asset not in valid_gcs_assets:
         raise ValueError(
@@ -170,11 +170,11 @@ def _get_gcs_asset_path(asset: str, subasset: Optional[str] = None) -> str:
     return out_file
 
 
-class _CprAssetValidator(BaseModel):
+class _NapistuAssetValidator(BaseModel):
     file: str
     subassets: dict[str, str] | None
     public_url: str
 
 
-class _CprAssetsValidator(BaseModel):
-    assets: dict[str, _CprAssetValidator]
+class _NapistuAssetsValidator(BaseModel):
+    assets: dict[str, _NapistuAssetValidator]
