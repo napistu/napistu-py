@@ -752,7 +752,7 @@ def filter_to_direct_mechanistic_interactions(
     )
 
     # reduce to distinct sc_id pairs
-    sc_id_pairs = edgelist_w_scids[CPR_EDGELIST_REQ_VARS].drop_duplicates()
+    sc_id_pairs = edgelist_w_scids[list(CPR_EDGELIST_REQ_VARS)].drop_duplicates()
 
     # define all existing direct regulatory interactions
     pathway_interactions = pd.concat(
