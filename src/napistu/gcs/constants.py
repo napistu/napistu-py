@@ -31,7 +31,7 @@ GCS_ASSETS = SimpleNamespace(
                 GCS_SUBASSET_NAMES.REGULATORY_GRAPH: GCS_FILETYPES.REGULATORY_GRAPH,
                 GCS_SUBASSET_NAMES.REGULATORY_DISTANCES: GCS_FILETYPES.REGULATORY_DISTANCES,
             },
-            "public_url": "https://storage.googleapis.com/calico-cpr-public/test_pathway.tar.gz",
+            "public_url": "https://storage.cloud.google.com/shackett-napistu-public/test_pathway.tar.gz",
         },
         "human_consensus": {
             "file": "human_consensus.tar.gz",
@@ -40,7 +40,7 @@ GCS_ASSETS = SimpleNamespace(
                 GCS_SUBASSET_NAMES.IDENTIFIERS: GCS_FILETYPES.IDENTIFIERS,
                 GCS_SUBASSET_NAMES.REGULATORY_GRAPH: GCS_FILETYPES.REGULATORY_GRAPH,
             },
-            "public_url": "https://storage.googleapis.com/calico-cpr-public/human_consensus.tar.gz",
+            "public_url": "https://storage.cloud.google.com/shackett-napistu-public/human_consensus.tar.gz",
         },
         "human_consensus_w_distances": {
             "file": "human_consensus_w_distances.tar.gz",
