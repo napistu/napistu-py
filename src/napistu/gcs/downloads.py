@@ -94,6 +94,9 @@ def download_public_napistu_asset(asset: str, out_path: str) -> None:
     logger.info(f"Download URI: {selected_file}")
 
     utils.download_wget(selected_file, out_path)
+    
+    if not os.path.isfile(out_path):
+        raise FileNotFoundError(f"Download failed: {out_path} was not created.")
 
     return None
 
