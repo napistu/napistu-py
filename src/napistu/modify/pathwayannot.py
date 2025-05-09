@@ -24,6 +24,8 @@ from napistu.constants import ONTOLOGIES
 from napistu.constants import ENSEMBL_PREFIX_TO_ONTOLOGY
 from napistu.modify.constants import COFACTOR_SCHEMA
 from napistu.modify.constants import COFACTOR_CHEBI_IDS
+from napistu.modify.constants import NEO4_MEMBERS_SET
+from napistu.modify.constants import REACTOME_CROSSREF_SET
 
 logger = logging.getLogger(__name__)
 
@@ -499,12 +501,14 @@ def add_entity_sets(
     reactome_members = _read_neo4j_members(neo4j_members)
 
     # create missing species and compartmentalized species
+    logger.info("Adding entity set species")
     (
         merged_membership,
         new_species_for_sbml_dfs,
         set_component_species_ids,
     ) = _add_entity_sets_species(sbml_dfs, reactome_members)
 
+    logger.info("Adding complex formation species")
     (
         new_compartmentalized_species_for_sbml_dfs,
         updated_compartmentalized_membership,
@@ -515,6 +519,7 @@ def add_entity_sets(
         set_component_species_ids,
     )
 
+    logger.info("Adding entity set reactions")
     (
         new_reactions_for_sbml_dfs,
         new_reaction_species_for_sbml_dfs,
@@ -569,7 +574,8 @@ def add_reactome_identifiers(
 
     """
 
-    select_reactome_ids = _format_reactome_crossref_ids(crossref_path)
+    logger.info("Reading Reactome crossref ids")
+    select_reactome_ids = _read_reactome_crossref_ids(crossref_path)
 
     # read all current identifiers
     current_ids = sbml_dfs.get_identifiers(SBML_DFS.SPECIES)
@@ -582,6 +588,7 @@ def add_reactome_identifiers(
     )
 
     # combine existing s_ids with additional cross-ref annotations using uniprot ids
+    logger.info("Merging Reactome crossref ids with existing identifiers")
     merged_crossrefs = _merge_reactome_crossref_ids(
         current_molecular_ids, select_reactome_ids
     )
@@ -637,7 +644,8 @@ def add_reactome_identifiers(
     updated_identifiers.index.name = SBML_DFS.S_ID
     updated_identifiers.name = "new_Identifiers"
 
-    # add new identifiers to species table
+    # add new identifiers to species tabl
+    logger.info("Adding new identifiers to species table")
     updated_species = sbml_dfs.species.merge(
         updated_identifiers,
         left_index=True,
@@ -1173,6 +1181,9 @@ def _read_neo4j_members(neo4j_members: str) -> pd.DataFrame:
         with bfs.open(path, "rb") as f:
             reactome_members = pd.read_csv(f).assign(url="")
 
+    # check that the expected columns are present
+    utils.match_pd_vars(reactome_members, NEO4_MEMBERS_SET).assert_present()
+
     reactome_members[IDENTIFIERS.ONTOLOGY] = reactome_members[
         IDENTIFIERS.ONTOLOGY
     ].str.lower()
@@ -1332,9 +1343,9 @@ def _merge_reactome_crossref_ids(
     return merged_crossrefs
 
 
-def _format_reactome_crossref_ids(
+def _read_reactome_crossref_ids(
     crossref_path: str,
-) -> str:
+) -> pd.DataFrame:
     """
     Format Reactome CrossRef IDs
 
@@ -1347,7 +1358,7 @@ def _format_reactome_crossref_ids(
 
     Returns
     -------
-    select_reactome_ids: str
+    select_reactome_ids: pd.DataFrame
         Crossref identifiers
 
     """
@@ -1356,6 +1367,9 @@ def _format_reactome_crossref_ids(
     with open_fs(base) as bfs:
         with bfs.open(path, "rb") as f:
             reactome_ids = pd.read_csv(f)
+
+    # check that the expected columns are present
+    utils.match_pd_vars(reactome_ids, REACTOME_CROSSREF_SET).assert_present()
 
     # only use ensembl and pharos for now
 

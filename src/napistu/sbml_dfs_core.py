@@ -1486,15 +1486,15 @@ def infer_sbo_terms(sbml_dfs: SBML_dfs) -> SBML_dfs:
 
     # add missing/invalid terms based on stoichiometry
     invalid_sbo_terms.loc[
-        invalid_sbo_terms[sbml_dfs.STOICHIOMETRY] < 0, SBML_DFS.SBO_TERM
+        invalid_sbo_terms[SBML_DFS.STOICHIOMETRY] < 0, SBML_DFS.SBO_TERM
     ] = MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT]
 
     invalid_sbo_terms.loc[
-        invalid_sbo_terms[sbml_dfs.STOICHIOMETRY] > 0, SBML_DFS.SBO_TERM
+        invalid_sbo_terms[SBML_DFS.STOICHIOMETRY] > 0, SBML_DFS.SBO_TERM
     ] = MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT]
 
     invalid_sbo_terms.loc[
-        invalid_sbo_terms[sbml_dfs.STOICHIOMETRY] == 0, SBML_DFS.SBO_TERM
+        invalid_sbo_terms[SBML_DFS.STOICHIOMETRY] == 0, SBML_DFS.SBO_TERM
     ] = MINI_SBO_FROM_NAME[SBOTERM_NAMES.STIMULATOR]
 
     updated_reaction_species = pd.concat(

@@ -110,8 +110,18 @@ def test_create_cpr_graph():
     _ = net_create.create_cpr_graph(sbml_dfs, graph_type="surrogate")
 
 
+def test_create_cpr_graph_none_attrs():
+    # Should not raise when reaction_graph_attrs is None
+    _ = net_create.create_cpr_graph(sbml_dfs, reaction_graph_attrs=None, graph_type="bipartite")
+
+
 def test_igraph_construction():
     _ = net_create.process_cpr_graph(sbml_dfs)
+
+
+def test_process_cpr_graph_none_attrs():
+    # Should not raise when reaction_graph_attrs is None
+    _ = net_create.process_cpr_graph(sbml_dfs, reaction_graph_attrs=None)
 
 
 @pytest.mark.skip_on_windows
