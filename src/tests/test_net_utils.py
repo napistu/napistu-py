@@ -60,13 +60,14 @@ def test_validate_graph_attributes(sbml_dfs):
 def test_pluck_entity_data_species_identity(sbml_dfs):
     # Take first 10 species IDs
     species_ids = sbml_dfs.species.index[:10]
-    # Create mock data with explicit dtypes for cross-platform compatibility
-    # Fix for issue-42: Use explicit dtypes to ensure consistent behavior across platforms
+    # Create mock data with explicit dtype to ensure cross-platform consistency
+    # Fix for issue-42: Use explicit dtypes to avoid platform-specific dtype differences
+    # between Windows (int32) and macOS/Linux (int64)
     mock_df = pd.DataFrame({
         'string_col': [f"str_{i}" for i in range(10)],
-        'mixed_col': np.arange(-5, 5, dtype=np.int64),  # Force int64 to avoid platform differences
-        'ones_col': np.ones(10, dtype=np.float64),      # Force float64 to avoid platform differences
-        'squared_col': np.arange(10, dtype=np.int64),   # Force int64 to avoid platform differences
+        'mixed_col': np.arange(-5, 5, dtype=np.int64),  # Explicitly use int64
+        'ones_col': np.ones(10, dtype=np.float64),      # Explicitly use float64
+        'squared_col': np.arange(10, dtype=np.int64),   # Explicitly use int64
     }, index=species_ids)
     # Assign to species_data
     sbml_dfs.species_data["mock_table"] = mock_df
