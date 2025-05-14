@@ -1116,7 +1116,8 @@ def _prepare_member_table(
     defined_lookup_tables: dict,
     table_schema: dict,
     defined_by_schema: dict,
-    defining_attrs: list[str]
+    defining_attrs: list[str],
+    table: str = SBML_DFS.REACTIONS
 ) -> tuple[pd.DataFrame, str]:
     """
     Prepare a table of members and validate their structure.
@@ -1135,6 +1136,8 @@ def _prepare_member_table(
         Schema for the defining table
     defining_attrs: list[str]
         Attributes that define a unique member
+    table: str
+        Name of the main table (default: REACTIONS)
         
     Returns:
     ----------
@@ -1394,7 +1397,7 @@ def construct_meta_entities_members(
     # Step 2: Prepare the member table and validate its structure
     agg_tbl, defining_fk = _prepare_member_table(
         sbml_dfs_dict, defined_by, defined_lookup_tables, 
-        table_schema, defined_by_schema, defining_attrs
+        table_schema, defined_by_schema, defining_attrs, table
     )
     
     # Step 3: Create lookup table for entity membership
