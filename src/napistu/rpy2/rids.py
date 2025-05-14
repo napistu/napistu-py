@@ -620,7 +620,7 @@ def connect_dogmatic_mappings(species: str, r_paths: str | None = None) -> dict:
     ]
 
     s_name_series = (
-        consensus._add_nameness_score(possible_names, IDENTIFIERS.IDENTIFIER)
+        utils._add_nameness_score(possible_names, IDENTIFIERS.IDENTIFIER)
         .sort_values(["ontology_preference", "nameness_score"])
         .groupby("cluster")
         .first()

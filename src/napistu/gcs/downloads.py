@@ -4,6 +4,7 @@ import logging
 import os
 import pathlib
 import re
+import shutil
 from pydantic import BaseModel
 from typing import Optional
 
@@ -14,14 +15,15 @@ from napistu.gcs.constants import INIT_DATA_DIR_MSG
 logger = logging.getLogger(__name__)
 
 
-def load_public_cpr_asset(
+def load_public_napistu_asset(
     asset: str,
     data_dir: str,
     subasset: str | None = None,
     init_msg: str = INIT_DATA_DIR_MSG,
+    overwrite: bool = False,
 ) -> str:
     """
-    Load Public CPR Asset
+    Load Public Napistu Asset
 
     Download the `asset` asset to `data_dir` if it doesn't
     already exist and return a path
@@ -30,6 +32,7 @@ def load_public_cpr_asset(
     subasset: the name of a subasset to load from within the asset bundle
     data_dir: the local directory where assets should be stored
     init_msg: message to display if data_dir does not exist
+    overwrite: if True, always download the asset and re-extract it, even if it already exists
 
     returns:
         asset_path: the path to a local file
@@ -42,14 +45,16 @@ def load_public_cpr_asset(
 
     # get the path for the asset (which may have been downloaded in a tar-ball)
     asset_path = os.path.join(data_dir, _get_gcs_asset_path(asset, subasset))
-    if os.path.isfile(asset_path):
+    if os.path.isfile(asset_path) and not overwrite:
         return asset_path
 
     download_path = os.path.join(
         data_dir, os.path.basename(GCS_ASSETS.ASSETS[asset]["file"])
     )
+    if overwrite:
+        _remove_asset_files_if_needed(asset, data_dir)
     if not os.path.isfile(download_path):
-        download_public_cpr_asset(asset, download_path)
+        download_public_napistu_asset(asset, download_path)
 
     # gunzip if needed
     extn = utils.get_extn_from_url(download_path)
@@ -70,12 +75,12 @@ def load_public_cpr_asset(
     return asset_path
 
 
-def download_public_cpr_asset(asset: str, out_path: str) -> None:
+def download_public_napistu_asset(asset: str, out_path: str) -> None:
     """
-    Download Public CPR Asset
+    Download Public Napistu Asset
 
     Args:
-        asset (str): The name of a CPR public asset stored in Google Cloud Storage (GCS)
+        asset (str): The name of a Napistu public asset stored in Google Cloud Storage (GCS)
         out_path (list): Local location where the file should be saved.
 
     Returns:
@@ -86,8 +91,12 @@ def download_public_cpr_asset(asset: str, out_path: str) -> None:
     selected_file = GCS_ASSETS.ASSETS[asset]["public_url"]
 
     logger.info(f"Downloading {os.path.basename(selected_file)} to {out_path}")
+    logger.info(f"Download URI: {selected_file}")
 
     utils.download_wget(selected_file, out_path)
+    
+    if not os.path.isfile(out_path):
+        raise FileNotFoundError(f"Download failed: {out_path} was not created.")
 
     return None
 
@@ -109,7 +118,7 @@ def _initialize_data_dir(data_dir: str, init_msg: str = INIT_DATA_DIR_MSG) -> No
 def _validate_gcs_asset(asset: str) -> None:
     """Validate a GCS asset by name."""
 
-    assets = _CprAssetsValidator(assets=GCS_ASSETS.ASSETS).assets
+    assets = _NapistuAssetsValidator(assets=GCS_ASSETS.ASSETS).assets
     valid_gcs_assets = assets.keys()
     if asset not in valid_gcs_assets:
         raise ValueError(
@@ -170,11 +179,45 @@ def _get_gcs_asset_path(asset: str, subasset: Optional[str] = None) -> str:
     return out_file
 
 
-class _CprAssetValidator(BaseModel):
+class _NapistuAssetValidator(BaseModel):
     file: str
     subassets: dict[str, str] | None
     public_url: str
 
 
-class _CprAssetsValidator(BaseModel):
-    assets: dict[str, _CprAssetValidator]
+class _NapistuAssetsValidator(BaseModel):
+    assets: dict[str, _NapistuAssetValidator]
+
+
+def _remove_asset_files_if_needed(asset: str, data_dir: str):
+    """
+    Remove asset archive and any extracted directory from data_dir.
+
+    Args:
+        asset (str): The asset key (e.g., 'test_pathway').
+        data_dir (str): The directory where assets are stored.
+    """
+    logger = logging.getLogger(__name__)
+    removed = []
+
+    # Remove the archive file (any extension)
+    archive_filename = os.path.basename(GCS_ASSETS.ASSETS[asset]["file"])
+    archive_path = os.path.join(data_dir, archive_filename)
+    if os.path.exists(archive_path):
+        os.remove(archive_path)
+        logger.info(f"Removed asset archive: {archive_path}")
+        removed.append(archive_path)
+
+    # Remove extracted directory (if any)
+    asset_dict = GCS_ASSETS.ASSETS[asset]
+    if asset_dict.get("subassets") is not None or any(archive_filename.endswith(ext) for ext in [".tar.gz", ".tgz", ".zip", ".gz"]):
+        extract_dir = os.path.join(data_dir, archive_filename.split('.')[0])
+        if os.path.isdir(extract_dir):
+            shutil.rmtree(extract_dir)
+            logger.info(f"Removed extracted asset directory: {extract_dir}")
+            removed.append(extract_dir)
+
+    if not removed:
+        logger.debug("No asset files found to remove.")
+
+    return removed
