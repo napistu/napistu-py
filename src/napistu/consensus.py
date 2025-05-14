@@ -31,24 +31,24 @@ def construct_consensus_model(
     dogmatic: bool = True,
 ) -> sbml_dfs_core.SBML_dfs:
     """
-    Construct Consensus Model
+    Construct a Consensus Model by merging shared entities across pathway models.
 
-    Turn a dictionary of pathway models into a single consensus model by merging shared entities.
+    This function takes a dictionary of pathway models and merges shared entities (compartments, species, reactions, etc.)
+    into a single consensus model, using a set of rules for entity identity and merging.
 
-    Parameters:
+    Parameters
     ----------
-    sbml_dfs_dict: dict{cpr.SBML_dfs}
-        A dictionary of SBML_dfs from different models
-    pw_index: indices.PWIndex
-        An index of all tables being aggregated
-    dogmatic: bool
-        If True then try to preserve genes, transcript, and proteins as separate species. If False
-        then try to merge them.
+    sbml_dfs_dict : dict[str, sbml_dfs_core.SBML_dfs]
+        A dictionary of SBML_dfs objects from different models, keyed by model name.
+    pw_index : indices.PWIndex
+        An index of all tables being aggregated, used for cross-referencing entities.
+    dogmatic : bool, default=True
+        If True, preserve genes, transcripts, and proteins as separate species. If False, merge them when possible.
 
-    Returns:
-    ----------
-        A cpr.SBML_dfs object containing the consensus model
-
+    Returns
+    -------
+    sbml_dfs_core.SBML_dfs
+        A consensus SBML_dfs object containing the merged model.
     """
     # Validate inputs
     logger.info("Reporting possible issues in component models")
@@ -76,18 +76,22 @@ def construct_sbml_dfs_dict(
     pw_index: pd.DataFrame, strict: bool = True
 ) -> dict[str, sbml_dfs_core.SBML_dfs]:
     """
-    Construct SBML DFs Dict
+    Construct a dictionary of SBML_dfs objects from a pathway index.
 
-    Convert all models in the pathway index into SBML_dfs and add them to a dict.
+    This function converts all models in the pathway index into SBML_dfs objects and adds them to a dictionary.
+    Optionally, it can skip erroneous files with a warning instead of raising an error.
 
-    Parameters:
-    pw_index: indices.PWIndex
-        An index of all tables being aggregated
-    strict (bool): if set to `false` errorenous files are skipped with warning. Default: True
+    Parameters
+    ----------
+    pw_index : pd.DataFrame
+        An index of all tables being aggregated, containing model metadata and file paths.
+    strict : bool, default=True
+        If True, raise an error on any file that cannot be loaded. If False, skip erroneous files with a warning.
 
-    Returns:
-        dict(sbml_dfs_core.SBML_dfs)
-
+    Returns
+    -------
+    dict[str, sbml_dfs_core.SBML_dfs]
+        A dictionary mapping model names to SBML_dfs objects.
     """
 
     sbml_dfs_dict = dict()
@@ -114,18 +118,22 @@ def unnest_SBML_df(
     sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs], table: str
 ) -> pd.DataFrame:
     """
-    Unnest SBML_dfs
+    Unnest and concatenate a specific table from multiple SBML_dfs models.
 
-    Merge corresponding tables from a set of models
+    This function merges corresponding tables from a set of models into a single DataFrame,
+    adding the model name as an index level.
 
-    sbml_dfs_dict: dict{cpr.SBML_dfs}
-        A dictionary of SBML_dfs from different models
-    table: str
-        A table to aggregate (e.g., species, reactions, compartments)
+    Parameters
+    ----------
+    sbml_dfs_dict : dict[str, sbml_dfs_core.SBML_dfs]
+        A dictionary of SBML_dfs objects from different models, keyed by model name.
+    table : str
+        The name of the table to aggregate (e.g., 'species', 'reactions', 'compartments').
 
-    Returns:
-        pd.Dataframe, a table with a multindex of model and an entity_id
-
+    Returns
+    -------
+    pd.DataFrame
+        A concatenated table with a MultiIndex of model and entity ID.
     """
 
     # check that all sbml_dfs have the same schema
@@ -154,31 +162,30 @@ def construct_meta_entities_identifiers(
     defining_biological_qualifiers: list[str] = BQB_DEFINING_ATTRS,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """
-    Construct Meta Entities Defined by Identifiers
+    Construct meta-entities by merging entities across models that share identifiers.
 
-    Aggregating across one entity type for a set of pathway models merge entities which share identifiers
+    Aggregates a single entity type from a set of pathway models and merges entities that share identifiers
+    (as defined by the provided biological qualifiers).
 
-    Parameters:
+    Parameters
     ----------
-    sbml_df_dict (dict{"model": cpr.SBML_dfs}):
-        A dictionary of cpr.SBML_dfs
-    pw_index (indices.PWIndex):
-        An index of all tables being aggregated
-    table (str):
-        A table/entity set from the sbml_dfs to work-with
-    fk_lookup_tables (dict):
-        Dictionary containing lookup tables for all foreign keys used by the table
-    defining_biological_qualifiers (list[str]):
-        BQB codes which define distinct entities. Narrowly this would be BQB_IS, while more
-        permissive settings could merge homologs, different forms of the same gene.
+    sbml_dfs_dict : dict[str, sbml_dfs_core.SBML_dfs]
+        A dictionary of SBML_dfs objects from different models, keyed by model name.
+    pw_index : indices.PWIndex
+        An index of all tables being aggregated.
+    table : str
+        The name of the table/entity set to aggregate (e.g., 'species', 'compartments').
+    fk_lookup_tables : dict, optional
+        Dictionary containing lookup tables for all foreign keys used by the table (default: empty dict).
+    defining_biological_qualifiers : list[str], optional
+        List of BQB codes which define distinct entities. Defaults to BQB_DEFINING_ATTRS.
 
-    Returns:
-    ----------
-    new_id_table: pd.DataFrame
-        Matching the schema of one of the tables within sbml_df_dict
-    lookup_table: pd.Series
-        Matches the index of the aggregated entities to new_ids
-
+    Returns
+    -------
+    new_id_table : pd.DataFrame
+        Table matching the schema of one of the input models, with merged entities.
+    lookup_table : pd.Series
+        Series mapping the index of the aggregated entities to new consensus IDs.
     """
 
     # combine sbml_dfs by adding model to the index and concatinating all dfs
@@ -213,28 +220,28 @@ def reduce_to_consensus_ids(
     defining_biological_qualifiers: list[str] = BQB_DEFINING_ATTRS,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """
-    Reduce to Consensus
+    Reduce a table of entities to unique entries based on consensus identifiers.
 
-    Reduce a table of entities to unique entries based on identifiers.
+    This function clusters entities that share identifiers (as defined by the provided biological qualifiers)
+    and produces a new table of unique entities, along with a lookup table mapping original entities to consensus IDs.
 
-    Parameters:
+    Parameters
     ----------
-    sbml_df: pd.DataFrame
-        One type of entity from sbml_dfs_dict expanded to include
-        model its index, as produced by unnest_SBML_df(sbml_dfs_dict)
-    table_schema: dict
-        Schema for the table sbml_df
-    pw_index: indices.PWIndex
-        An index of all tables being aggregated
-    defining_biological_qualifiers: list(str)
-        A list of biological qualifier types which define distinct entities
+    sbml_df : pd.DataFrame
+        Table of entities from multiple models, with model in the index (as produced by unnest_SBML_df).
+    table_schema : dict
+        Schema for the table being reduced.
+    pw_index : indices.PWIndex, optional
+        An index of all tables being aggregated (default: None).
+    defining_biological_qualifiers : list[str], optional
+        List of biological qualifier types which define distinct entities. Defaults to BQB_DEFINING_ATTRS.
 
-    Returns:
-    ----------
-    new_id_table: pd.DataFrame
-        Matching the schema of one of the tables within sbml_df_dict
-    lookup_table: pd.Series
-        Matches the index of the aggregated entities to new_ids
+    Returns
+    -------
+    new_id_table : pd.DataFrame
+        Table matching the schema of one of the input models, with merged entities.
+    lookup_table : pd.Series
+        Series mapping the index of the aggregated entities to new consensus IDs.
     """
     # Step 1: Build consensus identifiers to create clusters of equivalent entities
     indexed_cluster, cluster_consensus_identifiers = build_consensus_identifiers(
@@ -275,29 +282,27 @@ def build_consensus_identifiers(
     defining_biological_qualifiers: list[str] = BQB_DEFINING_ATTRS,
 ) -> tuple[pd.Series, pd.DataFrame]:
     """
-    Build Consensus Identifiers
+    Build consensus identifiers by clustering entities that share biological identifiers.
 
-    Take a set of entities spanning multiple models and find all unique entities.
-
-    Defining attributes provided in defining_biological_qualifiers will
-    be used for grouping; other identifiers will be added back at the end.
+    This function takes a set of entities spanning multiple models and finds all unique entities
+    by grouping them according to the provided biological qualifiers. It returns a mapping from
+    original entities to clusters and a DataFrame of consensus identifier objects for each cluster.
 
     Parameters
     ----------
     sbml_df : pd.DataFrame
-        One type of entity from sbml_dfs_dict expanded to include model in its index,
-        as produced by unnest_SBML_df(sbml_dfs_dict)
+        Table of entities from multiple models, with model in the index (as produced by unnest_SBML_df).
     table_schema : dict
-        Schema for the table sbml_df
+        Schema for the table being processed.
     defining_biological_qualifiers : list[str], optional
-        A list of biological qualifier types which should be used for grouping
+        List of biological qualifier types to use for grouping. Defaults to BQB_DEFINING_ATTRS.
 
     Returns
     -------
     indexed_cluster : pd.Series
-        Maps the index from sbml_df onto a set of clusters which define unique entities
+        Series mapping the index from sbml_df onto a set of clusters which define unique entities.
     cluster_consensus_identifiers_df : pd.DataFrame
-        Maps an index of clusters onto a consensus cpr.identifiers.Identifiers object
+        DataFrame mapping clusters to consensus identifiers (Identifiers objects).
     """
     # Step 1: Extract and validate identifiers
     meta_identifiers = sbml_dfs_utils.unnest_identifiers(sbml_df, table_schema["id"])
@@ -331,8 +336,27 @@ def build_consensus_identifiers(
 
 def pre_consensus_ontology_check(
     sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs], tablename: str
-):
-    """Check for shared ontologies across source models."""
+) -> tuple[list, pd.DataFrame]:
+    """
+    Check for shared ontologies across source models for a given table.
+
+    For compartments, species, or reactions tables, this function returns the set of ontologies
+    shared among all SBML_dfs in the input dictionary, as well as a DataFrame summarizing ontologies per model.
+
+    Parameters
+    ----------
+    sbml_dfs_dict : dict[str, sbml_dfs_core.SBML_dfs]
+        Dictionary of SBML_dfs objects from different models, keyed by model name.
+    tablename : str
+        Name of the table to check (should be one of 'compartments', 'species', or 'reactions').
+
+    Returns
+    -------
+    shared_onto_list : list
+        List of ontologies shared by all models for the specified table.
+    sbml_dict_onto_df : pd.DataFrame
+        DataFrame summarizing ontologies present in each model for the specified table.
+    """
 
     # tablename: compartments/species/reactions tables with Identifiers
     # returns shared ontologies among sbml_dfs in sbml_dfs_dict for
@@ -367,23 +391,23 @@ def pre_consensus_ontology_check(
     return shared_onto_list, sbml_dict_onto_df
 
 
-def _validate_meta_identifiers(meta_identifiers: pd.DataFrame) -> None:
-    """Flag cases where meta identifers are totally missing or BQB codes are not included"""
-
-    if meta_identifiers.shape[0] == 0:
-        raise ValueError(
-            '"meta_identifiers" was empty; some identifiers should be present'
-        )
-
-    n_null = sum(meta_identifiers["bqb"].isnull())
-    if n_null > 0:
-        msg = f"{n_null} identifiers were missing a bqb code and will not be mergeable"
-        logger.warn(msg)
-
-    return None
-
-
 def post_consensus_species_ontology_check(sbml_dfs: sbml_dfs_core.SBML_dfs) -> set[str]:
+    """
+    Check and return the set of ontologies shared by different sources in a consensus model's species table.
+
+    This function examines the species table in a consensus SBML_dfs object, determines the ontologies
+    present for each source model, and returns the intersection of ontologies shared by all sources.
+
+    Parameters
+    ----------
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The consensus SBML_dfs object containing merged species from multiple models.
+
+    Returns
+    -------
+    set[str]
+        Set of ontology terms shared by all sources in the consensus model's species table.
+    """
     # Checking the ontology in "species" shared by different sources in a consensus model
     # returns a set of shared ontologies by different sources
 
@@ -429,27 +453,6 @@ def post_consensus_species_ontology_check(sbml_dfs: sbml_dfs_core.SBML_dfs) -> s
     logger.info(f"shared ontologies in the consesus model are: {shared_onto_set}")
 
     return shared_onto_set
-
-
-def _update_foreign_keys(
-    agg_tbl: pd.DataFrame, table_schema: dict, fk_lookup_tables: dict
-) -> pd.DataFrame:
-    """Update one or more foreign keys based on old-to-new foreign key lookup table(s)."""
-
-    for fk in table_schema["fk"]:
-        updated_fks = (
-            agg_tbl[fk]
-            .reset_index()
-            .merge(
-                fk_lookup_tables[fk], left_on=[SOURCE_SPEC.MODEL, fk], right_index=True
-            )
-            .drop(fk, axis=1)
-            .rename(columns={"new_id": fk})
-            .set_index(["model", table_schema["pk"]])
-        )
-        agg_tbl = agg_tbl.drop(columns=fk).join(updated_fks)
-
-    return agg_tbl
 
 
 def pre_consensus_compartment_check(
@@ -1761,9 +1764,46 @@ def _validate_meta_identifiers(meta_identifiers: pd.DataFrame) -> None:
     return None
 
 
+def _validate_meta_identifiers(meta_identifiers: pd.DataFrame) -> None:
+    """Flag cases where meta identifers are totally missing or BQB codes are not included"""
+
+    if meta_identifiers.shape[0] == 0:
+        raise ValueError(
+            '"meta_identifiers" was empty; some identifiers should be present'
+        )
+
+    n_null = sum(meta_identifiers["bqb"].isnull())
+    if n_null > 0:
+        msg = f"{n_null} identifiers were missing a bqb code and will not be mergeable"
+        logger.warn(msg)
+
+    return None
+
+
 def _update_foreign_keys(
     agg_tbl: pd.DataFrame, table_schema: dict, fk_lookup_tables: dict
 ) -> pd.DataFrame:
+    for fk in table_schema["fk"]:
+        updated_fks = (
+            agg_tbl[fk]
+            .reset_index()
+            .merge(
+                fk_lookup_tables[fk], left_on=[SOURCE_SPEC.MODEL, fk], right_index=True
+            )
+            .drop(fk, axis=1)
+            .rename(columns={"new_id": fk})
+            .set_index(["model", table_schema["pk"]])
+        )
+        agg_tbl = agg_tbl.drop(columns=fk).join(updated_fks)
+
+    return agg_tbl
+
+
+def _update_foreign_keys(
+    agg_tbl: pd.DataFrame, table_schema: dict, fk_lookup_tables: dict
+) -> pd.DataFrame:
+    """Update one or more foreign keys based on old-to-new foreign key lookup table(s)."""
+
     for fk in table_schema["fk"]:
         updated_fks = (
             agg_tbl[fk]
