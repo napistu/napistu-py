@@ -492,13 +492,21 @@ def _validate_consensus_table(
         new_id_table.index.names
     ):
         raise ValueError(
-            "The newly constructed id table's index does not match the inputs"
+            f"The newly constructed id table's index does not match the inputs.\n"
+            f"Expected index names: {sbml_df.index.names}\n"
+            f"Actual index names: {new_id_table.index.names}"
         )
 
     # Check that the columns match
     if set(sbml_df) != set(new_id_table.columns):
+        missing_in_new = set(sbml_df) - set(new_id_table.columns)
+        extra_in_new = set(new_id_table.columns) - set(sbml_df)
         raise ValueError(
-            "The newly constructed id table's variables do not match the inputs"
+            "The newly constructed id table's variables do not match the inputs.\n"
+            f"Expected columns: {list(sbml_df.columns)}\n"
+            f"Actual columns: {list(new_id_table.columns)}\n"
+            f"Missing in new: {missing_in_new}\n"
+            f"Extra in new: {extra_in_new}"
         )
 
 
@@ -697,7 +705,8 @@ def _create_cluster_identifiers(
     meta_identifiers: pd.DataFrame,
     indexed_cluster: pd.Series,
     sbml_df: pd.DataFrame,
-    ind_clusters: pd.DataFrame
+    ind_clusters: pd.DataFrame,
+    table_schema: dict
 ) -> pd.DataFrame:
     """
     Create identifier objects for each cluster.
@@ -754,12 +763,12 @@ def _create_cluster_identifiers(
         **catchup_clusters,
     }
 
-    # Convert to DataFrame
+    # Convert to DataFrame with correct column name
+    id_col = table_schema["id"]
     cluster_consensus_identifiers_df = pd.DataFrame(
-        cluster_consensus_identifiers, index=["identifiers"]
+        cluster_consensus_identifiers, index=[id_col]
     ).T
     cluster_consensus_identifiers_df.index.name = "cluster"
-    
     return cluster_consensus_identifiers_df
 
 
@@ -817,7 +826,7 @@ def build_consensus_identifiers(
 
     # Step 7: Create consensus identifiers for each cluster
     cluster_consensus_identifiers_df = _create_cluster_identifiers(
-        meta_identifiers, indexed_cluster, sbml_df, ind_clusters
+        meta_identifiers, indexed_cluster, sbml_df, ind_clusters, table_schema
     )
 
     return indexed_cluster, cluster_consensus_identifiers_df
