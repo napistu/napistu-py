@@ -25,151 +25,6 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
 
 
-def _create_consensus_entities(
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs],
-    pw_index: indices.PWIndex,
-    defining_biological_qualifiers: list[str],
-) -> tuple[dict, dict]:
-    """
-    Create consensus entities for all primary tables in the model.
-    
-    This helper function creates consensus compartments, species, compartmentalized species,
-    reactions, and reaction species by finding shared entities across source models.
-    
-    Parameters:
-    ----------
-    sbml_dfs_dict: dict{cpr.SBML_dfs}
-        A dictionary of SBML_dfs from different models
-    pw_index: indices.PWIndex
-        An index of all tables being aggregated
-    defining_biological_qualifiers: list[str]
-        Biological qualifier terms that define distinct entities
-        
-    Returns:
-    ----------
-    tuple:
-        - dict of consensus entities tables
-        - dict of lookup tables
-    """
-    # Step 1: Compartments
-    logger.info("Defining compartments based on unique ids")
-    comp_consensus_entities, comp_lookup_table = construct_meta_entities_identifiers(
-        sbml_dfs_dict=sbml_dfs_dict, pw_index=pw_index, table="compartments"
-    )
-
-    # Step 2: Species
-    logger.info("Defining species based on unique ids")
-    spec_consensus_entities, spec_lookup_table = construct_meta_entities_identifiers(
-        sbml_dfs_dict=sbml_dfs_dict,
-        pw_index=pw_index,
-        table=SBML_DFS.SPECIES,
-        defining_biological_qualifiers=defining_biological_qualifiers,
-    )
-
-    # Step 3: Compartmentalized species
-    logger.info(
-        "Defining compartmentalized species based on unique species x compartments"
-    )
-    compspec_consensus_instances, compspec_lookup_table = construct_meta_entities_fk(
-        sbml_dfs_dict,
-        pw_index,
-        table=SBML_DFS.COMPARTMENTALIZED_SPECIES,
-        fk_lookup_tables={
-            SBML_DFS.C_ID: comp_lookup_table,
-            SBML_DFS.S_ID: spec_lookup_table,
-        },
-    )
-
-    # Step 4: Reactions
-    logger.info(
-        "Define reactions based on membership of identical compartmentalized species"
-    )
-    rxn_consensus_species, rxn_lookup_table = construct_meta_entities_members(
-        sbml_dfs_dict,
-        pw_index,
-        table=SBML_DFS.REACTIONS,
-        defined_by=SBML_DFS.REACTION_SPECIES,
-        defined_lookup_tables={SBML_DFS.SC_ID: compspec_lookup_table},
-        defining_attrs=[SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY],
-    )
-
-    logger.info("Annotating reversibility based on merged reactions")
-    rxn_consensus_species = _resolve_reversibility(
-        sbml_dfs_dict, rxn_consensus_species, rxn_lookup_table
-    )
-
-    # Step 5: Reaction species
-    logger.info("Define reaction species based on reactions")
-    rxnspec_consensus_instances, rxnspec_lookup_table = construct_meta_entities_fk(
-        sbml_dfs_dict,
-        pw_index,
-        table=SBML_DFS.REACTION_SPECIES,
-        fk_lookup_tables={
-            SBML_DFS.R_ID: rxn_lookup_table,
-            SBML_DFS.SC_ID: compspec_lookup_table,
-        },
-        # retain species with different roles
-        extra_defining_attrs=[SBML_DFS.SBO_TERM],
-    )
-    
-    consensus_entities = {
-        SBML_DFS.COMPARTMENTS: comp_consensus_entities,
-        SBML_DFS.SPECIES: spec_consensus_entities,
-        SBML_DFS.COMPARTMENTALIZED_SPECIES: compspec_consensus_instances,
-        SBML_DFS.REACTIONS: rxn_consensus_species,
-        SBML_DFS.REACTION_SPECIES: rxnspec_consensus_instances,
-    }
-    
-    lookup_tables = {
-        SBML_DFS.COMPARTMENTS: comp_lookup_table,
-        SBML_DFS.SPECIES: spec_lookup_table,
-        SBML_DFS.COMPARTMENTALIZED_SPECIES: compspec_lookup_table,
-        SBML_DFS.REACTIONS: rxn_lookup_table,
-        SBML_DFS.REACTION_SPECIES: rxnspec_lookup_table,
-    }
-    
-    return consensus_entities, lookup_tables
-
-
-def _add_entity_data(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, 
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs], 
-    lookup_tables: dict
-) -> sbml_dfs_core.SBML_dfs:
-    """
-    Add entity data from component models to the consensus model.
-    
-    Parameters:
-    ----------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
-        The consensus model being built
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs]
-        A dictionary of SBML_dfs from different models
-    lookup_tables: dict
-        Dictionary of lookup tables for translating between old and new entity IDs
-        
-    Returns:
-    ----------
-    sbml_dfs_core.SBML_dfs
-        The updated consensus model
-    """
-    # Add species data
-    consensus_species_data = merge_entity_data(
-        sbml_dfs_dict, lookup_table=lookup_tables[SBML_DFS.SPECIES], table=SBML_DFS.SPECIES
-    )
-    for k in consensus_species_data.keys():
-        sbml_dfs.add_species_data(k, consensus_species_data[k])
-
-    # Add reactions data
-    consensus_reactions_data = merge_entity_data(
-        sbml_dfs_dict, lookup_table=lookup_tables[SBML_DFS.REACTIONS], table=SBML_DFS.REACTIONS
-    )
-    for k in consensus_reactions_data.keys():
-        sbml_dfs.add_reactions_data(k, consensus_reactions_data[k])
-        
-    return sbml_dfs
-
-
 def construct_consensus_model(
     sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs],
     pw_index: indices.PWIndex,
@@ -351,165 +206,6 @@ def construct_meta_entities_identifiers(
     return new_id_table, lookup_table
 
 
-def _create_entity_lookup_table(
-    agg_table_harmonized: pd.DataFrame,
-    table_schema: dict
-) -> pd.Series:
-    """
-    Create a lookup table mapping original entity IDs to new consensus IDs.
-    
-    Parameters:
-    ----------
-    agg_table_harmonized: pd.DataFrame
-        Table with cluster assignments for each entity
-    table_schema: dict
-        Schema for the table
-        
-    Returns:
-    ----------
-    pd.Series
-        Lookup table mapping old entity IDs to new consensus IDs
-    """
-    # Create a new ID based on cluster number and entity type
-    agg_table_harmonized["new_id"] = sbml_dfs_utils.id_formatter(
-        agg_table_harmonized["cluster"], table_schema["pk"]
-    )
-    
-    # Return the lookup series
-    return agg_table_harmonized["new_id"]
-
-
-def _prepare_consensus_table(
-    agg_table_harmonized: pd.DataFrame,
-    table_schema: dict,
-    cluster_consensus_identifiers: pd.DataFrame
-) -> pd.DataFrame:
-    """
-    Prepare a consensus table with one row per unique entity.
-    
-    Parameters:
-    ----------
-    agg_table_harmonized: pd.DataFrame
-        Table with nameness scores and cluster assignments
-    table_schema: dict
-        Schema for the table
-    cluster_consensus_identifiers: pd.DataFrame
-        Consensus identifiers for each cluster
-        
-    Returns:
-    ----------
-    pd.DataFrame
-        New consensus table with merged entities
-    """
-    # Sort by nameness score and keep one row per new entity ID
-    agg_table_reduced = (
-        agg_table_harmonized.reset_index(drop=True)
-        .sort_values(["nameness_score"])
-        .rename(columns={"new_id": table_schema["pk"]})
-        .groupby(table_schema["pk"])
-        .first()
-        .drop("nameness_score", axis=1)
-    )
-
-    # Join in the consensus identifiers and drop the temporary cluster column
-    new_id_table = (
-        agg_table_reduced.drop(table_schema["id"], axis=1)
-        .merge(cluster_consensus_identifiers, left_on="cluster", right_index=True)
-        .drop("cluster", axis=1)
-    )
-    
-    return new_id_table
-
-
-def _add_consensus_sources(
-    new_id_table: pd.DataFrame,
-    agg_table_harmonized: pd.DataFrame,
-    lookup_table: pd.Series,
-    table_schema: dict,
-    pw_index: indices.PWIndex | None
-) -> pd.DataFrame:
-    """
-    Add source information to the consensus table.
-    
-    Parameters:
-    ----------
-    new_id_table: pd.DataFrame
-        Consensus table without source information
-    agg_table_harmonized: pd.DataFrame
-        Original table with cluster assignments
-    lookup_table: pd.Series 
-        Maps old IDs to new consensus IDs
-    table_schema: dict
-        Schema for the table
-    pw_index: indices.PWIndex | None
-        An index of all tables being aggregated
-        
-    Returns:
-    ----------
-    pd.DataFrame
-        Consensus table with source information added
-    """
-    if type(pw_index) is not indices.PWIndex:
-        raise ValueError(
-            f"pw_index must be provided as a indices.PWIndex if there is a source but was type {type(pw_index)}"
-        )
-
-    # Track the model(s) that each entity came from
-    new_sources = create_consensus_sources(
-        agg_table_harmonized, lookup_table, table_schema, pw_index
-    )
-    assert isinstance(new_sources, pd.Series)
-
-    # Add the sources to the consensus table
-    updated_table = new_id_table.drop(
-        table_schema[SOURCE_SPEC.SOURCE], axis=1
-    ).merge(new_sources, left_index=True, right_index=True)
-    
-    return updated_table
-
-
-def _validate_consensus_table(
-    new_id_table: pd.DataFrame,
-    sbml_df: pd.DataFrame
-) -> None:
-    """
-    Validate that the new consensus table has the same structure as the original.
-    
-    Parameters:
-    ----------
-    new_id_table: pd.DataFrame
-        Newly created consensus table
-    sbml_df: pd.DataFrame
-        Original table from which consensus was built
-        
-    Raises:
-    ------
-    ValueError
-        If index names or columns don't match
-    """
-    # Check that the index names match
-    if set(sbml_df.index.names).difference({SOURCE_SPEC.MODEL}) != set(
-        new_id_table.index.names
-    ):
-        raise ValueError(
-            f"The newly constructed id table's index does not match the inputs.\n"
-            f"Expected index names: {sbml_df.index.names}\n"
-            f"Actual index names: {new_id_table.index.names}"
-        )
-
-    # Check that the columns match
-    if set(sbml_df) != set(new_id_table.columns):
-        missing_in_new = set(sbml_df) - set(new_id_table.columns)
-        extra_in_new = set(new_id_table.columns) - set(sbml_df)
-        raise ValueError(
-            "The newly constructed id table's variables do not match the inputs.\n"
-            f"Expected columns: {list(sbml_df.columns)}\n"
-            f"Actual columns: {list(new_id_table.columns)}\n"
-            f"Missing in new: {missing_in_new}\n"
-            f"Extra in new: {extra_in_new}"
-        )
-
-
 def reduce_to_consensus_ids(
     sbml_df: pd.DataFrame,
     table_schema: dict,
@@ -573,205 +269,6 @@ def reduce_to_consensus_ids(
     return new_id_table, lookup_table
 
 
-def _filter_identifiers_by_qualifier(
-    meta_identifiers: pd.DataFrame,
-    defining_biological_qualifiers: list[str]
-) -> pd.DataFrame:
-    """
-    Filter identifiers to only include those with specific biological qualifiers.
-    
-    Parameters:
-    ----------
-    meta_identifiers: pd.DataFrame
-        Table of identifiers
-    defining_biological_qualifiers: list[str]
-        List of biological qualifier types to keep
-        
-    Returns:
-    ----------
-    pd.DataFrame
-        Filtered identifiers
-    """
-    valid_identifiers = meta_identifiers.copy()
-    return valid_identifiers[
-        meta_identifiers[IDENTIFIERS.BQB].isin(defining_biological_qualifiers)
-    ]
-
-
-def _handle_entries_without_identifiers(
-    sbml_df: pd.DataFrame,
-    valid_identifiers: pd.DataFrame
-) -> pd.DataFrame:
-    """
-    Handle entities that don't have identifiers by adding dummy identifiers.
-    
-    Parameters:
-    ----------
-    sbml_df: pd.DataFrame
-        Original table of entities
-    valid_identifiers: pd.DataFrame
-        Table of identifiers that passed filtering
-        
-    Returns:
-    ----------
-    pd.DataFrame
-        Valid identifiers with dummy entries added
-    """
-    # Find entries which no longer have any identifiers
-    filtered_entries = sbml_df.reset_index().merge(
-        valid_identifiers.reset_index(),
-        left_on=sbml_df.index.names,
-        right_on=sbml_df.index.names,
-        how="outer",
-    )[sbml_df.index.names + [IDENTIFIERS.IDENTIFIER]]
-    
-    filtered_entries = filtered_entries[
-        filtered_entries[IDENTIFIERS.IDENTIFIER].isnull()
-    ]
-    
-    if filtered_entries.shape[0] == 0:
-        return valid_identifiers
-        
-    # Add dummy identifiers to these entries
-    logger.warning(
-        f"{filtered_entries.shape[0]} entries didn't possess identifiers and thus cannot be merged"
-    )
-
-    filtered_entries[SOURCE_SPEC.ENTRY] = 0
-    filtered_entries[IDENTIFIERS.ONTOLOGY] = "none"
-    filtered_entries[IDENTIFIERS.ONTOLOGY] = [
-        "dummy_value_" + str(val)
-        for val in random.sample(range(1, 100000000), filtered_entries.shape[0])
-    ]
-    filtered_entries[IDENTIFIERS.URL] = None
-    filtered_entries[IDENTIFIERS.BQB] = None
-
-    filtered_entries = filtered_entries.set_index(
-        sbml_df.index.names + [SOURCE_SPEC.ENTRY]
-    )
-
-    # Combine original valid identifiers with dummy identifiers
-    return pd.concat([valid_identifiers, filtered_entries])
-
-
-def _prepare_identifier_edgelist(
-    valid_identifiers: pd.DataFrame,
-    sbml_df: pd.DataFrame
-) -> pd.DataFrame:
-    """
-    Prepare an edgelist for clustering identifiers.
-    
-    Parameters:
-    ----------
-    valid_identifiers: pd.DataFrame
-        Table of identifiers
-    sbml_df: pd.DataFrame
-        Original table of entities
-        
-    Returns:
-    ----------
-    pd.DataFrame
-        Edgelist connecting entities to their identifiers
-    """
-    # Format identifiers as edgelist
-    formatted_identifiers = utils.format_identifiers_as_edgelist(
-        valid_identifiers, [IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER]
-    )
-
-    # Create a unique tag for each entity from the original index
-    indexed_species_tags = (
-        formatted_identifiers.reset_index()
-        .set_index(formatted_identifiers.index.names, drop=False)[sbml_df.index.names]
-        .astype(str)
-        .apply("__".join, axis=1)
-    )
-    formatted_identifiers.loc[:, "model_spec"] = indexed_species_tags
-
-    # Create edgelist that connects entities to identifiers
-    id_edgelist = pd.concat(
-        [
-            formatted_identifiers[["ind", "id"]],
-            # Add edges connecting model-specific instances to their identifiers
-            formatted_identifiers[["model_spec", "id"]].rename(
-                columns={"model_spec": "ind"}
-            ),
-        ]
-    )
-    
-    return id_edgelist
-
-
-def _create_cluster_identifiers(
-    meta_identifiers: pd.DataFrame,
-    indexed_cluster: pd.Series,
-    sbml_df: pd.DataFrame,
-    ind_clusters: pd.DataFrame,
-    table_schema: dict
-) -> pd.DataFrame:
-    """
-    Create identifier objects for each cluster.
-    
-    Parameters:
-    ----------
-    meta_identifiers: pd.DataFrame
-        All identifiers (including those filtered out by BQB)
-    indexed_cluster: pd.Series
-        Maps entity indices to cluster IDs
-    sbml_df: pd.DataFrame
-        Original table of entities
-    ind_clusters: pd.DataFrame
-        Cluster assignments from graph algorithm
-        
-    Returns:
-    ----------
-    pd.DataFrame
-        Table mapping clusters to their consensus identifiers
-    """
-    # Combine all identifiers with cluster assignments
-    all_cluster_identifiers = meta_identifiers.reset_index().merge(
-        indexed_cluster, left_on=sbml_df.index.names, right_index=True
-    )
-
-    # Create an Identifiers object for each cluster
-    cluster_consensus_identifiers = {
-        k: identifiers.Identifiers(
-            list(
-                v[
-                    [
-                        IDENTIFIERS.ONTOLOGY,
-                        IDENTIFIERS.IDENTIFIER,
-                        IDENTIFIERS.URL,
-                        IDENTIFIERS.BQB,
-                    ]
-                ]
-                .T.to_dict()
-                .values()
-            )
-        )
-        for k, v in all_cluster_identifiers.groupby("cluster")
-    }
-
-    # Handle clusters that don't have any identifiers
-    catchup_clusters = {
-        c: identifiers.Identifiers(list())
-        for c in set(ind_clusters["cluster"].tolist()).difference(
-            cluster_consensus_identifiers
-        )
-    }
-    cluster_consensus_identifiers = {
-        **cluster_consensus_identifiers,
-        **catchup_clusters,
-    }
-
-    # Convert to DataFrame with correct column name
-    id_col = table_schema["id"]
-    cluster_consensus_identifiers_df = pd.DataFrame(
-        cluster_consensus_identifiers, index=[id_col]
-    ).T
-    cluster_consensus_identifiers_df.index.name = "cluster"
-    return cluster_consensus_identifiers_df
-
-
 def build_consensus_identifiers(
     sbml_df: pd.DataFrame,
     table_schema: dict,
@@ -785,21 +282,21 @@ def build_consensus_identifiers(
     Defining attributes provided in defining_biological_qualifiers will
     be used for grouping; other identifiers will be added back at the end.
 
-    Parameters:
+    Parameters
     ----------
-    sbml_df: pd.DataFrame
-        One type of entity from sbml_dfs_dict expanded to include model its index,
+    sbml_df : pd.DataFrame
+        One type of entity from sbml_dfs_dict expanded to include model in its index,
         as produced by unnest_SBML_df(sbml_dfs_dict)
-    table_schema: dict
+    table_schema : dict
         Schema for the table sbml_df
-    defining_biological_qualifiers: [str]
+    defining_biological_qualifiers : list[str], optional
         A list of biological qualifier types which should be used for grouping
 
-    Returns:
-    ----------
-    indexed_cluster: pd.Series
+    Returns
+    -------
+    indexed_cluster : pd.Series
         Maps the index from sbml_df onto a set of clusters which define unique entities
-    cluster_consensus_identifiers_df: pd.DataFrame
+    cluster_consensus_identifiers_df : pd.DataFrame
         Maps an index of clusters onto a consensus cpr.identifiers.Identifiers object
     """
     # Step 1: Extract and validate identifiers
@@ -1119,247 +616,6 @@ def construct_meta_entities_fk(
     return new_id_table, lookup_table
 
 
-def _prepare_member_table(
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs],
-    defined_by: str,
-    defined_lookup_tables: dict,
-    table_schema: dict,
-    defined_by_schema: dict,
-    defining_attrs: list[str],
-    table: str = SBML_DFS.REACTIONS
-) -> tuple[pd.DataFrame, str]:
-    """
-    Prepare a table of members and validate their structure.
-    
-    Parameters:
-    ----------
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs]
-        Dictionary of SBML_dfs from different models
-    defined_by: str
-        Name of the table whose entries define membership
-    defined_lookup_tables: dict
-        Lookup tables for updating IDs
-    table_schema: dict
-        Schema for the main table
-    defined_by_schema: dict
-        Schema for the defining table
-    defining_attrs: list[str]
-        Attributes that define a unique member
-    table: str
-        Name of the main table (default: REACTIONS)
-        
-    Returns:
-    ----------
-    tuple:
-        - Updated aggregated table with member strings
-        - Name of the foreign key
-    """
-    # Combine models into a single table
-    agg_tbl = unnest_SBML_df(sbml_dfs_dict, table=defined_by)
-    
-    # Update IDs using previously created lookup tables
-    for k in defined_lookup_tables.keys():
-        agg_tbl = (
-            agg_tbl.merge(
-                defined_lookup_tables[k],
-                left_on=[SOURCE_SPEC.MODEL, k],
-                right_index=True,
-            )
-            .drop(k, axis=1)
-            .rename(columns={"new_id": k})
-        )
-    
-    # Identify the foreign key
-    defining_fk = set(defined_by_schema["fk"]).difference({table_schema["pk"]})
-
-    if (
-        len(defining_fk) != 1
-        or len(defining_fk.intersection(set(defined_by_schema["fk"]))) != 1
-    ):
-        raise ValueError(
-            f"A foreign key could not be found in {defined_by} which was a primary key in {table}"
-        )
-    else:
-        defining_fk = list(defining_fk)[0]
-    
-    # Validate defining attributes
-    valid_defining_attrs = agg_tbl.columns.values.tolist()
-    invalid_defining_attrs = [
-        x for x in defining_attrs if x not in valid_defining_attrs
-    ]
-
-    if len(invalid_defining_attrs) != 0:
-        raise ValueError(
-            f"{', '.join(invalid_defining_attrs)} was not found; "
-            f"valid defining_attrs are {', '.join(valid_defining_attrs)}"
-        )
-    
-    # Create unique member strings
-    agg_tbl["member"] = agg_tbl[defining_attrs].astype(str).apply("__".join, axis=1)
-    
-    return agg_tbl, defining_fk
-
-
-def _create_membership_lookup(
-    agg_tbl: pd.DataFrame,
-    table_schema: dict
-) -> pd.DataFrame:
-    """
-    Create a lookup table for entity membership.
-    
-    Parameters:
-    ----------
-    agg_tbl: pd.DataFrame
-        Table with member information
-    table_schema: dict
-        Schema for the table
-        
-    Returns:
-    ----------
-    pd.DataFrame
-        Lookup table mapping entity IDs to member strings
-    """
-    # Group members by entity
-    membership_df = (
-        agg_tbl.reset_index()
-        .groupby(["model", table_schema["pk"]])
-        .agg(membership=("member", lambda x: (list(set(x)))))
-    )
-    
-    # Check for duplicated members within an entity
-    for i in range(membership_df.shape[0]):
-        members = membership_df["membership"].iloc[i]
-        if len(members) != len(set(members)):
-            raise ValueError(
-                "Members were duplicated suggesting overmerging in the source"
-            )
-    
-    # Convert membership lists to strings for comparison
-    membership_df["member_string"] = [
-        _create_member_string(x) for x in membership_df["membership"]
-    ]
-    
-    return membership_df.reset_index()
-
-
-def _create_entity_consensus(
-    membership_lookup: pd.DataFrame, 
-    table_schema: dict
-) -> tuple[pd.DataFrame, pd.Series]:
-    """
-    Create consensus entities based on membership.
-    
-    Parameters:
-    ----------
-    membership_lookup: pd.DataFrame
-        Table mapping entities to their member strings
-    table_schema: dict
-        Schema for the table
-        
-    Returns:
-    ----------
-    tuple:
-        - Consensus entities DataFrame
-        - Lookup table mapping old IDs to new IDs
-    """
-    # Group by member string to find entities with identical members
-    consensus_entities = membership_lookup.groupby("member_string").first()
-    
-    # Create new IDs for the consensus entities
-    consensus_entities["new_id"] = sbml_dfs_utils.id_formatter(
-        range(consensus_entities.shape[0]), table_schema["pk"]
-    )
-    
-    # Create lookup table mapping original entities to consensus entities
-    lookup_table = membership_lookup.merge(
-        consensus_entities["new_id"], left_on="member_string", right_index=True
-    ).set_index([SOURCE_SPEC.MODEL, table_schema["pk"]])["new_id"]
-    
-    return consensus_entities, lookup_table
-
-
-def _merge_entity_identifiers(
-    agg_primary_table: pd.DataFrame,
-    lookup_table: pd.Series,
-    table_schema: dict
-) -> pd.Series:
-    """
-    Merge identifiers from multiple entities.
-    
-    Parameters:
-    ----------
-    agg_primary_table: pd.DataFrame
-        Table of entities
-    lookup_table: pd.Series
-        Lookup table mapping old IDs to new IDs
-    table_schema: dict
-        Schema for the table
-        
-    Returns:
-    ----------
-    pd.Series
-        Series mapping new IDs to merged identifier objects
-    """
-    # Combine entities with the same consensus ID
-    indexed_old_identifiers = (
-        agg_primary_table.join(lookup_table)
-        .reset_index(drop=True)
-        .rename(columns={"new_id": table_schema["pk"]})
-        .groupby(table_schema["pk"])[table_schema["id"]]
-    )
-    
-    # Merge identifier objects
-    return indexed_old_identifiers.agg(identifiers.merge_identifiers)
-
-
-def _create_consensus_table(
-    agg_primary_table: pd.DataFrame,
-    lookup_table: pd.Series,
-    updated_identifiers: pd.Series,
-    table_schema: dict
-) -> pd.DataFrame:
-    """
-    Create a consensus table with merged entities.
-    
-    Parameters:
-    ----------
-    agg_primary_table: pd.DataFrame
-        Table of entities
-    lookup_table: pd.Series
-        Lookup table mapping old IDs to new IDs
-    updated_identifiers: pd.Series
-        Series mapping new IDs to merged identifier objects
-    table_schema: dict
-        Schema for the table
-        
-    Returns:
-    ----------
-    pd.DataFrame
-        Consensus table with one row per unique entity
-    """
-    # Add nameness scores to help select representative names
-    agg_primary_table_scored = utils._add_nameness_score_wrapper(
-        agg_primary_table, "label", table_schema
-    )
-    
-    # Create a table with one row per consensus entity
-    new_id_table = (
-        agg_primary_table_scored.join(lookup_table)
-        .reset_index(drop=True)
-        .sort_values(["nameness_score"])
-        .rename(columns={"new_id": table_schema["pk"]})
-        .groupby(table_schema["pk"])
-        .first()[table_schema["vars"]]
-    )
-    
-    # Replace identifiers with merged versions
-    new_id_table = new_id_table.drop(table_schema["id"], axis=1).merge(
-        updated_identifiers, left_index=True, right_index=True
-    )
-    
-    return new_id_table
-
-
 def construct_meta_entities_members(
     sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs],
     pw_index: indices.PWIndex | None,
@@ -1635,6 +891,165 @@ def report_consensus_merges(
     return None
 
 
+def _create_entity_lookup_table(
+    agg_table_harmonized: pd.DataFrame,
+    table_schema: dict
+) -> pd.Series:
+    """
+    Create a lookup table mapping original entity IDs to new consensus IDs.
+    
+    Parameters:
+    ----------
+    agg_table_harmonized: pd.DataFrame
+        Table with cluster assignments for each entity
+    table_schema: dict
+        Schema for the table
+        
+    Returns:
+    ----------
+    pd.Series
+        Lookup table mapping old entity IDs to new consensus IDs
+    """
+    # Create a new ID based on cluster number and entity type
+    agg_table_harmonized["new_id"] = sbml_dfs_utils.id_formatter(
+        agg_table_harmonized["cluster"], table_schema["pk"]
+    )
+    
+    # Return the lookup series
+    return agg_table_harmonized["new_id"]
+
+
+def _prepare_consensus_table(
+    agg_table_harmonized: pd.DataFrame,
+    table_schema: dict,
+    cluster_consensus_identifiers: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Prepare a consensus table with one row per unique entity.
+    
+    Parameters:
+    ----------
+    agg_table_harmonized: pd.DataFrame
+        Table with nameness scores and cluster assignments
+    table_schema: dict
+        Schema for the table
+    cluster_consensus_identifiers: pd.DataFrame
+        Consensus identifiers for each cluster
+        
+    Returns:
+    ----------
+    pd.DataFrame
+        New consensus table with merged entities
+    """
+    # Sort by nameness score and keep one row per new entity ID
+    agg_table_reduced = (
+        agg_table_harmonized.reset_index(drop=True)
+        .sort_values(["nameness_score"])
+        .rename(columns={"new_id": table_schema["pk"]})
+        .groupby(table_schema["pk"])
+        .first()
+        .drop("nameness_score", axis=1)
+    )
+
+    # Join in the consensus identifiers and drop the temporary cluster column
+    new_id_table = (
+        agg_table_reduced.drop(table_schema["id"], axis=1)
+        .merge(cluster_consensus_identifiers, left_on="cluster", right_index=True)
+        .drop("cluster", axis=1)
+    )
+    
+    return new_id_table
+
+
+def _add_consensus_sources(
+    new_id_table: pd.DataFrame,
+    agg_table_harmonized: pd.DataFrame,
+    lookup_table: pd.Series,
+    table_schema: dict,
+    pw_index: indices.PWIndex | None
+) -> pd.DataFrame:
+    """
+    Add source information to the consensus table.
+    
+    Parameters:
+    ----------
+    new_id_table: pd.DataFrame
+        Consensus table without source information
+    agg_table_harmonized: pd.DataFrame
+        Original table with cluster assignments
+    lookup_table: pd.Series 
+        Maps old IDs to new consensus IDs
+    table_schema: dict
+        Schema for the table
+    pw_index: indices.PWIndex | None
+        An index of all tables being aggregated
+        
+    Returns:
+    ----------
+    pd.DataFrame
+        Consensus table with source information added
+    """
+    if type(pw_index) is not indices.PWIndex:
+        raise ValueError(
+            f"pw_index must be provided as a indices.PWIndex if there is a source but was type {type(pw_index)}"
+        )
+
+    # Track the model(s) that each entity came from
+    new_sources = create_consensus_sources(
+        agg_table_harmonized, lookup_table, table_schema, pw_index
+    )
+    assert isinstance(new_sources, pd.Series)
+
+    # Add the sources to the consensus table
+    updated_table = new_id_table.drop(
+        table_schema[SOURCE_SPEC.SOURCE], axis=1
+    ).merge(new_sources, left_index=True, right_index=True)
+    
+    return updated_table
+
+
+def _validate_consensus_table(
+    new_id_table: pd.DataFrame,
+    sbml_df: pd.DataFrame
+) -> None:
+    """
+    Validate that the new consensus table has the same structure as the original.
+    
+    Parameters:
+    ----------
+    new_id_table: pd.DataFrame
+        Newly created consensus table
+    sbml_df: pd.DataFrame
+        Original table from which consensus was built
+        
+    Raises:
+    ------
+    ValueError
+        If index names or columns don't match
+    """
+    # Check that the index names match
+    if set(sbml_df.index.names).difference({SOURCE_SPEC.MODEL}) != set(
+        new_id_table.index.names
+    ):
+        raise ValueError(
+            f"The newly constructed id table's index does not match the inputs.\n"
+            f"Expected index names: {sbml_df.index.names}\n"
+            f"Actual index names: {new_id_table.index.names}"
+        )
+
+    # Check that the columns match
+    if set(sbml_df) != set(new_id_table.columns):
+        missing_in_new = set(sbml_df) - set(new_id_table.columns)
+        extra_in_new = set(new_id_table.columns) - set(sbml_df)
+        raise ValueError(
+            "The newly constructed id table's variables do not match the inputs.\n"
+            f"Expected columns: {list(sbml_df.columns)}\n"
+            f"Actual columns: {list(new_id_table.columns)}\n"
+            f"Missing in new: {missing_in_new}\n"
+            f"Extra in new: {extra_in_new}"
+        )
+    
+
 def merge_entity_data(
     sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs],
     lookup_table: pd.Series,
@@ -1675,6 +1090,593 @@ def merge_entity_data(
     }
 
     return entity_data
+
+
+def _create_consensus_entities(
+    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs],
+    pw_index: indices.PWIndex,
+    defining_biological_qualifiers: list[str],
+) -> tuple[dict, dict]:
+    """
+    Create consensus entities for all primary tables in the model.
+    
+    This helper function creates consensus compartments, species, compartmentalized species,
+    reactions, and reaction species by finding shared entities across source models.
+    
+    Parameters:
+    ----------
+    sbml_dfs_dict: dict{cpr.SBML_dfs}
+        A dictionary of SBML_dfs from different models
+    pw_index: indices.PWIndex
+        An index of all tables being aggregated
+    defining_biological_qualifiers: list[str]
+        Biological qualifier terms that define distinct entities
+        
+    Returns:
+    ----------
+    tuple:
+        - dict of consensus entities tables
+        - dict of lookup tables
+    """
+    # Step 1: Compartments
+    logger.info("Defining compartments based on unique ids")
+    comp_consensus_entities, comp_lookup_table = construct_meta_entities_identifiers(
+        sbml_dfs_dict=sbml_dfs_dict, pw_index=pw_index, table="compartments"
+    )
+
+    # Step 2: Species
+    logger.info("Defining species based on unique ids")
+    spec_consensus_entities, spec_lookup_table = construct_meta_entities_identifiers(
+        sbml_dfs_dict=sbml_dfs_dict,
+        pw_index=pw_index,
+        table=SBML_DFS.SPECIES,
+        defining_biological_qualifiers=defining_biological_qualifiers,
+    )
+
+    # Step 3: Compartmentalized species
+    logger.info(
+        "Defining compartmentalized species based on unique species x compartments"
+    )
+    compspec_consensus_instances, compspec_lookup_table = construct_meta_entities_fk(
+        sbml_dfs_dict,
+        pw_index,
+        table=SBML_DFS.COMPARTMENTALIZED_SPECIES,
+        fk_lookup_tables={
+            SBML_DFS.C_ID: comp_lookup_table,
+            SBML_DFS.S_ID: spec_lookup_table,
+        },
+    )
+
+    # Step 4: Reactions
+    logger.info(
+        "Define reactions based on membership of identical compartmentalized species"
+    )
+    rxn_consensus_species, rxn_lookup_table = construct_meta_entities_members(
+        sbml_dfs_dict,
+        pw_index,
+        table=SBML_DFS.REACTIONS,
+        defined_by=SBML_DFS.REACTION_SPECIES,
+        defined_lookup_tables={SBML_DFS.SC_ID: compspec_lookup_table},
+        defining_attrs=[SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY],
+    )
+
+    logger.info("Annotating reversibility based on merged reactions")
+    rxn_consensus_species = _resolve_reversibility(
+        sbml_dfs_dict, rxn_consensus_species, rxn_lookup_table
+    )
+
+    # Step 5: Reaction species
+    logger.info("Define reaction species based on reactions")
+    rxnspec_consensus_instances, rxnspec_lookup_table = construct_meta_entities_fk(
+        sbml_dfs_dict,
+        pw_index,
+        table=SBML_DFS.REACTION_SPECIES,
+        fk_lookup_tables={
+            SBML_DFS.R_ID: rxn_lookup_table,
+            SBML_DFS.SC_ID: compspec_lookup_table,
+        },
+        # retain species with different roles
+        extra_defining_attrs=[SBML_DFS.SBO_TERM],
+    )
+    
+    consensus_entities = {
+        SBML_DFS.COMPARTMENTS: comp_consensus_entities,
+        SBML_DFS.SPECIES: spec_consensus_entities,
+        SBML_DFS.COMPARTMENTALIZED_SPECIES: compspec_consensus_instances,
+        SBML_DFS.REACTIONS: rxn_consensus_species,
+        SBML_DFS.REACTION_SPECIES: rxnspec_consensus_instances,
+    }
+    
+    lookup_tables = {
+        SBML_DFS.COMPARTMENTS: comp_lookup_table,
+        SBML_DFS.SPECIES: spec_lookup_table,
+        SBML_DFS.COMPARTMENTALIZED_SPECIES: compspec_lookup_table,
+        SBML_DFS.REACTIONS: rxn_lookup_table,
+        SBML_DFS.REACTION_SPECIES: rxnspec_lookup_table,
+    }
+    
+    return consensus_entities, lookup_tables
+
+
+def _add_entity_data(
+    sbml_dfs: sbml_dfs_core.SBML_dfs, 
+    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs], 
+    lookup_tables: dict
+) -> sbml_dfs_core.SBML_dfs:
+    """
+    Add entity data from component models to the consensus model.
+    
+    Parameters:
+    ----------
+    sbml_dfs: sbml_dfs_core.SBML_dfs
+        The consensus model being built
+    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs]
+        A dictionary of SBML_dfs from different models
+    lookup_tables: dict
+        Dictionary of lookup tables for translating between old and new entity IDs
+        
+    Returns:
+    ----------
+    sbml_dfs_core.SBML_dfs
+        The updated consensus model
+    """
+    # Add species data
+    consensus_species_data = merge_entity_data(
+        sbml_dfs_dict, lookup_table=lookup_tables[SBML_DFS.SPECIES], table=SBML_DFS.SPECIES
+    )
+    for k in consensus_species_data.keys():
+        sbml_dfs.add_species_data(k, consensus_species_data[k])
+
+    # Add reactions data
+    consensus_reactions_data = merge_entity_data(
+        sbml_dfs_dict, lookup_table=lookup_tables[SBML_DFS.REACTIONS], table=SBML_DFS.REACTIONS
+    )
+    for k in consensus_reactions_data.keys():
+        sbml_dfs.add_reactions_data(k, consensus_reactions_data[k])
+        
+    return sbml_dfs
+
+
+def _prepare_member_table(
+    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs],
+    defined_by: str,
+    defined_lookup_tables: dict,
+    table_schema: dict,
+    defined_by_schema: dict,
+    defining_attrs: list[str],
+    table: str = SBML_DFS.REACTIONS
+) -> tuple[pd.DataFrame, str]:
+    """
+    Prepare a table of members and validate their structure.
+    
+    Parameters:
+    ----------
+    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs]
+        Dictionary of SBML_dfs from different models
+    defined_by: str
+        Name of the table whose entries define membership
+    defined_lookup_tables: dict
+        Lookup tables for updating IDs
+    table_schema: dict
+        Schema for the main table
+    defined_by_schema: dict
+        Schema for the defining table
+    defining_attrs: list[str]
+        Attributes that define a unique member
+    table: str
+        Name of the main table (default: REACTIONS)
+        
+    Returns:
+    ----------
+    tuple:
+        - Updated aggregated table with member strings
+        - Name of the foreign key
+    """
+    # Combine models into a single table
+    agg_tbl = unnest_SBML_df(sbml_dfs_dict, table=defined_by)
+    
+    # Update IDs using previously created lookup tables
+    for k in defined_lookup_tables.keys():
+        agg_tbl = (
+            agg_tbl.merge(
+                defined_lookup_tables[k],
+                left_on=[SOURCE_SPEC.MODEL, k],
+                right_index=True,
+            )
+            .drop(k, axis=1)
+            .rename(columns={"new_id": k})
+        )
+    
+    # Identify the foreign key
+    defining_fk = set(defined_by_schema["fk"]).difference({table_schema["pk"]})
+
+    if (
+        len(defining_fk) != 1
+        or len(defining_fk.intersection(set(defined_by_schema["fk"]))) != 1
+    ):
+        raise ValueError(
+            f"A foreign key could not be found in {defined_by} which was a primary key in {table}"
+        )
+    else:
+        defining_fk = list(defining_fk)[0]
+    
+    # Validate defining attributes
+    valid_defining_attrs = agg_tbl.columns.values.tolist()
+    invalid_defining_attrs = [
+        x for x in defining_attrs if x not in valid_defining_attrs
+    ]
+
+    if len(invalid_defining_attrs) != 0:
+        raise ValueError(
+            f"{', '.join(invalid_defining_attrs)} was not found; "
+            f"valid defining_attrs are {', '.join(valid_defining_attrs)}"
+        )
+    
+    # Create unique member strings
+    agg_tbl["member"] = agg_tbl[defining_attrs].astype(str).apply("__".join, axis=1)
+    
+    return agg_tbl, defining_fk
+
+
+def _create_membership_lookup(
+    agg_tbl: pd.DataFrame,
+    table_schema: dict
+) -> pd.DataFrame:
+    """
+    Create a lookup table for entity membership.
+    
+    Parameters:
+    ----------
+    agg_tbl: pd.DataFrame
+        Table with member information
+    table_schema: dict
+        Schema for the table
+        
+    Returns:
+    ----------
+    pd.DataFrame
+        Lookup table mapping entity IDs to member strings
+    """
+    # Group members by entity
+    membership_df = (
+        agg_tbl.reset_index()
+        .groupby(["model", table_schema["pk"]])
+        .agg(membership=("member", lambda x: (list(set(x)))))
+    )
+    
+    # Check for duplicated members within an entity
+    for i in range(membership_df.shape[0]):
+        members = membership_df["membership"].iloc[i]
+        if len(members) != len(set(members)):
+            raise ValueError(
+                "Members were duplicated suggesting overmerging in the source"
+            )
+    
+    # Convert membership lists to strings for comparison
+    membership_df["member_string"] = [
+        _create_member_string(x) for x in membership_df["membership"]
+    ]
+    
+    return membership_df.reset_index()
+
+
+def _create_entity_consensus(
+    membership_lookup: pd.DataFrame, 
+    table_schema: dict
+) -> tuple[pd.DataFrame, pd.Series]:
+    """
+    Create consensus entities based on membership.
+    
+    Parameters:
+    ----------
+    membership_lookup: pd.DataFrame
+        Table mapping entities to their member strings
+    table_schema: dict
+        Schema for the table
+        
+    Returns:
+    ----------
+    tuple:
+        - Consensus entities DataFrame
+        - Lookup table mapping old IDs to new IDs
+    """
+    # Group by member string to find entities with identical members
+    consensus_entities = membership_lookup.groupby("member_string").first()
+    
+    # Create new IDs for the consensus entities
+    consensus_entities["new_id"] = sbml_dfs_utils.id_formatter(
+        range(consensus_entities.shape[0]), table_schema["pk"]
+    )
+    
+    # Create lookup table mapping original entities to consensus entities
+    lookup_table = membership_lookup.merge(
+        consensus_entities["new_id"], left_on="member_string", right_index=True
+    ).set_index([SOURCE_SPEC.MODEL, table_schema["pk"]])["new_id"]
+    
+    return consensus_entities, lookup_table
+
+
+def _merge_entity_identifiers(
+    agg_primary_table: pd.DataFrame,
+    lookup_table: pd.Series,
+    table_schema: dict
+) -> pd.Series:
+    """
+    Merge identifiers from multiple entities.
+    
+    Parameters:
+    ----------
+    agg_primary_table: pd.DataFrame
+        Table of entities
+    lookup_table: pd.Series
+        Lookup table mapping old IDs to new IDs
+    table_schema: dict
+        Schema for the table
+        
+    Returns:
+    ----------
+    pd.Series
+        Series mapping new IDs to merged identifier objects
+    """
+    # Combine entities with the same consensus ID
+    indexed_old_identifiers = (
+        agg_primary_table.join(lookup_table)
+        .reset_index(drop=True)
+        .rename(columns={"new_id": table_schema["pk"]})
+        .groupby(table_schema["pk"])[table_schema["id"]]
+    )
+    
+    # Merge identifier objects
+    return indexed_old_identifiers.agg(identifiers.merge_identifiers)
+
+
+def _create_consensus_table(
+    agg_primary_table: pd.DataFrame,
+    lookup_table: pd.Series,
+    updated_identifiers: pd.Series,
+    table_schema: dict
+) -> pd.DataFrame:
+    """
+    Create a consensus table with merged entities.
+    
+    Parameters:
+    ----------
+    agg_primary_table: pd.DataFrame
+        Table of entities
+    lookup_table: pd.Series
+        Lookup table mapping old IDs to new IDs
+    updated_identifiers: pd.Series
+        Series mapping new IDs to merged identifier objects
+    table_schema: dict
+        Schema for the table
+        
+    Returns:
+    ----------
+    pd.DataFrame
+        Consensus table with one row per unique entity
+    """
+    # Add nameness scores to help select representative names
+    agg_primary_table_scored = utils._add_nameness_score_wrapper(
+        agg_primary_table, "label", table_schema
+    )
+    
+    # Create a table with one row per consensus entity
+    new_id_table = (
+        agg_primary_table_scored.join(lookup_table)
+        .reset_index(drop=True)
+        .sort_values(["nameness_score"])
+        .rename(columns={"new_id": table_schema["pk"]})
+        .groupby(table_schema["pk"])
+        .first()[table_schema["vars"]]
+    )
+    
+    # Replace identifiers with merged versions
+    new_id_table = new_id_table.drop(table_schema["id"], axis=1).merge(
+        updated_identifiers, left_index=True, right_index=True
+    )
+    
+    return new_id_table
+
+
+def _filter_identifiers_by_qualifier(
+    meta_identifiers: pd.DataFrame,
+    defining_biological_qualifiers: list[str]
+) -> pd.DataFrame:
+    """
+    Filter identifiers to only include those with specific biological qualifiers.
+    
+    Parameters:
+    ----------
+    meta_identifiers: pd.DataFrame
+        Table of identifiers
+    defining_biological_qualifiers: list[str]
+        List of biological qualifier types to keep
+        
+    Returns:
+    ----------
+    pd.DataFrame
+        Filtered identifiers
+    """
+    valid_identifiers = meta_identifiers.copy()
+    return valid_identifiers[
+        meta_identifiers[IDENTIFIERS.BQB].isin(defining_biological_qualifiers)
+    ]
+
+
+def _handle_entries_without_identifiers(
+    sbml_df: pd.DataFrame,
+    valid_identifiers: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Handle entities that don't have identifiers by adding dummy identifiers.
+    
+    Parameters:
+    ----------
+    sbml_df: pd.DataFrame
+        Original table of entities
+    valid_identifiers: pd.DataFrame
+        Table of identifiers that passed filtering
+        
+    Returns:
+    ----------
+    pd.DataFrame
+        Valid identifiers with dummy entries added
+    """
+    # Find entries which no longer have any identifiers
+    filtered_entries = sbml_df.reset_index().merge(
+        valid_identifiers.reset_index(),
+        left_on=sbml_df.index.names,
+        right_on=sbml_df.index.names,
+        how="outer",
+    )[sbml_df.index.names + [IDENTIFIERS.IDENTIFIER]]
+    
+    filtered_entries = filtered_entries[
+        filtered_entries[IDENTIFIERS.IDENTIFIER].isnull()
+    ]
+    
+    if filtered_entries.shape[0] == 0:
+        return valid_identifiers
+        
+    # Add dummy identifiers to these entries
+    logger.warning(
+        f"{filtered_entries.shape[0]} entries didn't possess identifiers and thus cannot be merged"
+    )
+
+    filtered_entries[SOURCE_SPEC.ENTRY] = 0
+    filtered_entries[IDENTIFIERS.ONTOLOGY] = "none"
+    filtered_entries[IDENTIFIERS.ONTOLOGY] = [
+        "dummy_value_" + str(val)
+        for val in random.sample(range(1, 100000000), filtered_entries.shape[0])
+    ]
+    filtered_entries[IDENTIFIERS.URL] = None
+    filtered_entries[IDENTIFIERS.BQB] = None
+
+    filtered_entries = filtered_entries.set_index(
+        sbml_df.index.names + [SOURCE_SPEC.ENTRY]
+    )
+
+    # Combine original valid identifiers with dummy identifiers
+    return pd.concat([valid_identifiers, filtered_entries])
+
+
+def _prepare_identifier_edgelist(
+    valid_identifiers: pd.DataFrame,
+    sbml_df: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Prepare an edgelist for clustering identifiers.
+    
+    Parameters:
+    ----------
+    valid_identifiers: pd.DataFrame
+        Table of identifiers
+    sbml_df: pd.DataFrame
+        Original table of entities
+        
+    Returns:
+    ----------
+    pd.DataFrame
+        Edgelist connecting entities to their identifiers
+    """
+    # Format identifiers as edgelist
+    formatted_identifiers = utils.format_identifiers_as_edgelist(
+        valid_identifiers, [IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER]
+    )
+
+    # Create a unique tag for each entity from the original index
+    indexed_species_tags = (
+        formatted_identifiers.reset_index()
+        .set_index(formatted_identifiers.index.names, drop=False)[sbml_df.index.names]
+        .astype(str)
+        .apply("__".join, axis=1)
+    )
+    formatted_identifiers.loc[:, "model_spec"] = indexed_species_tags
+
+    # Create edgelist that connects entities to identifiers
+    id_edgelist = pd.concat(
+        [
+            formatted_identifiers[["ind", "id"]],
+            # Add edges connecting model-specific instances to their identifiers
+            formatted_identifiers[["model_spec", "id"]].rename(
+                columns={"model_spec": "ind"}
+            ),
+        ]
+    )
+    
+    return id_edgelist
+
+
+def _create_cluster_identifiers(
+    meta_identifiers: pd.DataFrame,
+    indexed_cluster: pd.Series,
+    sbml_df: pd.DataFrame,
+    ind_clusters: pd.DataFrame,
+    table_schema: dict
+) -> pd.DataFrame:
+    """
+    Create identifier objects for each cluster.
+
+    Parameters
+    ----------
+    meta_identifiers : pd.DataFrame
+        All identifiers (including those filtered out by BQB)
+    indexed_cluster : pd.Series
+        Maps entity indices to cluster IDs
+    sbml_df : pd.DataFrame
+        Original table of entities
+    ind_clusters : pd.DataFrame
+        Cluster assignments from graph algorithm
+    table_schema : dict
+        Schema for the table, used to determine the correct identifier column name
+
+    Returns
+    -------
+    pd.DataFrame
+        Table mapping clusters to their consensus identifiers, with the identifier column named according to the schema
+    """
+    # Combine all identifiers with cluster assignments
+    all_cluster_identifiers = meta_identifiers.reset_index().merge(
+        indexed_cluster, left_on=sbml_df.index.names, right_index=True
+    )
+
+    # Create an Identifiers object for each cluster
+    cluster_consensus_identifiers = {
+        k: identifiers.Identifiers(
+            list(
+                v[
+                    [
+                        IDENTIFIERS.ONTOLOGY,
+                        IDENTIFIERS.IDENTIFIER,
+                        IDENTIFIERS.URL,
+                        IDENTIFIERS.BQB,
+                    ]
+                ]
+                .T.to_dict()
+                .values()
+            )
+        )
+        for k, v in all_cluster_identifiers.groupby("cluster")
+    }
+
+    # Handle clusters that don't have any identifiers
+    catchup_clusters = {
+        c: identifiers.Identifiers(list())
+        for c in set(ind_clusters["cluster"].tolist()).difference(
+            cluster_consensus_identifiers
+        )
+    }
+    cluster_consensus_identifiers = {
+        **cluster_consensus_identifiers,
+        **catchup_clusters,
+    }
+
+    # Convert to DataFrame with correct column name
+    id_col = table_schema["id"]
+    cluster_consensus_identifiers_df = pd.DataFrame(
+        cluster_consensus_identifiers, index=[id_col]
+    ).T
+    cluster_consensus_identifiers_df.index.name = "cluster"
+    return cluster_consensus_identifiers_df
 
 
 def _check_sbml_dfs_dict(sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs]) -> None:
