@@ -1,4 +1,4 @@
 sphinx
 sphinx-rtd-theme
 myst-parser
--e .[rpy2]  # Install the package in editable mode
+-e .  # Install the package in editable mode
