@@ -1,5 +1,0 @@
-sphinx
-sphinx-rtd-theme
-myst-parser
-# Add any additional dependencies needed to build docs
--e .  # Install your package in editable mode
