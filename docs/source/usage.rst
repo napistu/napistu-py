@@ -1,12 +1,7 @@
 Usage
 =====
 
-Basic Example
--------------
+Tutorials
+---------
 
-.. code-block:: python
-
-   import your_package
-
-   # Basic usage example
-   result = your_package.some_function()
+See `napistu-tutorials <https://github.com/napistu/napistu/tree/main/tutorials>`_ for more examples.

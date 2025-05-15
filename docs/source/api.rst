@@ -1,6 +1,8 @@
 API Reference
 =============
 
+Package Overview
+----------------
 .. autosummary::
    :toctree: generated/
    :recursive:
@@ -11,30 +13,4 @@ API Reference
    napistu.modify
    napistu.rpy2
    napistu.gcs
-
-Detailed Modules
-----------------
-.. automodule::  napistu.network
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule::  napistu.ingestion
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule::  napistu.modify
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule::  napistu.rpy2
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule::  napistu.gcs
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   
