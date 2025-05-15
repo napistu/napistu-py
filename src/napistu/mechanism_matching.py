@@ -437,6 +437,12 @@ def match_by_ontology_and_identifier(
         - A single ontology string
         - A set of ontology strings
         - A list of ontology strings
+        - None (if supported): will automatically detect ontology columns based on ONTOLOGIES_LIST
+        
+        Either:
+        - Set of columns to treat as ontologies
+        - Dict mapping wide column names to ontology names
+        - None to automatically detect ontology columns based on ONTOLOGIES_LIST
     feature_identifiers_var : str, default="identifier"
         Name of the identifier column in feature_identifiers
     verbose : bool, default=False
