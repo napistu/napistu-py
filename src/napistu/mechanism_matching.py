@@ -50,8 +50,11 @@ def bind_wide_results(
         The table containing the results to bind.
     results_name : str
         The name of the results to bind.
-    ontologies : Optional[Union[Set[str], Dict[str, str]]]
-        The ontologies to use for matching.
+    ontologies : Optional[Union[Set[str], Dict[str, str]]], default=None
+        Either:
+        - Set of columns to treat as ontologies (these should be entries in ONTOLOGIES_LIST )
+        - Dict mapping wide column names to ontology names in the ONTOLOGIES_LIST controlled vocabulary
+        - None to automatically detect valid ontology columns based on ONTOLOGIES_LIST
     dogmatic : bool
         Whether to respect differences between genes, transcripts, and proteins (True) or ignore them (False).
     species_identifiers : Optional[pd.DataFrame]
@@ -326,9 +329,9 @@ def match_features_to_wide_pathway_species(
         DataFrame as required by features_to_pathway_species
     ontologies : Optional[Union[Set[str], Dict[str, str]]], default=None
         Either:
-        - Set of columns to treat as ontologies
-        - Dict mapping wide column names to ontology names
-        - None to automatically detect ontology columns based on ONTOLOGIES_LIST
+        - Set of columns to treat as ontologies (these should be entries in ONTOLOGIES_LIST )
+        - Dict mapping wide column names to ontology names in the ONTOLOGIES_LIST controlled vocabulary
+        - None to automatically detect valid ontology columns based on ONTOLOGIES_LIST
     feature_identifiers_var : str, default="identifier"
         Name for the identifier column in the long format
     feature_id_var: str, default=FEATURE_ID_VAR_DEFAULT
