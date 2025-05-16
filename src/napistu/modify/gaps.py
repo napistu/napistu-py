@@ -75,28 +75,34 @@ def update_sbml_df_with_exchange(
     exchange_compartment: str = COMPARTMENTS["CYTOSOL"],
 ) -> sbml_dfs_core.SBML_dfs:
     """
-
     Update SBML_dfs With Exchange
 
     Add transportation reactions between all locations of a set of molecular species by
     including bidirectional exchange reactions through an exchange compartment.
 
-    Parameters:
+    This function is now modular and delegates to helper functions for each logical step:
+    - Finding new exchange compartmentalized species
+    - Adding new compartmentalized species
+    - Building the transport reaction edgelist
+    - Creating new reactions
+    - Creating new reaction species
+    - Updating and validating the sbml_dfs
 
-    species_needing_transport_rxns: np.ndarray
+    Parameters
+    ----------
+    species_needing_transport_rxns : np.ndarray
         Vector of molecular species (s_ids) with no or insufficient transportation reactions
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    sbml_dfs : sbml_dfs_core.SBML_dfs
         A mechanistic model containing a set of molecular species which exist
         in multiple compartments and are interconverted by reactions
-    exchange_compartment: str
+    exchange_compartment : str, optional
         The name of an exchange compartment matching a c_name from sbml_dfs.compartments
 
-    Returns:
-
-    update_sbml_df_with_exchange: sbml_dfs_core.SBML_dfs
+    Returns
+    -------
+    sbml_dfs_core.SBML_dfs
         The input sbml_dfs with additional transport reactions and compartmentalized species
         (in the exchange compartment) added.
-
     """
 
     exchange_compartment_id = sbml_dfs.compartments[
@@ -108,8 +114,6 @@ def update_sbml_df_with_exchange(
             f"{len(exchange_compartment_id)} compartments - this is unexpected behavior"
         )
     exchange_compartment_id = exchange_compartment_id[0]
-
-    # create a source object with provenance information for the entities that we'll add to the sbml_dfs
     gap_filling_source_obj = source.Source(
         pd.Series(
             {
@@ -117,30 +121,63 @@ def update_sbml_df_with_exchange(
                 SOURCE_SPEC.PATHWAY_ID: "gap_filling",
                 SOURCE_SPEC.NAME: "Gap filling to enable transport between all compartments where species is present",
             }
-        )
-        .to_frame()
-        .T
+        ).to_frame().T
     )
-
-    # initialize an empty identifiers object for gap filled reactions
     gap_filling_id_obj = identifiers.Identifiers([])
-
-    # find species which need exchange reactions but which are not currently present in the exchange compartment
-    existing_exchange_cspecies = sbml_dfs.compartmentalized_species[
-        sbml_dfs.compartmentalized_species[SBML_DFS.C_ID] == exchange_compartment_id
-    ]
-    new_exchange_cspecies = set(species_needing_transport_rxns).difference(
-        set(existing_exchange_cspecies[SBML_DFS.S_ID].tolist())
+    new_exchange_cspecies = _find_new_exchange_cspecies(
+        species_needing_transport_rxns, sbml_dfs, exchange_compartment_id
     )
-
     logger.info(
         f"{len(new_exchange_cspecies)} new compartmentalized species must "
         f"be added to the {exchange_compartment} to add protein transportation gap filling"
     )
+    new_exchange_cspecies_df = _add_new_exchange_cspecies(
+        new_exchange_cspecies, sbml_dfs, exchange_compartment_id, exchange_compartment, gap_filling_source_obj
+    )
+    updated_sbml_dfs = copy.deepcopy(sbml_dfs)
+    updated_sbml_dfs.compartmentalized_species = pd.concat(
+        [updated_sbml_dfs.compartmentalized_species, new_exchange_cspecies_df]
+    )
+    transport_rxn_edgelist = _build_transport_rxn_edgelist(
+        updated_sbml_dfs, species_needing_transport_rxns, exchange_compartment_id
+    )
+    new_reactions = _create_new_reactions(
+        transport_rxn_edgelist, sbml_dfs, gap_filling_id_obj, gap_filling_source_obj
+    )
+    logger.info(
+        f"{len(new_reactions)} new reactions must "
+        f"be added to the {exchange_compartment} to add molecular species transportation reactions"
+    )
+    updated_sbml_dfs.reactions = pd.concat([updated_sbml_dfs.reactions, new_reactions])
+    new_reaction_species = _create_new_reaction_species(
+        transport_rxn_edgelist, sbml_dfs
+    )
+    updated_sbml_dfs.reaction_species = pd.concat(
+        [updated_sbml_dfs.reaction_species, new_reaction_species]
+    )
+    updated_sbml_dfs = sbml_dfs_utils.check_entity_data_index_matching(
+        updated_sbml_dfs, SBML_DFS.REACTIONS
+    )
+    updated_sbml_dfs.validate()
+    return updated_sbml_dfs
 
-    # since compartmentalized species are defined by their sid and cid
-    # add the defining foreign keys for all new exchange species
-    # then we'll add the primary key by autoincrementing existing keys
+
+def _find_new_exchange_cspecies(species_needing_transport_rxns, sbml_dfs, exchange_compartment_id):
+    """
+    Find species which need exchange reactions but are not currently present in the exchange compartment.
+    """
+    existing_exchange_cspecies = sbml_dfs.compartmentalized_species[
+        sbml_dfs.compartmentalized_species[SBML_DFS.C_ID] == exchange_compartment_id
+    ]
+    return set(species_needing_transport_rxns).difference(
+        set(existing_exchange_cspecies[SBML_DFS.S_ID].tolist())
+    )
+
+
+def _add_new_exchange_cspecies(new_exchange_cspecies, sbml_dfs, exchange_compartment_id, exchange_compartment, gap_filling_source_obj):
+    """
+    Add new compartmentalized species to the exchange compartment.
+    """
     new_exchange_cspecies_fks = (
         pd.DataFrame({SBML_DFS.S_ID: list(new_exchange_cspecies)})
         .assign(c_id=exchange_compartment_id)
@@ -157,32 +194,24 @@ def update_sbml_df_with_exchange(
     ]
     new_exchange_cspecies_fks = new_exchange_cspecies_fks.drop(SBML_DFS.S_NAME, axis=1)
     new_exchange_cspecies_fks[SBML_DFS.SC_SOURCE] = gap_filling_source_obj
-
-    # update index by incrementing existing keys
     existing_sc_ids = sbml_dfs_utils.id_formatter_inv(
         sbml_dfs.compartmentalized_species.index.tolist()
     )
-    # filter np.nan which will be introduced if the key is not the default format
     existing_sc_ids = [x for x in existing_sc_ids if x is not np.nan]
     current_max_sc_id = max(existing_sc_ids)
-
     new_int_ids = [
         1 + current_max_sc_id + x for x in new_exchange_cspecies_fks.index.tolist()
     ]
     new_exchange_cspecies_fks[SBML_DFS.SC_ID] = sbml_dfs_utils.id_formatter(
         new_int_ids, id_type=SBML_DFS.SC_ID
     )
-    new_exchange_cspecies_df = new_exchange_cspecies_fks.set_index(SBML_DFS.SC_ID)
+    return new_exchange_cspecies_fks.set_index(SBML_DFS.SC_ID)
 
-    # add new compartmentalized species to sbml_dfs model
-    updated_sbml_dfs = copy.deepcopy(sbml_dfs)
-    updated_sbml_dfs.compartmentalized_species = pd.concat(
-        [updated_sbml_dfs.compartmentalized_species, new_exchange_cspecies_df]
-    )
 
-    # define all new transport reactions as an edgelist
-
-    # pull out all cspecies of species needing transport
+def _build_transport_rxn_edgelist(updated_sbml_dfs, species_needing_transport_rxns, exchange_compartment_id):
+    """
+    Build the edgelist for new transport reactions.
+    """
     cspecies_needing_transport = (
         updated_sbml_dfs.compartmentalized_species[
             updated_sbml_dfs.compartmentalized_species[SBML_DFS.S_ID].isin(
@@ -192,17 +221,14 @@ def update_sbml_df_with_exchange(
         .reset_index()
         .drop(SBML_DFS.SC_SOURCE, axis=1)
     )
-
     exchange_cspecies = cspecies_needing_transport[
         cspecies_needing_transport[SBML_DFS.C_ID] == exchange_compartment_id
     ].drop(SBML_DFS.C_ID, axis=1)
     non_exchange_cspecies = cspecies_needing_transport[
         cspecies_needing_transport[SBML_DFS.C_ID] != exchange_compartment_id
     ].drop(SBML_DFS.C_ID, axis=1)
-
     transport_rxn_edgelist = pd.concat(
         [
-            # exchange compartment -> non-exchange compartment
             exchange_cspecies.rename(
                 {SBML_DFS.SC_ID: "sc_id_from", SBML_DFS.SC_NAME: "sc_name_from"}, axis=1
             ).merge(
@@ -220,29 +246,27 @@ def update_sbml_df_with_exchange(
             ),
         ]
     )
-
-    # we should add two reactions for each non-exchange compartment cspecies
-    # one transporting from the exchange compartment and one transporting into the
-    # exchange compartment
-    assert transport_rxn_edgelist.shape[0] == 2 * non_exchange_cspecies.shape[0]
-
-    # the rows in this edgelist correspond to new reactions that we'll add
-    # to the model
+    if transport_rxn_edgelist.shape[0] != 2 * non_exchange_cspecies.shape[0]:
+        raise ValueError(
+            f"Undefined behavior: expected {2 * non_exchange_cspecies.shape[0]} transport reactions, "
+            f"but got {transport_rxn_edgelist.shape[0]}. This likely indicates a logic error in building the transport reaction edgelist."
+        )
     transport_rxn_edgelist[SBML_DFS.R_NAME] = [
         f"{x} -> {y} gap-filling transport"
         for x, y in zip(
             transport_rxn_edgelist["sc_name_from"], transport_rxn_edgelist["sc_name_to"]
         )
     ]
-    transport_rxn_edgelist = transport_rxn_edgelist.reset_index(drop=True)
+    return transport_rxn_edgelist.reset_index(drop=True)
 
-    # create new reactions, update index by incrementing existing keys
 
+def _create_new_reactions(transport_rxn_edgelist, sbml_dfs, gap_filling_id_obj, gap_filling_source_obj):
+    """
+    Create new reactions DataFrame.
+    """
     existing_r_ids = sbml_dfs_utils.id_formatter_inv(sbml_dfs.reactions.index.tolist())
-    # filter np.nan which will be introduced if the key is not the default format
     existing_r_ids = [x for x in existing_r_ids if x is not np.nan]
     current_max_r_id = max(existing_r_ids)
-
     new_int_ids = [
         1 + current_max_r_id + x for x in transport_rxn_edgelist.index.tolist()
     ]
@@ -255,17 +279,13 @@ def update_sbml_df_with_exchange(
         .assign(r_Identifiers=gap_filling_id_obj)
         .assign(r_Source=gap_filling_source_obj)
     )
+    return new_reactions
 
-    logger.info(
-        f"{len(new_reactions)} new reactions must "
-        f"be added to the {exchange_compartment} to add molecular species transportation reactions"
-    )
 
-    # add new reactions
-    updated_sbml_dfs.reactions = pd.concat([updated_sbml_dfs.reactions, new_reactions])
-
-    # create new reaction species
-    # each reaction adds two reaction species - the from and to compartmentalized species
+def _create_new_reaction_species(transport_rxn_edgelist, sbml_dfs):
+    """
+    Create new reaction species DataFrame.
+    """
     new_reaction_species = pd.concat(
         [
             transport_rxn_edgelist[["sc_id_from", SBML_DFS.R_ID]]
@@ -280,33 +300,20 @@ def update_sbml_df_with_exchange(
             .assign(sbo_term=MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT]),
         ]
     ).reset_index(drop=True)
-
+    
     existing_rsc_ids = sbml_dfs_utils.id_formatter_inv(
         sbml_dfs.reaction_species.index.tolist()
     )
     # filter np.nan which will be introduced if the key is not the default format
     existing_rsc_ids = [x for x in existing_rsc_ids if x is not np.nan]
     current_max_rsc_id = max(existing_rsc_ids)
-
     new_int_ids = [
         1 + current_max_rsc_id + x for x in new_reaction_species.index.tolist()
     ]
     new_reaction_species[SBML_DFS.RSC_ID] = sbml_dfs_utils.id_formatter(
         new_int_ids, id_type=SBML_DFS.RSC_ID
     )
-    new_reaction_species = new_reaction_species.set_index(SBML_DFS.RSC_ID)
-
-    updated_sbml_dfs.reaction_species = pd.concat(
-        [updated_sbml_dfs.reaction_species, new_reaction_species]
-    )
-
-    updated_sbml_dfs = sbml_dfs_utils.check_entity_data_index_matching(
-        updated_sbml_dfs, SBML_DFS.REACTIONS
-    )
-
-    updated_sbml_dfs.validate()
-
-    return updated_sbml_dfs
+    return new_reaction_species.set_index(SBML_DFS.RSC_ID)
 
 
 def _identify_species_needing_transport_reactions(
