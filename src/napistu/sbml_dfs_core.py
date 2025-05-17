@@ -307,13 +307,16 @@ class SBML_dfs:
 
             if isinstance(id_entry, identifiers.Identifiers):
                 identifiers_dict[sysid] = pd.DataFrame(id_entry.ids)
-            elif np.isnan(id_entry):
+            elif pd.isna(id_entry):
                 continue
             else:
                 raise ValueError(
                     f"id_entry was a {type(id_entry)} and must either be"
-                    " an identifiers.Identifiers object or NaN"
+                    " an identifiers.Identifiers object or a missing value (None, np.nan, pd.NA)"
                 )
+        if not identifiers_dict:
+            # Return empty DataFrame with expected columns if nothing found
+            return pd.DataFrame(columns=[schema[id_type]["pk"], "entry"])
         identifiers_tbl = pd.concat(identifiers_dict)
 
         identifiers_tbl.index.names = [schema[id_type]["pk"], "entry"]

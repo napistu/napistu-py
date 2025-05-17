@@ -198,7 +198,7 @@ def _add_new_exchange_cspecies(new_exchange_cspecies, sbml_dfs, exchange_compart
         sbml_dfs.compartmentalized_species.index.tolist()
     )
     existing_sc_ids = [x for x in existing_sc_ids if x is not np.nan]
-    current_max_sc_id = max(existing_sc_ids)
+    current_max_sc_id = max(existing_sc_ids) if existing_sc_ids else 0
     new_int_ids = [
         1 + current_max_sc_id + x for x in new_exchange_cspecies_fks.index.tolist()
     ]
@@ -266,7 +266,7 @@ def _create_new_reactions(transport_rxn_edgelist, sbml_dfs, gap_filling_id_obj, 
     """
     existing_r_ids = sbml_dfs_utils.id_formatter_inv(sbml_dfs.reactions.index.tolist())
     existing_r_ids = [x for x in existing_r_ids if x is not np.nan]
-    current_max_r_id = max(existing_r_ids)
+    current_max_r_id = max(existing_r_ids) if existing_r_ids else 0
     new_int_ids = [
         1 + current_max_r_id + x for x in transport_rxn_edgelist.index.tolist()
     ]
@@ -306,7 +306,7 @@ def _create_new_reaction_species(transport_rxn_edgelist, sbml_dfs):
     )
     # filter np.nan which will be introduced if the key is not the default format
     existing_rsc_ids = [x for x in existing_rsc_ids if x is not np.nan]
-    current_max_rsc_id = max(existing_rsc_ids)
+    current_max_rsc_id = max(existing_rsc_ids) if existing_rsc_ids else 0
     new_int_ids = [
         1 + current_max_rsc_id + x for x in new_reaction_species.index.tolist()
     ]

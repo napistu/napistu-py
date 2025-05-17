@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import os
 
+import numpy as np
 import pandas as pd
 import pytest
 from napistu import sbml_dfs_core
 from napistu.ingestion import sbml
 from napistu.modify import pathwayannot
 
+from napistu import identifiers as napistu_identifiers
+from napistu.constants import SBML_DFS
+from napistu.sbml_dfs_core import SBML_dfs
 
 def test_drop_cofactors(sbml_dfs):
     starting_rscs = sbml_dfs.reaction_species.shape[0]
@@ -303,5 +307,23 @@ def test_species_status(sbml_dfs):
     )
 
 
-# if __name__ == "__main__":
-#   test_get_table()
+def test_get_identifiers_handles_missing_values():
+
+    # Minimal DataFrame with all types
+    df = pd.DataFrame({
+        SBML_DFS.S_NAME: ["A", "B", "C", "D"],
+        SBML_DFS.S_IDENTIFIERS: [napistu_identifiers.Identifiers([]), None, np.nan, pd.NA],
+        SBML_DFS.S_SOURCE: [None, None, None, None],
+    }, index=["s1", "s2", "s3", "s4"])
+    df.index.name = SBML_DFS.S_ID
+
+    sbml_dict = {
+        SBML_DFS.COMPARTMENTS: pd.DataFrame({SBML_DFS.C_NAME: ["cytosol"], SBML_DFS.C_IDENTIFIERS: [None], SBML_DFS.C_SOURCE: [None]}, index=["c1"]),
+        SBML_DFS.SPECIES: df,
+        SBML_DFS.COMPARTMENTALIZED_SPECIES: pd.DataFrame({SBML_DFS.SC_NAME: ["A [cytosol]"], SBML_DFS.S_ID: ["s1"], SBML_DFS.C_ID: ["c1"], SBML_DFS.SC_SOURCE: [None]}, index=["sc1"]),
+        SBML_DFS.REACTIONS: pd.DataFrame({SBML_DFS.R_NAME: [], SBML_DFS.R_IDENTIFIERS: [], SBML_DFS.R_SOURCE: [], SBML_DFS.R_ISREVERSIBLE: []}, index=[]),
+        SBML_DFS.REACTION_SPECIES: pd.DataFrame({SBML_DFS.R_ID: [], SBML_DFS.SC_ID: [], SBML_DFS.STOICHIOMETRY: [], SBML_DFS.SBO_TERM: []}, index=[]),
+    }
+    sbml = SBML_dfs(sbml_dict, validate=False)
+    result = sbml.get_identifiers(SBML_DFS.SPECIES)
+    assert result.shape[0] == 0 or all(result[SBML_DFS.S_ID] == "s1"), "Only Identifiers objects should be returned."
