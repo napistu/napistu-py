@@ -91,10 +91,14 @@ def sbml_dfs_to_rcpr_string_graph(
     )
 
     # Perform validations
-    assert dat_gene["s_id"].is_unique
-    assert dat_gene["sc_id"].is_unique
-    assert dat_gene[COL_GENE].is_unique
-    assert dat_gene[COL_GENE].hasnans is False
+    if not dat_gene["s_id"].is_unique:
+        raise ValueError("dat_gene['s_id'] must be unique")
+    if not dat_gene["sc_id"].is_unique:
+        raise ValueError("dat_gene['sc_id'] must be unique")
+    if not dat_gene[COL_GENE].is_unique:
+        raise ValueError("dat_gene[COL_GENE] must be unique")
+    if dat_gene[COL_GENE].hasnans:
+        raise ValueError("dat_gene[COL_GENE] must not have NaNs")
 
     # Reshape into the correct format
     dat_reactions = dat_gene[["sc_id", COL_GENE]].merge(
@@ -102,9 +106,8 @@ def sbml_dfs_to_rcpr_string_graph(
     )[[COL_GENE, "r_id"]]
     # assert that this has the correct shape, ie 2x the shape of the number
     # of reactions
-    assert (
-        dat_reactions.shape[0] == 2 * sbml_dfs.reactions.shape[0]
-    ), "There should be exactly 2 reactants per reactions"
+    if dat_reactions.shape[0] != 2 * sbml_dfs.reactions.shape[0]:
+        raise ValueError("There should be exactly 2 reactants per reaction")
 
     # This is the fastest way I found to reshape this into the
     # Edgelist format

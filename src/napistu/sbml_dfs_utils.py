@@ -152,7 +152,6 @@ def adapt_pw_index(
 
 
 def _dogmatic_to_defining_bqbs(dogmatic: bool = False) -> str:
-    assert isinstance(dogmatic, bool)
     if dogmatic:
         logger.info(
             "Running in dogmatic mode - differences genes, transcripts, and proteins will "

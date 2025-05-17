@@ -171,7 +171,8 @@ class SBML_dfs:
             )
 
         if required_attributes is not None:
-            assert isinstance(required_attributes, set)
+            if not isinstance(required_attributes, set):
+                raise TypeError(f"required_attributes must be a set, but got {type(required_attributes).__name__}")
 
             # determine whether required_attributes are appropriate
             VALID_REQUIRED_ATTRIBUTES = {"id", "source", "label"}
@@ -221,7 +222,9 @@ class SBML_dfs:
         ).assert_present()
 
         if ontologies is not None:
-            assert isinstance(ontologies, set)
+            if not isinstance(ontologies, set):
+                # for clarity this should not be reachable based on type hints
+                raise TypeError(f"ontologies must be a set, but got {type(ontologies).__name__}")
             ALL_VALID_ONTOLOGIES = identifiers_df["ontology"].unique()
             invalid_ontologies = ontologies.difference(ALL_VALID_ONTOLOGIES)
             if len(invalid_ontologies) > 0:
@@ -819,7 +822,8 @@ class SBML_dfs:
         _validate_matching_data(reactions_data_table, self.reactions)
 
     def _validate_reaction_species(self):
-        assert all(self.reaction_species[SBML_DFS.STOICHIOMETRY].notnull())
+        if not all(self.reaction_species[SBML_DFS.STOICHIOMETRY].notnull()):
+            raise ValueError("All reaction_species[SBML_DFS.STOICHIOMETRY] must be not null")
 
         # test for null SBO terms
         n_null_sbo_terms = sum(self.reaction_species[SBML_DFS.SBO_TERM].isnull())
@@ -1123,7 +1127,8 @@ def construct_formula_string(
     rxn_reversible = bool(
         reactions_df.loc[reaction_species_df[SBML_DFS.R_ID][0], SBML_DFS.R_ISREVERSIBLE]
     )  # convert from a np.bool_ to bool if needed
-    assert isinstance(rxn_reversible, bool)
+    if not isinstance(rxn_reversible, bool):
+        raise TypeError(f"rxn_reversible must be a bool, but got {type(rxn_reversible).__name__}")
 
     if rxn_reversible:
         arrow_type = " <-> "
@@ -1480,7 +1485,8 @@ def infer_sbo_terms(sbml_dfs: SBML_dfs) -> SBML_dfs:
         ~sbml_dfs.reaction_species[SBML_DFS.SBO_TERM].isin(MINI_SBO_TO_NAME.keys())
     ]
 
-    assert all(sbml_dfs.reaction_species[SBML_DFS.SBO_TERM].notnull())
+    if not all(sbml_dfs.reaction_species[SBML_DFS.SBO_TERM].notnull()):
+        raise ValueError("All sbml_dfs.reaction_species[SBML_DFS.SBO_TERM] must be not null")
     if invalid_sbo_terms.shape[0] == 0:
         logger.info("All sbo_terms were valid; returning input sbml_dfs")
         return sbml_dfs
@@ -1504,7 +1510,8 @@ def infer_sbo_terms(sbml_dfs: SBML_dfs) -> SBML_dfs:
         [valid_sbo_terms, invalid_sbo_terms]
     ).sort_index()
 
-    assert sbml_dfs.reaction_species.shape[0] == updated_reaction_species.shape[0]
+    if sbml_dfs.reaction_species.shape[0] != updated_reaction_species.shape[0]:
+        raise ValueError(f"Trying to overwrite {sbml_dfs.reaction_species.shape[0]} reaction_species with {updated_reaction_species.shape[0]}")
     sbml_dfs.reaction_species = updated_reaction_species
 
     return sbml_dfs

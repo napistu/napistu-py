@@ -259,7 +259,7 @@ def test_get_table(sbml_dfs):
         sbml_dfs.get_table("foo", {"id"})
 
     # bad type
-    with pytest.raises(AssertionError):
+    with pytest.raises(TypeError):
         sbml_dfs.get_table("reaction_species", "id")
 
     # reaction species don't have ids
