@@ -29,24 +29,25 @@ def add_transportation_reactions(
     exchange_compartment: str = COMPARTMENTS["CYTOSOL"],
 ) -> sbml_dfs_core.SBML_dfs:
     """
-    Add Transportation Reactions
+    Add transportation reactions to connect all forms of a protein across compartments.
 
     Identifies proteins whose various compartmentalized forms cannot reach one
     another via existing transportation reactions and then adds transportation
     reactions which connect all forms of a protein.
 
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    Parameters
+    ----------
+    sbml_dfs : sbml_dfs_core.SBML_dfs
         A mechanistic model containing a set of molecular species which exist
-        in multiple compartments and are interconverted by reactions
-    exchange_compartment: str
-        The name of an exchange compartment matching a c_name from sbml_dfs.compartments
+        in multiple compartments and are interconverted by reactions.
+    exchange_compartment : str, optional
+        The name of an exchange compartment matching a c_name from sbml_dfs.compartments.
 
-    Returns:
-
-    sbml_df_with_exchange: sbml_dfs_core.SBML_dfs
+    Returns
+    -------
+    sbml_dfs_core.SBML_dfs
         The input sbml_dfs with additional transport reactions and compartmentalized species
         (in the exchange compartment) added.
-
     """
 
     # validate arguments
@@ -75,12 +76,10 @@ def update_sbml_df_with_exchange(
     exchange_compartment: str = COMPARTMENTS["CYTOSOL"],
 ) -> sbml_dfs_core.SBML_dfs:
     """
-    Update SBML_dfs With Exchange
-
     Add transportation reactions between all locations of a set of molecular species by
     including bidirectional exchange reactions through an exchange compartment.
 
-    This function is now modular and delegates to helper functions for each logical step:
+    This function is modular and delegates to helper functions for each logical step:
     - Finding new exchange compartmentalized species
     - Adding new compartmentalized species
     - Building the transport reaction edgelist
@@ -162,9 +161,27 @@ def update_sbml_df_with_exchange(
     return updated_sbml_dfs
 
 
-def _find_new_exchange_cspecies(species_needing_transport_rxns, sbml_dfs, exchange_compartment_id):
+def _find_new_exchange_cspecies(
+    species_needing_transport_rxns: np.ndarray,
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    exchange_compartment_id: str,
+) -> set:
     """
     Find species which need exchange reactions but are not currently present in the exchange compartment.
+
+    Parameters
+    ----------
+    species_needing_transport_rxns : np.ndarray
+        Vector of molecular species (s_ids) with no or insufficient transportation reactions
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The SBML_dfs object
+    exchange_compartment_id : str
+        The compartment ID for the exchange compartment
+
+    Returns
+    -------
+    set
+        Set of s_ids needing new compartmentalized species in the exchange compartment.
     """
     existing_exchange_cspecies = sbml_dfs.compartmentalized_species[
         sbml_dfs.compartmentalized_species[SBML_DFS.C_ID] == exchange_compartment_id
@@ -174,9 +191,33 @@ def _find_new_exchange_cspecies(species_needing_transport_rxns, sbml_dfs, exchan
     )
 
 
-def _add_new_exchange_cspecies(new_exchange_cspecies, sbml_dfs, exchange_compartment_id, exchange_compartment, gap_filling_source_obj):
+def _add_new_exchange_cspecies(
+    new_exchange_cspecies: set,
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    exchange_compartment_id: str,
+    exchange_compartment: str,
+    gap_filling_source_obj: source.Source,
+) -> pd.DataFrame:
     """
     Add new compartmentalized species to the exchange compartment.
+
+    Parameters
+    ----------
+    new_exchange_cspecies : set
+        Set of s_ids needing new compartmentalized species in the exchange compartment.
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The SBML_dfs object
+    exchange_compartment_id : str
+        The compartment ID for the exchange compartment
+    exchange_compartment : str
+        The name of the exchange compartment
+    gap_filling_source_obj : source.Source
+        Source object for gap-filling
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame of new compartmentalized species to add.
     """
     new_exchange_cspecies_fks = (
         pd.DataFrame({SBML_DFS.S_ID: list(new_exchange_cspecies)})
@@ -208,9 +249,27 @@ def _add_new_exchange_cspecies(new_exchange_cspecies, sbml_dfs, exchange_compart
     return new_exchange_cspecies_fks.set_index(SBML_DFS.SC_ID)
 
 
-def _build_transport_rxn_edgelist(updated_sbml_dfs, species_needing_transport_rxns, exchange_compartment_id):
+def _build_transport_rxn_edgelist(
+    updated_sbml_dfs: sbml_dfs_core.SBML_dfs,
+    species_needing_transport_rxns: np.ndarray,
+    exchange_compartment_id: str,
+) -> pd.DataFrame:
     """
-    Build the edgelist for new transport reactions.
+    Build the edgelist for new transport reactions, ensuring only one reversible reaction per compartment pair.
+
+    Parameters
+    ----------
+    updated_sbml_dfs : sbml_dfs_core.SBML_dfs
+        The updated SBML_dfs object
+    species_needing_transport_rxns : np.ndarray
+        Vector of molecular species (s_ids) with no or insufficient transportation reactions
+    exchange_compartment_id : str
+        The compartment ID for the exchange compartment
+
+    Returns
+    -------
+    pd.DataFrame
+        Edgelist for new transport reactions.
     """
     cspecies_needing_transport = (
         updated_sbml_dfs.compartmentalized_species[
@@ -244,14 +303,35 @@ def _build_transport_rxn_edgelist(updated_sbml_dfs, species_needing_transport_rx
         )
     ]
     transport_rxn_edgelist[SBML_DFS.R_ISREVERSIBLE] = True
-
     return transport_rxn_edgelist.reset_index(drop=True)
 
 
-def _create_new_reactions(transport_rxn_edgelist, sbml_dfs, gap_filling_id_obj, gap_filling_source_obj):
+def _create_new_reactions(
+    transport_rxn_edgelist: pd.DataFrame,
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    gap_filling_id_obj: identifiers.Identifiers,
+    gap_filling_source_obj: source.Source,
+) -> pd.DataFrame:
     """
-    Create new reactions DataFrame.
+    Create new reactions DataFrame for gap-filling transport reactions.
+
+    Parameters
+    ----------
+    transport_rxn_edgelist : pd.DataFrame
+        Edgelist for new transport reactions.
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The SBML_dfs object
+    gap_filling_id_obj : identifiers.Identifiers
+        Identifiers object for gap-filling
+    gap_filling_source_obj : source.Source
+        Source object for gap-filling
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame of new reactions to add.
     """
+    
     existing_r_ids = sbml_dfs_utils.id_formatter_inv(sbml_dfs.reactions.index.tolist())
     existing_r_ids = [x for x in existing_r_ids if x is not np.nan]
     current_max_r_id = max(existing_r_ids) if existing_r_ids else 0
@@ -270,10 +350,26 @@ def _create_new_reactions(transport_rxn_edgelist, sbml_dfs, gap_filling_id_obj, 
     return new_reactions
 
 
-def _create_new_reaction_species(transport_rxn_edgelist, sbml_dfs):
+def _create_new_reaction_species(
+    transport_rxn_edgelist: pd.DataFrame,
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+) -> pd.DataFrame:
     """
-    Create new reaction species DataFrame.
+    Create new reaction species DataFrame for gap-filling transport reactions.
+
+    Parameters
+    ----------
+    transport_rxn_edgelist : pd.DataFrame
+        Edgelist for new transport reactions.
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The SBML_dfs object
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame of new reaction species to add.
     """
+    
     new_reaction_species = pd.concat(
         [
             transport_rxn_edgelist[["sc_id_from", SBML_DFS.R_ID]]
@@ -292,6 +388,7 @@ def _create_new_reaction_species(transport_rxn_edgelist, sbml_dfs):
     existing_rsc_ids = sbml_dfs_utils.id_formatter_inv(
         sbml_dfs.reaction_species.index.tolist()
     )
+    
     # filter np.nan which will be introduced if the key is not the default format
     existing_rsc_ids = [x for x in existing_rsc_ids if x is not np.nan]
     current_max_rsc_id = max(existing_rsc_ids) if existing_rsc_ids else 0
@@ -308,24 +405,19 @@ def _identify_species_needing_transport_reactions(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
 ) -> np.ndarray:
     """
-    Identify Molecular Species Needing Transport Reactions
+    Identify molecular species needing transport reactions so all of the compartments where it exists are connected.
 
-    Determine whether each molecular species has sufficient transport reactions
-    so all of the compartments where it exists are connected.
-
-    Parameters:
-
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    Parameters
+    ----------
+    sbml_dfs : sbml_dfs_core.SBML_dfs
         A mechanistic model containing a set of molecular species which exist
         in multiple compartments and are interconverted by reactions
 
-    Returns:
-
-    species_needing_transport_rxns: np.ndarray
+    Returns
+    -------
+    np.ndarray
         Vector of molecular species (s_ids) with no or insufficient transportation reactions
-
     """
-
     # ensure that all genic reaction species can be produced and transported to each
     # compartment where they should exist.
     # we should be able to follow a directed path from a synthesized protein
@@ -438,31 +530,25 @@ def _identify_species_needing_transport_reactions(
 
 
 def _eval_existing_inter_cspecies_paths(
-    comp_specs: pd.DataFrame, existing_cspecies_paths: pd.DataFrame
+    comp_specs: pd.DataFrame,
+    existing_cspecies_paths: pd.DataFrame,
 ) -> dict:
     """
-    Evaluate Existing Inter Compartmentalized Species Paths
+    Evaluate whether paths between compartments found in _find_existing_inter_cspecies_paths cover all of the compartments where the protein exists.
 
-    Determine whether paths between compartments found in
-    _find_existing_inter_cspecies_paths()
-        cover all of the compartments where the protein exists.
-
-    Parameters:
-
-    comp_specs: pd.DataFrame
+    Parameters
+    ----------
+    comp_specs : pd.DataFrame
         Compartmentalized species for a single s_id
-    existing_cspecies_paths: pd.DataFrame
-        An edgelist of a from and to compartmentalized species
-        and a label of the path connecting them.
+    existing_cspecies_paths : pd.DataFrame
+        An edgelist of a from and to compartmentalized species and a label of the path connecting them.
 
-    Returns:
-
-    species_tranpsort_status: dict
+    Returns
+    -------
+    dict
         type: the status category the species falls in
-        ?msg: an optional message describing the type
-
+        msg: an optional message describing the type
     """
-
     # If the largest connected component includes all compartmentalized species
     # then we can assume that the transportation reactions which exist are adequate. Note that
     # because the subgraph is directed its topology may still be kind of funky.
@@ -510,33 +596,25 @@ def _find_existing_inter_cspecies_paths(
     partial_protein_cspecies: pd.DataFrame,
 ) -> pd.DataFrame | None:
     """
-    Find Existing Inter Compartmentalized Species Paths
+    Find which compartments a protein exists in can be reached from one another by traversing a directed graph of reactions and molecular species including the protein.
 
-    Determine which compartments a protein exists in can be reached from one another by
-        traversing a directed graph of reactions and molecular species including the protein
-        (i.e., paths can involve complexes of the protein of interest).
-
-    Parameters:
-
-    comp_specs: pd.DataFrame
+    Parameters
+    ----------
+    comp_specs : pd.DataFrame
         Compartmentalized species for a single s_id
-    uniprot_id: str
+    uniprot_id : str
         The Uniprot ID for the protein of interest
-    directed_graph: ig.Graph
+    directed_graph : ig.Graph
         An igraph version of the sbml_dfs model
-    partial_protein_cspecies: pd.DataFrame
-        A table of proteins included in each species ID (this includes BQB_HAS_PART
-        qualifiers in addition to the BQB_IS qualifiers which generally define
-        distinct species
+    partial_protein_cspecies : pd.DataFrame
+        A table of proteins included in each species ID (this includes BQB_HAS_PART qualifiers in addition to the BQB_IS qualifiers which generally define distinct species
 
-    Returns:
-
-    existing_cspecies_paths: pd.DataFrame or None
-        An edgelist of a from and to compartmentalized species and a label of the path
-        connecting them.
-
+    Returns
+    -------
+    pd.DataFrame or None
+        An edgelist of a from and to compartmentalized species and a label of the path connecting them.
     """
-
+    
     reaction_vertices = np.where(
         [x == "reaction" for x in directed_graph.vs["node_type"]]
     )[0]
@@ -588,6 +666,14 @@ def _find_existing_inter_cspecies_paths(
 def _log_protein_transport_gapfilling(
     species_transport_status_df: pd.DataFrame,
 ) -> None:
+    """
+    Log summary statistics and example messages for protein transport gapfilling.
+
+    Parameters
+    ----------
+    species_transport_status_df : pd.DataFrame
+        DataFrame summarizing transport status for each species
+    """
     print(
         utils.style_df(
             species_transport_status_df.value_counts("type").to_frame().reset_index(),
