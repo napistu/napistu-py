@@ -196,7 +196,6 @@ PSI_MI_INTACT_SPECIES_TO_BASENAME = {
 
 
 # REACTOME
-REACTOME_SBGN_URL = "https://reactome.org/download/current/homo_sapiens.sbgn.tar.gz"
 REACTOME_SMBL_URL = "https://reactome.org/download/current/all_species.3.1.sbml.tgz"
 REACTOME_PATHWAYS_URL = "https://reactome.org/download/current/ReactomePathways.txt"
 REACTOME_PATHWAY_INDEX_COLUMNS = ["file", "source", "species", "pathway_id", "name"]
