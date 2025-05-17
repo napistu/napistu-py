@@ -25,34 +25,6 @@ from fs import open_fs
 logger = logging.getLogger(__name__)
 
 
-def reactome_sbgn_download(output_dir_path: str, overwrite: bool = False):
-    """
-    Reactome SBGN Download
-
-    Download all human Reactome SBGN (systems biology graphical notation) files.
-
-    Args:
-        output_dir_path (str): Paths to a directory where .sbgn files should be saved.
-        overwrite (bool): Overwrite an existing output directory.
-    """
-    utils.download_and_extract(
-        REACTOME_SBGN_URL,
-        output_dir_path=output_dir_path,
-        overwrite=overwrite,
-    )
-    # create the pathway index
-    pw_index = _build_reactome_pw_index(
-        output_dir_path,
-        file_ext="sbgn",
-        # For sbgn only homo sapiens files are available
-        species_filter=(SPECIES_FULL_NAME_HUMAN,),
-    )
-    # save as tsv
-    out_fs = open_fs(output_dir_path)
-    with out_fs.open("pw_index.tsv", "wb") as index_path:
-        pw_index.to_csv(index_path, sep="\t", index=False)
-
-
 def reactome_sbml_download(output_dir_path: str, overwrite: bool = False):
     """
     Reactome SBML Download
@@ -165,7 +137,7 @@ def _check_reactome_pw_index(pw_index: indices.PWIndex, reactome_pathway_list: l
     # check extension in pw_index
     extn = set([os.path.splitext(x)[1] for x in pw_index["file"]])
     assert len(extn) == 1
-    assert len(extn.intersection(set([".sbgn", ".sbml"]))) == 1
+    assert len(extn.intersection(set([".sbml"]))) == 1
     extn_string = extn.pop()
 
     local_reactome_pws = set(pw_index["pathway_id"])
