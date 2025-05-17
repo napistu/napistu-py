@@ -1865,8 +1865,10 @@ def _resolve_reversibility(
         SBML_DFS.R_ISREVERSIBLE, axis=1
     ).join(r_id_reversibility)
 
-    assert rxns_w_reversibility.shape[0] == rxn_consensus_species.shape[0]
-    assert all(rxns_w_reversibility[SBML_DFS.R_ISREVERSIBLE].isin([True, False]))
+    if rxns_w_reversibility.shape[0] != rxn_consensus_species.shape[0]:
+        raise ValueError("rxns_w_reversibility and rxn_consensus_species must have the same number of rows")
+    if not all(rxns_w_reversibility[SBML_DFS.R_ISREVERSIBLE].isin([True, False])):
+        raise ValueError("All rxns_w_reversibility[R_ISREVERSIBLE] must be True or False")
 
     return rxns_w_reversibility
 

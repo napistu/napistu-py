@@ -229,24 +229,29 @@ def format_uri_url(uri: str) -> dict:
         elif netloc == "www.ensembl.org" and split_path[-1] == "geneview":
             ontology = "ensembl_gene"
             identifier, id_ontology, _ = parse_ensembl_id(result.query)  # type: ignore
-            assert ontology == id_ontology
+            if ontology != id_ontology:
+                raise ValueError(f"Ontology mismatch: expected {ontology}, got {id_ontology}")
         elif netloc == "www.ensembl.org" and split_path[-1] in [
             "transview",
             "Transcript",
         ]:
             ontology = "ensembl_transcript"
             identifier, id_ontology, _ = parse_ensembl_id(result.query)  # type: ignore
-            assert ontology == id_ontology
+            if ontology != id_ontology:
+                raise ValueError(f"Ontology mismatch: expected {ontology}, got {id_ontology}")
         elif netloc == "www.ensembl.org" and split_path[-1] == "ProteinSummary":
             ontology = "ensembl_protein"
             identifier, id_ontology, _ = parse_ensembl_id(result.query)  # type: ignore
-            assert ontology == id_ontology
+            if ontology != id_ontology:
+                raise ValueError(f"Ontology mismatch: expected {ontology}, got {id_ontology}")
         elif netloc == "www.ensembl.org" and (
             re.search("ENS[GTP]", split_path[-1])
             or re.search("ENS[A-Z]{3}[GTP]", split_path[-1])
         ):
             # format ensembl IDs which lack gene/transview
-            identifier, ontology, _ = parse_ensembl_id(split_path[-1])
+            identifier, implied_ontology, _ = parse_ensembl_id(split_path[-1])
+            if implied_ontology != ontology:
+                raise ValueError(f"Implied ontology mismatch: expected {ontology}, got {implied_ontology}")
         elif netloc == "www.mirbase.org" or netloc == "mirbase.org":
             ontology = "mirbase"
             if re.search("MI[0-9]+", split_path[-1]):
@@ -680,7 +685,8 @@ def ensembl_id_to_url_regex(identifier: str, ontology: str) -> tuple[str, str]:
     # extract the species name from the 3 letter species code in the id
     # (these letters are not present for humans)
     identifier, implied_ontology, species = parse_ensembl_id(identifier)  # type: ignore
-    assert implied_ontology == ontology
+    if implied_ontology != ontology:
+        raise ValueError(f"Implied ontology mismatch: expected {ontology}, got {implied_ontology}")
 
     # create an appropriate regex for validating input
     # this provides testing for other identifiers even if it is redundant with other

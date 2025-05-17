@@ -84,7 +84,8 @@ def find_and_prune_neighborhoods(
 
     if isinstance(compartmentalized_species, str):
         compartmentalized_species = [compartmentalized_species]
-    assert isinstance(compartmentalized_species, list)
+    if not isinstance(compartmentalized_species, list):
+        raise TypeError("compartmentalized_species must be a list")
 
     if isinstance(precomputed_distances, pd.DataFrame):
         logger.info("Pre-computed neighbors based on precomputed_distances")
@@ -832,8 +833,8 @@ def add_vertices_uri_urls(
 
     """
 
-    assert isinstance(vertices, pd.DataFrame)
-    assert vertices.shape[0] > 0
+    if vertices.shape[0] <= 0:
+        raise ValueError("vertices must have at least one row")
 
     # add uri urls for each node
 
@@ -880,7 +881,8 @@ def add_vertices_uri_urls(
             [neighborhood_species_aug, neighborhood_reactions]
         ).fillna("")
 
-    assert isinstance(updated_vertices, pd.DataFrame)
+    if not isinstance(updated_vertices, pd.DataFrame):
+        raise TypeError("updated_vertices must be a pandas DataFrame")
     if vertices.shape[0] != updated_vertices.shape[0]:
         raise ValueError("output vertices rows did not match input")
 
@@ -1532,7 +1534,8 @@ def _calculate_path_attrs(
         raise TypeError("neighborhood_paths should be a list of lists of edge indices")
     if not isinstance(vertices, list):
         raise TypeError("vertices should be a list of list of vertices")
-    assert len(vertices) > 0  # control for length zero vertices upstream
+    if len(vertices) <= 0:
+        raise ValueError("vertices must have length greater than zero")
     if len(neighborhood_paths) != len(vertices):
         raise ValueError("vertices and neighborhood_paths were not the same length")
 
@@ -1588,7 +1591,9 @@ def _calculate_path_attrs(
     path_attributes_df = pd.concat([path_attributes_df, edgeles_nodes_df])
     neighborhood_path_entities.update({x: {x} for x in edgeless_nodes})
 
-    assert path_attributes_df.shape[0] == len(neighborhood_paths)
-    assert len(neighborhood_path_entities) == len(neighborhood_paths)
+    if path_attributes_df.shape[0] != len(neighborhood_paths):
+        raise ValueError("path_attributes_df row count must match number of neighborhood_paths")
+    if len(neighborhood_path_entities) != len(neighborhood_paths):
+        raise ValueError("neighborhood_path_entities length must match number of neighborhood_paths")
 
     return path_attributes_df, neighborhood_path_entities

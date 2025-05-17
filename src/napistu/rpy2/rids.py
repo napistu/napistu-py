@@ -67,7 +67,8 @@ def expand_identifiers(
 
     # pull out all identifiers as a pd.DataFrame
     all_entity_identifiers = sbml_dfs.get_identifiers(id_type)
-    assert isinstance(all_entity_identifiers, pd.DataFrame)
+    if not isinstance(all_entity_identifiers, pd.DataFrame):
+        raise TypeError("all_entity_identifiers must be a pandas DataFrame")
 
     if id_type == "species":
         all_entity_identifiers = _check_species_identifiers_entrez_gene_ontology(
@@ -226,8 +227,10 @@ def create_bioconductor_mapping_tables(
 
     """
 
-    assert isinstance(mappings, set)
-    assert isinstance(species, str)
+    if not isinstance(mappings, set):
+        raise TypeError(f"mappings must be a set, but got {type(mappings).__name__}")
+    if not isinstance(species, str):
+        raise TypeError(f"species must be a str, but got {type(species).__name__}")
 
     logger.info(
         f"Creating mapping tables from entrez genes to/from {', '.join(mappings)}"

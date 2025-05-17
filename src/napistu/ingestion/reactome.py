@@ -164,8 +164,10 @@ def _check_reactome_pw_index(pw_index: indices.PWIndex, reactome_pathway_list: l
 
     # check extension in pw_index
     extn = set([os.path.splitext(x)[1] for x in pw_index["file"]])
-    assert len(extn) == 1
-    assert len(extn.intersection(set([".sbgn", ".sbml"]))) == 1
+    if len(extn) != 1:
+        raise ValueError(f"Expected all files to have the same extension, but found extensions: {extn}")
+    if len(extn.intersection({'.sbgn', '.sbml'})) != 1:
+        raise ValueError(f"Expected all files to have the .sbgn or .sbml extension, but found: {extn}")
     extn_string = extn.pop()
 
     local_reactome_pws = set(pw_index["pathway_id"])

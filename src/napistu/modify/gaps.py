@@ -224,7 +224,8 @@ def update_sbml_df_with_exchange(
     # we should add two reactions for each non-exchange compartment cspecies
     # one transporting from the exchange compartment and one transporting into the
     # exchange compartment
-    assert transport_rxn_edgelist.shape[0] == 2 * non_exchange_cspecies.shape[0]
+    if transport_rxn_edgelist.shape[0] != 2 * non_exchange_cspecies.shape[0]:
+        raise ValueError(f"Expected transport_rxn_edgelist to have {2 * non_exchange_cspecies.shape[0]} rows, but got {transport_rxn_edgelist.shape[0]}")
 
     # the rows in this edgelist correspond to new reactions that we'll add
     # to the model
