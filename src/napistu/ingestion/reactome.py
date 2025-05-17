@@ -17,9 +17,7 @@ from napistu.consensus import construct_sbml_dfs_dict
 from napistu.ingestion.constants import REACTOME_PATHWAY_INDEX_COLUMNS
 from napistu.ingestion.constants import REACTOME_PATHWAY_LIST_COLUMNS
 from napistu.ingestion.constants import REACTOME_PATHWAYS_URL
-from napistu.ingestion.constants import REACTOME_SBGN_URL
 from napistu.ingestion.constants import REACTOME_SMBL_URL
-from napistu.ingestion.constants import SPECIES_FULL_NAME_HUMAN
 from fs import open_fs
 
 logger = logging.getLogger(__name__)
