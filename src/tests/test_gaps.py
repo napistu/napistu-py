@@ -65,8 +65,16 @@ def _create_sbml_dfs_missing_transport_rxns():
 
     return sbml_dfs
 
+
 def test_add_transportation_reactions():
 
     sbml_dfs = _create_sbml_dfs_missing_transport_rxns()
     sbml_dfs_w_transport = gaps.update_sbml_df_with_exchange(np.array(["s_A"]), sbml_dfs, exchange_compartment="cytosol")
     assert sbml_dfs_w_transport.reactions.shape[0] == 4, "Should add 2 reactions"
+    assert sbml_dfs_w_transport.reactions[SBML_DFS.R_ISREVERSIBLE].all(), "Should be reversible"
+
+
+def test_identify_species_needing_transport_reactions(sbml_dfs):
+    result = gaps._identify_species_needing_transport_reactions(sbml_dfs)
+    assert isinstance(result, np.ndarray)
+    assert result.size == 0  # or: assert (result == np.array([], dtype=object)).all()

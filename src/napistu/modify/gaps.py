@@ -227,36 +227,24 @@ def _build_transport_rxn_edgelist(updated_sbml_dfs, species_needing_transport_rx
     non_exchange_cspecies = cspecies_needing_transport[
         cspecies_needing_transport[SBML_DFS.C_ID] != exchange_compartment_id
     ].drop(SBML_DFS.C_ID, axis=1)
-    transport_rxn_edgelist = pd.concat(
-        [
-            exchange_cspecies.rename(
-                {SBML_DFS.SC_ID: "sc_id_from", SBML_DFS.SC_NAME: "sc_name_from"}, axis=1
-            ).merge(
-                non_exchange_cspecies.rename(
-                    {SBML_DFS.SC_ID: "sc_id_to", SBML_DFS.SC_NAME: "sc_name_to"}, axis=1
-                )
-            ),
-            # non-exchange compartment -> exchange compartment
+    transport_rxn_edgelist = (
+        exchange_cspecies
+        .rename({SBML_DFS.SC_ID: "sc_id_from", SBML_DFS.SC_NAME: "sc_name_from"}, axis=1)
+        .merge(
             non_exchange_cspecies.rename(
-                {SBML_DFS.SC_ID: "sc_id_from", SBML_DFS.SC_NAME: "sc_name_from"}, axis=1
-            ).merge(
-                exchange_cspecies.rename(
-                    {SBML_DFS.SC_ID: "sc_id_to", SBML_DFS.SC_NAME: "sc_name_to"}, axis=1
-                )
-            ),
-        ]
-    )
-    if transport_rxn_edgelist.shape[0] != 2 * non_exchange_cspecies.shape[0]:
-        raise ValueError(
-            f"Undefined behavior: expected {2 * non_exchange_cspecies.shape[0]} transport reactions, "
-            f"but got {transport_rxn_edgelist.shape[0]}. This likely indicates a logic error in building the transport reaction edgelist."
+                {SBML_DFS.SC_ID: "sc_id_to", SBML_DFS.SC_NAME: "sc_name_to"}, axis=1
+            )
         )
+    )
+    
     transport_rxn_edgelist[SBML_DFS.R_NAME] = [
-        f"{x} -> {y} gap-filling transport"
+        f"{x} <-> {y} gap-filling transport"
         for x, y in zip(
             transport_rxn_edgelist["sc_name_from"], transport_rxn_edgelist["sc_name_to"]
         )
     ]
+    transport_rxn_edgelist[SBML_DFS.R_ISREVERSIBLE] = True
+
     return transport_rxn_edgelist.reset_index(drop=True)
 
 
@@ -274,7 +262,7 @@ def _create_new_reactions(transport_rxn_edgelist, sbml_dfs, gap_filling_id_obj, 
         new_int_ids, id_type=SBML_DFS.R_ID
     )
     new_reactions = (
-        transport_rxn_edgelist[[SBML_DFS.R_ID, SBML_DFS.R_NAME]]
+        transport_rxn_edgelist[[SBML_DFS.R_ID, SBML_DFS.R_NAME, SBML_DFS.R_ISREVERSIBLE]]
         .set_index(SBML_DFS.R_ID)
         .assign(r_Identifiers=gap_filling_id_obj)
         .assign(r_Source=gap_filling_source_obj)
@@ -427,7 +415,7 @@ def _identify_species_needing_transport_reactions(
     species_transport_status_df = pd.DataFrame(species_transport_status_dict_list)
 
     # optional logging
-    # logger.info(_log_protein_transport_gapfilling(species_transport_status_df))
+    logger.debug(_log_protein_transport_gapfilling(species_transport_status_df))
 
     # define proteins which whose compartmentalized forms are not connected
     proteins_needing_transport_rxns = species_transport_status_df[
