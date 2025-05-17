@@ -3,11 +3,13 @@ import pytest
 import types
 import pandas as pd
 import numpy as np
+import warnings
 
 import pandas as pd
 from napistu.sbml_dfs_core import SBML_dfs
 from napistu.constants import SBML_DFS
 from napistu.constants import MINI_SBO_FROM_NAME
+from napistu.identifiers import Identifiers
 
 from napistu.modify import gaps
 
@@ -23,7 +25,7 @@ def _create_sbml_dfs_missing_transport_rxns():
     # Minimal species table
     species = pd.DataFrame({
         SBML_DFS.S_NAME: ["A"],
-        SBML_DFS.S_IDENTIFIERS: [None],
+        SBML_DFS.S_IDENTIFIERS: [Identifiers([{"ontology": "uniprot", "identifier": "PFAKE1", "bqb": "BQB_IS", "url": None}])],
         SBML_DFS.S_SOURCE: [None]
     }, index=["s_A"]).rename_axis(SBML_DFS.S_ID)
 
@@ -77,4 +79,12 @@ def test_add_transportation_reactions():
 def test_identify_species_needing_transport_reactions(sbml_dfs):
     result = gaps._identify_species_needing_transport_reactions(sbml_dfs)
     assert isinstance(result, np.ndarray)
-    assert result.size == 0  # or: assert (result == np.array([], dtype=object)).all()
+    assert result.size == 0 
+
+    sbml_dfs = _create_sbml_dfs_missing_transport_rxns()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        result = gaps._identify_species_needing_transport_reactions(sbml_dfs)
+    assert isinstance(result, np.ndarray)
+    assert result.size == 1
+    assert result[0] == "s_A"
