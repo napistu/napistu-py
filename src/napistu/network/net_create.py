@@ -630,12 +630,11 @@ def _create_cpr_graph_tiered(
     invalid_sbo_terms = sbml_dfs.reaction_species[
         ~sbml_dfs.reaction_species[SBML_DFS.SBO_TERM].isin(MINI_SBO_TO_NAME.keys())
     ]
-    assert isinstance(invalid_sbo_terms, pd.DataFrame)
 
     if invalid_sbo_terms.shape[0] != 0:
         invalid_counts = invalid_sbo_terms.value_counts(SBML_DFS.SBO_TERM).to_frame("N")
-        assert isinstance(invalid_counts, pd.DataFrame)
-
+        if not isinstance(invalid_counts, pd.DataFrame):
+            raise TypeError("invalid_counts must be a pandas DataFrame")
         logger.warning(utils.style_df(invalid_counts, headers="keys"))  # type: ignore
         raise ValueError("Some reaction species have unusable SBO terms")
 
@@ -788,9 +787,12 @@ def _format_tiered_reaction_species(
     """
 
     rxn_species = sorted_reaction_species.loc[r_id]
-    assert isinstance(rxn_species, pd.DataFrame)
-    assert list(rxn_species.index.names) == [SBML_DFS.SBO_TERM]
-    assert rxn_species.columns.tolist() == [SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY]
+    if not isinstance(rxn_species, pd.DataFrame):
+        raise TypeError("rxn_species must be a pandas DataFrame")
+    if list(rxn_species.index.names) != [SBML_DFS.SBO_TERM]:
+        raise ValueError("rxn_species index names must be [SBML_DFS.SBO_TERM]")
+    if rxn_species.columns.tolist() != [SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY]:
+        raise ValueError("rxn_species columns must be [SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY]")
 
     rxn_sbo_terms = set(rxn_species.index.unique())
     # map to common names
@@ -829,7 +831,8 @@ def _format_tiered_reaction_species(
     )
     ordered_tiers = entities_ordered_by_tier.index.get_level_values("tier").unique()
 
-    assert len(ordered_tiers) > 1
+    if len(ordered_tiers) <= 1:
+        raise ValueError("ordered_tiers must have more than one element")
 
     # which tier is the reaction?
     reaction_tier = graph_hierarchy_df["tier"][
@@ -1603,7 +1606,8 @@ def _reverse_network_edges(augmented_network_edges: pd.DataFrame) -> pd.DataFram
         ]
     )
 
-    assert transformed_r_reaction_edges.shape[0] == r_reaction_edges.shape[0]
+    if transformed_r_reaction_edges.shape[0] != r_reaction_edges.shape[0]:
+        raise ValueError("transformed_r_reaction_edges and r_reaction_edges must have the same number of rows")
 
     return transformed_r_reaction_edges.assign(
         direction=CPR_GRAPH_EDGE_DIRECTIONS.REVERSE

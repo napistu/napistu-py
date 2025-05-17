@@ -808,14 +808,14 @@ def format_identifiers_as_edgelist(
             values of the index and defining_vars
     """
 
-    assert isinstance(df, pd.DataFrame)
     # requires a named index by convention
     if None in df.index.names:
         raise ValueError(
             "df did not have a named index. A named index or multindex is expected"
         )
 
-    assert isinstance(defining_vars, list)
+    if not isinstance(defining_vars, list):
+        raise TypeError("defining_vars must be a list")
 
     logger.info(
         f"creating an edgelist linking index levels {', '.join(df.index.names)} and linking it "
@@ -841,14 +841,15 @@ def format_identifiers_as_edgelist(
     return df
 
 
-def find_weakly_connected_subgraphs(edgelist):
+def find_weakly_connected_subgraphs(edgelist: pd.DataFrame) -> pd.DataFrame:
     """Find all cliques of loosly connected components."""
 
-    assert isinstance(edgelist, pd.DataFrame)
-    assert edgelist.shape[1] == 2
-    assert edgelist.columns.tolist() == ["ind", "id"]
-    # at least some entries in ind should start with ind because this is how we'll pull them out
-    assert any(edgelist["ind"].str.startswith("ind"))
+    if edgelist.shape[1] != 2:
+        raise ValueError("edgelist must have exactly 2 columns")
+    if edgelist.columns.tolist() != ["ind", "id"]:
+        raise ValueError("edgelist columns must be ['ind', 'id']")
+    if not any(edgelist["ind"].str.startswith("ind")):
+        raise ValueError("At least some entries in 'ind' must start with 'ind'")
 
     id_graph = ig.Graph.TupleList(edgelist.itertuples(index=False))
 

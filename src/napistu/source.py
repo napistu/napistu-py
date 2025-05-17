@@ -191,7 +191,8 @@ def unnest_sources(
         # check that the entries of sourcevar are Source objects
         source_value = source_table[source_var].iloc[i]
 
-        assert isinstance(source_value, Source)
+        if not isinstance(source_value, Source):
+            raise TypeError(f"source_value must be a Source, but got {type(source_value).__name__}")
 
         if source_value.source is None:
             print("Some sources were only missing - returning None")
@@ -310,7 +311,8 @@ def _deduplicate_source_df(source_df: pd.DataFrame, table_schema: dict) -> pd.Da
     )
 
     category_index = membership_categories.index.unique()
-    assert isinstance(category_index, pd.core.indexes.base.Index)
+    if not isinstance(category_index, pd.core.indexes.base.Index):
+        raise TypeError(f"category_index must be a pandas Index, but got {type(category_index).__name__}")
 
     merged_sources = pd.concat(
         [

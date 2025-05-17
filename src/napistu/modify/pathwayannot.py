@@ -1306,9 +1306,10 @@ def _merge_reactome_crossref_ids(
     ].drop("_merge", axis=1)
 
     merged_crossrefs = pd.concat([uni_rct_with_crossrefs, uni_no_rct_with_crossrefs])
-    assert (
+    if not (
         uni_rct_with_crossrefs.shape[0] + uni_no_rct_with_crossrefs.shape[0]
-    ) == merged_crossrefs.shape[0]
+    ) == merged_crossrefs.shape[0]:
+        raise ValueError("The number of merged crossrefs does not match the sum of the number of uniprot + reactome crossrefs and uniprot-only crossrefs")
 
     species_with_protein_and_no_gene = current_molecular_ids[
         current_molecular_ids[IDENTIFIERS.ONTOLOGY] == ONTOLOGIES.UNIPROT
