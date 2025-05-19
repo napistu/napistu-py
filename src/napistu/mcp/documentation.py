@@ -6,7 +6,8 @@ from typing import Dict, List, Any, Optional
 import os
 import json
 
-from napistu.mcp.utils import documentation as docs_utils
+from napistu.mcp import documentation_utils
+from napistu.mcp.constants import READMES
 
 # Global cache for documentation content
 _docs_cache = {
@@ -29,12 +30,9 @@ async def initialize_components(mcp, config):
     """
     global _docs_cache
     
-    # Load documentation if paths provided
-    docs_paths = config.get("docs_paths")
-    if docs_paths:
-        for path in docs_paths:
-            if path.endswith('.md'):
-                _docs_cache["readme"][os.path.basename(path)] = await docs_utils.load_readme_content(path)
+    # Load documentation from the READMES dict
+    for name, url in READMES.items():
+        _docs_cache["readme"][name] = await documentation_utils.load_readme_content(url)
     
     # Return True to indicate successful initialization
     return True
@@ -100,7 +98,7 @@ def register_components(mcp, docs_paths=None):
             if query.lower() in content.lower():
                 results["readme"].append({
                     "name": readme_name,
-                    "snippet": docs_utils.get_snippet(content, query),
+                    "snippet": documentation_utils.get_snippet(content, query),
                 })
         
         return results

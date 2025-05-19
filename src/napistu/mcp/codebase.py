@@ -3,10 +3,9 @@ Codebase exploration components for the Napistu MCP server.
 """
 
 from typing import Dict, List, Any, Optional
-from mcp import tool, resource
 import json
 
-from napistu.mcp.utils import codebase as codebase_utils
+from napistu.mcp import codebase_utils
 
 # Global cache for codebase information
 _codebase_cache = {
@@ -14,6 +13,16 @@ _codebase_cache = {
     "classes": {},
     "functions": {},
 }
+
+async def initialize_components(mcp, config):
+    """
+    Initialize codebase components.
+    """
+    global _codebase_cache
+    codebase_path = config.get("codebase_path")
+    if codebase_path:
+        _codebase_cache = await codebase_utils.scan_codebase(codebase_path)
+    return True
 
 def register_components(mcp, codebase_path=None):
     """
@@ -28,7 +37,7 @@ def register_components(mcp, codebase_path=None):
     # Scan codebase if path provided
     if codebase_path:
         async def _scan_codebase():
-            nonlocal _codebase_cache
+            global _codebase_cache
             _codebase_cache = await codebase_utils.scan_codebase(codebase_path)
         
         # Schedule codebase scanning

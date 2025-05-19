@@ -50,7 +50,7 @@ if is_available:
     # Helper function for registering objects with a running server
     def register_object(name, obj):
         """Register an object with the execution component."""
-        from .components.execution import register_object as _register
+        from .execution import register_object as _register
         return _register(name, obj)
 
 else:

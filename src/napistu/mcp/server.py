@@ -2,18 +2,15 @@
 Core MCP server implementation for Napistu.
 """
 
-try:
-    from mcp.server.fastmcp import FastMCP
-except ImportError:
-    raise ImportError(
-        "MCP support not installed. Install with 'pip install napistu[mcp]'"
-    )
-
-from typing import Dict, Any, Optional
+from typing import Dict, List, Any, Optional
+from mcp.server import FastMCP
 import asyncio
 
-from .profiles import ServerProfile
-from .components import documentation, codebase, execution, tutorials
+from napistu.mcp import codebase
+from napistu.mcp import documentation
+from napistu.mcp import execution
+
+from napistu.mcp.profiles import ServerProfile
 
 def create_server(profile: Optional[ServerProfile] = None, **kwargs) -> FastMCP:
     """
@@ -34,6 +31,9 @@ def create_server(profile: Optional[ServerProfile] = None, **kwargs) -> FastMCP:
     
     # Create the server
     mcp = FastMCP(config["server_name"])
+    
+    # Import components only when needed to avoid circular imports
+    from . import tutorials
     
     # Add components based on configuration
     if config["enable_documentation"]:
@@ -63,7 +63,6 @@ def create_server(profile: Optional[ServerProfile] = None, **kwargs) -> FastMCP:
     
     return mcp
 
-
 async def start_server(server):
     """
     Start the MCP server with proper initialization.
@@ -71,20 +70,24 @@ async def start_server(server):
     Args:
         server: FastMCP server instance
     """
-    config = server.config
+    # Get the configuration (adjust based on how FastMCP stores config)
+    config = getattr(server, "settings", {})
+    
+    # Import components only when needed to avoid circular imports
+    from . import tutorials
     
     # Initialize components
-    if config.get("enable_documentation"):
+    if getattr(config, "enable_documentation", False):
         await documentation.initialize_components(server, config)
     
-    if config.get("enable_codebase"):
+    if getattr(config, "enable_codebase", False):
         await codebase.initialize_components(server, config)
     
-    if config.get("enable_tutorials"):
+    if getattr(config, "enable_tutorials", False):
         await tutorials.initialize_components(server, config)
     
-    if config.get("enable_execution"):
+    if getattr(config, "enable_execution", False):
         await execution.initialize_components(server, config)
     
     # Start the server
-    await server.start()
+    await server.run()  # Using run() method based on available methods

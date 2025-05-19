@@ -3,15 +3,29 @@ Tutorial components for the Napistu MCP server.
 """
 
 from typing import Dict, List, Any, Optional
-from mcp import tool, resource
 
-from napistu.mcp.utils import tutorials as tutorials_utils
+from napistu.mcp import tutorials_utils
 
 # Global cache for tutorial content
 _tutorial_cache = {
     "index": [],
     "content": {},
 }
+
+async def initialize_components(mcp, config):
+    """
+    Initialize tutorial components.
+    """
+    global _tutorial_cache
+    tutorials_path = config.get("tutorials_path")
+    if tutorials_path:
+        tutorial_index = await tutorials_utils.load_tutorial_index(tutorials_path)
+        _tutorial_cache["index"] = tutorial_index
+        for tutorial in tutorial_index:
+            tutorial_id = tutorial["id"]
+            content = await tutorials_utils.get_tutorial_content(tutorials_path, tutorial_id)
+            _tutorial_cache["content"][tutorial_id] = content
+    return True
 
 def register_components(mcp, tutorials_path=None):
     """
@@ -26,7 +40,7 @@ def register_components(mcp, tutorials_path=None):
     # Load tutorials if path provided
     if tutorials_path:
         async def _load_tutorials():
-            nonlocal _tutorial_cache
+            global _tutorial_cache
             tutorial_index = await tutorials_utils.load_tutorial_index(tutorials_path)
             _tutorial_cache["index"] = tutorial_index
             

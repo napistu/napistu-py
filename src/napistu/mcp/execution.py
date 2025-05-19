@@ -3,13 +3,27 @@ Function execution components for the Napistu MCP server.
 """
 
 from typing import Dict, List, Any, Optional
-from mcp import tool, resource
 import inspect
 import json
 
 # Global storage for session context and objects
 _session_context = {}
 _session_objects = {}
+
+async def initialize_components(mcp, config):
+    """
+    Initialize execution components.
+    """
+    global _session_context, _session_objects
+    session_context = config.get("session_context")
+    object_registry = config.get("object_registry")
+    if session_context:
+        _session_context = session_context
+    if object_registry:
+        _session_objects = object_registry
+    import napistu
+    _session_context["napistu"] = napistu
+    return True
 
 def register_object(name: str, obj: Any) -> None:
     """
@@ -41,12 +55,8 @@ def register_components(mcp, session_context=None, object_registry=None):
     if object_registry:
         _session_objects = object_registry
     
-    # Import Napistu modules if available
-    try:
-        import napistu
-        _session_context["napistu"] = napistu
-    except ImportError:
-        print("Warning: Napistu package not found. Some functionality may be limited.")
+    import napistu
+    _session_context["napistu"] = napistu
     
     # Register resources
     @mcp.resource("napistu-local://registry")
