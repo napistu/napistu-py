@@ -1,7 +1,37 @@
 
 import os
+from types import SimpleNamespace
 
 from napistu.constants import PACKAGE_DEFS
+
+MCP_COMPONENTS = SimpleNamespace(
+    CODEBASE="codebase",
+    DOCUMENTATION="documentation",
+    EXECUTION="execution",
+    TUTORIALS="tutorials",
+)
+
+DOCUMENTATION = SimpleNamespace(
+    README="readme",
+    WIKI="wiki",
+    ISSUES="issues",
+    PRS="prs",
+    PACKAGEDOWN="packagedown",
+)
+
+EXECUTION = SimpleNamespace(
+    NOTEBOOKS="notebooks",
+)
+
+TUTORIALS = SimpleNamespace(
+    TUTORIALS="tutorials",
+)
+
+TOOL_VARS = SimpleNamespace(
+    NAME="name",
+    SNIPPET="snippet",
+)
+
 
 READMES = {
     "napistu": "https://raw.githubusercontent.com/napistu/napistu/main/README.md",
@@ -40,4 +70,4 @@ TUTORIAL_URLS = {
     "working_with_genome_scale_networks" : "https://raw.githubusercontent.com/napistu/napistu/refs/heads/main/tutorials/working_with_genome_scale_networks.ipynb",
 }
 
-TUTORIALS_CACHE_DIR = os.path.join(PACKAGE_DEFS.CACHE_DIR, "tutorials")
+TUTORIALS_CACHE_DIR = os.path.join(PACKAGE_DEFS.CACHE_DIR, TUTORIALS.TUTORIALS)

@@ -10,6 +10,7 @@ from typing import Optional
 
 from napistu import utils
 from napistu.gcs.constants import GCS_ASSETS
+
 from napistu.gcs.constants import INIT_DATA_DIR_MSG
 from napistu.gcs.utils import _initialize_data_dir
 

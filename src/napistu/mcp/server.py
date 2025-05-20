@@ -9,6 +9,7 @@ import asyncio
 from napistu.mcp import codebase
 from napistu.mcp import documentation
 from napistu.mcp import execution
+from napistu.mcp import tutorials
 
 from napistu.mcp.profiles import ServerProfile
 
@@ -32,9 +33,6 @@ def create_server(profile: Optional[ServerProfile] = None, **kwargs) -> FastMCP:
     # Create the server
     mcp = FastMCP(config["server_name"])
     
-    # Import components only when needed to avoid circular imports
-    from . import tutorials
-    
     # Add components based on configuration
     if config["enable_documentation"]:
         documentation.register_components(mcp)
@@ -50,10 +48,7 @@ def create_server(profile: Optional[ServerProfile] = None, **kwargs) -> FastMCP:
         )
     
     if config["enable_tutorials"]:
-        tutorials.register_components(
-            mcp, 
-            tutorials_path=config["tutorials_path"]
-        )
+        tutorials.register_components(mcp)
     
     return mcp
 
@@ -66,9 +61,6 @@ async def start_server(server):
     """
     # Get the configuration (adjust based on how FastMCP stores config)
     config = getattr(server, "settings", {})
-    
-    # Import components only when needed to avoid circular imports
-    from . import tutorials
     
     # Initialize components
     if getattr(config, "enable_documentation", False):

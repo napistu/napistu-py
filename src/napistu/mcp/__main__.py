@@ -168,7 +168,7 @@ def list_components():
 )
 @click_logging.simple_verbosity_option(logger)
 def custom_server(enable_documentation, enable_codebase, enable_execution, 
-                  enable_tutorials, server_name, tutorials_path):
+                  enable_tutorials, server_name):
     """Start an MCP server with custom component configuration."""
     # Collect configuration
     config = {"server_name": server_name}
@@ -180,8 +180,6 @@ def custom_server(enable_documentation, enable_codebase, enable_execution,
         config["enable_execution"] = enable_execution
     if enable_tutorials is not None:
         config["enable_tutorials"] = enable_tutorials
-    if tutorials_path:
-        config["tutorials_path"] = tutorials_path
     
     # Create a custom profile
     server_profile = ServerProfile(**config)

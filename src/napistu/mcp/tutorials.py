@@ -3,110 +3,121 @@ Tutorial components for the Napistu MCP server.
 """
 
 from typing import Dict, List, Any, Optional
+import logging
+
+from fastmcp import FastMCP
 
 from napistu.mcp import tutorials_utils
 from napistu.mcp import utils as mcp_utils
+from napistu.mcp.constants import TUTORIALS
+from napistu.mcp.constants import TUTORIAL_URLS
+from napistu.mcp.constants import TOOL_VARS
 
 # Global cache for tutorial content
-_tutorial_cache = {
-    "index": [],
-    "content": {},
+_tutorial_cache: Dict[str, Dict[str, str]] = {
+    TUTORIALS.TUTORIALS: {},
 }
 
-async def initialize_components(mcp, config):
+logger = logging.getLogger(__name__)
+
+async def initialize_components(mcp: FastMCP) -> bool:
     """
-    Initialize tutorial components.
+    Initialize tutorial components by preloading all tutorials into the cache.
+
+    Parameters
+    ----------
+    mcp : FastMCP
+        The FastMCP server instance.
+
+    Returns
+    -------
+    bool
+        True if initialization is successful.
     """
     global _tutorial_cache
-    tutorials_path = config.get("tutorials_path")
-    if tutorials_path:
-        tutorial_index = await tutorials_utils.load_tutorial_index(tutorials_path)
-        _tutorial_cache["index"] = tutorial_index
-        for tutorial in tutorial_index:
-            tutorial_id = tutorial["id"]
-            content = await tutorials_utils.get_tutorial_content(tutorials_path, tutorial_id)
-            _tutorial_cache["content"][tutorial_id] = content
+    
+    for k, v in TUTORIAL_URLS.items():
+        _tutorial_cache[TUTORIALS.TUTORIALS][k] = await tutorials_utils.get_tutorial_markdown(k)
     return True
 
-def register_components(mcp, tutorials_path=None):
+def register_components(mcp: FastMCP) -> None:
     """
     Register tutorial components with the MCP server.
-    
-    Args:
-        mcp: FastMCP server instance
-        tutorials_path: Path to the tutorials directory
+
+    Parameters
+    ----------
+    mcp : FastMCP
+        FastMCP server instance.
     """
-    global _tutorial_cache
-    
-    # Load tutorials if path provided
-    if tutorials_path:
-        async def _load_tutorials():
-            global _tutorial_cache
-            tutorial_index = await tutorials_utils.load_tutorial_index(tutorials_path)
-            _tutorial_cache["index"] = tutorial_index
-            
-            # Preload tutorial content
-            for tutorial in tutorial_index:
-                tutorial_id = tutorial["id"]
-                content = await tutorials_utils.get_tutorial_content(tutorials_path, tutorial_id)
-                _tutorial_cache["content"][tutorial_id] = content
-        
-        # Schedule tutorial loading
-        import asyncio
-        asyncio.create_task(_load_tutorials())
-    
     # Register resources
     @mcp.resource("napistu://tutorials/index")
     async def get_tutorial_index() -> List[Dict[str, Any]]:
         """
         Get the index of all available tutorials.
+
+        Returns
+        -------
+        List[dict]
+            List of dictionaries with tutorial IDs and URLs.
         """
-        return _tutorial_cache["index"]
-    
+        return [
+            {"id": tutorial_id, "url": url}
+            for tutorial_id, url in TUTORIAL_URLS.items()
+        ]
+
     @mcp.resource("napistu://tutorials/content/{tutorial_id}")
     async def get_tutorial_content_resource(tutorial_id: str) -> Dict[str, Any]:
         """
-        Get the content of a specific tutorial.
-        
-        Args:
-            tutorial_id: ID of the tutorial
+        Get the content of a specific tutorial as markdown.
+
+        Parameters
+        ----------
+        tutorial_id : str
+            ID of the tutorial.
+
+        Returns
+        -------
+        dict
+            Dictionary with markdown content and format.
+
+        Raises
+        ------
+        Exception
+            If the tutorial cannot be loaded.
         """
-        if tutorial_id not in _tutorial_cache["content"]:
-            return {"error": f"Tutorial {tutorial_id} not found"}
-        
+        content = _tutorial_cache[TUTORIALS.TUTORIALS].get(tutorial_id)
+        if content is None:
+            try:
+                content = await tutorials_utils.get_tutorial_markdown(tutorial_id)
+                _tutorial_cache[TUTORIALS.TUTORIALS][tutorial_id] = content
+            except Exception as e:
+                logger.error(f"Tutorial {tutorial_id} could not be loaded: {e}")
+                raise
         return {
-            "content": _tutorial_cache["content"][tutorial_id],
-            "format": "jupyter_notebook",
+            "content": content,
+            "format": "markdown",
         }
-    
-    # Register tools
+
     @mcp.tool()
     async def search_tutorials(query: str) -> List[Dict[str, Any]]:
         """
         Search tutorials for a specific query.
-        
-        Args:
-            query: Search term
-        
-        Returns:
-            List of matching tutorials with metadata
+
+        Parameters
+        ----------
+        query : str
+            Search term.
+
+        Returns
+        -------
+        List[dict]
+            List of matching tutorials with metadata and snippet.
         """
-        results = []
-        
-        # Search tutorial index
-        for tutorial in _tutorial_cache["index"]:
-            tutorial_id = tutorial["id"]
-            tutorial_content = _tutorial_cache["content"].get(tutorial_id, "")
-            
-            # Check if query matches title, description, or content
-            if (query.lower() in tutorial["title"].lower() or
-                query.lower() in tutorial.get("description", "").lower() or
-                query.lower() in tutorial_content.lower()):
+        results: List[Dict[str, Any]] = []
+        for tutorial_id, content in _tutorial_cache[TUTORIALS.TUTORIALS].items():
+            if query.lower() in content.lower():
                 results.append({
-                    "id": tutorial_id,
-                    "title": tutorial["title"],
-                    "description": tutorial.get("description", ""),
-                    "snippet": mcp_utils.get_snippet(tutorial_content, query) if tutorial_content else "",
+                    TOOL_VARS.ID: tutorial_id,
+                    TOOL_VARS.SNIPPET: mcp_utils.get_snippet(content, query),
                 })
-        
         return results
