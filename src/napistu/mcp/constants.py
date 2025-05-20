@@ -1,3 +1,5 @@
+from napistu.constants import PACKAGE_DEFS
+
 READMES = {
     "napistu": "https://raw.githubusercontent.com/napistu/napistu/main/README.md",
     "napistu-py": "https://raw.githubusercontent.com/napistu/napistu-py/main/README.md",
@@ -10,3 +12,15 @@ WIKI_ROOT = "https://raw.githubusercontent.com/napistu/napistu/main/docs/wiki"
 NAPISTU_PY_READTHEDOCS = "https://napistu.readthedocs.io/en/latest"
 NAPISTU_PY_READTHEDOCS_API = NAPISTU_PY_READTHEDOCS + '/api.html'
 READTHEDOCS_TOC_CSS_SELECTOR = "td"
+
+DEFAULT_GITHUB_API = "https://api.github.com"
+
+REPOS_WITH_ISSUES = [
+    PACKAGE_DEFS.GITHUB_PROJECT_REPO,
+    PACKAGE_DEFS.GITHUB_PROJECT_REPO_PY,
+    PACKAGE_DEFS.GITHUB_PROJECT_REPO_R,
+]
+
+REPOS_WITH_WIKI = [
+    PACKAGE_DEFS.GITHUB_PROJECT_REPO
+]

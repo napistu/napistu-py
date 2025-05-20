@@ -6,19 +6,26 @@ from typing import Dict, List, Any, Optional
 import os
 import json
 
+from fastmcp import FastMCP
+
 from napistu.mcp import documentation_utils
+from napistu.mcp import github
+
 from napistu.mcp.constants import READMES
 from napistu.mcp.constants import NAPISTU_PY_READTHEDOCS_API
+from napistu.mcp.constants import REPOS_WITH_ISSUES
 
 # Global cache for documentation content
 _docs_cache = {
     "readme": {},
     "readthedocs": {},
     "wiki": {},
+    "issues": {},
+    "prs": {},
     "packagedown": {},
 }
 
-async def initialize_components(mcp, config):
+async def initialize_components(mcp: FastMCP, config: dict) -> bool:
     """
     Initialize documentation components.
     
@@ -38,10 +45,15 @@ async def initialize_components(mcp, config):
     # Load documentation from the ReadTheDocs API
     _docs_cache["readthedocs"] = await documentation_utils.read_read_the_docs(NAPISTU_PY_READTHEDOCS_API)
 
+    # Load issue and PR summaries with the GitHub API
+    for repo in REPOS_WITH_ISSUES:
+        _docs_cache["issues"][repo] = await github.list_issues(repo)
+        _docs_cache["prs"][repo] = await github.list_pull_requests(repo)
+
     # Return True to indicate successful initialization
     return True
 
-def register_components(mcp):
+def register_components(mcp: FastMCP):
     """
     Register documentation components with the MCP server.
     
@@ -95,6 +107,44 @@ def register_components(mcp):
         Get the full parsed ReadTheDocs documentation tree.
         """
         return _docs_cache["readthedocs"]
+
+    @mcp.resource("napistu://documentation/issues/{repo}")
+    async def get_issues(repo: str):
+        """
+        Get the list of issues for a given repository.
+        """
+        return _docs_cache["issues"].get(repo, [])
+
+    @mcp.resource("napistu://documentation/prs/{repo}")
+    async def get_prs(repo: str):
+        """
+        Get the list of pull requests for a given repository.
+        """
+        return _docs_cache["prs"].get(repo, [])
+
+    @mcp.resource("napistu://documentation/issue/{repo}/{number}")
+    async def get_issue_resource(repo: str, number: int):
+        """
+        Get a single issue by number for a given repository.
+        """
+        # Try cache first
+        cached = next((i for i in _docs_cache["issues"].get(repo, []) if i["number"] == number), None)
+        if cached:
+            return cached
+        # Fallback to live fetch
+        return await github.get_issue(repo, number)
+
+    @mcp.resource("napistu://documentation/pr/{repo}/{number}")
+    async def get_pr_resource(repo: str, number: int):
+        """
+        Get a single pull request by number for a given repository.
+        """
+        # Try cache first
+        cached = next((pr for pr in _docs_cache["prs"].get(repo, []) if pr["number"] == number), None)
+        if cached:
+            return cached
+        # Fallback to live fetch
+        return await github.get_issue(repo, number)
 
     # Register tools
     @mcp.tool("search_documentation")

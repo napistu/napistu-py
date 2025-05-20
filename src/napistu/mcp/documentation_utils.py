@@ -2,19 +2,16 @@
 Utilities for loading and processing documentation.
 """
 
-import os
-import re
 import httpx
 import asyncio
-from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set
 
+from napistu.mcp import utils as mcp_utils
 from napistu.mcp.constants import READTHEDOCS_TOC_CSS_SELECTOR
 
 # Import optional dependencies with error handling
 try:
     from bs4 import BeautifulSoup
-    import markdown
 except ImportError:
     raise ImportError(
         "Documentation utilities require additional dependencies. Install with 'pip install napistu[mcp]'"
@@ -45,7 +42,7 @@ async def read_read_the_docs(package_toc_url: str) -> dict:
             # Make absolute if needed
             base = package_toc_url.rsplit("/", 1)[0]
             module_url = base + "/" + module_url.lstrip("/")
-        await parse_rtd_module_recursive(module_url, visited, docs_dict)
+        await _parse_rtd_module_recursive(module_url, visited, docs_dict)
 
     return docs_dict
 
@@ -127,20 +124,11 @@ def get_snippet(text: str, query: str, context: int = 100) -> str:
     return snippet
 
 
-async def load_html_page(url: str) -> str:
-    """
-    Fetch the HTML content of a page from a URL.
-    Returns the HTML as a string.
-    """
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        response.raise_for_status()
-        return response.text
-
-
 async def _process_rtd_package_toc(url: str, css_selector: str = READTHEDOCS_TOC_CSS_SELECTOR) -> dict:
-    
-    page_html = await load_html_page(url)
+    """
+    Parse the ReadTheDocs package TOC and return a dict of {name: url}.
+    """
+    page_html = await mcp_utils.load_html_page(url)
     soup = BeautifulSoup(page_html, 'html.parser')
     selected = soup.select(css_selector)
     return _parse_module_tags(selected)
@@ -167,15 +155,6 @@ def _parse_module_tags(td_list: list, base_url: str = "") -> dict:
     return result
 
 
-def _clean_signature_text(text: str) -> str:
-    """
-    Remove trailing Unicode headerlink icons and extra whitespace from text.
-    """
-    if text:
-        return text.replace("\uf0c1", "").strip()
-    return text
-
-
 def _format_function(sig_dt, doc_dd) -> Dict[str, Any]:
     """
     Format a function or method signature and its documentation into a dictionary.
@@ -190,8 +169,8 @@ def _format_function(sig_dt, doc_dd) -> Dict[str, Any]:
     name = sig_dt.find("span", class_="sig-name").get_text(strip=True) if sig_dt else None
     signature = sig_dt.get_text(strip=True) if sig_dt else None
     return {
-        "name": _clean_signature_text(name),
-        "signature": _clean_signature_text(signature),
+        "name": mcp_utils._clean_signature_text(name),
+        "signature": mcp_utils._clean_signature_text(signature),
         "id": sig_dt.get("id") if sig_dt else None,
         "doc": doc_dd.get_text(" ", strip=True) if doc_dd else None
     }
@@ -212,8 +191,8 @@ def _format_attribute(attr_dl) -> Dict[str, Any]:
     name = sig.find("span", class_="sig-name").get_text(strip=True) if sig else None
     signature = sig.get_text(strip=True) if sig else None
     return {
-        "name": _clean_signature_text(name),
-        "signature": _clean_signature_text(signature),
+        "name": mcp_utils._clean_signature_text(name),
+        "signature": mcp_utils._clean_signature_text(signature),
         "id": sig.get("id") if sig else None,
         "doc": doc.get_text(" ", strip=True) if doc else None
     }
@@ -245,8 +224,8 @@ def _format_class(class_dl) -> Dict[str, Any]:
             if attr["name"]:
                 attributes[attr["name"]] = attr
     return {
-        "name": _clean_signature_text(class_name),
-        "signature": _clean_signature_text(sig.get_text(strip=True) if sig else None),
+        "name": mcp_utils._clean_signature_text(class_name),
+        "signature": mcp_utils._clean_signature_text(sig.get_text(strip=True) if sig else None),
         "id": sig.get("id") if sig else None,
         "doc": doc.get_text(" ", strip=True) if doc else None,
         "methods": methods,
@@ -288,7 +267,11 @@ def _format_submodules(soup) -> dict:
     return submodules
 
 
-async def parse_rtd_module_recursive(module_url, visited=None, docs_dict=None):
+async def _parse_rtd_module_recursive(module_url: str, visited: Optional[Set[str]] = None, docs_dict: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Recursively parse a module page and all its submodules.
+    """
+    
     if visited is None:
         visited = set()
     if docs_dict is None:
@@ -298,7 +281,7 @@ async def parse_rtd_module_recursive(module_url, visited=None, docs_dict=None):
         return docs_dict
     visited.add(module_url)
 
-    page_html = await load_html_page(module_url)
+    page_html = await mcp_utils.load_html_page(module_url)
     module_doc = parse_rtd_module_page(page_html, module_url)
     module_name = module_doc.get("module") or module_url
     docs_dict[module_name] = module_doc
@@ -309,6 +292,6 @@ async def parse_rtd_module_recursive(module_url, visited=None, docs_dict=None):
         if not submod_url.startswith("http"):
             base = module_url.rsplit("/", 1)[0]
             submod_url = base + "/" + submod_url.lstrip("/")
-        await parse_rtd_module_recursive(submod_url, visited, docs_dict)
+        await _parse_rtd_module_recursive(submod_url, visited, docs_dict)
 
     return docs_dict
