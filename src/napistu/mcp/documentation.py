@@ -12,13 +12,11 @@ from napistu.mcp import documentation_utils
 from napistu.mcp import github
 
 from napistu.mcp.constants import READMES
-from napistu.mcp.constants import NAPISTU_PY_READTHEDOCS_API
 from napistu.mcp.constants import REPOS_WITH_ISSUES
 
 # Global cache for documentation content
 _docs_cache = {
     "readme": {},
-    "readthedocs": {},
     "wiki": {},
     "issues": {},
     "prs": {},
@@ -42,9 +40,6 @@ async def initialize_components(mcp: FastMCP, config: dict) -> bool:
     for name, url in READMES.items():
         _docs_cache["readme"][name] = await documentation_utils.load_readme_content(url)
     
-    # Load documentation from the ReadTheDocs API
-    _docs_cache["readthedocs"] = await documentation_utils.read_read_the_docs(NAPISTU_PY_READTHEDOCS_API)
-
     # Load issue and PR summaries with the GitHub API
     for repo in REPOS_WITH_ISSUES:
         _docs_cache["issues"][repo] = await github.list_issues(repo)

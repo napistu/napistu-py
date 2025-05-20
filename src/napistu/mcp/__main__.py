@@ -95,12 +95,10 @@ def start_local(server_name):
     help="Path to the tutorials directory"
 )
 @click_logging.simple_verbosity_option(logger)
-def start_remote(server_name, codebase_path, tutorials_path):
+def start_remote(server_name, tutorials_path):
     """Start a remote MCP server for documentation and codebase exploration."""
     # Collect configuration
     config = {"server_name": server_name}
-    if codebase_path:
-        config["codebase_path"] = codebase_path
     if tutorials_path:
         config["tutorials_path"] = tutorials_path
     
@@ -170,8 +168,7 @@ def list_components():
 )
 @click_logging.simple_verbosity_option(logger)
 def custom_server(enable_documentation, enable_codebase, enable_execution, 
-                  enable_tutorials, server_name, codebase_path, 
-                  tutorials_path):
+                  enable_tutorials, server_name, tutorials_path):
     """Start an MCP server with custom component configuration."""
     # Collect configuration
     config = {"server_name": server_name}
@@ -183,8 +180,6 @@ def custom_server(enable_documentation, enable_codebase, enable_execution,
         config["enable_execution"] = enable_execution
     if enable_tutorials is not None:
         config["enable_tutorials"] = enable_tutorials
-    if codebase_path:
-        config["codebase_path"] = codebase_path
     if tutorials_path:
         config["tutorials_path"] = tutorials_path
     

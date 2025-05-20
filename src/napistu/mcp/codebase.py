@@ -2,6 +2,10 @@
 Codebase exploration components for the Napistu MCP server.
 """
 
+from napistu.mcp.constants import NAPISTU_PY_READTHEDOCS_API
+
+from fastmcp import FastMCP
+
 from typing import Dict, List, Any, Optional
 import json
 
@@ -14,36 +18,29 @@ _codebase_cache = {
     "functions": {},
 }
 
-async def initialize_components(mcp, config):
+
+async def initialize_components(mcp: FastMCP, config: dict) -> bool:
     """
     Initialize codebase components.
     """
     global _codebase_cache
-    codebase_path = config.get("codebase_path")
-    if codebase_path:
-        _codebase_cache = await codebase_utils.scan_codebase(codebase_path)
+    
+    # Load documentation from the ReadTheDocs API
+    _codebase_cache["modules"] = await codebase_utils.read_read_the_docs(NAPISTU_PY_READTHEDOCS_API)
+
+    # Extract functions and classes from the modules
+    _codebase_cache["functions"], _codebase_cache["classes"] = codebase_utils.extract_functions_and_classes_from_modules(_codebase_cache["modules"])
+
     return True
 
-def register_components(mcp, codebase_path=None):
+def register_components(mcp: FastMCP):
     """
     Register codebase exploration components with the MCP server.
     
     Args:
         mcp: FastMCP server instance
-        codebase_path: Path to the Napistu codebase root
     """
     global _codebase_cache
-    
-    # Scan codebase if path provided
-    if codebase_path:
-        async def _scan_codebase():
-            global _codebase_cache
-            _codebase_cache = await codebase_utils.scan_codebase(codebase_path)
-        
-        # Schedule codebase scanning
-        import asyncio
-        asyncio.create_task(_scan_codebase())
-    
     # Register resources
     @mcp.resource("napistu://codebase/summary")
     async def get_codebase_summary() -> Dict[str, Any]:
@@ -154,3 +151,4 @@ def register_components(mcp, codebase_path=None):
             return {"error": f"Class {class_name} not found"}
         
         return _codebase_cache["classes"][class_name]
+

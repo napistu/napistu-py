@@ -13,7 +13,6 @@ class ServerProfile:
             "enable_tutorials": False,
             "session_context": None,
             "object_registry": None,
-            "codebase_path": None,
             "tutorials_path": None,
         }
         # Override with provided kwargs
