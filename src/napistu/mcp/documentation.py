@@ -8,6 +8,7 @@ import json
 
 from napistu.mcp import documentation_utils
 from napistu.mcp.constants import READMES
+from napistu.mcp.constants import NAPISTU_PY_READTHEDOCS_API
 
 # Global cache for documentation content
 _docs_cache = {
@@ -34,16 +35,18 @@ async def initialize_components(mcp, config):
     for name, url in READMES.items():
         _docs_cache["readme"][name] = await documentation_utils.load_readme_content(url)
     
+    # Load documentation from the ReadTheDocs API
+    _docs_cache["readthedocs"] = await documentation_utils.read_read_the_docs(NAPISTU_PY_READTHEDOCS_API)
+
     # Return True to indicate successful initialization
     return True
 
-def register_components(mcp, docs_paths=None):
+def register_components(mcp):
     """
     Register documentation components with the MCP server.
     
     Args:
         mcp: FastMCP server instance
-        docs_paths: List of paths to documentation files
     """
     # Register resources
     @mcp.resource("napistu://documentation/summary")
@@ -73,7 +76,26 @@ def register_components(mcp, docs_paths=None):
             "content": _docs_cache["readme"][file_name],
             "format": "markdown",
         }
-    
+
+    @mcp.resource("napistu://documentation/readthedocs/{module_name}")
+    async def get_readthedocs_module(module_name: str):
+        """
+        Get the parsed ReadTheDocs documentation for a specific module.
+        Args:
+            module_name: Name of the module (as parsed from the docs tree)
+        """
+        docs = _docs_cache["readthedocs"]
+        if module_name not in docs:
+            return {"error": f"Module {module_name} not found in ReadTheDocs documentation."}
+        return docs[module_name]
+
+    @mcp.resource("napistu://documentation/readthedocs")
+    async def get_readthedocs_tree():
+        """
+        Get the full parsed ReadTheDocs documentation tree.
+        """
+        return _docs_cache["readthedocs"]
+
     # Register tools
     @mcp.tool("search_documentation")
     async def search_documentation(query: str):
@@ -92,7 +114,6 @@ def register_components(mcp, docs_paths=None):
             "wiki": [],
             "packagedown": [],
         }
-        
         # Simple text search
         for readme_name, content in _docs_cache["readme"].items():
             if query.lower() in content.lower():
@@ -100,5 +121,4 @@ def register_components(mcp, docs_paths=None):
                     "name": readme_name,
                     "snippet": documentation_utils.get_snippet(content, query),
                 })
-        
         return results

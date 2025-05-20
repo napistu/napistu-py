@@ -7,6 +7,14 @@ import libsbml
 from types import SimpleNamespace
 import pandas as pd
 
+
+PACKAGE_DEFS = SimpleNamespace(
+    NAPISTU = "napistu",
+    NAPISTU_PY = "napistu-py",
+    NAPISTU_R = "napistu-r",
+    NAPISTU_TUTORIALS = "napistu/tutorials",
+)
+
 PROTEINATLAS_SUBCELL_LOC_URL = (
     "https://www.proteinatlas.org/download/tsv/subcellular_location.tsv.zip"
 )

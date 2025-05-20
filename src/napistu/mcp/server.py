@@ -37,10 +37,7 @@ def create_server(profile: Optional[ServerProfile] = None, **kwargs) -> FastMCP:
     
     # Add components based on configuration
     if config["enable_documentation"]:
-        documentation.register_components(
-            mcp, 
-            docs_paths=config["docs_paths"]
-        )
+        documentation.register_components(mcp)
     
     if config["enable_codebase"]:
         codebase.register_components(

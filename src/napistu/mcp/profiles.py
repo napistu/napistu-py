@@ -14,7 +14,6 @@ class ServerProfile:
             "session_context": None,
             "object_registry": None,
             "codebase_path": None,
-            "docs_paths": None,
             "tutorials_path": None,
         }
         # Override with provided kwargs

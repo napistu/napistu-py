@@ -29,51 +29,69 @@ async def load_readme_content(readme_url: str) -> str:
     else:
         raise ValueError(f"Only HTTP(S) URLs are supported for documentation paths: {readme_url}")
 
-async def load_readthedocs_content(url: str) -> Dict[str, str]:
+
+async def read_read_the_docs(package_toc_url: str) -> dict:
     """
-    Load content from a Read the Docs site.
-    
+    Recursively parse all modules and submodules starting from the package TOC.
+    """
+    # Step 1: Get all module URLs from the TOC
+    packages_dict = await _process_rtd_package_toc(package_toc_url)
+    docs_dict = {}
+    visited = set()
+
+    # Step 2: Recursively parse each module page
+    for package_name, module_url in packages_dict.items():
+        if not module_url.startswith("http"):
+            # Make absolute if needed
+            base = package_toc_url.rsplit("/", 1)[0]
+            module_url = base + "/" + module_url.lstrip("/")
+        await parse_rtd_module_recursive(module_url, visited, docs_dict)
+
+    return docs_dict
+
+
+def parse_rtd_module_page(html: str, url: Optional[str] = None) -> dict:
+    """
+    Parse a ReadTheDocs module HTML page and extract functions, classes, methods, attributes, and submodules.
+    Returns a dict suitable for MCP server use, with functions, classes, and methods keyed by name.
+
     Args:
-        url: Base URL of the Read the Docs site
-    
+        html (str): The HTML content of the module page.
+        url (Optional[str]): The URL of the page (for reference).
+
     Returns:
-        Dictionary mapping section names to content
+        dict: {
+            'module': str,
+            'url': str,
+            'functions': Dict[str, dict],
+            'classes': Dict[str, dict],
+            'submodules': Dict[str, dict]
+        }
     """
-    sections = {}
-    
-    try:
-        # Fetch the main page
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Find the table of contents
-            toc = soup.select('.toctree-wrapper .toctree-l1 a')
-            
-            # Fetch each section
-            for link in toc:
-                section_name = link.text.strip()
-                section_url = url + link['href'] if not link['href'].startswith('http') else link['href']
-                
-                # Fetch the section content
-                section_response = await client.get(section_url)
-                section_response.raise_for_status()
-                
-                section_soup = BeautifulSoup(section_response.text, 'html.parser')
-                content_div = section_soup.select_one('.section')
-                
-                if content_div:
-                    sections[section_name] = content_div.prettify()
-                else:
-                    sections[section_name] = "Content not found"
-    
-    except Exception as e:
-        print(f"Error loading Read the Docs content from {url}: {e}")
-        sections["error"] = f"Error loading Read the Docs content: {e}"
-    
-    return sections
+    soup = BeautifulSoup(html, "html.parser")
+    result = {
+        "module": None,
+        "url": url,
+        "functions": {},
+        "classes": {},
+        "submodules": _format_submodules(soup)
+    }
+    # Get module name from <h1>
+    h1 = soup.find("h1")
+    if h1:
+        module_name = h1.get_text(strip=True).replace("\uf0c1", "").strip()
+        result["module"] = module_name
+    # Functions
+    for func_dl in soup.find_all("dl", class_="py function"):
+        func = _format_function(func_dl.find("dt"), func_dl.find("dd"))
+        if func["name"]:
+            result["functions"][func["name"]] = func
+    # Classes
+    for class_dl in soup.find_all("dl", class_="py class"):
+        cls = _format_class(class_dl)
+        if cls["name"]:
+            result["classes"][cls["name"]] = cls
+    return result
 
 
 def get_snippet(text: str, query: str, context: int = 100) -> str:
@@ -149,7 +167,94 @@ def _parse_module_tags(td_list: list, base_url: str = "") -> dict:
     return result
 
 
-def extract_submodules_from_rtd_page(soup) -> dict:
+def _clean_signature_text(text: str) -> str:
+    """
+    Remove trailing Unicode headerlink icons and extra whitespace from text.
+    """
+    if text:
+        return text.replace("\uf0c1", "").strip()
+    return text
+
+
+def _format_function(sig_dt, doc_dd) -> Dict[str, Any]:
+    """
+    Format a function or method signature and its documentation into a dictionary.
+
+    Args:
+        sig_dt: The <dt> tag containing the function/method signature.
+        doc_dd: The <dd> tag containing the function/method docstring.
+
+    Returns:
+        dict: A dictionary with keys 'name', 'signature', 'id', and 'doc'.
+    """
+    name = sig_dt.find("span", class_="sig-name").get_text(strip=True) if sig_dt else None
+    signature = sig_dt.get_text(strip=True) if sig_dt else None
+    return {
+        "name": _clean_signature_text(name),
+        "signature": _clean_signature_text(signature),
+        "id": sig_dt.get("id") if sig_dt else None,
+        "doc": doc_dd.get_text(" ", strip=True) if doc_dd else None
+    }
+
+
+def _format_attribute(attr_dl) -> Dict[str, Any]:
+    """
+    Format a class attribute's signature and documentation into a dictionary.
+
+    Args:
+        attr_dl: The <dl> tag for the attribute, containing <dt> and <dd>.
+
+    Returns:
+        dict: A dictionary with keys 'name', 'signature', 'id', and 'doc'.
+    """
+    sig = attr_dl.find("dt")
+    doc = attr_dl.find("dd")
+    name = sig.find("span", class_="sig-name").get_text(strip=True) if sig else None
+    signature = sig.get_text(strip=True) if sig else None
+    return {
+        "name": _clean_signature_text(name),
+        "signature": _clean_signature_text(signature),
+        "id": sig.get("id") if sig else None,
+        "doc": doc.get_text(" ", strip=True) if doc else None
+    }
+
+
+def _format_class(class_dl) -> Dict[str, Any]:
+    """
+    Format a class definition, including its methods and attributes, into a dictionary.
+
+    Args:
+        class_dl: The <dl> tag for the class, containing <dt> and <dd>.
+
+    Returns:
+        dict: A dictionary with keys 'name', 'signature', 'id', 'doc', 'methods', and 'attributes'.
+              'methods' and 'attributes' are themselves dicts keyed by name.
+    """
+    sig = class_dl.find("dt")
+    doc = class_dl.find("dd")
+    class_name = sig.find("span", class_="sig-name").get_text(strip=True) if sig else None
+    methods = {}
+    attributes = {}
+    if doc:
+        for meth_dl in doc.find_all("dl", class_="py method"):
+            meth = _format_function(meth_dl.find("dt"), meth_dl.find("dd"))
+            if meth["name"]:
+                methods[meth["name"]] = meth
+        for attr_dl in doc.find_all("dl", class_="py attribute"):
+            attr = _format_attribute(attr_dl)
+            if attr["name"]:
+                attributes[attr["name"]] = attr
+    return {
+        "name": _clean_signature_text(class_name),
+        "signature": _clean_signature_text(sig.get_text(strip=True) if sig else None),
+        "id": sig.get("id") if sig else None,
+        "doc": doc.get_text(" ", strip=True) if doc else None,
+        "methods": methods,
+        "attributes": attributes
+    }
+
+
+def _format_submodules(soup) -> dict:
     """
     Extract submodules from a ReadTheDocs module page soup object.
     Looks for a 'Modules' rubric and parses the following table or list for submodule names, URLs, and descriptions.
@@ -183,119 +288,27 @@ def extract_submodules_from_rtd_page(soup) -> dict:
     return submodules
 
 
-def parse_rtd_module_page(html: str, url: Optional[str] = None) -> dict:
-    """
-    Parse a ReadTheDocs module HTML page and extract functions, classes, methods, attributes, and submodules.
-    Returns a dict suitable for MCP server use, with functions, classes, and methods keyed by name.
+async def parse_rtd_module_recursive(module_url, visited=None, docs_dict=None):
+    if visited is None:
+        visited = set()
+    if docs_dict is None:
+        docs_dict = {}
 
-    Args:
-        html (str): The HTML content of the module page.
-        url (Optional[str]): The URL of the page (for reference).
+    if module_url in visited:
+        return docs_dict
+    visited.add(module_url)
 
-    Returns:
-        dict: {
-            'module': str,
-            'url': str,
-            'functions': Dict[str, dict],
-            'classes': Dict[str, dict],
-            'submodules': Dict[str, dict]
-        }
-    """
-    soup = BeautifulSoup(html, "html.parser")
-    result = {
-        "module": None,
-        "url": url,
-        "functions": {},
-        "classes": {},
-        "submodules": extract_submodules_from_rtd_page(soup)
-    }
-    # Get module name from <h1>
-    h1 = soup.find("h1")
-    if h1:
-        module_name = h1.get_text(strip=True).replace("\uf0c1", "").strip()
-        result["module"] = module_name
-    # Functions
-    for func_dl in soup.find_all("dl", class_="py function"):
-        func = _format_function(func_dl.find("dt"), func_dl.find("dd"))
-        if func["name"]:
-            result["functions"][func["name"]] = func
-    # Classes
-    for class_dl in soup.find_all("dl", class_="py class"):
-        cls = _format_class(class_dl)
-        if cls["name"]:
-            result["classes"][cls["name"]] = cls
-    return result
+    page_html = await load_html_page(module_url)
+    module_doc = parse_rtd_module_page(page_html, module_url)
+    module_name = module_doc.get("module") or module_url
+    docs_dict[module_name] = module_doc
 
+    # Recursively parse submodules
+    for submod_name, submod_info in module_doc.get("submodules", {}).items():
+        submod_url = submod_info["url"]
+        if not submod_url.startswith("http"):
+            base = module_url.rsplit("/", 1)[0]
+            submod_url = base + "/" + submod_url.lstrip("/")
+        await parse_rtd_module_recursive(submod_url, visited, docs_dict)
 
-def _format_function(sig_dt, doc_dd) -> Dict[str, Any]:
-    """
-    Format a function or method signature and its documentation into a dictionary.
-
-    Args:
-        sig_dt: The <dt> tag containing the function/method signature.
-        doc_dd: The <dd> tag containing the function/method docstring.
-
-    Returns:
-        dict: A dictionary with keys 'name', 'signature', 'id', and 'doc'.
-    """
-    return {
-        "name": sig_dt.find("span", class_="sig-name").get_text(strip=True) if sig_dt else None,
-        "signature": sig_dt.get_text(strip=True) if sig_dt else None,
-        "id": sig_dt.get("id") if sig_dt else None,
-        "doc": doc_dd.get_text(" ", strip=True) if doc_dd else None
-    }
-
-
-def _format_attribute(attr_dl) -> Dict[str, Any]:
-    """
-    Format a class attribute's signature and documentation into a dictionary.
-
-    Args:
-        attr_dl: The <dl> tag for the attribute, containing <dt> and <dd>.
-
-    Returns:
-        dict: A dictionary with keys 'name', 'signature', 'id', and 'doc'.
-    """
-    sig = attr_dl.find("dt")
-    doc = attr_dl.find("dd")
-    return {
-        "name": sig.find("span", class_="sig-name").get_text(strip=True) if sig else None,
-        "signature": sig.get_text(strip=True) if sig else None,
-        "id": sig.get("id") if sig else None,
-        "doc": doc.get_text(" ", strip=True) if doc else None
-    }
-
-
-def _format_class(class_dl) -> Dict[str, Any]:
-    """
-    Format a class definition, including its methods and attributes, into a dictionary.
-
-    Args:
-        class_dl: The <dl> tag for the class, containing <dt> and <dd>.
-
-    Returns:
-        dict: A dictionary with keys 'name', 'signature', 'id', 'doc', 'methods', and 'attributes'.
-              'methods' and 'attributes' are themselves dicts keyed by name.
-    """
-    sig = class_dl.find("dt")
-    doc = class_dl.find("dd")
-    class_name = sig.find("span", class_="sig-name").get_text(strip=True) if sig else None
-    methods = {}
-    attributes = {}
-    if doc:
-        for meth_dl in doc.find_all("dl", class_="py method"):
-            meth = _format_function(meth_dl.find("dt"), meth_dl.find("dd"))
-            if meth["name"]:
-                methods[meth["name"]] = meth
-        for attr_dl in doc.find_all("dl", class_="py attribute"):
-            attr = _format_attribute(attr_dl)
-            if attr["name"]:
-                attributes[attr["name"]] = attr
-    return {
-        "name": class_name,
-        "signature": sig.get_text(strip=True) if sig else None,
-        "id": sig.get("id") if sig else None,
-        "doc": doc.get_text(" ", strip=True) if doc else None,
-        "methods": methods,
-        "attributes": attributes
-    }
+    return docs_dict
