@@ -5,6 +5,7 @@ Tutorial components for the Napistu MCP server.
 from typing import Dict, List, Any, Optional
 
 from napistu.mcp import tutorials_utils
+from napistu.mcp import utils as mcp_utils
 
 # Global cache for tutorial content
 _tutorial_cache = {
@@ -105,7 +106,7 @@ def register_components(mcp, tutorials_path=None):
                     "id": tutorial_id,
                     "title": tutorial["title"],
                     "description": tutorial.get("description", ""),
-                    "snippet": tutorials_utils.get_snippet(tutorial_content, query) if tutorial_content else "",
+                    "snippet": mcp_utils.get_snippet(tutorial_content, query) if tutorial_content else "",
                 })
         
         return results

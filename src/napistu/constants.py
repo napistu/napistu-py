@@ -15,6 +15,10 @@ PACKAGE_DEFS = SimpleNamespace(
     GITHUB_NAPISTU_PY = "napistu-py",
     GITHUB_NAPISTU_R = "napistu-r",
     TUTORIALS_URL = "https://github.com/napistu/napistu/wiki",
+    # User-facing functionality should use a user-defined directory but
+    # for convenience, we provide a default cache directory for dev-facing
+    # workflows
+    CACHE_DIR = "napistu_data",
 )
 
 PROTEINATLAS_SUBCELL_LOC_URL = (

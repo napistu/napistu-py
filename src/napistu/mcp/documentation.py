@@ -10,6 +10,7 @@ from fastmcp import FastMCP
 
 from napistu.mcp import documentation_utils
 from napistu.mcp import github
+from napistu.mcp import utils as mcp_utils
 
 from napistu.mcp.constants import READMES
 from napistu.mcp.constants import REPOS_WITH_ISSUES
@@ -63,7 +64,8 @@ def register_components(mcp: FastMCP):
         """
         return {
             "readme_files": list(_docs_cache["readme"].keys()),
-            "readthedocs_sections": list(_docs_cache["readthedocs"].keys()),
+            "issues": list(_docs_cache["issues"].keys()),
+            "prs": list(_docs_cache["prs"].keys()),
             "wiki_pages": list(_docs_cache["wiki"].keys()),
             "packagedown_sections": list(_docs_cache["packagedown"].keys()),
         }
@@ -83,25 +85,6 @@ def register_components(mcp: FastMCP):
             "content": _docs_cache["readme"][file_name],
             "format": "markdown",
         }
-
-    @mcp.resource("napistu://documentation/readthedocs/{module_name}")
-    async def get_readthedocs_module(module_name: str):
-        """
-        Get the parsed ReadTheDocs documentation for a specific module.
-        Args:
-            module_name: Name of the module (as parsed from the docs tree)
-        """
-        docs = _docs_cache["readthedocs"]
-        if module_name not in docs:
-            return {"error": f"Module {module_name} not found in ReadTheDocs documentation."}
-        return docs[module_name]
-
-    @mcp.resource("napistu://documentation/readthedocs")
-    async def get_readthedocs_tree():
-        """
-        Get the full parsed ReadTheDocs documentation tree.
-        """
-        return _docs_cache["readthedocs"]
 
     @mcp.resource("napistu://documentation/issues/{repo}")
     async def get_issues(repo: str):
@@ -155,8 +138,9 @@ def register_components(mcp: FastMCP):
         """
         results = {
             "readme": [],
-            "readthedocs": [],
             "wiki": [],
+            "issues": [],
+            "prs": [],
             "packagedown": [],
         }
         # Simple text search
@@ -164,6 +148,6 @@ def register_components(mcp: FastMCP):
             if query.lower() in content.lower():
                 results["readme"].append({
                     "name": readme_name,
-                    "snippet": documentation_utils.get_snippet(content, query),
+                    "snippet": mcp_utils.get_snippet(content, query),
                 })
         return results

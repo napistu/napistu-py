@@ -11,6 +11,7 @@ from typing import Optional
 from napistu import utils
 from napistu.gcs.constants import GCS_ASSETS
 from napistu.gcs.constants import INIT_DATA_DIR_MSG
+from napistu.gcs.utils import _initialize_data_dir
 
 logger = logging.getLogger(__name__)
 
@@ -97,20 +98,6 @@ def download_public_napistu_asset(asset: str, out_path: str) -> None:
     
     if not os.path.isfile(out_path):
         raise FileNotFoundError(f"Download failed: {out_path} was not created.")
-
-    return None
-
-
-def _initialize_data_dir(data_dir: str, init_msg: str = INIT_DATA_DIR_MSG) -> None:
-    """Create a data directory if it doesn't exist."""
-
-    if not os.path.isdir(data_dir):
-
-        logger.warning(INIT_DATA_DIR_MSG.format(data_dir=data_dir))
-
-        # Artifact directory not found; creating {parentdir}")
-        logger.warning(f"Trying to create {data_dir}")
-        pathlib.Path(data_dir).mkdir(parents=True, exist_ok=True)
 
     return None
 

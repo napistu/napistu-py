@@ -6,6 +6,12 @@ import os
 import json
 from pathlib import Path
 from typing import Dict, List, Any, Optional
+import httpx
+
+from napistu.gcs.utils import _initialize_data_dir
+
+from napistu.mcp.constants import TUTORIAL_URLS
+from napistu.mcp.constants import TUTORIALS_CACHE_DIR
 
 # Import optional dependencies with error handling
 try:
@@ -15,144 +21,57 @@ except ImportError:
         "Tutorial utilities require additional dependencies. Install with 'pip install napistu[mcp]'"
     )
 
-async def load_tutorial_index(tutorials_path: str) -> List[Dict[str, Any]]:
+async def get_tutorial_markdown(tutorial_id: str, tutorial_urls: Dict[str, str] = TUTORIAL_URLS, cache_dir: Path = TUTORIALS_CACHE_DIR) -> str:
     """
-    Load the index of available tutorials.
-    
+    Download/cache the notebook if needed, load it, and return the markdown.
     Args:
-        tutorials_path: Path to the tutorials directory
-    
-    Returns:
-        List of tutorial metadata
-    """
-    tutorials = []
-    
-    try:
-        tutorials_dir = Path(tutorials_path)
-        
-        # Find notebook files
-        notebook_files = list(tutorials_dir.glob('**/*.ipynb'))
-        
-        for idx, notebook_path in enumerate(notebook_files):
-            # Extract tutorial ID from path
-            rel_path = notebook_path.relative_to(tutorials_dir)
-            tutorial_id = str(rel_path).replace('/', '_').replace('\\', '_').replace('.ipynb', '')
-            
-            # Load notebook metadata
-            with open(notebook_path, 'r', encoding='utf-8') as f:
-                notebook = nbformat.read(f, as_version=4)
-            
-            # Extract title and description
-            title = notebook_path.stem.replace('_', ' ').title()
-            description = ""
-            
-            # Try to extract title and description from first cell
-            if notebook.cells and notebook.cells[0].cell_type == 'markdown':
-                lines = notebook.cells[0].source.split('\n')
-                
-                # First line with # is title
-                for line in lines:
-                    if line.startswith('# '):
-                        title = line[2:].strip()
-                        break
-                
-                # Description is first paragraph after title
-                description_lines = []
-                in_description = False
-                
-                for line in lines:
-                    if line.startswith('# '):
-                        in_description = True
-                        continue
-                    
-                    if in_description and line.strip():
-                        description_lines.append(line)
-                    elif in_description and description_lines:
-                        break
-                
-                if description_lines:
-                    description = ' '.join(description_lines)
-            
-            tutorials.append({
-                "id": tutorial_id,
-                "title": title,
-                "description": description,
-                "path": str(rel_path),
-            })
-    
-    except Exception as e:
-        print(f"Error loading tutorial index from {tutorials_path}: {e}")
-    
-    return tutorials
-
-async def get_tutorial_content(tutorials_path: str, tutorial_id: str) -> str:
-    """
-    Get the content of a tutorial.
-    
-    Args:
-        tutorials_path: Path to the tutorials directory
         tutorial_id: ID of the tutorial
-    
+        tutorial_urls: Dict of tutorial_id to GitHub raw URL
+        cache_dir: Directory to cache notebooks
     Returns:
-        Tutorial content as a string
+        Markdown content as a string
     """
     try:
-        tutorials_dir = Path(tutorials_path)
-        
-        # Convert tutorial ID back to path
-        path_parts = tutorial_id.split('_')
-        notebook_name = path_parts[-1] + '.ipynb'
-        directory_parts = path_parts[:-1]
-        
-        notebook_path = tutorials_dir
-        for part in directory_parts:
-            notebook_path = notebook_path / part
-        notebook_path = notebook_path / notebook_name
-        
-        # Fallback: search for the notebook
-        if not notebook_path.exists():
-            for path in tutorials_dir.glob('**/*.ipynb'):
-                rel_path = path.relative_to(tutorials_dir)
-                candidate_id = str(rel_path).replace('/', '_').replace('\\', '_').replace('.ipynb', '')
-                if candidate_id == tutorial_id:
-                    notebook_path = path
-                    break
-        
-        # Load notebook
-        with open(notebook_path, 'r', encoding='utf-8') as f:
+        path = await _ensure_notebook_cached(tutorial_id, tutorial_urls, cache_dir)
+        with open(path, 'r', encoding='utf-8') as f:
             notebook = nbformat.read(f, as_version=4)
-        
-        # Convert to markdown
-        markdown_content = notebook_to_markdown(notebook)
-        
-        return markdown_content
-    
+        return notebook_to_markdown(notebook)
     except Exception as e:
         print(f"Error getting tutorial content for {tutorial_id}: {e}")
         return f"Error loading tutorial: {e}"
 
-def notebook_to_markdown(notebook) -> str:
+
+async def fetch_notebook_from_github(tutorial_id: str, url: str, cache_dir: Path = TUTORIALS_CACHE_DIR) -> Path:
+    """
+    Fetch a notebook from GitHub and cache it locally.
+    Returns the path to the cached file.
+    """
+    # create the cache directory if it doesn't exist
+    _initialize_data_dir(cache_dir)
+    cache_path = _get_cached_notebook_path(tutorial_id, cache_dir)
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        cache_path.write_bytes(response.content)
+    return cache_path
+
+
+def notebook_to_markdown(notebook: nbformat.NotebookNode) -> str:
     """
     Convert a Jupyter notebook to Markdown.
-    
     Args:
         notebook: nbformat notebook object
-    
     Returns:
         Markdown representation of the notebook
     """
     markdown = []
-    
     for cell in notebook.cells:
         if cell.cell_type == 'markdown':
             markdown.append(cell.source)
         elif cell.cell_type == 'code':
-            # Add code cell as a fenced code block
             markdown.append("```python")
             markdown.append(cell.source)
             markdown.append("```")
-            
-            # Add outputs if any
             if cell.outputs:
                 markdown.append("\nOutput:")
                 for output in cell.outputs:
@@ -165,40 +84,27 @@ def notebook_to_markdown(notebook) -> str:
                             markdown.append("```")
                             markdown.append(output['data']['text/plain'])
                             markdown.append("```")
-        
-        # Add a separator between cells
         markdown.append("\n---\n")
-    
     return "\n".join(markdown)
 
-def get_snippet(text: str, query: str, context: int = 100) -> str:
+
+async def _ensure_notebook_cached(tutorial_id: str, tutorial_urls: Dict[str, str] = TUTORIAL_URLS, cache_dir: Path = TUTORIALS_CACHE_DIR) -> Path:
     """
-    Get a text snippet around a search term.
-    
-    Args:
-        text: Text to search in
-        query: Search term
-        context: Number of characters to include before and after the match
-    
-    Returns:
-        Text snippet
+    Ensure the notebook is cached locally, fetching from GitHub if needed.
+    Returns the path to the cached file.
     """
-    query = query.lower()
-    text_lower = text.lower()
-    
-    if query not in text_lower:
-        return ""
-    
-    start_pos = text_lower.find(query)
-    start = max(0, start_pos - context)
-    end = min(len(text), start_pos + len(query) + context)
-    
-    snippet = text[start:end]
-    
-    # Add ellipsis if we're not at the beginning or end
-    if start > 0:
-        snippet = "..." + snippet
-    if end < len(text):
-        snippet = snippet + "..."
-    
-    return snippet
+    # create the cache directory if it doesn't exist
+    cache_path = _get_cached_notebook_path(tutorial_id, cache_dir)
+    if not cache_path.exists():
+        url = tutorial_urls[tutorial_id]
+        if not url:
+            raise FileNotFoundError(f"No GitHub URL found for tutorial ID: {tutorial_id}")
+        await fetch_notebook_from_github(tutorial_id, url, cache_dir)
+    return cache_path
+
+
+def _get_cached_notebook_path(tutorial_id: str, cache_dir: Path = TUTORIALS_CACHE_DIR) -> Path:
+    """
+    Get the local cache path for a tutorial notebook.
+    """
+    return os.path.join(cache_dir, f"{tutorial_id}.ipynb")
