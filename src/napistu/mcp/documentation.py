@@ -27,7 +27,7 @@ _docs_cache = {
     DOCUMENTATION.PACKAGEDOWN: {},
 }
 
-async def initialize_components(mcp: FastMCP, config: dict) -> bool:
+async def initialize_components(mcp: FastMCP) -> bool:
     """
     Initialize documentation components.
     
@@ -36,7 +36,6 @@ async def initialize_components(mcp: FastMCP, config: dict) -> bool:
     
     Args:
         mcp: FastMCP server instance
-        config: Server configuration dictionary
     """
     global _docs_cache
     

@@ -3,8 +3,10 @@ Core MCP server implementation for Napistu.
 """
 
 from typing import Dict, List, Any, Optional
-from mcp.server import FastMCP
+import logging
+
 import asyncio
+from mcp.server import FastMCP
 
 from napistu.mcp import codebase
 from napistu.mcp import documentation
@@ -13,67 +15,74 @@ from napistu.mcp import tutorials
 
 from napistu.mcp.profiles import ServerProfile
 
-def create_server(profile: Optional[ServerProfile] = None, **kwargs) -> FastMCP:
+logger = logging.getLogger(__name__)
+
+def create_server(profile: ServerProfile, **kwargs: Any) -> FastMCP:
     """
-    Create an MCP server based on a profile or configuration.
+    Create an MCP server based on a profile configuration.
+
+    Parameters
+    ----------
+    profile : ServerProfile
+        Server profile to use. All configuration must be set in the profile.
+    **kwargs
+        Additional arguments to pass to the FastMCP constructor such as host and port.
     
-    Args:
-        profile: Server profile to use
-        **kwargs: Configuration overrides
-    
-    Returns:
-        Configured FastMCP server
+    Returns
+    -------
+    FastMCP
+        Configured FastMCP server instance.
     """
-    # Start with an empty profile if none provided
-    config = (profile or ServerProfile()).get_config()
+
+    config = profile.get_config()
     
-    # Override with any kwargs
-    config.update(kwargs)
-    
-    # Create the server
-    mcp = FastMCP(config["server_name"])
-    
-    # Add components based on configuration
+    # Create the server with FastMCP-specific parameters
+    # Pass all kwargs directly to the FastMCP constructor
+    mcp = FastMCP(config["server_name"], **kwargs)
+
     if config["enable_documentation"]:
+        logger.info("Registering documentation components")
         documentation.register_components(mcp)
-    
     if config["enable_codebase"]:
+        logger.info("Registering codebase components")
         codebase.register_components(mcp)
-    
     if config["enable_execution"]:
+        logger.info("Registering execution components")
         execution.register_components(
-            mcp, 
+            mcp,
             session_context=config["session_context"],
             object_registry=config["object_registry"]
         )
-    
     if config["enable_tutorials"]:
+        logger.info("Registering tutorials components")
         tutorials.register_components(mcp)
-    
     return mcp
 
-async def start_server(server):
+async def initialize_components(server: FastMCP, profile: ServerProfile) -> None:
     """
-    Start the MCP server with proper initialization.
-    
-    Args:
-        server: FastMCP server instance
+    Asynchronously initialize all enabled components for the MCP server, using the provided ServerProfile.
+
+    Parameters
+    ----------
+    server : FastMCP
+        The FastMCP server instance to initialize components for.
+    profile : ServerProfile
+        The profile whose configuration determines which components to initialize.
+
+    Returns
+    -------
+    None
     """
-    # Get the configuration (adjust based on how FastMCP stores config)
-    config = getattr(server, "settings", {})
-    
-    # Initialize components
-    if getattr(config, "enable_documentation", False):
-        await documentation.initialize_components(server, config)
-    
-    if getattr(config, "enable_codebase", False):
-        await codebase.initialize_components(server, config)
-    
-    if getattr(config, "enable_tutorials", False):
-        await tutorials.initialize_components(server, config)
-    
-    if getattr(config, "enable_execution", False):
+    config = profile.get_config()
+    if config["enable_documentation"]:
+        logger.info("Initializing documentation components")
+        await documentation.initialize_components(server)
+    if config["enable_codebase"]:
+        logger.info("Initializing codebase components")
+        await codebase.initialize_components(server)
+    if config["enable_tutorials"]:
+        logger.info("Initializing tutorials components")
+        await tutorials.initialize_components(server)
+    if config["enable_execution"]:
+        logger.info("Initializing execution components")
         await execution.initialize_components(server, config)
-    
-    # Start the server
-    await server.run()  # Using run() method based on available methods

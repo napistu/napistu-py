@@ -19,7 +19,7 @@ _codebase_cache = {
 }
 
 
-async def initialize_components(mcp: FastMCP, config: dict) -> bool:
+async def initialize_components(mcp: FastMCP) -> bool:
     """
     Initialize codebase components.
     """
