@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import pathlib
 import re
 import shutil
 from pydantic import BaseModel

@@ -2,9 +2,7 @@
 Utilities for scanning and analyzing the Napistu codebase.
 """
 
-import httpx
-import asyncio
-from typing import Dict, List, Optional, Any, Set
+from typing import Dict, Optional, Any, Set
 
 from napistu.mcp import utils as mcp_utils
 from napistu.mcp.constants import READTHEDOCS_TOC_CSS_SELECTOR

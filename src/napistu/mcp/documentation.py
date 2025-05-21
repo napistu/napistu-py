@@ -2,21 +2,11 @@
 Documentation components for the Napistu MCP server.
 """
 
-from typing import Dict, List, Any, Optional
-import os
-import json
-
 from fastmcp import FastMCP
 
 from napistu.mcp import documentation_utils
-from napistu.mcp import github
 from napistu.mcp import utils as mcp_utils
-
-from napistu.mcp.constants import DOCUMENTATION
-from napistu.mcp.constants import MCP_COMPONENTS
-from napistu.mcp.constants import READMES
-from napistu.mcp.constants import REPOS_WITH_ISSUES
-from napistu.mcp.constants import TOOL_VARS
+from napistu.mcp.constants import DOCUMENTATION, READMES, REPOS_WITH_ISSUES
 
 # Global cache for documentation content
 _docs_cache = {

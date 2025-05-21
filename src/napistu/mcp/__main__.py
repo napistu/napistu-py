@@ -2,8 +2,6 @@
 MCP (Model Context Protocol) Server for Napistu.
 """
 
-import os
-import sys
 import asyncio
 import logging
 import click

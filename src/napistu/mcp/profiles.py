@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 class ServerProfile:
     """Base profile for MCP server configuration."""

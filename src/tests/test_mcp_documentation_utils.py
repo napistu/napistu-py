@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 from napistu.mcp.documentation_utils import load_readme_content
 from napistu.mcp.constants import READMES
 

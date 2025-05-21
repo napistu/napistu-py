@@ -2,7 +2,7 @@
 Tutorial components for the Napistu MCP server.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 import logging
 
 from fastmcp import FastMCP

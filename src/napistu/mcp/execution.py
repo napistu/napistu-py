@@ -4,7 +4,6 @@ Function execution components for the Napistu MCP server.
 
 from typing import Dict, List, Any, Optional
 import inspect
-import json
 
 # Global storage for session context and objects
 _session_context = {}

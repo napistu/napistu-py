@@ -6,13 +6,13 @@ pip install napistu[mcp]
 """
 
 import asyncio
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 __all__ = ["start_server", "register_object", "is_available"]
 
 # Check if MCP dependencies are available
 try:
-    from mcp import __version__ as mcp_version
+    __import__('mcp')
     is_available = True
 except ImportError:
     is_available = False
@@ -28,7 +28,7 @@ if is_available:
         Args:
             profile_name: Name of the profile ('local', 'remote', or 'full')
             **kwargs: Additional configuration options
-        
+            
         Returns:
             Server control dictionary
         """

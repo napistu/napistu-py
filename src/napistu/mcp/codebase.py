@@ -6,7 +6,7 @@ from napistu.mcp.constants import NAPISTU_PY_READTHEDOCS_API
 
 from fastmcp import FastMCP
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any
 import json
 
 from napistu.mcp import codebase_utils
@@ -87,7 +87,6 @@ def register_components(mcp: FastMCP):
         Returns:
             Dictionary with search results organized by code element type, including snippets for context.
         """
-        from napistu.mcp import utils as mcp_utils
         results = {
             "modules": [],
             "classes": [],

@@ -2,10 +2,8 @@
 Core MCP server implementation for Napistu.
 """
 
-from typing import Dict, List, Any, Optional
 import logging
 
-import asyncio
 from mcp.server import FastMCP
 
 from napistu.mcp import codebase
@@ -17,7 +15,7 @@ from napistu.mcp.profiles import ServerProfile
 
 logger = logging.getLogger(__name__)
 
-def create_server(profile: ServerProfile, **kwargs: Any) -> FastMCP:
+def create_server(profile: ServerProfile, **kwargs) -> FastMCP:
     """
     Create an MCP server based on a profile configuration.
 

@@ -2,7 +2,6 @@
 Utilities for loading and processing documentation.
 """
 
-import asyncio
 import base64
 import httpx
 import os

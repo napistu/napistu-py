@@ -3,9 +3,8 @@ Utilities for loading and processing tutorials.
 """
 
 import os
-import json
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict
 import httpx
 import logging
 
