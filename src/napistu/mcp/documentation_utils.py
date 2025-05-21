@@ -7,7 +7,7 @@ import base64
 import httpx
 import os
 from napistu.constants import PACKAGE_DEFS
-from napistu.mcp.constants import DEFAULT_GITHUB_API
+from napistu.mcp.constants import DEFAULT_GITHUB_API, GITHUB_ISSUES_INDEXED, GITHUB_PRS_INDEXED
 
 async def load_readme_content(readme_url: str) -> str:
     if readme_url.startswith("http://") or readme_url.startswith("https://"):
@@ -75,7 +75,7 @@ async def fetch_wiki_page(page_name: str, repo: str, owner: str = PACKAGE_DEFS.G
         return content
 
 
-async def list_issues(repo: str, owner: str = PACKAGE_DEFS.GITHUB_OWNER, github_api: str = DEFAULT_GITHUB_API, state: str = 'open', include_prs: bool = False) -> list:
+async def list_issues(repo: str, owner: str = PACKAGE_DEFS.GITHUB_OWNER, github_api: str = DEFAULT_GITHUB_API, state: str = GITHUB_ISSUES_INDEXED, include_prs: bool = False) -> list:
     """
     List issues (and optionally PRs) for a given GitHub repository using the GitHub API.
 
@@ -102,7 +102,7 @@ async def list_issues(repo: str, owner: str = PACKAGE_DEFS.GITHUB_OWNER, github_
     return await _fetch_github_items(url, filter_func=filter_func)
 
 
-async def list_pull_requests(repo: str, owner: str = PACKAGE_DEFS.GITHUB_OWNER, github_api: str = DEFAULT_GITHUB_API, state: str = 'open') -> list:
+async def list_pull_requests(repo: str, owner: str = PACKAGE_DEFS.GITHUB_OWNER, github_api: str = DEFAULT_GITHUB_API, state: str = GITHUB_PRS_INDEXED) -> list:
     """
     List pull requests for a given GitHub repository using the GitHub API.
 

@@ -32,7 +32,6 @@ TOOL_VARS = SimpleNamespace(
     SNIPPET="snippet",
 )
 
-
 READMES = {
     "napistu": "https://raw.githubusercontent.com/napistu/napistu/main/README.md",
     "napistu-py": "https://raw.githubusercontent.com/napistu/napistu-py/main/README.md",
@@ -53,6 +52,9 @@ REPOS_WITH_ISSUES = [
     PACKAGE_DEFS.GITHUB_NAPISTU_PY,
     PACKAGE_DEFS.GITHUB_NAPISTU_R,
 ]
+
+GITHUB_ISSUES_INDEXED = "all"
+GITHUB_PRS_INDEXED = "all"
 
 REPOS_WITH_WIKI = [
     PACKAGE_DEFS.GITHUB_PROJECT_REPO

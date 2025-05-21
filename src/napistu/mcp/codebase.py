@@ -10,6 +10,7 @@ from typing import Dict, List, Any, Optional
 import json
 
 from napistu.mcp import codebase_utils
+from napistu.mcp import utils as mcp_utils
 
 # Global cache for codebase information
 _codebase_cache = {
@@ -82,8 +83,9 @@ def register_components(mcp: FastMCP):
             query: Search term
         
         Returns:
-            Dictionary with search results organized by code element type
+            Dictionary with search results organized by code element type, including snippets for context.
         """
+        from napistu.mcp import utils as mcp_utils
         results = {
             "modules": [],
             "classes": [],
@@ -92,30 +94,40 @@ def register_components(mcp: FastMCP):
         
         # Search modules
         for module_name, info in _codebase_cache["modules"].items():
+            # Use docstring or description for snippet
+            doc = info.get("doc") or info.get("description") or ""
             module_text = json.dumps(info)
             if query.lower() in module_text.lower():
+                snippet = mcp_utils.get_snippet(doc, query)
                 results["modules"].append({
                     "name": module_name,
-                    "description": info.get("description", ""),
+                    "description": doc,
+                    "snippet": snippet,
                 })
         
         # Search classes
         for class_name, info in _codebase_cache["classes"].items():
+            doc = info.get("doc") or info.get("description") or ""
             class_text = json.dumps(info)
             if query.lower() in class_text.lower():
+                snippet = mcp_utils.get_snippet(doc, query)
                 results["classes"].append({
                     "name": class_name,
-                    "description": info.get("description", ""),
+                    "description": doc,
+                    "snippet": snippet,
                 })
         
         # Search functions
         for func_name, info in _codebase_cache["functions"].items():
+            doc = info.get("doc") or info.get("description") or ""
             func_text = json.dumps(info)
             if query.lower() in func_text.lower():
+                snippet = mcp_utils.get_snippet(doc, query)
                 results["functions"].append({
                     "name": func_name,
-                    "description": info.get("description", ""),
+                    "description": doc,
                     "signature": info.get("signature", ""),
+                    "snippet": snippet,
                 })
         
         return results
