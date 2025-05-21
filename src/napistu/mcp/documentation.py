@@ -27,28 +27,24 @@ _docs_cache = {
     DOCUMENTATION.PACKAGEDOWN: {},
 }
 
-async def initialize_components(mcp: FastMCP) -> bool:
+async def initialize_components() -> bool:
     """
     Initialize documentation components.
-    
-    This function loads documentation content and should be called before
-    the server starts handling requests.
-    
-    Args:
-        mcp: FastMCP server instance
+    Loads documentation content and should be called before the server starts handling requests.
+
+    Returns
+    -------
+    bool
+        True if initialization is successful.
     """
     global _docs_cache
-    
     # Load documentation from the READMES dict
     for name, url in READMES.items():
         _docs_cache[DOCUMENTATION.README][name] = await documentation_utils.load_readme_content(url)
-    
     # Load issue and PR summaries with the GitHub API
     for repo in REPOS_WITH_ISSUES:
         _docs_cache[DOCUMENTATION.ISSUES][repo] = await documentation_utils.list_issues(repo)
         _docs_cache[DOCUMENTATION.PRS][repo] = await documentation_utils.list_pull_requests(repo)
-
-    # Return True to indicate successful initialization
     return True
 
 def register_components(mcp: FastMCP):

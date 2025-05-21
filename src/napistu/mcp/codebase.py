@@ -20,18 +20,20 @@ _codebase_cache = {
 }
 
 
-async def initialize_components(mcp: FastMCP) -> bool:
+async def initialize_components() -> bool:
     """
     Initialize codebase components.
+
+    Returns
+    -------
+    bool
+        True if initialization is successful.
     """
     global _codebase_cache
-    
     # Load documentation from the ReadTheDocs API
     _codebase_cache["modules"] = await codebase_utils.read_read_the_docs(NAPISTU_PY_READTHEDOCS_API)
-
     # Extract functions and classes from the modules
     _codebase_cache["functions"], _codebase_cache["classes"] = codebase_utils.extract_functions_and_classes_from_modules(_codebase_cache["modules"])
-
     return True
 
 def register_components(mcp: FastMCP):

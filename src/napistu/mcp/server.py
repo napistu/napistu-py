@@ -58,14 +58,12 @@ def create_server(profile: ServerProfile, **kwargs: Any) -> FastMCP:
         tutorials.register_components(mcp)
     return mcp
 
-async def initialize_components(server: FastMCP, profile: ServerProfile) -> None:
+async def initialize_components(profile: ServerProfile) -> None:
     """
     Asynchronously initialize all enabled components for the MCP server, using the provided ServerProfile.
 
     Parameters
     ----------
-    server : FastMCP
-        The FastMCP server instance to initialize components for.
     profile : ServerProfile
         The profile whose configuration determines which components to initialize.
 
@@ -76,13 +74,13 @@ async def initialize_components(server: FastMCP, profile: ServerProfile) -> None
     config = profile.get_config()
     if config["enable_documentation"]:
         logger.info("Initializing documentation components")
-        await documentation.initialize_components(server)
+        await documentation.initialize_components()
     if config["enable_codebase"]:
         logger.info("Initializing codebase components")
-        await codebase.initialize_components(server)
+        await codebase.initialize_components()
     if config["enable_tutorials"]:
         logger.info("Initializing tutorials components")
-        await tutorials.initialize_components(server)
+        await tutorials.initialize_components()
     if config["enable_execution"]:
         logger.info("Initializing execution components")
-        await execution.initialize_components(server, config)
+        await execution.initialize_components()

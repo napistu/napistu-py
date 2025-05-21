@@ -20,14 +20,9 @@ _tutorial_cache: Dict[str, Dict[str, str]] = {
 
 logger = logging.getLogger(__name__)
 
-async def initialize_components(mcp: FastMCP) -> bool:
+async def initialize_components() -> bool:
     """
     Initialize tutorial components by preloading all tutorials into the cache.
-
-    Parameters
-    ----------
-    mcp : FastMCP
-        The FastMCP server instance.
 
     Returns
     -------
@@ -35,7 +30,6 @@ async def initialize_components(mcp: FastMCP) -> bool:
         True if initialization is successful.
     """
     global _tutorial_cache
-    
     for k, v in TUTORIAL_URLS.items():
         _tutorial_cache[TUTORIALS.TUTORIALS][k] = await tutorials_utils.get_tutorial_markdown(k)
     return True

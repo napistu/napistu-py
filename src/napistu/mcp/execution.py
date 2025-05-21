@@ -10,17 +10,16 @@ import json
 _session_context = {}
 _session_objects = {}
 
-async def initialize_components(mcp, config):
+async def initialize_components() -> bool:
     """
     Initialize execution components.
+
+    Returns
+    -------
+    bool
+        True if initialization is successful.
     """
     global _session_context, _session_objects
-    session_context = config.get("session_context")
-    object_registry = config.get("object_registry")
-    if session_context:
-        _session_context = session_context
-    if object_registry:
-        _session_objects = object_registry
     import napistu
     _session_context["napistu"] = napistu
     return True
