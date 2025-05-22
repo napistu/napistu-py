@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 
 import pandas as pd
-from napistu import consensus
 from napistu import constants
 from napistu import identifiers
 from napistu import sbml_dfs_core
