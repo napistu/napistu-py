@@ -1,9 +1,101 @@
 import anndata
-from typing import Optional, List, Union
+import logging 
+from typing import Optional, List, Union, Set, Dict
+
 import pandas as pd
 import numpy as np
 
-from napistu.scverse.constants import ADATA, ADATA_DICTLIKE_ATTRS, ADATA_IDENTITY_ATTRS
+from napistu import mechanism_matching
+from napistu.scverse.constants import ADATA, ADATA_DICTLIKE_ATTRS, ADATA_IDENTITY_ATTRS, ADATA_FEATURELEVEL_ATTRS
+
+logger = logging.getLogger(__name__)
+
+def prepare_anndata_results_df(
+    adata: anndata.AnnData,
+    table_type: str = ADATA.VAR,
+    table_name: Optional[str] = None,
+    results_attrs: Optional[List[str]] = None,
+    ontologies: Optional[Union[Set[str], Dict[str, str]]] = None,
+    index_which_ontology: Optional[str] = None,
+    verbose: bool = True
+):
+    """
+    Prepare a results table from an AnnData object for use in Napistu.
+
+    This function extracts a table from an AnnData object and formats it for use in Napistu.
+
+    Parameters
+    ----------
+    adata : anndata.AnnData
+        The AnnData object containing the results to be formatted.
+    table_type : str, optional
+        The type of table to extract from the AnnData object. Must be one of: "var", "varm", or "X".
+    table_name : str, optional
+        The name of the table to extract from the AnnData object.
+    results_attrs : list of str, optional
+        The attributes to extract from the table.
+    index_which_ontology : str, optional
+        The ontology to use for the systematic identifiers. This column will be pulled out of the
+        index renamed to the ontology name, and added to the results table as a new column with
+        the same name.
+    ontologies : Optional[Union[Set[str], Dict[str, str]]], default=None
+        Either:
+        - Set of columns to treat as ontologies (these should be entries in ONTOLOGIES_LIST )
+        - Dict mapping wide column names to ontology names in the ONTOLOGIES_LIST controlled vocabulary
+        - None to automatically detect valid ontology columns based on ONTOLOGIES_LIST
+
+        If index_which_ontology is defined, it should be represented in these ontologies. 
+    verbose : bool, optional
+        Whether to print verbose output.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame containing the formatted results.
+
+    Raises
+    ------
+    ValueError
+        If table_type is not one of: "var", "varm", or "X"
+    """
+    
+    if table_type not in ADATA_FEATURELEVEL_ATTRS:
+        raise ValueError(f"table_type must be one of {ADATA_FEATURELEVEL_ATTRS}, got {table_type}")
+
+    # pull out the table containing results
+    raw_results_table = _load_raw_table(adata, table_type, table_name)
+
+    # convert the raw results to a pd.DataFrame with rows corresponding to vars and columns
+    # being attributes of interest
+    results_data_table =_select_results_attrs(adata, raw_results_table, results_attrs)
+
+    # load the var table so we can pull out systematic identifiers
+    if table_type == ADATA.VAR:
+        var_table = copy.deepcopy(raw_results_table)
+    else:
+        var_table = adata.var
+
+    # select relevant attributes returning a pd.DataFrame
+    # if raw_results_table is a np.ndarray select observations
+    # based on their primary key if results_attrs is not None
+    if index_which_ontology is not None:
+        var_table[index_which_ontology] = var_table.index.to_series()
+
+    # ontologies as they are defined in the var table (possibly having it extracted from its index)
+    matching_ontologies = mechanism_matching._validate_wide_ontologies(var_table, ontologies)
+
+    # if ontologies is a dict, we actually want the keys but the previous _validate_wide_ontologies() will
+    # still validate that these keys can be transformed into valid ontology names
+    if isinstance(ontologies, dict):
+        var_ontologies = var_table.loc[:, ontologies.keys()]
+    else:
+        var_ontologies = var_table.loc[:, matching_ontologies]
+
+    # combine ontologies with results data
+    results_table = pd.concat([var_ontologies, results_data_table], axis = 1)
+
+    return results_table
+
 
 def _load_raw_table(
     adata: anndata.AnnData,
@@ -31,8 +123,9 @@ def _load_raw_table(
         The loaded table.
     """
     
-    if table_type not in [*ADATA_DICTLIKE_ATTRS, *ADATA_IDENTITY_ATTRS]:
-        raise ValueError(f"table_type {table_type} is not a valid AnnData attribute. Valid attributes are: {ADATA_DICTLIKE_ATTRS + ADATA_IDENTITY_ATTRS}")
+    valid_attrs = ADATA_DICTLIKE_ATTRS | ADATA_IDENTITY_ATTRS
+    if table_type not in valid_attrs:
+        raise ValueError(f"table_type {table_type} is not a valid AnnData attribute. Valid attributes are: {valid_attrs}")
 
     if table_type in ADATA_IDENTITY_ATTRS:
         if table_name is not None:
@@ -81,10 +174,6 @@ def _get_table_from_dict_attr(
     else:
         return attr_dict[table_name]
     
-#_load_raw_table(adata, "X")
-#_load_raw_table(adata, "var", "ignored")
-# _load_raw_table(adata, "layers")
-# _load_raw_table(adata, "foo")
 
 def _select_results_attrs(
     adata: anndata.AnnData,
