@@ -3,6 +3,10 @@ from __future__ import annotations
 import os
 import sys
 
+import anndata
+import numpy as np
+import pandas as pd
+
 from napistu import consensus
 from napistu import indices
 from napistu import sbml_dfs_core
@@ -55,6 +59,39 @@ def sbml_dfs_glucose_metabolism():
     sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
 
     return sbml_dfs
+
+
+@fixture
+def minimal_adata():
+    """Create a minimal AnnData object for testing."""
+    # Create random data
+    n_obs, n_vars = 10, 5
+    X = np.random.randn(n_obs, n_vars)
+    
+    # Create observation and variable annotations
+    obs = pd.DataFrame(
+        {'cell_type': ['type_' + str(i) for i in range(n_obs)]},
+        index=['cell_' + str(i) for i in range(n_obs)]
+    )
+    var = pd.DataFrame(
+        {'gene_name': ['gene_' + str(i) for i in range(n_vars)]},
+        index=['gene_' + str(i) for i in range(n_vars)]
+    )
+    
+    # Create AnnData object
+    adata = anndata.AnnData(X=X, obs=obs, var=var)
+    
+    # Add some layers
+    adata.layers['counts'] = np.random.randint(0, 100, size=(n_obs, n_vars))
+    
+    # Add some additional matrices
+    adata.varm['gene_scores'] = pd.DataFrame(
+        np.random.randn(n_vars, 3),
+        index=adata.var.index,
+        columns=['score1', 'score2', 'score3']
+    )
+    
+    return adata
 
 
 # Define custom markers for platforms
