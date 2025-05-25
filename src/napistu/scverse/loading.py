@@ -68,7 +68,7 @@ def prepare_anndata_results_df(
 
     # convert the raw results to a pd.DataFrame with rows corresponding to vars and columns
     # being attributes of interest
-    results_data_table =_select_results_attrs(adata, raw_results_table, results_attrs)
+    results_data_table = _select_results_attrs(adata, raw_results_table, table_type, results_attrs)
 
     # load the var table so we can pull out systematic identifiers
     if table_type == ADATA.VAR:
@@ -93,7 +93,7 @@ def prepare_anndata_results_df(
         var_ontologies = var_table.loc[:, list(matching_ontologies)]
 
     # combine ontologies with results data
-    results_table = pd.concat([var_ontologies, results_data_table], axis = 1)
+    results_table = pd.concat([var_ontologies, results_data_table], axis=1)
 
     return results_table
 
@@ -157,7 +157,7 @@ def _get_table_from_dict_attr(
     """
 
     if attr_name not in ADATA_DICTLIKE_ATTRS:
-        raise ValueError(f"attr_name {attr_name} is not a dict-like AnnData attribute. Valid attributes are: {VALID_ATTRS}")
+        raise ValueError(f"attr_name {attr_name} is not a dict-like AnnData attribute. Valid attributes are: {ADATA_DICTLIKE_ATTRS}")
 
     attr_dict = getattr(adata, attr_name)
     available_tables = list(attr_dict.keys())
@@ -208,52 +208,49 @@ def _select_results_attrs(
     pd.DataFrame
         A DataFrame containing the formatted results.
     """
+    logger.debug(f"_select_results_attrs called with table_type={table_type}, results_attrs={results_attrs}")
+
+    # Validate that array-type tables are not passed as DataFrames
+    if table_type in ADATA_ARRAY_ATTRS and isinstance(raw_results_table, pd.DataFrame):
+        raise ValueError(f"Table type {table_type} must be a numpy array, not a DataFrame. Got {type(raw_results_table)}")
+
     if isinstance(raw_results_table, pd.DataFrame):
         if results_attrs is not None:
             results_table_data = raw_results_table.loc[results_attrs]
         else:
             results_table_data = raw_results_table
+        return results_table_data
+
+    # Convert sparse matrix to dense if needed
+    if hasattr(raw_results_table, 'toarray'):
+        raw_results_table = raw_results_table.toarray()
+
+    valid_attrs = _get_valid_attrs_for_feature_level_array(
+        adata,
+        table_type,
+        raw_results_table,
+        table_colnames
+    )
+
+    if results_attrs is not None:
+        invalid_results_attrs = [x for x in results_attrs if x not in valid_attrs]
+        if len(invalid_results_attrs) > 0:
+            raise ValueError(f"The following results attributes are not valid: {invalid_results_attrs}")
+
+        # Get positions based on table type
+        if table_type == ADATA.VARM:
+            positions = [table_colnames.index(attr) for attr in results_attrs]
+            selected_array = raw_results_table[:, positions]
+        elif table_type == ADATA.VARP:
+            positions = [adata.var.index.get_loc(attr) for attr in results_attrs]
+            selected_array = raw_results_table[:, positions]
+        else:  # X or layers
+            positions = [adata.obs.index.get_loc(attr) for attr in results_attrs]
+            selected_array = raw_results_table[positions, :]
+
+        results_table_data = _create_results_df(selected_array, results_attrs, adata.var.index, table_type)
     else:
-        # Convert sparse matrix to dense if needed
-        if hasattr(raw_results_table, 'toarray'):
-            raw_results_table = raw_results_table.toarray()
-
-        valid_attrs = _get_valid_attrs_for_feature_level_array(
-            adata,
-            table_type,
-            raw_results_table,
-            table_colnames
-        )
-
-        if results_attrs is not None:
-            invalid_results_attrs = [x for x in results_attrs if x not in valid_attrs]
-            if len(invalid_results_attrs) > 0:
-                raise ValueError(f"The following results attributes are not valid: {invalid_results_attrs}")
-
-            # Find positions of desired rows based on table type
-            if table_type == ADATA.VARM:
-                row_positions = [table_colnames.index(attr) for attr in results_attrs]
-            elif table_type == ADATA.VARP:
-                row_positions = [adata.var.index.get_loc(attr) for attr in results_attrs]
-            else:  # X or layers
-                row_positions = [adata.obs.index.get_loc(attr) for attr in results_attrs]
-            
-            # Select rows from numpy array
-            selected_array = raw_results_table[row_positions, :]
-            
-            # Convert to DataFrame with appropriate index/columns
-            results_table_data = pd.DataFrame(
-                selected_array,
-                index=results_attrs,
-                columns=adata.var.index
-            ).T
-        else:
-            # Convert entire array to DataFrame with appropriate index/columns
-            results_table_data = pd.DataFrame(
-                raw_results_table,
-                index=valid_attrs,
-                columns=adata.var.index
-            ).T
+        results_table_data = _create_results_df(raw_results_table, valid_attrs, adata.var.index, table_type)
 
     return results_table_data
 
@@ -308,3 +305,33 @@ def _get_valid_attrs_for_feature_level_array(
         valid_attrs = table_colnames
 
     return valid_attrs
+
+
+def _create_results_df(
+    array: np.ndarray,
+    attrs: List[str],
+    var_index: pd.Index,
+    table_type: str
+) -> pd.DataFrame:
+    """Create a DataFrame with the right orientation based on table type.
+    
+    For varm/varp tables:
+        - rows are vars (var_index)
+        - columns are attrs (features/selected vars)
+    For X/layers:
+        - rows are attrs (selected observations)
+        - columns are vars (var_index)
+        - then transpose to get vars as rows
+    """
+    if table_type in [ADATA.VARM, ADATA.VARP]:
+        return pd.DataFrame(
+            array,
+            index=var_index,
+            columns=attrs
+        )
+    else:
+        return pd.DataFrame(
+            array,
+            index=attrs,
+            columns=var_index
+        ).T
