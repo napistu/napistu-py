@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import copy
 import logging 
 from typing import Optional, List, Union, Set, Dict
@@ -89,7 +91,7 @@ def prepare_anndata_results_df(
 
 def prepare_mudata_results_df(
     mdata: mudata.MuData,
-    mudata_ontologies: Union[MultiModalityOntologyConfig, Dict[str, Dict[str, Union[Optional[Union[Set[str], Dict[str, str]]], Optional[str]]]]],
+    mudata_ontologies: Union["MultiModalityOntologyConfig", Dict[str, Dict[str, Union[Optional[Union[Set[str], Dict[str, str]]], Optional[str]]]]],
     table_type: str = ADATA.VAR,
     table_name: Optional[str] = None,
     results_attrs: Optional[List[str]] = None,
@@ -526,6 +528,9 @@ def _extract_ontologies(
     ------
     ValueError
         If index_which_ontology already exists in var table
+        If any renamed ontology column already exists in var table
+        If any rename values are duplicated
+        If any final column names are not in ONTOLOGIES_LIST
     """
     # Make a copy to avoid modifying original
     var_table = var_table.copy()
@@ -540,13 +545,46 @@ def _extract_ontologies(
         # Add the column with index values
         var_table[index_which_ontology] = var_table.index
 
-    # if ontologies is a dict, we actually want the keys but the previous _validate_wide_ontologies() will
-    # still validate that these keys can be transformed into valid ontology names
+    # if ontologies is a dict, validate rename values are unique and don't exist
+    if isinstance(ontologies, dict):
+        # Check for duplicate rename values
+        rename_values = list(ontologies.values())
+        if len(rename_values) != len(set(rename_values)):
+            duplicates = [val for val in rename_values if rename_values.count(val) > 1]
+            raise ValueError(
+                f"Duplicate rename values found in ontologies mapping: {duplicates}. "
+                "Each ontology must be renamed to a unique value."
+            )
+        
+        # Check for existing columns with rename values
+        existing_rename_cols = set(rename_values) & set(var_table.columns)
+        if existing_rename_cols:
+            # Filter out cases where we're mapping a column to itself
+            actual_conflicts = {
+                rename_val for src, rename_val in ontologies.items()
+                if rename_val in existing_rename_cols and src != rename_val
+            }
+            if actual_conflicts:
+                raise ValueError(
+                    f"Cannot rename ontologies - columns already exist in var table: {actual_conflicts}"
+                )
+
+    # Validate and get matching ontologies
     matching_ontologies = mechanism_matching._validate_wide_ontologies(var_table, ontologies)
     if isinstance(ontologies, dict):
         var_ontologies = var_table.loc[:, ontologies.keys()]
+        # Rename columns according to the mapping
+        var_ontologies = var_ontologies.rename(columns=ontologies)
     else:
         var_ontologies = var_table.loc[:, list(matching_ontologies)]
+
+    # Final validation: ensure all column names are in ONTOLOGIES_LIST
+    invalid_cols = set(var_ontologies.columns) - set(mechanism_matching.ONTOLOGIES_LIST)
+    if invalid_cols:
+        raise ValueError(
+            f"The following column names are not in ONTOLOGIES_LIST: {invalid_cols}. "
+            f"All column names must be one of: {mechanism_matching.ONTOLOGIES_LIST}"
+        )
 
     return var_ontologies
 

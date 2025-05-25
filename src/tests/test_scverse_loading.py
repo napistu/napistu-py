@@ -486,17 +486,20 @@ def test_prepare_mudata_results_df(minimal_mudata):
             "index_which_ontology": "ensembl_gene"  # Rename index to this
         },
         "protein": {
-            "ontologies": {"uniprot": "uniprot"},  # Map to valid ontology name
+            "ontologies": {"protein_id": "ensembl_protein", "uniprot": "uniprot"},  # Map source column to valid ontology name
             "index_which_ontology": None
         }
     }
+
+    # First add the source column to the protein modality
+    minimal_mudata.mod["protein"].var["protein_id"] = minimal_mudata.mod["protein"].var["uniprot"]
 
     expected_rna_ontologies = {
         "ensembl_gene",  # From index
         "ensembl_transcript",  # From RNA modality var
         "gene_name"  # From RNA modality var
     }
-    expected_protein_ontologies = {"uniprot"}  # From protein modality var
+    expected_protein_ontologies = {"uniprot", "ensembl_protein"}  # Both original and renamed columns
 
     # Act - Test var table extraction
     var_results = loading.prepare_mudata_results_df(
@@ -521,6 +524,14 @@ def test_prepare_mudata_results_df(minimal_mudata):
     assert protein_results.shape[0] == minimal_mudata.mod["protein"].n_vars
     assert expected_protein_ontologies.issubset(set(protein_results.columns)), \
         f"Missing ontology columns: {expected_protein_ontologies - set(protein_results.columns)}"
+    # Check that source column was correctly renamed
+    assert "protein_id" not in protein_results.columns
+    assert "ensembl_protein" in protein_results.columns
+    pd.testing.assert_series_equal(
+        protein_results["ensembl_protein"],
+        minimal_mudata.mod["protein"].var["protein_id"],
+        check_names=False  # Ignore Series names in comparison
+    )
 
     # Act - Test varm table extraction with explicit results_attrs
     varm_results = loading.prepare_mudata_results_df(
