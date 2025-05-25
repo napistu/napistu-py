@@ -214,6 +214,10 @@ def _select_results_attrs(
         else:
             results_table_data = raw_results_table
     else:
+        # Convert sparse matrix to dense if needed
+        if hasattr(raw_results_table, 'toarray'):
+            raw_results_table = raw_results_table.toarray()
+
         valid_attrs = _get_valid_attrs_for_feature_level_array(
             adata,
             table_type,
@@ -240,14 +244,14 @@ def _select_results_attrs(
             # Convert to DataFrame with appropriate index/columns
             results_table_data = pd.DataFrame(
                 selected_array,
-                index=results_attrs,  # Use results_attrs since that's what we selected
+                index=results_attrs,
                 columns=adata.var.index
             ).T
         else:
             # Convert entire array to DataFrame with appropriate index/columns
             results_table_data = pd.DataFrame(
                 raw_results_table,
-                index=valid_attrs,  # Use valid_attrs since we're using the whole array
+                index=valid_attrs,
                 columns=adata.var.index
             ).T
 
@@ -288,7 +292,9 @@ def _get_valid_attrs_for_feature_level_array(
         raise ValueError(f"table_type {table_type} is not a valid AnnData array attribute. Valid attributes are: {ADATA_ARRAY_ATTRS}")
 
     if not isinstance(raw_results_table, np.ndarray):
-        raise ValueError(f"raw_results_table must be a numpy array for table_type {table_type}")
+        raw_results_table = raw_results_table.toarray() if hasattr(raw_results_table, 'toarray') else raw_results_table
+        if not isinstance(raw_results_table, np.ndarray):
+            raise ValueError(f"raw_results_table must be a numpy array or sparse matrix for table_type {table_type}")
 
     if table_type in [ADATA.X, ADATA.LAYERS]:
         valid_attrs = adata.obs.index.tolist()
