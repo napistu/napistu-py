@@ -4,6 +4,7 @@ from typing import Optional, List, Union, Set, Dict
 
 import anndata
 import pandas as pd
+import mudata
 import numpy as np
 
 from napistu import mechanism_matching
@@ -11,24 +12,26 @@ from napistu.scverse.constants import ADATA, ADATA_DICTLIKE_ATTRS, ADATA_IDENTIT
 
 logger = logging.getLogger(__name__)
 
-def prepare_anndata_results_df(
-    adata: anndata.AnnData,
+def prepare_scverse_results_df(
+    adata: Union[anndata.AnnData, mudata.MuData],
     table_type: str = ADATA.VAR,
     table_name: Optional[str] = None,
     results_attrs: Optional[List[str]] = None,
     ontologies: Optional[Union[Set[str], Dict[str, str]]] = None,
     index_which_ontology: Optional[str] = None,
-    verbose: bool = True
-):
+    table_colnames: Optional[List[str]] = None
+) -> pd.DataFrame:
     """
     Prepare a results table from an AnnData object for use in Napistu.
 
     This function extracts a table from an AnnData object and formats it for use in Napistu.
+    The returned DataFrame will always include systematic identifiers from the var table,
+    along with the requested results data.
 
     Parameters
     ----------
-    adata : anndata.AnnData
-        The AnnData object containing the results to be formatted.
+    adata : anndata.AnnData or mudata.MuData
+        The AnnData or MuData object containing the results to be formatted.
     table_type : str, optional
         The type of table to extract from the AnnData object. Must be one of: "var", "varm", or "X".
     table_name : str, optional
@@ -38,26 +41,28 @@ def prepare_anndata_results_df(
     index_which_ontology : str, optional
         The ontology to use for the systematic identifiers. This column will be pulled out of the
         index renamed to the ontology name, and added to the results table as a new column with
-        the same name.
+        the same name. Must not already exist in var table.
     ontologies : Optional[Union[Set[str], Dict[str, str]]], default=None
         Either:
         - Set of columns to treat as ontologies (these should be entries in ONTOLOGIES_LIST )
         - Dict mapping wide column names to ontology names in the ONTOLOGIES_LIST controlled vocabulary
         - None to automatically detect valid ontology columns based on ONTOLOGIES_LIST
 
-        If index_which_ontology is defined, it should be represented in these ontologies. 
-    verbose : bool, optional
-        Whether to print verbose output.
+        If index_which_ontology is defined, it should be represented in these ontologies.
+    table_colnames : Optional[List[str]], optional
+        Column names for varm tables. Required when table_type is "varm". Ignored otherwise.
 
     Returns
     -------
     pd.DataFrame
-        A DataFrame containing the formatted results.
+        A DataFrame containing the formatted results with systematic identifiers.
+        The index will match the var_names of the AnnData object.
 
     Raises
     ------
     ValueError
         If table_type is not one of: "var", "varm", or "X"
+        If index_which_ontology already exists in var table
     """
     
     if table_type not in ADATA_FEATURELEVEL_ATTRS:
@@ -68,41 +73,41 @@ def prepare_anndata_results_df(
 
     # convert the raw results to a pd.DataFrame with rows corresponding to vars and columns
     # being attributes of interest
-    results_data_table = _select_results_attrs(adata, raw_results_table, table_type, results_attrs)
+    results_data_table = _select_results_attrs(adata, raw_results_table, table_type, results_attrs, table_colnames)
 
-    # load the var table so we can pull out systematic identifiers
-    if table_type == ADATA.VAR:
-        var_table = copy.deepcopy(raw_results_table)
-    else:
-        var_table = adata.var
+    # Load var_table which contains systematic identifiers
+    var_table = adata.var.copy()  # Make a copy to avoid modifying original
 
-    # select relevant attributes returning a pd.DataFrame
-    # if raw_results_table is a np.ndarray select observations
-    # based on their primary key if results_attrs is not None
+    # Extract index as ontology if requested
     if index_which_ontology is not None:
-        var_table[index_which_ontology] = var_table.index.to_series()
-
-    # ontologies as they are defined in the var table (possibly having it extracted from its index)
-    matching_ontologies = mechanism_matching._validate_wide_ontologies(var_table, ontologies)
+        if index_which_ontology in var_table.columns:
+            raise ValueError(
+                f"Cannot use '{index_which_ontology}' as index_which_ontology - "
+                f"column already exists in var table"
+            )
+        # Add the column with index values
+        var_table[index_which_ontology] = var_table.index
 
     # if ontologies is a dict, we actually want the keys but the previous _validate_wide_ontologies() will
     # still validate that these keys can be transformed into valid ontology names
+    matching_ontologies = mechanism_matching._validate_wide_ontologies(var_table, ontologies)
     if isinstance(ontologies, dict):
         var_ontologies = var_table.loc[:, ontologies.keys()]
     else:
         var_ontologies = var_table.loc[:, list(matching_ontologies)]
 
-    # combine ontologies with results data
+    # Combine ontologies with results data
+    # Both should have the same index (var_names)
     results_table = pd.concat([var_ontologies, results_data_table], axis=1)
 
     return results_table
 
 
 def _load_raw_table(
-    adata: anndata.AnnData,
+    adata: Union[anndata.AnnData, mudata.MuData],
     table_type: str,
     table_name: Optional[str] = None
-):
+) -> Union[pd.DataFrame, np.ndarray]:
     
     """
     Load an AnnData table.
@@ -111,8 +116,8 @@ def _load_raw_table(
     
     Parameters
     ----------
-    adata : anndata.AnnData
-        The AnnData object to load the table from.
+    adata : anndata.AnnData or mudata.MuData
+        The AnnData or MuData object to load the table from.
     table_type : str
         The type of table to load.
     table_name : str, optional
@@ -120,7 +125,7 @@ def _load_raw_table(
 
     Returns
     -------
-    pd.DataFrame
+    pd.DataFrame or np.ndarray
         The loaded table.
     """
     
@@ -143,17 +148,37 @@ def _load_raw_table(
     
     
 def _get_table_from_dict_attr(
-    adata: anndata.AnnData,
+    adata: Union[anndata.AnnData, mudata.MuData],
     attr_name: str,
     table_name: Optional[str] = None
-):
+) -> Union[pd.DataFrame, np.ndarray]:
     """
-    Generic function to get a table from a dict-like AnnData attribute (varm, layers, etc.)
+    Get a table from a dict-like AnnData attribute (varm, layers, etc.)
     
-    Args:
-        adata: AnnData object
-        attr_name: Name of the attribute ('varm', 'layers', etc.)
-        table_name: Specific table name to retrieve, or None for auto-selection
+    Parameters
+    ----------
+    adata : anndata.AnnData or mudata.MuData
+        The AnnData or MuData object to load the table from
+    attr_name : str
+        Name of the attribute ('varm', 'layers', etc.)
+    table_name : str, optional
+        Specific table name to retrieve. If None and only one table exists,
+        that table will be returned. If None and multiple tables exist,
+        raises ValueError
+        
+    Returns
+    -------
+    Union[pd.DataFrame, np.ndarray]
+        The table data. For array-type attributes (varm, varp, X, layers),
+        returns numpy array. For other attributes, returns DataFrame
+        
+    Raises
+    ------
+    ValueError
+        If attr_name is not a valid dict-like attribute
+        If no tables found in the attribute
+        If multiple tables found and table_name not specified
+        If specified table_name not found
     """
 
     if attr_name not in ADATA_DICTLIKE_ATTRS:
@@ -282,16 +307,10 @@ def _get_valid_attrs_for_feature_level_array(
     Raises
     ------
     ValueError
-        If table_type is invalid, raw_results_table is not a numpy array,
-        or if table_colnames validation fails for varm tables
+        If table_type is invalid or if table_colnames validation fails for varm tables
     """
     if table_type not in ADATA_ARRAY_ATTRS:
         raise ValueError(f"table_type {table_type} is not a valid AnnData array attribute. Valid attributes are: {ADATA_ARRAY_ATTRS}")
-
-    if not isinstance(raw_results_table, np.ndarray):
-        raw_results_table = raw_results_table.toarray() if hasattr(raw_results_table, 'toarray') else raw_results_table
-        if not isinstance(raw_results_table, np.ndarray):
-            raise ValueError(f"raw_results_table must be a numpy array or sparse matrix for table_type {table_type}")
 
     if table_type in [ADATA.X, ADATA.LAYERS]:
         valid_attrs = adata.obs.index.tolist()
@@ -335,3 +354,61 @@ def _create_results_df(
             index=attrs,
             columns=var_index
         ).T
+
+def split_mdata_results_by_modality(
+    mdata: mudata.MuData,
+    results_data_table: pd.DataFrame,
+) -> Dict[str, pd.DataFrame]:
+    """
+    Split a results table by modality and verify compatibility with var tables.
+    
+    Parameters
+    ----------
+    mdata : mudata.MuData
+        MuData object containing multiple modalities
+    results_data_table : pd.DataFrame
+        Results table with vars as rows, typically from prepare_anndata_results_df()
+        
+    Returns
+    -------
+    Dict[str, pd.DataFrame]
+        Dictionary with modality names as keys and DataFrames as values.
+        Each DataFrame contains just the results for that modality.
+        The index of each DataFrame is guaranteed to match the corresponding
+        modality's var table for later merging.
+        
+    Raises
+    ------
+    ValueError
+        If any modality's vars are not found in the results table
+        If any modality's results have different indices than its var table
+    """
+    # Initialize results dictionary
+    results: Dict[str, pd.DataFrame] = {}
+    
+    # Process each modality
+    for modality in mdata.mod.keys():
+        # Get the var_names for this modality
+        mod_vars = mdata.mod[modality].var_names
+        
+        # Check if all modality vars exist in results
+        missing_vars = set(mod_vars) - set(results_data_table.index)
+        if missing_vars:
+            raise ValueError(
+                f"Index mismatch in {modality}: vars {missing_vars} not found in results table"
+            )
+        
+        # Extract results for this modality
+        mod_results = results_data_table.loc[mod_vars]
+        
+        # Verify index alignment with var table
+        if not mod_results.index.equals(mdata.mod[modality].var.index):
+            raise ValueError(
+                f"Index mismatch in {modality}: var table and results subset have different indices"
+            )
+        
+        # Store just the results
+        results[modality] = mod_results
+    
+    return results
+
