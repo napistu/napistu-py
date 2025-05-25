@@ -10,7 +10,10 @@ import mudata
 import numpy as np
 from pydantic import BaseModel, Field, RootModel
 
-from napistu import mechanism_matching
+from napistu.matching import mount
+from napistu.matching import species
+from napistu.constants import ONTOLOGIES_LIST
+from napistu.matching.constants import FEATURE_ID_VAR_DEFAULT
 from napistu.scverse.constants import ADATA, ADATA_DICTLIKE_ATTRS, ADATA_IDENTITY_ATTRS, ADATA_FEATURELEVEL_ATTRS, ADATA_ARRAY_ATTRS
 
 logger = logging.getLogger(__name__)
@@ -570,7 +573,7 @@ def _extract_ontologies(
                 )
 
     # Validate and get matching ontologies
-    matching_ontologies = mechanism_matching._validate_wide_ontologies(var_table, ontologies)
+    matching_ontologies = species._validate_wide_ontologies(var_table, ontologies)
     if isinstance(ontologies, dict):
         var_ontologies = var_table.loc[:, ontologies.keys()]
         # Rename columns according to the mapping
@@ -579,11 +582,11 @@ def _extract_ontologies(
         var_ontologies = var_table.loc[:, list(matching_ontologies)]
 
     # Final validation: ensure all column names are in ONTOLOGIES_LIST
-    invalid_cols = set(var_ontologies.columns) - set(mechanism_matching.ONTOLOGIES_LIST)
+    invalid_cols = set(var_ontologies.columns) - set(ONTOLOGIES_LIST)
     if invalid_cols:
         raise ValueError(
             f"The following column names are not in ONTOLOGIES_LIST: {invalid_cols}. "
-            f"All column names must be one of: {mechanism_matching.ONTOLOGIES_LIST}"
+            f"All column names must be one of: {ONTOLOGIES_LIST}"
         )
 
     return var_ontologies
