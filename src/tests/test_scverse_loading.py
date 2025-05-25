@@ -91,21 +91,21 @@ def test_select_results_attrs_success(minimal_adata):
         columns=minimal_adata.var.index
     )
     df_results_attrs = ['attr_0', 'attr_2']
-    df_result = _select_results_attrs(minimal_adata, df, df_results_attrs)
+    df_result = _select_results_attrs(minimal_adata, df, "X", df_results_attrs)
     assert isinstance(df_result, pd.DataFrame)
     assert all(attr in df_result.index for attr in df_results_attrs)
     
-    # Test numpy array selection
-    array = np.random.randn(10, 5)
+    # Test numpy array selection - shape should be (n_obs x n_vars)
+    array = np.random.randn(minimal_adata.n_obs, minimal_adata.n_vars)  # 10x5 to match minimal_adata
     array_results_attrs = minimal_adata.obs.index[:3].tolist()
-    array_result = _select_results_attrs(minimal_adata, array, array_results_attrs)
+    array_result = _select_results_attrs(minimal_adata, array, "X", array_results_attrs)
     assert isinstance(array_result, pd.DataFrame)
     assert array_result.shape[0] == minimal_adata.var.shape[0]
     assert len(array_result.columns) == len(array_results_attrs)
 
 def test_select_results_attrs_errors(minimal_adata):
     """Test error cases for results attribute selection."""
-    # Test invalid results attributes
-    array = np.random.randn(10, 5)
-    with pytest.raises(ValueError, match="not present in the AnnData object's obs index"):
-        _select_results_attrs(minimal_adata, array, ['nonexistent_attr']) 
+    # Test invalid results attributes - shape should match minimal_adata
+    array = np.random.randn(minimal_adata.n_obs, minimal_adata.n_vars)
+    with pytest.raises(ValueError, match="The following results attributes are not valid"):
+        _select_results_attrs(minimal_adata, array, "X", ['nonexistent_attr']) 

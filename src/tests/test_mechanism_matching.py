@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import copy
 
 import numpy as np
 import pandas as pd
@@ -667,8 +668,9 @@ def test_bind_wide_results(sbml_dfs_glucose_metabolism):
                         .reset_index()
                         .rename_axis(None, axis=1))
 
-    # Call bind_wide_results
+    # Test inplace=False (default)
     results_name = "test_results"
+    original_sbml_dfs = copy.deepcopy(sbml_dfs_glucose_metabolism)
     sbml_dfs_result = mechanism_matching.bind_wide_results(
         sbml_dfs=sbml_dfs_glucose_metabolism,
         results_df=example_data_wide,
@@ -677,19 +679,37 @@ def test_bind_wide_results(sbml_dfs_glucose_metabolism):
         dogmatic=False,
         species_identifiers=None,
         feature_id_var=FEATURE_ID_VAR_DEFAULT,
-        verbose=True
+        verbose=True,
+        inplace=False
     )
 
-    # Verify the results were added correctly
-    assert results_name in sbml_dfs_result.species_data, f"{results_name} not found in species_data"
+    # Verify original object is unchanged
+    assert results_name not in original_sbml_dfs.species_data
     
-    # Get the bound results
+    # Verify the results were added correctly to the new object
+    assert results_name in sbml_dfs_result.species_data
     bound_results = sbml_dfs_result.species_data[results_name]
-
-    # columns are feature_id, results_a, results_b
     assert set(bound_results.columns) == {FEATURE_ID_VAR_DEFAULT, "results_a", "results_b"}
-
     assert bound_results.shape == (23, 3)
     assert bound_results.loc["S00000056", "feature_id"] == "18,19"
     assert bound_results.loc["S00000057", "feature_id"] == "18"
     assert bound_results.loc["S00000010", "feature_id"] == "9"
+
+    # Test inplace=True
+    results_name_2 = "test_results_2"
+    sbml_dfs_inplace = copy.deepcopy(sbml_dfs_glucose_metabolism)
+    result_inplace = mechanism_matching.bind_wide_results(
+        sbml_dfs=sbml_dfs_inplace,
+        results_df=example_data_wide,
+        results_name=results_name_2,
+        ontologies={ONTOLOGIES.UNIPROT, ONTOLOGIES.CHEBI},
+        dogmatic=False,
+        species_identifiers=None,
+        feature_id_var=FEATURE_ID_VAR_DEFAULT,
+        verbose=True,
+        inplace=True
+    )
+
+    # Verify the object was modified and function returned None
+    assert result_inplace is None
+    assert results_name_2 in sbml_dfs_inplace.species_data

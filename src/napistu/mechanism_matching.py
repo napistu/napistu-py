@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import logging
 from typing import Optional, Union, Set, Dict, List
 
@@ -35,8 +36,9 @@ def bind_wide_results(
     feature_id_var : str = FEATURE_ID_VAR_DEFAULT,
     numeric_agg : str = RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN,
     keep_id_col : bool = True,
-    verbose : bool = False
-) -> sbml_dfs_core.SBML_dfs:
+    verbose : bool = False,
+    inplace : bool = True
+) -> Optional[sbml_dfs_core.SBML_dfs]:
     """
     Binds wide results to a sbml_dfs object.
 
@@ -67,12 +69,17 @@ def bind_wide_results(
         Whether to keep the identifier column in the results_df.
     verbose : bool
         Whether to log cases of 1-to-many and many-to-one mapping and to indicate the behavior for resolving degeneracy
-    
+    inplace : bool, default=True
+        Whether to modify the sbml_dfs object in place. If False, returns a copy.
+
     Returns
     -------
     sbml_dfs : sbml_dfs_core.SBML_dfs
         The sbml_dfs object with the results bound.
     """
+
+    if not inplace:
+        sbml_dfs = copy.deepcopy(sbml_dfs)
 
     species_identifiers = identifiers._prepare_species_identifiers(
         sbml_dfs,
@@ -107,7 +114,7 @@ def bind_wide_results(
         clean_species_data
         )
 
-    return sbml_dfs
+    return None if inplace else sbml_dfs
 
 
 def features_to_pathway_species(

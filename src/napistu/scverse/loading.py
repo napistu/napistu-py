@@ -1,12 +1,13 @@
-import anndata
+import copy
 import logging 
 from typing import Optional, List, Union, Set, Dict
 
+import anndata
 import pandas as pd
 import numpy as np
 
 from napistu import mechanism_matching
-from napistu.scverse.constants import ADATA, ADATA_DICTLIKE_ATTRS, ADATA_IDENTITY_ATTRS, ADATA_FEATURELEVEL_ATTRS
+from napistu.scverse.constants import ADATA, ADATA_DICTLIKE_ATTRS, ADATA_IDENTITY_ATTRS, ADATA_FEATURELEVEL_ATTRS, ADATA_ARRAY_ATTRS
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,7 @@ def prepare_anndata_results_df(
     if isinstance(ontologies, dict):
         var_ontologies = var_table.loc[:, ontologies.keys()]
     else:
-        var_ontologies = var_table.loc[:, matching_ontologies]
+        var_ontologies = var_table.loc[:, list(matching_ontologies)]
 
     # combine ontologies with results data
     results_table = pd.concat([var_ontologies, results_data_table], axis = 1)
@@ -178,15 +179,16 @@ def _get_table_from_dict_attr(
 def _select_results_attrs(
     adata: anndata.AnnData,
     raw_results_table: Union[pd.DataFrame, np.ndarray],
-    results_attrs: Optional[List[str]] = None
+    table_type: str,
+    results_attrs: Optional[List[str]] = None,
+    table_colnames: Optional[List[str]] = None
 ) -> pd.DataFrame:
-
     """
     Select results attributes from an AnnData object.
 
     This function selects results attributes from raw_results_table derived
     from an AnnData object and converts them if needed to a pd.DataFrame
-    with appropriate indicies.
+    with appropriate indices.
 
     Parameters
     ----------
@@ -194,8 +196,12 @@ def _select_results_attrs(
         The AnnData object containing the results to be formatted.
     raw_results_table : pd.DataFrame or np.ndarray
         The raw results table to be formatted.
+    table_type: str,
+        The type of table `raw_results_table` refers to.
     results_attrs : list of str, optional
         The attributes to extract from the raw_results_table.
+    table_colnames: list of str, optional,
+        If `table_type` is `varm`, this is the names of all columns (e.g., PC1, PC2, etc.). Ignored otherwise
 
     Returns
     -------
@@ -208,32 +214,91 @@ def _select_results_attrs(
         else:
             results_table_data = raw_results_table
     else:
-        if results_attrs is not None:
-            # Check that results_attrs exist in adata.obs.index
-            valid_obs = adata.obs.index.tolist()
-            
-            invalid_results_attrs = [x for x in results_attrs if x not in valid_obs]
-            if len(invalid_results_attrs) > 0:
-                raise ValueError(f"The following results attributes are not present in the AnnData object's obs index: {invalid_results_attrs}")
+        valid_attrs = _get_valid_attrs_for_feature_level_array(
+            adata,
+            table_type,
+            raw_results_table,
+            table_colnames
+        )
 
-            # Find positions of desired rows in adata.obs.index
-            row_positions = [adata.obs.index.get_loc(attr) for attr in results_attrs]
+        if results_attrs is not None:
+            invalid_results_attrs = [x for x in results_attrs if x not in valid_attrs]
+            if len(invalid_results_attrs) > 0:
+                raise ValueError(f"The following results attributes are not valid: {invalid_results_attrs}")
+
+            # Find positions of desired rows based on table type
+            if table_type == ADATA.VARM:
+                row_positions = [table_colnames.index(attr) for attr in results_attrs]
+            elif table_type == ADATA.VARP:
+                row_positions = [adata.var.index.get_loc(attr) for attr in results_attrs]
+            else:  # X or layers
+                row_positions = [adata.obs.index.get_loc(attr) for attr in results_attrs]
             
-            # Select ROWS from numpy array using positions
+            # Select rows from numpy array
             selected_array = raw_results_table[row_positions, :]
             
-            # Convert to DataFrame and set row names to results_attrs
+            # Convert to DataFrame with appropriate index/columns
             results_table_data = pd.DataFrame(
                 selected_array,
-                index = results_attrs,
-                columns = adata.var.index
-                ).T
+                index=results_attrs,  # Use results_attrs since that's what we selected
+                columns=adata.var.index
+            ).T
         else:
-            # Convert entire array to DataFrame
+            # Convert entire array to DataFrame with appropriate index/columns
             results_table_data = pd.DataFrame(
                 raw_results_table,
-                index = adata.obs.index,
-                columns = adata.var.index
+                index=valid_attrs,  # Use valid_attrs since we're using the whole array
+                columns=adata.var.index
             ).T
 
     return results_table_data
+
+def _get_valid_attrs_for_feature_level_array(
+    adata: anndata.AnnData,
+    table_type: str,
+    raw_results_table: np.ndarray,
+    table_colnames: Optional[List[str]] = None
+) -> list[str]:
+    """
+    Get valid attributes for a feature-level array.
+    
+    Parameters
+    ----------
+    adata : anndata.AnnData
+        The AnnData object
+    table_type : str
+        The type of table
+    raw_results_table : np.ndarray
+        The raw results table for dimension validation
+    table_colnames : Optional[List[str]]
+        Column names for varm tables
+        
+    Returns
+    -------
+    list[str]
+        List of valid attributes for this table type
+        
+    Raises
+    ------
+    ValueError
+        If table_type is invalid, raw_results_table is not a numpy array,
+        or if table_colnames validation fails for varm tables
+    """
+    if table_type not in ADATA_ARRAY_ATTRS:
+        raise ValueError(f"table_type {table_type} is not a valid AnnData array attribute. Valid attributes are: {ADATA_ARRAY_ATTRS}")
+
+    if not isinstance(raw_results_table, np.ndarray):
+        raise ValueError(f"raw_results_table must be a numpy array for table_type {table_type}")
+
+    if table_type in [ADATA.X, ADATA.LAYERS]:
+        valid_attrs = adata.obs.index.tolist()
+    elif table_type == ADATA.VARP:
+        valid_attrs = adata.var.index.tolist()
+    else:  # varm
+        if table_colnames is None:
+            raise ValueError("table_colnames is required for varm tables")
+        if len(table_colnames) != raw_results_table.shape[1]:
+            raise ValueError(f"table_colnames must have length {raw_results_table.shape[1]}")
+        valid_attrs = table_colnames
+
+    return valid_attrs
