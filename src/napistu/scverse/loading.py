@@ -6,13 +6,15 @@ import anndata
 import pandas as pd
 import mudata
 import numpy as np
+from pydantic import BaseModel, Field, RootModel
 
 from napistu import mechanism_matching
 from napistu.scverse.constants import ADATA, ADATA_DICTLIKE_ATTRS, ADATA_IDENTITY_ATTRS, ADATA_FEATURELEVEL_ATTRS, ADATA_ARRAY_ATTRS
 
 logger = logging.getLogger(__name__)
 
-def prepare_scverse_results_df(
+
+def prepare_anndata_results_df(
     adata: Union[anndata.AnnData, mudata.MuData],
     table_type: str = ADATA.VAR,
     table_name: Optional[str] = None,
@@ -75,32 +77,114 @@ def prepare_scverse_results_df(
     # being attributes of interest
     results_data_table = _select_results_attrs(adata, raw_results_table, table_type, results_attrs, table_colnames)
 
-    # Load var_table which contains systematic identifiers
-    var_table = adata.var.copy()  # Make a copy to avoid modifying original
-
-    # Extract index as ontology if requested
-    if index_which_ontology is not None:
-        if index_which_ontology in var_table.columns:
-            raise ValueError(
-                f"Cannot use '{index_which_ontology}' as index_which_ontology - "
-                f"column already exists in var table"
-            )
-        # Add the column with index values
-        var_table[index_which_ontology] = var_table.index
-
-    # if ontologies is a dict, we actually want the keys but the previous _validate_wide_ontologies() will
-    # still validate that these keys can be transformed into valid ontology names
-    matching_ontologies = mechanism_matching._validate_wide_ontologies(var_table, ontologies)
-    if isinstance(ontologies, dict):
-        var_ontologies = var_table.loc[:, ontologies.keys()]
-    else:
-        var_ontologies = var_table.loc[:, list(matching_ontologies)]
+    # Extract and validate ontologies from var table
+    var_ontologies = _extract_ontologies(adata.var, ontologies, index_which_ontology)
 
     # Combine ontologies with results data
     # Both should have the same index (var_names)
     results_table = pd.concat([var_ontologies, results_data_table], axis=1)
 
     return results_table
+
+
+def prepare_mudata_results_df(
+    mdata: mudata.MuData,
+    mudata_ontologies: Union[MultiModalityOntologyConfig, Dict[str, Dict[str, Union[Optional[Union[Set[str], Dict[str, str]]], Optional[str]]]]],
+    table_type: str = ADATA.VAR,
+    table_name: Optional[str] = None,
+    results_attrs: Optional[List[str]] = None,
+    table_colnames: Optional[List[str]] = None
+) -> Dict[str, pd.DataFrame]:
+    """
+    Prepare results tables from a MuData object for use in Napistu, with modality-specific ontology handling.
+
+    This function extracts tables from each modality in a MuData object and formats them for use in Napistu.
+    Each modality's table will include systematic identifiers from its var table along with the requested results data.
+    Ontology handling is configured per-modality using MultiModalityOntologyConfig.
+
+    Parameters
+    ----------
+    mdata : mudata.MuData
+        The MuData object containing the results to be formatted.
+    mudata_ontologies : MultiModalityOntologyConfig or dict
+        Configuration for ontology handling per modality. Must include an entry for each modality. Can be either:
+        - A MultiModalityOntologyConfig object
+        - A dictionary that can be converted to MultiModalityOntologyConfig using from_dict()
+        Each modality's 'ontologies' field can be:
+        - None to automatically detect valid ontology columns
+        - Set of columns to treat as ontologies
+        - Dict mapping wide column names to ontology names
+        The 'index_which_ontology' field is optional.
+    table_type : str, optional
+        The type of table to extract from each modality. Must be one of: "var", "varm", or "X".
+    table_name : str, optional
+        The name of the table to extract from each modality.
+    results_attrs : list of str, optional
+        The attributes to extract from the table.
+    table_colnames : list of str, optional
+        Column names for varm tables. Required when table_type is "varm". Ignored otherwise.
+
+    Returns
+    -------
+    Dict[str, pd.DataFrame]
+        Dictionary mapping modality names to their formatted results DataFrames.
+        Each DataFrame contains the modality's results with systematic identifiers.
+        The index of each DataFrame will match the var_names of that modality.
+
+    Raises
+    ------
+    ValueError
+        If table_type is not one of: "var", "varm", or "X"
+        If mudata_ontologies contains invalid configuration
+        If modality-specific ontology extraction fails
+        If any modality is missing from mudata_ontologies
+    """
+    if table_type not in ADATA_FEATURELEVEL_ATTRS:
+        raise ValueError(f"table_type must be one of {ADATA_FEATURELEVEL_ATTRS}, got {table_type}")
+
+    # Convert dict config to MultiModalityOntologyConfig if needed
+    if isinstance(mudata_ontologies, dict):
+        mudata_ontologies = MultiModalityOntologyConfig.from_dict(mudata_ontologies)
+
+    # Validate that all modalities have configurations
+    missing_modalities = set(mdata.mod.keys()) - set(mudata_ontologies.root.keys())
+    if missing_modalities:
+        raise ValueError(
+            f"Missing ontology configurations for modalities: {missing_modalities}. "
+            "Each modality must have at least the 'ontologies' field specified."
+        )
+
+    # Pull out the table containing results
+    raw_results_table = _load_raw_table(mdata, table_type, table_name)
+
+    # Convert the raw results to a pd.DataFrame with rows corresponding to vars and columns
+    # being attributes of interest
+    results_data_table = _select_results_attrs(mdata, raw_results_table, table_type, results_attrs, table_colnames)
+
+    # Split results by modality
+    split_results_data_tables = _split_mdata_results_by_modality(mdata, results_data_table)
+
+    # Extract each modality's ontology table and then merge it with
+    # the modality's data table
+    split_results_tables = {}
+    for modality in mdata.mod.keys():
+        # Get ontology config for this modality
+        modality_ontology_spec = mudata_ontologies[modality]
+        
+        # Extract ontologies according to the modality's specification
+        ontology_table = _extract_ontologies(
+            mdata.mod[modality].var,
+            modality_ontology_spec.ontologies,
+            modality_ontology_spec.index_which_ontology
+        )
+        
+        # Combine ontologies with results
+        split_results_tables[modality] = pd.concat(
+            [ontology_table, split_results_data_tables[modality]],
+            axis=1
+        )
+
+    return split_results_tables
 
 
 def _load_raw_table(
@@ -355,7 +439,7 @@ def _create_results_df(
             columns=var_index
         ).T
 
-def split_mdata_results_by_modality(
+def _split_mdata_results_by_modality(
     mdata: mudata.MuData,
     results_data_table: pd.DataFrame,
 ) -> Dict[str, pd.DataFrame]:
@@ -412,3 +496,111 @@ def split_mdata_results_by_modality(
     
     return results
 
+
+def _extract_ontologies(
+    var_table: pd.DataFrame,
+    ontologies: Optional[Union[Set[str], Dict[str, str]]] = None,
+    index_which_ontology: Optional[str] = None
+) -> pd.DataFrame:
+    """
+    Extract ontology columns from a var table, optionally including the index as an ontology.
+
+    Parameters
+    ----------
+    var_table : pd.DataFrame
+        The var table containing systematic identifiers
+    ontologies : Optional[Union[Set[str], Dict[str, str]]], default=None
+        Either:
+        - Set of columns to treat as ontologies (these should be entries in ONTOLOGIES_LIST)
+        - Dict mapping wide column names to ontology names in the ONTOLOGIES_LIST controlled vocabulary
+        - None to automatically detect valid ontology columns based on ONTOLOGIES_LIST
+    index_which_ontology : Optional[str], default=None
+        If provided, extract the index as this ontology. Must not already exist in var table.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing only the ontology columns, with the same index as var_table
+
+    Raises
+    ------
+    ValueError
+        If index_which_ontology already exists in var table
+    """
+    # Make a copy to avoid modifying original
+    var_table = var_table.copy()
+
+    # Extract index as ontology if requested
+    if index_which_ontology is not None:
+        if index_which_ontology in var_table.columns:
+            raise ValueError(
+                f"Cannot use '{index_which_ontology}' as index_which_ontology - "
+                f"column already exists in var table"
+            )
+        # Add the column with index values
+        var_table[index_which_ontology] = var_table.index
+
+    # if ontologies is a dict, we actually want the keys but the previous _validate_wide_ontologies() will
+    # still validate that these keys can be transformed into valid ontology names
+    matching_ontologies = mechanism_matching._validate_wide_ontologies(var_table, ontologies)
+    if isinstance(ontologies, dict):
+        var_ontologies = var_table.loc[:, ontologies.keys()]
+    else:
+        var_ontologies = var_table.loc[:, list(matching_ontologies)]
+
+    return var_ontologies
+
+
+class ModalityOntologyConfig(BaseModel):
+    """Configuration for ontology handling in a single modality."""
+    ontologies: Optional[Union[Set[str], Dict[str, str]]] = Field(
+        description="Ontology configuration. Can be either:\n"
+                   "- None to automatically detect valid ontology columns\n"
+                   "- Set of columns to treat as ontologies\n"
+                   "- Dict mapping wide column names to ontology names"
+    )
+    index_which_ontology: Optional[str] = Field(
+        default=None,
+        description="If provided, extract the index as this ontology"
+    )
+
+class MultiModalityOntologyConfig(RootModel):
+    """Configuration for ontology handling across multiple modalities."""
+    root: Dict[str, ModalityOntologyConfig]
+
+    def __getitem__(self, key: str) -> ModalityOntologyConfig:
+        return self.root[key]
+
+    def items(self):
+        return self.root.items()
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Dict[str, Union[Optional[Union[Set[str], Dict[str, str]]], Optional[str]]]]) -> "MultiModalityOntologyConfig":
+        """
+        Create a MultiModalityOntologyConfig from a dictionary.
+
+        Parameters
+        ----------
+        data : Dict[str, Dict[str, Union[Optional[Union[Set[str], Dict[str, str]]], Optional[str]]]]
+            Dictionary mapping modality names to their ontology configurations.
+            Each modality config should have 'ontologies' and optionally 'index_which_ontology'.
+            The 'ontologies' field can be:
+            - None to automatically detect valid ontology columns
+            - Set of columns to treat as ontologies
+            - Dict mapping wide column names to ontology names
+
+        Returns
+        -------
+        MultiModalityOntologyConfig
+            Validated ontology configuration
+        """
+        return cls(root={
+            modality: ModalityOntologyConfig(**config)
+            for modality, config in data.items()
+        })
+
+    def __iter__(self):
+        return iter(self.root)
+
+    def __len__(self):
+        return len(self.root)

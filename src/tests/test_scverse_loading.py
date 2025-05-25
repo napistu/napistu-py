@@ -22,7 +22,10 @@ def minimal_adata():
         index=['cell_' + str(i) for i in range(n_obs)]
     )
     var = pd.DataFrame(
-        {'gene_name': ['gene_' + str(i) for i in range(n_vars)]},
+        {
+            'gene_name': ['gene_' + str(i) for i in range(n_vars)],
+            'ensembl_transcript': [f'ENST{i:011d}' for i in range(n_vars)]  # Add ensembl_transcript
+        },
         index=['gene_' + str(i) for i in range(n_vars)]
     )
     
@@ -289,18 +292,25 @@ def minimal_mudata(minimal_adata):
     # Create MuData with both modalities
     mdata = mudata.MuData({'rna': minimal_adata, 'protein': adata_protein})
     
+    # Add varm table at MuData level
+    n_features = 3
+    varm_array = np.random.randn(mdata.n_vars, n_features)
+    mdata.varm["gene_scores"] = varm_array
+    mdata.uns["gene_scores_features"] = ["score1", "score2", "score3"]
+    
     return mdata
 
-def test_prepare_scverse_results_df_anndata(minimal_adata):
-    """Test prepare_scverse_results_df with AnnData input."""
+def test_prepare_anndata_results_df_anndata(minimal_adata):
+    """Test prepare_anndata_results_df with AnnData input."""
     # Test var table
-    var_results = loading.prepare_scverse_results_df(minimal_adata, table_type=ADATA.VAR)
+    var_results = loading.prepare_anndata_results_df(minimal_adata, table_type=ADATA.VAR)
     assert isinstance(var_results, pd.DataFrame)
     assert var_results.shape[0] == minimal_adata.n_vars
     assert 'gene_name' in var_results.columns
+    assert 'ensembl_transcript' in var_results.columns
 
     # Test varm table
-    varm_results = loading.prepare_scverse_results_df(
+    varm_results = loading.prepare_anndata_results_df(
         minimal_adata,
         table_type=ADATA.VARM,
         table_name='gene_scores',
@@ -309,14 +319,15 @@ def test_prepare_scverse_results_df_anndata(minimal_adata):
     )
     assert isinstance(varm_results, pd.DataFrame)
     assert varm_results.shape[0] == minimal_adata.n_vars
-    assert varm_results.shape[1] == 4  # score1, score2, score3 + gene_name from var table
+    assert varm_results.shape[1] == 5  # score1, score2, score3 + gene_name + ensembl_transcript from var table
     
-    # Check we have both the scores and systematic identifier
+    # Check we have both the scores and systematic identifiers
     assert all(score in varm_results.columns for score in minimal_adata.uns['gene_scores_features'])
     assert 'gene_name' in varm_results.columns
+    assert 'ensembl_transcript' in varm_results.columns
     
     # Test with ontology extraction
-    var_results_with_ontology = loading.prepare_scverse_results_df(
+    var_results_with_ontology = loading.prepare_anndata_results_df(
         minimal_adata,
         table_type=ADATA.VAR,
         index_which_ontology='ensembl_gene'  # Use a new ontology name
@@ -329,31 +340,11 @@ def test_prepare_scverse_results_df_anndata(minimal_adata):
 
     # Test error when trying to use existing column
     with pytest.raises(ValueError, match="Cannot use 'gene_name' as index_which_ontology"):
-        loading.prepare_scverse_results_df(
+        loading.prepare_anndata_results_df(
             minimal_adata,
             table_type=ADATA.VAR,
             index_which_ontology='gene_name'  # Should fail - already exists
         )
-
-def test_prepare_scverse_results_df_mudata(minimal_mudata):
-    """Test prepare_scverse_results_df with MuData input."""
-    # Test RNA modality (using minimal_adata)
-    rna_results = loading.prepare_scverse_results_df(
-        minimal_mudata.mod['rna'],
-        table_type=ADATA.VAR
-    )
-    assert isinstance(rna_results, pd.DataFrame)
-    assert rna_results.shape[0] == minimal_mudata.mod['rna'].n_vars
-    assert list(rna_results.index) == list(minimal_mudata.mod['rna'].var.index)
-    
-    # Test protein modality
-    protein_results = loading.prepare_scverse_results_df(
-        minimal_mudata.mod['protein'],
-        table_type=ADATA.VAR
-    )
-    assert isinstance(protein_results, pd.DataFrame)
-    assert protein_results.shape[0] == minimal_mudata.mod['protein'].n_vars
-    assert list(protein_results.index) == list(minimal_mudata.mod['protein'].var.index)
 
 def test_split_mdata_results_by_modality(minimal_mudata):
     """Test splitting results table by modality."""
@@ -365,7 +356,7 @@ def test_split_mdata_results_by_modality(minimal_mudata):
     )
     
     # Split by modality
-    modality_results = loading.split_mdata_results_by_modality(minimal_mudata, all_results)
+    modality_results = loading._split_mdata_results_by_modality(minimal_mudata, all_results)
     
     # Check we got both modalities
     assert set(modality_results.keys()) == {'rna', 'protein'}
@@ -404,5 +395,187 @@ def test_split_mdata_results_by_modality_errors(minimal_mudata):
     
     # Should raise error due to index mismatch
     with pytest.raises(ValueError, match="Index mismatch in rna"):
-        loading.split_mdata_results_by_modality(minimal_mudata, wrong_index_results) 
+        loading._split_mdata_results_by_modality(minimal_mudata, wrong_index_results) 
+
+def test_multimodality_ontology_config():
+    """Test MultiModalityOntologyConfig creation and validation."""
+    # Test successful creation with different ontology types
+    config_dict = {
+        "transcriptomics": {
+            "ontologies": None,  # Auto-detect
+            "index_which_ontology": None
+        },
+        "proteomics": {
+            "ontologies": {"uniprot", "pharos"},  # Set of columns
+            "index_which_ontology": "uniprot"
+        },
+        "atac": {
+            "ontologies": {"peak1": "peak_id"},  # Dict mapping
+            "index_which_ontology": None
+        }
+    }
+    config = loading.MultiModalityOntologyConfig.from_dict(config_dict)
+
+    # Test dictionary-like access
+    assert len(config) == 3
+    assert set(config) == {"transcriptomics", "proteomics", "atac"}
+    
+    # Test modality access and type preservation
+    transcriptomics = config["transcriptomics"]
+    assert transcriptomics.ontologies is None
+    assert transcriptomics.index_which_ontology is None
+
+    proteomics = config["proteomics"]
+    assert isinstance(proteomics.ontologies, set)
+    assert proteomics.ontologies == {"uniprot", "pharos"}
+    assert proteomics.index_which_ontology == "uniprot"
+
+    atac = config["atac"]
+    assert isinstance(atac.ontologies, dict)
+    assert atac.ontologies == {"peak1": "peak_id"}
+    assert atac.index_which_ontology is None
+
+    # Test items() method
+    for modality, modality_config in config.items():
+        assert modality in config_dict
+        assert modality_config.ontologies == config_dict[modality]["ontologies"]
+        assert modality_config.index_which_ontology == config_dict[modality]["index_which_ontology"]
+
+    # Test validation - missing required field
+    with pytest.raises(ValueError):
+        loading.MultiModalityOntologyConfig.from_dict({
+            "transcriptomics": {
+                "index_which_ontology": "ensembl_gene"  # Missing ontologies field
+            }
+        })
+
+    # Test validation - wrong type for ontologies
+    with pytest.raises(ValueError):
+        loading.MultiModalityOntologyConfig.from_dict({
+            "transcriptomics": {
+                "ontologies": "ensembl_gene",  # Should be None, set, or dict
+                "index_which_ontology": "ensembl_gene"
+            }
+        })
+
+    # Test empty config
+    empty_config = loading.MultiModalityOntologyConfig(root={})
+    assert len(empty_config) == 0
+
+    # Test optional index_which_ontology
+    minimal_config = loading.MultiModalityOntologyConfig.from_dict({
+        "transcriptomics": {
+            "ontologies": None  # No index_which_ontology
+        }
+    })
+    assert minimal_config["transcriptomics"].index_which_ontology is None
+
+def test_prepare_mudata_results_df(minimal_mudata):
+    """Test prepare_mudata_results_df with different ontology configurations.
+    
+    The function should:
+    1. Use MuData's var/varm tables for the actual data
+    2. Use each modality's var table for ontology information
+    3. Return a dictionary of DataFrames, one per modality
+    4. Each DataFrame should have the ontology columns and any requested data columns
+    """
+    # Arrange
+    config = {
+        "rna": {
+            "ontologies": None,  # Auto-detect
+            "index_which_ontology": "ensembl_gene"  # Rename index to this
+        },
+        "protein": {
+            "ontologies": {"uniprot": "uniprot"},  # Map to valid ontology name
+            "index_which_ontology": None
+        }
+    }
+
+    expected_rna_ontologies = {
+        "ensembl_gene",  # From index
+        "ensembl_transcript",  # From RNA modality var
+        "gene_name"  # From RNA modality var
+    }
+    expected_protein_ontologies = {"uniprot"}  # From protein modality var
+
+    # Act - Test var table extraction
+    var_results = loading.prepare_mudata_results_df(
+        minimal_mudata,
+        mudata_ontologies=config,
+        table_type=ADATA.VAR
+    )
+
+    # Assert - Basic structure
+    assert set(var_results.keys()) == {"rna", "protein"}
+    
+    # Assert - RNA modality
+    rna_results = var_results["rna"]
+    assert isinstance(rna_results, pd.DataFrame)
+    assert rna_results.shape[0] == minimal_mudata.mod["rna"].n_vars
+    assert expected_rna_ontologies.issubset(set(rna_results.columns)), \
+        f"Missing ontology columns: {expected_rna_ontologies - set(rna_results.columns)}"
+    
+    # Assert - Protein modality
+    protein_results = var_results["protein"]
+    assert isinstance(protein_results, pd.DataFrame)
+    assert protein_results.shape[0] == minimal_mudata.mod["protein"].n_vars
+    assert expected_protein_ontologies.issubset(set(protein_results.columns)), \
+        f"Missing ontology columns: {expected_protein_ontologies - set(protein_results.columns)}"
+
+    # Act - Test varm table extraction with explicit results_attrs
+    varm_results = loading.prepare_mudata_results_df(
+        minimal_mudata,
+        mudata_ontologies=config,
+        table_type=ADATA.VARM,
+        table_name="gene_scores",
+        results_attrs=["score1", "score2"],
+        table_colnames=["score1", "score2", "score3"]
+    )
+    
+    # Assert - RNA varm results
+    rna_varm = varm_results["rna"]
+    expected_rna_varm_cols = expected_rna_ontologies | {"score1", "score2"}
+    assert isinstance(rna_varm, pd.DataFrame)
+    assert rna_varm.shape[0] == minimal_mudata.mod["rna"].n_vars
+    assert expected_rna_varm_cols.issubset(set(rna_varm.columns)), \
+        f"Missing columns: {expected_rna_varm_cols - set(rna_varm.columns)}"
+    
+    # Assert - Protein varm results
+    protein_varm = varm_results["protein"]
+    expected_protein_varm_cols = expected_protein_ontologies | {"score1", "score2"}
+    assert isinstance(protein_varm, pd.DataFrame)
+    assert protein_varm.shape[0] == minimal_mudata.mod["protein"].n_vars
+    assert expected_protein_varm_cols.issubset(set(protein_varm.columns)), \
+        f"Missing columns: {expected_protein_varm_cols - set(protein_varm.columns)}"
+
+def test_prepare_mudata_results_df_errors(minimal_mudata):
+    """Test error cases for prepare_mudata_results_df."""
+    # Test missing modality configuration
+    with pytest.raises(ValueError, match="Missing ontology configurations for modalities"):
+        loading.prepare_mudata_results_df(
+            minimal_mudata,
+            mudata_ontologies={"rna": {"ontologies": None}},
+            table_type=ADATA.VAR
+        )
+
+    # Test invalid table type
+    with pytest.raises(ValueError, match="table_type must be one of"):
+        loading.prepare_mudata_results_df(
+            minimal_mudata,
+            mudata_ontologies={"rna": {"ontologies": None}, "protein": {"ontologies": None}},
+            table_type="invalid_type"
+        )
+
+    # Test missing table_colnames for varm
+    # Add varm table to RNA modality first
+    minimal_mudata.mod["rna"].varm["scores"] = np.random.randn(minimal_mudata.mod["rna"].n_vars, 3)
+    minimal_mudata.mod["rna"].uns["scores_features"] = ["score1", "score2", "score3"]
+    with pytest.raises(ValueError, match="table_name 'scores' not found in adata.varm"):
+        loading.prepare_mudata_results_df(
+            minimal_mudata,
+            mudata_ontologies={"rna": {"ontologies": None}, "protein": {"ontologies": None}},
+            table_type=ADATA.VARM,
+            table_name="scores",
+            results_attrs=["score1", "score2"]  # Missing table_colnames
+        )
     
