@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import pytest
+import numpy as np
 
 import pandas as pd
 from napistu import sbml_dfs_core
@@ -108,6 +109,60 @@ def test_create_cpr_graph():
     _ = net_create.create_cpr_graph(sbml_dfs, graph_type="bipartite")
     _ = net_create.create_cpr_graph(sbml_dfs, graph_type="regulatory")
     _ = net_create.create_cpr_graph(sbml_dfs, graph_type="surrogate")
+
+
+def test_create_cpr_graph_edge_reversed():
+    """Test that edge_reversed=True properly reverses edges in the graph for all graph types."""
+    # Test each graph type
+    for graph_type in ["bipartite", "regulatory", "surrogate"]:
+        # Create graphs with and without edge reversal
+        normal_graph = net_create.create_cpr_graph(
+            sbml_dfs,
+            graph_type=graph_type,
+            directed=True,
+            edge_reversed=False
+        )
+        reversed_graph = net_create.create_cpr_graph(
+            sbml_dfs,
+            graph_type=graph_type,
+            directed=True,
+            edge_reversed=True
+        )
+
+        # Get edge dataframes for comparison
+        normal_edges = normal_graph.get_edge_dataframe()
+        reversed_edges = reversed_graph.get_edge_dataframe()
+
+        # Verify we have edges to test
+        assert len(normal_edges) > 0, f"No edges found in {graph_type} graph"
+        assert len(normal_edges) == len(reversed_edges), f"Edge count mismatch in {graph_type} graph"
+
+        # Test edge reversal
+        # Check a few edges to verify from/to are swapped
+        for i in range(min(5, len(normal_edges))):
+            # Check from/to are swapped
+            assert normal_edges.iloc[i]["from"] == reversed_edges.iloc[i]["to"], \
+                f"From/to not properly swapped in {graph_type} graph"
+            assert normal_edges.iloc[i]["to"] == reversed_edges.iloc[i]["from"], \
+                f"From/to not properly swapped in {graph_type} graph"
+            
+            # Check stoichiometry is negated
+            assert normal_edges.iloc[i]["stoichiometry"] == -reversed_edges.iloc[i]["stoichiometry"], \
+                f"Stoichiometry not properly negated in {graph_type} graph"
+            
+            # Check direction attributes are properly swapped
+            if normal_edges.iloc[i]["direction"] == "forward":
+                assert reversed_edges.iloc[i]["direction"] == "reverse", \
+                    f"Direction not properly reversed (forward->reverse) in {graph_type} graph"
+            elif normal_edges.iloc[i]["direction"] == "reverse":
+                assert reversed_edges.iloc[i]["direction"] == "forward", \
+                    f"Direction not properly reversed (reverse->forward) in {graph_type} graph"
+
+            # Check parents/children are swapped
+            assert normal_edges.iloc[i]["sc_parents"] == reversed_edges.iloc[i]["sc_children"], \
+                f"Parents/children not properly swapped in {graph_type} graph"
+            assert normal_edges.iloc[i]["sc_children"] == reversed_edges.iloc[i]["sc_parents"], \
+                f"Parents/children not properly swapped in {graph_type} graph"
 
 
 def test_create_cpr_graph_none_attrs():
@@ -342,12 +397,43 @@ def test_net_polarity():
 
 
 def test_entity_validation():
+    # Test basic validation
     entity_attrs = {"table": "reactions", "variable": "foo"}
-
     assert net_create._EntityAttrValidator(**entity_attrs).model_dump() == {
         **entity_attrs,
         **{"trans": DEFAULT_WT_TRANS},
     }
+
+    # Test validation with custom transformations
+    custom_transformations = {
+        "nlog10": lambda x: -np.log10(x),
+        "square": lambda x: x**2
+    }
+
+    # Test valid custom transformation
+    entity_attrs_custom = {
+        "attr1": {"table": "reactions", "variable": "foo", "trans": "nlog10"},
+        "attr2": {"table": "species", "variable": "bar", "trans": "square"}
+    }
+    # Should not raise any errors
+    net_create._validate_entity_attrs(entity_attrs_custom, custom_transformations=custom_transformations)
+
+    # Test invalid transformation
+    entity_attrs_invalid = {
+        "attr1": {"table": "reactions", "variable": "foo", "trans": "invalid_trans"}
+    }
+    with pytest.raises(ValueError) as excinfo:
+        net_create._validate_entity_attrs(entity_attrs_invalid, custom_transformations=custom_transformations)
+    assert "transformation 'invalid_trans' was not defined" in str(excinfo.value)
+
+    # Test with validate_transformations=False
+    # Should not raise any errors even with invalid transformation
+    net_create._validate_entity_attrs(entity_attrs_invalid, validate_transformations=False)
+
+    # Test with non-dict input
+    with pytest.raises(AssertionError) as excinfo:
+        net_create._validate_entity_attrs(["not", "a", "dict"])
+    assert "entity_attrs must be a dictionary" in str(excinfo.value)
 
 
 ################################################

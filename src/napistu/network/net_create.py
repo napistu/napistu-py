@@ -85,36 +85,14 @@ def create_cpr_graph(
     if reaction_graph_attrs is None:
         reaction_graph_attrs = {}
 
-    if not isinstance(sbml_dfs, sbml_dfs_core.SBML_dfs):
-        raise TypeError(
-            f"sbml_dfs must be a sbml_dfs_core.SBML_dfs, but was {type(sbml_dfs)}"
-        )
-
-    if not isinstance(reaction_graph_attrs, dict):
-        raise TypeError(
-            f"reaction_graph_attrs must be a dict, but was {type(reaction_graph_attrs)}"
-        )
-
-    if not isinstance(directed, bool):
-        raise TypeError(f"directed must be a bool, but was {type(directed)}")
-
-    if not isinstance(edge_reversed, bool):
-        raise TypeError(f"edge_reverse must be a bool, but was {type(edge_reversed)}")
-
-    if not isinstance(graph_type, str):
-        raise TypeError(f"graph_type must be a str, but was {type(verbose)}")
-
     if graph_type not in VALID_CPR_GRAPH_TYPES:
         raise ValueError(
             f"graph_type is not a valid value ({graph_type}), valid values are {','.join(VALID_CPR_GRAPH_TYPES)}"
         )
 
-    if not isinstance(verbose, bool):
-        raise TypeError(f"verbose must be a bool, but was {type(verbose)}")
-
-    # fail fast in reaction_graph_attrs is not properly formatted
+    # fail fast if reaction_graph_attrs is not properly formatted
     for k in reaction_graph_attrs.keys():
-        _validate_entity_attrs(reaction_graph_attrs[k])
+        _validate_entity_attrs(reaction_graph_attrs[k], custom_transformations=custom_transformations)
 
     working_sbml_dfs = copy.deepcopy(sbml_dfs)
     reaction_species_counts = working_sbml_dfs.reaction_species.value_counts(
@@ -185,7 +163,7 @@ def create_cpr_graph(
             [
                 # assign forward edges
                 augmented_network_edges.assign(
-                    direction=CPR_GRAPH_EDGE_DIRECTIONS.FORWARD
+                    **{CPR_GRAPH_EDGES.DIRECTION: CPR_GRAPH_EDGE_DIRECTIONS.FORWARD}
                 ),
                 # create reverse edges for reversibile reactions
                 _reverse_network_edges(augmented_network_edges),
@@ -193,7 +171,7 @@ def create_cpr_graph(
         )
     else:
         directed_network_edges = augmented_network_edges.assign(
-            direction=CPR_GRAPH_EDGE_DIRECTIONS.UNDIRECTED
+            **{CPR_GRAPH_EDGES.DIRECTION: CPR_GRAPH_EDGE_DIRECTIONS.UNDIRECTED}
         )
 
     # de-duplicate edges
@@ -510,7 +488,7 @@ def summarize_weight_calibration(cpr_graph: ig.Graph, reaction_attrs: dict) -> N
 def add_graph_weights(
     cpr_graph: ig.Graph,
     reaction_attrs: dict,
-    weighting_strategy: str = CPR_WEIGHTING_STRATEGIES.UNWEIGHTED,
+    weighting_strategy: str = CPR_WEIGHTING_STRATEGIES.UNWEIGHTED
 ) -> ig.Graph:
     """
     Add Graph Weights
@@ -1544,7 +1522,7 @@ def _reverse_network_edges(augmented_network_edges: pd.DataFrame) -> pd.DataFram
         raise ValueError("transformed_r_reaction_edges and r_reaction_edges must have the same number of rows")
 
     return transformed_r_reaction_edges.assign(
-        direction=CPR_GRAPH_EDGE_DIRECTIONS.REVERSE
+        **{CPR_GRAPH_EDGES.DIRECTION: CPR_GRAPH_EDGE_DIRECTIONS.REVERSE}
     )
 
 
@@ -1673,23 +1651,45 @@ def _create_topology_weights(
 def _validate_entity_attrs(
     entity_attrs: dict, validate_transformations: bool = True, custom_transformations: Optional[dict] = None
 ) -> None:
-    """Validate that graph attributes are a valid format."""
-
-    assert isinstance(entity_attrs, dict)
-    for v in entity_attrs.values():
+    """Validate that graph attributes are a valid format.
+    
+    Parameters
+    ----------
+    entity_attrs : dict
+        Dictionary of entity attributes to validate
+    validate_transformations : bool, optional
+        Whether to validate transformation names, by default True
+    custom_transformations : Optional[dict], optional
+        Dictionary of custom transformation functions, by default None
+        Keys are transformation names, values are transformation functions
+        
+    Returns
+    -------
+    None
+        
+    Raises
+    ------
+    AssertionError
+        If entity_attrs is not a dictionary
+    ValueError
+        If a transformation is not found in DEFINED_WEIGHT_TRANSFORMATION or custom_transformations
+    """
+    assert isinstance(entity_attrs, dict), "entity_attrs must be a dictionary"
+    
+    for k, v in entity_attrs.items():
         # check structure against pydantic config
-        entity_attrs = _EntityAttrValidator(**v).model_dump()
-
+        validated_attrs = _EntityAttrValidator(**v).model_dump()
+        
         if validate_transformations:
-            trans_name = v["trans"]
+            trans_name = validated_attrs.get("trans", DEFAULT_WT_TRANS)
             valid_trans = set(DEFINED_WEIGHT_TRANSFORMATION.keys())
             if custom_transformations:
                 valid_trans = valid_trans.union(set(custom_transformations.keys()))
             if trans_name not in valid_trans:
                 raise ValueError(
-                    f"transformation {trans_name} was not defined as an alias in "
+                    f"transformation '{trans_name}' was not defined as an alias in "
                     "DEFINED_WEIGHT_TRANSFORMATION or custom_transformations. The defined transformations "
-                    f"are {', '.join(valid_trans)}"
+                    f"are {', '.join(sorted(valid_trans))}"
                 )
 
     return None
