@@ -440,11 +440,11 @@ def _log_feature_species_mapping_stats(pathway_species: pd.DataFrame, feature_id
     Log statistics about the mapping between feature_id and s_id in the pathway_species DataFrame.
     """
     
-    # Percent of feature_ids present one or more times in the output
+    # Percent change in feature_ids
     n_feature_ids = pathway_species[feature_id_var].nunique()
     n_input_feature_ids = pathway_species[feature_id_var].max() + 1 if feature_id_var in pathway_species.columns else 0
-    percent_present = 100 * n_feature_ids / n_input_feature_ids if n_input_feature_ids else 0
-    logger.info(f"{percent_present:.1f}% of feature_ids are present one or more times in the output ({n_feature_ids}/{n_input_feature_ids})")
+    percent_change = 100 * (n_feature_ids - n_input_feature_ids) / n_input_feature_ids if n_input_feature_ids else 0
+    logger.info(f"{percent_change:+.1f}% change in feature_ids ({n_feature_ids} vs {n_input_feature_ids})")
 
     # Number of times an s_id maps to 1+ feature_ids (with s_name)
     s_id_counts = pathway_species.groupby(SBML_DFS.S_ID)[feature_id_var].nunique()

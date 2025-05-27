@@ -330,7 +330,15 @@ def _select_results_attrs(
 
     if isinstance(raw_results_table, pd.DataFrame):
         if results_attrs is not None:
-            results_table_data = raw_results_table.loc[results_attrs]
+            # Get available columns for better error message
+            available_attrs = raw_results_table.columns.tolist()
+            missing_attrs = [attr for attr in results_attrs if attr not in available_attrs]
+            if missing_attrs:
+                raise ValueError(
+                    f"The following results attributes were not found: {missing_attrs}\n"
+                    f"Available attributes are: {available_attrs}"
+                )
+            results_table_data = raw_results_table.loc[:, results_attrs]
         else:
             results_table_data = raw_results_table
         return results_table_data
@@ -349,7 +357,10 @@ def _select_results_attrs(
     if results_attrs is not None:
         invalid_results_attrs = [x for x in results_attrs if x not in valid_attrs]
         if len(invalid_results_attrs) > 0:
-            raise ValueError(f"The following results attributes are not valid: {invalid_results_attrs}")
+            raise ValueError(
+                f"The following results attributes were not found: {invalid_results_attrs}\n"
+                f"Available attributes are: {valid_attrs}"
+            )
 
         # Get positions based on table type
         if table_type == ADATA.VARM:

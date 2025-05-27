@@ -1,12 +1,22 @@
-from typing import Optional, Union, Set, Dict
 import copy
+import logging
+from typing import Optional, Union, Set, Dict
+
 import pandas as pd
 
-from napistu.constants import SBML_DFS
-from napistu.matching.constants import FEATURE_ID_VAR_DEFAULT, RESOLVE_MATCHES_AGGREGATORS, RESOLVE_MATCHES_TMP_WEIGHT_COL
+from napistu.constants import SBML_DFS, ONTOLOGIES_LIST
+from napistu.matching.constants import (
+    FEATURE_ID_VAR_DEFAULT,
+    RESOLVE_MATCHES_AGGREGATORS,
+    RESOLVE_MATCHES_TMP_WEIGHT_COL,
+    BIND_DICT_OF_WIDE_RESULTS_STRATEGIES,
+    BIND_DICT_OF_WIDE_RESULTS_STRATEGIES_LIST
+)
 from napistu import identifiers, utils
 from napistu.matching.species import match_features_to_wide_pathway_species
 from napistu import sbml_dfs_core
+
+logger = logging.getLogger(__name__)
 
 def bind_wide_results(
     sbml_dfs : sbml_dfs_core.SBML_dfs,
@@ -96,6 +106,122 @@ def bind_wide_results(
         clean_species_data
         )
 
+    return None if inplace else sbml_dfs
+
+
+def bind_dict_of_wide_results(
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    results_dict: dict,
+    results_name: str,
+    strategy: str = BIND_DICT_OF_WIDE_RESULTS_STRATEGIES.CONTATENATE,
+    species_identifiers: pd.DataFrame = None,
+    ontologies: Optional[Union[str, list]] = None,
+    dogmatic: bool = False,
+    inplace: bool = True,
+    verbose=True
+):
+    """
+    Bind a dictionary of wide results to an SBML_dfs object.
+
+    This function is used to bind a dictionary of wide results to 1 or more species_data attributes of an SBML_dfs object.
+    The dictionary should have keys which are the modality names and values which are the results dataframes.
+    The "strategy" argument controls how the results are added to the SBML_dfs object.
+
+    Parameters
+    ----------
+    sbml_dfs : SBML_dfs
+        The SBML_dfs object to bind the results to.
+    results_dict : dict
+        A dictionary of results dataframes with modality names as keys.
+    results_name : str
+        The name of the species_data attribute to bind the results to.
+    strategy : str
+        The strategy to use for binding the results.
+
+        Options are:
+        - "concatenate" : concatenate the results dataframes and add them as a single attribute.
+        - "multiple_keys" : add each modality's results as a separate attribute. The attribute name will be f'{results_name}_{modality}'.
+        - "stagger" : add each modality's results as a separate attribute. The attribute name will be f'{attr_name}_{modality}'.
+        
+    species_identifiers : pd.DataFrame
+        A dataframe with species identifiers.
+    ontologies : optional str, list
+        The ontology to use for the species identifiers. If not provided, the column names of the results dataframes which match ONTOLOGIES_LIST will be used.
+    dogmatic : bool
+        Whether to use dogmatic mode. Ignored if species_identifiers is provided.
+    verbose : bool
+        Whether to print verbose output.
+    inplace : bool, default=True
+        Whether to modify the sbml_dfs object in place. If False, returns a copy.
+
+    Returns
+    -------
+    Optional[SBML_dfs]
+        If inplace=True, returns None. Otherwise returns the modified copy of sbml_dfs.
+    """
+
+    # validate strategy
+    if strategy not in BIND_DICT_OF_WIDE_RESULTS_STRATEGIES_LIST:
+        raise ValueError(f"Invalid strategy: {strategy}. Must be one of {BIND_DICT_OF_WIDE_RESULTS_STRATEGIES_LIST}")
+
+    species_identifiers = identifiers._prepare_species_identifiers(
+        sbml_dfs,
+        dogmatic = dogmatic,
+        species_identifiers = species_identifiers
+        )
+
+    if not inplace:
+        sbml_dfs = copy.deepcopy(sbml_dfs)
+    
+    if strategy == BIND_DICT_OF_WIDE_RESULTS_STRATEGIES.MULTIPLE_KEYS:
+        for modality, results_df in results_dict.items():
+            valid_ontologies = _get_wide_results_valid_ontologies(results_df, ontologies)
+            
+            modality_results_name = f"{results_name}_{modality}"
+
+            bind_wide_results(
+                sbml_dfs,
+                results_df,
+                modality_results_name,
+                species_identifiers = species_identifiers,
+                ontologies = valid_ontologies,
+                inplace = True,  # Always use inplace=True here since we handle copying above
+                verbose = verbose
+            )
+
+        return None if inplace else sbml_dfs
+
+    # create either a concatenated or staggered results table
+    if strategy == BIND_DICT_OF_WIDE_RESULTS_STRATEGIES.CONTATENATE:
+        results_df = pd.concat(results_dict.values(), axis=0)
+    elif strategy == BIND_DICT_OF_WIDE_RESULTS_STRATEGIES.STAGGER:
+        
+        results_dict_copy = results_dict.copy()
+        for k, v in results_dict_copy.items():
+            valid_ontologies = _get_wide_results_valid_ontologies(v, ontologies)
+
+            if verbose:
+                logger.info(f"Modality {k} has ontologies {valid_ontologies}. Other variables will be renamed to {k}_<variable>")
+
+            # rename all the columns besides ontologies names
+            for var in v.columns:
+                if var not in valid_ontologies:
+                    results_dict_copy[k].rename(columns={var: f'{var}_{k}'}, inplace=True)
+
+        results_df = pd.concat(results_dict_copy.values(), axis=1)
+
+    valid_ontologies = _get_wide_results_valid_ontologies(results_df, ontologies)
+    
+    bind_wide_results(
+        sbml_dfs,
+        results_df,
+        results_name,
+        species_identifiers = species_identifiers,
+        ontologies = valid_ontologies,
+        inplace = True,  # Always use inplace=True here since we handle copying above
+        verbose = verbose
+    )
+            
     return None if inplace else sbml_dfs
 
 
@@ -202,6 +328,44 @@ def resolve_matches(
     resolved.index.name = index_col
     
     return resolved
+
+
+def _get_wide_results_valid_ontologies(results_df: pd.DataFrame, ontologies: Optional[Union[str, list]] = None) -> list:
+
+    """
+    Get the valid ontologies for a wide results dataframe.
+
+    If ontologies is a string, it will be converted to a list.
+    If ontologies is None, the column names of the results dataframe which match ONTOLOGIES_LIST will be used.
+
+    Parameters
+    ----------
+    results_df : pd.DataFrame
+        The results dataframe to get the valid ontologies for.
+    ontologies : optional str, list
+        The ontology to use for the species identifiers. If not provided, the column names of the results dataframes which match ONTOLOGIES_LIST will be used.
+
+    Returns
+    -------
+    list
+        The valid ontologies for the results dataframe.
+    """
+
+    if isinstance(ontologies, str):
+        ontologies = [ontologies] # now, it will be None or list
+
+    if ontologies is None:
+        ontologies = [col for col in results_df.columns if col in ONTOLOGIES_LIST]
+        if len(ontologies) == 0:
+            raise ValueError("No valid ontologies found in results dataframe. Columns are: " + str(results_df.columns))
+        
+    
+    if isinstance(ontologies, list):
+        invalid_ontologies = set(ontologies) - set(ONTOLOGIES_LIST)
+        if len(invalid_ontologies) > 0:
+            raise ValueError("Invalid ontologies found in ontologies list: " + str(invalid_ontologies))
+
+    return ontologies
 
 
 def _get_numeric_aggregator(

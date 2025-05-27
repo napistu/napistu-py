@@ -177,11 +177,11 @@ def test_select_results_attrs_errors(minimal_adata):
     """Test error cases for results attribute selection."""
     # Test invalid results attributes - shape should match minimal_adata
     array = np.random.randn(minimal_adata.n_obs, minimal_adata.n_vars)
-    with pytest.raises(ValueError, match="The following results attributes are not valid"):
+    with pytest.raises(ValueError, match="The following results attributes were not found"):
         loading._select_results_attrs(minimal_adata, array, "X", ['nonexistent_attr'])
 
     # Test invalid gene names for varp
-    with pytest.raises(ValueError, match="The following results attributes are not valid"):
+    with pytest.raises(ValueError, match="The following results attributes were not found"):
         loading._select_results_attrs(
             minimal_adata,
             minimal_adata.varp['correlations'],
