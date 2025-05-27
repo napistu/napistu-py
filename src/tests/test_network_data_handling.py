@@ -32,7 +32,7 @@ def mock_sbml_dfs():
     return MockSBMLDfs()
 
 @pytest.fixture
-def test_data_table():
+def test_entity_data():
     """Create a test data table."""
     return pd.DataFrame({
         "attr1": [1, 2, 3],
@@ -73,51 +73,57 @@ def test_select_sbml_dfs_data_table(mock_sbml_dfs):
     with pytest.raises(ValueError, match="Expected a single species data table but found 2"):
         data_handling._select_sbml_dfs_data_table(mock_sbml_dfs)
 
-def test_select_data_table_attrs_basic(test_data_table):
+def test_select_data_table_attrs_basic(test_entity_data):
     """Test basic attribute selection from data table."""
     # Test single attribute as list
-    result = data_handling._select_sbml_dfs_data_table_attrs(test_data_table, ["attr1"])
-    assert isinstance(result, pd.DataFrame)
-    assert list(result.columns) == ["attr1"]
-    assert result["attr1"].tolist() == [1, 2, 3]
+    result = data_handling._create_data_table_column_mapping(test_entity_data, ["attr1"])
+    assert isinstance(result, dict)
+    assert result == {"attr1": "attr1"}
 
     # Test multiple attributes
-    result = data_handling._select_sbml_dfs_data_table_attrs(test_data_table, ["attr1", "attr2"])
-    assert isinstance(result, pd.DataFrame)
-    assert list(result.columns) == ["attr1", "attr2"]
-    assert result["attr1"].tolist() == [1, 2, 3]
-    assert result["attr2"].tolist() == ["a", "b", "c"]
+    result = data_handling._create_data_table_column_mapping(test_entity_data, ["attr1", "attr2"])
+    assert isinstance(result, dict)
+    assert result == {"attr1": "attr1", "attr2": "attr2"}
 
     # Test invalid attribute
     with pytest.raises(ValueError, match="following attributes were missing"):
-        data_handling._select_sbml_dfs_data_table_attrs(test_data_table, ["invalid_attr"])
+        data_handling._create_data_table_column_mapping(test_entity_data, ["invalid_attr"])
 
-def test_select_data_table_attrs_advanced(test_data_table):
+def test_select_data_table_attrs_advanced(test_entity_data):
     """Test advanced attribute selection features."""
     # Test dictionary renaming
-    result = data_handling._select_sbml_dfs_data_table_attrs(
-        test_data_table, 
+    result = data_handling._create_data_table_column_mapping(
+        test_entity_data, 
         {"attr1": "new_name1", "attr2": "new_name2"}
     )
-    assert isinstance(result, pd.DataFrame)
-    assert list(result.columns) == ["new_name1", "new_name2"]
-    assert result["new_name1"].tolist() == [1, 2, 3]
-    assert result["new_name2"].tolist() == ["a", "b", "c"]
+    assert isinstance(result, dict)
+    assert result == {"attr1": "new_name1", "attr2": "new_name2"}
 
     # Test empty dictionary
     with pytest.raises(ValueError, match="No attributes found in the dictionary"):
-        data_handling._select_sbml_dfs_data_table_attrs(test_data_table, {})
+        data_handling._create_data_table_column_mapping(test_entity_data, {})
 
     # Test invalid source columns
     with pytest.raises(ValueError, match="following source columns were missing"):
-        data_handling._select_sbml_dfs_data_table_attrs(
-            test_data_table, 
+        data_handling._create_data_table_column_mapping(
+            test_entity_data, 
             {"invalid_attr": "new_name"}
         )
     
     # Test conflicting new column names
     with pytest.raises(ValueError, match="following new column names conflict with existing columns"):
-        data_handling._select_sbml_dfs_data_table_attrs(
-            test_data_table,
+        data_handling._create_data_table_column_mapping(
+            test_entity_data,
             {"attr1": "attr2"}  # trying to rename attr1 to attr2, which already exists
-        ) 
+        )
+
+    # Test None returns identity mapping for all columns
+    result = data_handling._create_data_table_column_mapping(test_entity_data, None)
+    assert isinstance(result, dict)
+    expected = {col: col for col in test_entity_data.columns}
+    assert result == expected
+
+    # Test string pattern matching
+    result = data_handling._create_data_table_column_mapping(test_entity_data, "test_prefix_.*")
+    assert isinstance(result, dict)
+    assert result == {"test_prefix_attr": "test_prefix_attr"} 

@@ -25,7 +25,7 @@ def _select_sbml_dfs_data_table(sbml_dfs: sbml_dfs_core.SBML_dfs, table_name: Op
 
     Returns
     -------
-    data_table: pd.DataFrame
+    entity_data: pd.DataFrame
     """
 
     # validate table_type
@@ -48,19 +48,19 @@ def _select_sbml_dfs_data_table(sbml_dfs: sbml_dfs_core.SBML_dfs, table_name: Op
     if table_name not in valid_table_names:
         raise ValueError(f"Invalid table_name: {table_name}. Must be one of {valid_table_names}")
     
-    data_table = data_attr[table_name]
+    entity_data = data_attr[table_name]
 
-    return data_table
+    return entity_data
 
-def _select_sbml_dfs_data_table_attrs(data_table: pd.DataFrame, attribute_names: Union[str, List[str], Dict[str, str]], table_type: Optional[str] = "species") -> pd.DataFrame:
+def _create_data_table_column_mapping(entity_data: pd.DataFrame, attribute_names: Union[str, List[str], Dict[str, str]], table_type: Optional[str] = "species") -> Dict[str, str]:
     """
     Select attributes from an sbml_dfs data table.
 
-    This function validates the attribute names and returns the selected attributes.
+    This function validates the attribute names and returns a mapping of original names to new names.
 
     Parameters
     ----------
-    data_table: pd.DataFrame
+    entity_data: pd.DataFrame
         The data table to select attributes from.
     attribute_names: str or list of str, optional
         Either:
@@ -74,32 +74,35 @@ def _select_sbml_dfs_data_table_attrs(data_table: pd.DataFrame, attribute_names:
 
     Returns
     -------
-    selected_data_table: pd.DataFrame
-        pd.DataFrame containing the selected attributes.
+    Dict[str, str]
+        A dictionary mapping original column names to their new names.
+        For non-renamed columns, the mapping will be identity (original -> original).
     """
-    valid_data_table_columns = data_table.columns.tolist()
+    valid_data_table_columns = entity_data.columns.tolist()
     
     # Initialize attribute_names_list
     attribute_names_list = []
 
     # select the attributes to add
     if attribute_names is None:
-        attribute_names_list = valid_data_table_columns
+        # For None, create identity mapping for all columns
+        return {col: col for col in valid_data_table_columns}
     elif isinstance(attribute_names, str):
         # try to find an exact match
         if attribute_names in valid_data_table_columns:
-            attribute_names_list = [attribute_names]
+            return {attribute_names: attribute_names}
         else:
             # try to find a regex match
-            attribute_names_list = [attr for attr in valid_data_table_columns if re.match(attribute_names, attr)]
-            if len(attribute_names_list) == 0:
+            matching_attrs = [attr for attr in valid_data_table_columns if re.match(attribute_names, attr)]
+            if len(matching_attrs) == 0:
                 raise ValueError(f"No attributes found matching {attribute_names} as a literal or regular expression. Valid attributes: {valid_data_table_columns}")
+            return {attr: attr for attr in matching_attrs}
     elif isinstance(attribute_names, list):
         # Validate that all attributes exist
         invalid_attributes = [attr for attr in attribute_names if attr not in valid_data_table_columns]
         if len(invalid_attributes) > 0:
             raise ValueError(f"The following attributes were missing from the {table_type}_data table: {invalid_attributes}. Valid attributes: {valid_data_table_columns}")
-        attribute_names_list = attribute_names
+        return {attr: attr for attr in attribute_names}
     elif isinstance(attribute_names, dict):
         # validate the keys exist in the table
         invalid_keys = [key for key in attribute_names.keys() if key not in valid_data_table_columns]
@@ -115,18 +118,10 @@ def _select_sbml_dfs_data_table_attrs(data_table: pd.DataFrame, attribute_names:
         if conflicting_names:
             raise ValueError(f"The following new column names conflict with existing columns: {conflicting_names}")
         
-        attribute_names_list = list(attribute_names.keys())
-        if len(attribute_names_list) == 0:
+        if len(attribute_names) == 0:
             raise ValueError(f"No attributes found in the dictionary. Valid attributes: {valid_data_table_columns}")
+            
+        return attribute_names
     else:
         # shouldn't be reached - for clarity
         raise ValueError(f"Invalid type for attribute_names: {type(attribute_names)}. Must be str, list, dict, or None.")
-
-    # return the selected attributes
-    selected_data_table = data_table[attribute_names_list]
-    
-    # rename columns if a dictionary was provided
-    if isinstance(attribute_names, dict):
-        selected_data_table = selected_data_table.rename(columns=attribute_names)
-    
-    return selected_data_table
