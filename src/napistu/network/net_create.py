@@ -1322,76 +1322,6 @@ def _format_interactors_for_tiered_graph(
     )
 
 
-def _add_graph_species_attribute(
-    cpr_graph: ig.Graph,
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
-    species_graph_attrs: dict,
-    custom_transformations: Optional[dict] = None,
-) -> ig.Graph:
-    """
-    Add meta-data from species_data to existing igraph's vertices.
-
-    This function augments the vertices of an igraph network with additional attributes
-    derived from the species-level data in the provided SBML_dfs object. The attributes
-    to add are specified in the species_graph_attrs dictionary, and can be transformed
-    using either built-in or user-supplied transformation functions.
-
-    Parameters
-    ----------
-    cpr_graph : ig.Graph
-        The igraph network to augment.
-    sbml_dfs : sbml_dfs_core.SBML_dfs
-        The SBML_dfs object containing species data.
-    species_graph_attrs : dict
-        Dictionary specifying which attributes to pull from species_data and how to transform them.
-        The structure should be {attribute_name: {"table": ..., "variable": ..., "trans": ...}}.
-    custom_transformations : dict, optional
-        Dictionary mapping transformation names to functions. If provided, these will be checked
-        before built-in transformations. Example: {"square": lambda x: x**2}
-
-    Returns
-    -------
-    ig.Graph
-        The input igraph network with additional vertex attributes added from species_data.
-    """
-    if not isinstance(species_graph_attrs, dict):
-        raise TypeError(
-            f"species_graph_attrs must be a dict, but was {type(species_graph_attrs)}"
-        )
-
-    # fail fast if species_graph_attrs is not properly formatted
-    # also flatten attribute list to be added to vertex nodes
-    sp_graph_key_list = []
-    sp_node_attr_list = []
-    for k in species_graph_attrs.keys():
-        _validate_entity_attrs(species_graph_attrs[k], custom_transformations=custom_transformations)
-
-        sp_graph_key_list.append(k)
-        sp_node_attr_list.append(list(species_graph_attrs[k].keys()))
-
-    # flatten sp_node_attr_list
-    flat_sp_node_attr_list = [item for items in sp_node_attr_list for item in items]
-
-    logger.info("Adding meta-data from species_data")
-
-    curr_network_nodes_df = cpr_graph.get_vertex_dataframe()
-
-    # add species-level attributes to nodes dataframe
-    augmented_network_nodes_df = _augment_network_nodes(
-        curr_network_nodes_df,
-        sbml_dfs,
-        species_graph_attrs,
-        custom_transformations=custom_transformations,
-    )
-
-    for vs_attr in flat_sp_node_attr_list:
-        # in case more than one vs_attr in the flat_sp_node_attr_list
-        logger.info(f"Adding new attribute {vs_attr} to vertices")
-        cpr_graph.vs[vs_attr] = augmented_network_nodes_df[vs_attr].values
-
-    return cpr_graph
-
-
 def _augment_network_nodes(
     network_nodes: pd.DataFrame,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
@@ -1440,13 +1370,17 @@ def _augment_network_nodes(
         )
 
     # include matching s_ids and c_ids of sc_ids
-    # (the index of network_nodes df) in network_nodes df
+    # Get original columns before merge
+    original_cols = network_nodes.columns.tolist()
+    
+    # Merge with suffixes on first entry
     network_nodes_sid = pd.merge(
         network_nodes,
         sbml_dfs.compartmentalized_species[["s_id", "c_id"]],
         left_on="name",
         right_index=True,
         how="left",
+        suffixes=("_old", "")  # Add suffix to original columns if there's a conflict
     )
 
     # assign species_data related attributes to s_id
@@ -1765,3 +1699,52 @@ class _EntityAttrValidator(BaseModel):
     table: str
     variable: str
     trans: Optional[str] = DEFAULT_WT_TRANS
+
+
+def _merge_and_log_overwrites(
+    left_df: pd.DataFrame,
+    right_df: pd.DataFrame,
+    merge_context: str,
+    **merge_kwargs
+) -> pd.DataFrame:
+    """
+    Merge two DataFrames and log any column overwrites.
+
+    Parameters
+    ----------
+    left_df : pd.DataFrame
+        Left DataFrame for merge
+    right_df : pd.DataFrame
+        Right DataFrame for merge
+    merge_context : str
+        Description of the merge operation for logging
+    **merge_kwargs : dict
+        Additional keyword arguments passed to pd.merge
+
+    Returns
+    -------
+    pd.DataFrame
+        Merged DataFrame with overwritten columns removed
+    """
+    # Track original columns
+    original_cols = left_df.columns.tolist()
+
+    # Ensure we're using the correct suffixes
+    merge_kwargs['suffixes'] = ("_old", "")
+
+    # Perform merge
+    merged_df = pd.merge(left_df, right_df, **merge_kwargs)
+
+    # Check for and log any overwritten columns
+    new_cols = merged_df.columns.tolist()
+    overwritten_cols = [col for col in original_cols if col + "_old" in new_cols]
+    if overwritten_cols:
+        logger.warning(
+            f"The following columns were overwritten during {merge_context} merge and their original values "
+            f"have been suffixed with '_old': {', '.join(overwritten_cols)}"
+        )
+        # Drop the old columns
+        cols_to_drop = [col + "_old" for col in overwritten_cols]
+        merged_df = merged_df.drop(columns=cols_to_drop)
+
+    return merged_df

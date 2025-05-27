@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import pytest
+
+import igraph as ig
 import pandas as pd
-from napistu.network import data_handling
+
+from napistu.network import data_handling, net_create
 from napistu import sbml_dfs_core
 from napistu.constants import ENTITIES_W_DATA
 
@@ -40,6 +43,7 @@ def test_entity_data():
         "test_prefix_attr": [4, 5, 6],
         "another_attr": [7, 8, 9]
     })
+
 
 def test_select_sbml_dfs_data_table(mock_sbml_dfs):
     """Test selecting data tables from SBML_dfs object."""
@@ -127,3 +131,240 @@ def test_select_data_table_attrs_advanced(test_entity_data):
     result = data_handling._create_data_table_column_mapping(test_entity_data, "test_prefix_.*")
     assert isinstance(result, dict)
     assert result == {"test_prefix_attr": "test_prefix_attr"} 
+
+
+def test_create_graph_attrs_config():
+    """Test creating graph attributes configuration with a single table and transformation."""
+    # Test basic case with single table and transformation
+    result = data_handling._create_graph_attrs_config(
+        column_mapping={"col1": "col1"},
+        data_type="species",
+        table_name="test_table",
+        transformation="identity"
+    )
+    
+    expected = {
+        "species": {
+            "col1": {
+                "table": "test_table",
+                "variable": "col1",
+                "trans": "identity",
+            }
+        }
+    }
+    assert result == expected
+
+    # Test with column renaming
+    result = data_handling._create_graph_attrs_config(
+        column_mapping={"original_col": "new_col"},
+        data_type="species",
+        table_name="test_table",
+        transformation="squared"
+    )
+    
+    expected = {
+        "species": {
+            "new_col": {
+                "table": "test_table",
+                "variable": "original_col",
+                "trans": "squared",
+            }
+        }
+    }
+    assert result == expected
+
+    # Test with multiple columns but same table and transformation
+    result = data_handling._create_graph_attrs_config(
+        column_mapping={"col1": "col1", "col2": "renamed_col2"},
+        data_type="species",
+        table_name="test_table",
+        transformation="identity"
+    )
+    
+    expected = {
+        "species": {
+            "col1": {
+                "table": "test_table",
+                "variable": "col1",
+                "trans": "identity",
+            },
+            "renamed_col2": {
+                "table": "test_table",
+                "variable": "col2",
+                "trans": "identity",
+            }
+        }
+    }
+    assert result == expected
+
+def test_add_results_table_to_graph(sbml_dfs_glucose_metabolism):
+    """Test adding results table to graph."""
+    # Create a test graph using create_cpr_graph
+    graph = net_create.create_cpr_graph(
+        sbml_dfs_glucose_metabolism,
+        directed=True,
+        graph_type="regulatory"
+    )
+
+    # Add some test data to sbml_dfs
+    test_data = pd.DataFrame(
+        {"test_attr": [1.0, 2.0, 3.0]},
+        index=pd.Index(list(sbml_dfs_glucose_metabolism.species.index[:3]), name='s_id')
+    )
+    sbml_dfs_glucose_metabolism.add_species_data("test_table", test_data)
+
+    # Test basic case - single attribute
+    result = data_handling.add_results_table_to_graph(
+        napistu_graph=graph,
+        sbml_dfs=sbml_dfs_glucose_metabolism,
+        attribute_names=["test_attr"],
+        table_name="test_table",
+        inplace=False
+    )
+    assert "test_attr" in result.vs.attributes()
+
+    # Test with transformation
+    def square(x): return x ** 2
+    result = data_handling.add_results_table_to_graph(
+        napistu_graph=graph,
+        sbml_dfs=sbml_dfs_glucose_metabolism,
+        attribute_names=["test_attr"],
+        table_name="test_table",
+        transformation="square",
+        custom_transformations={"square": square},
+        inplace=False
+    )
+    assert "test_attr" in result.vs.attributes()
+
+    # Test inplace=True
+    original_graph = graph.copy()
+    result = data_handling.add_results_table_to_graph(
+        napistu_graph=graph,
+        sbml_dfs=sbml_dfs_glucose_metabolism,
+        attribute_names=["test_attr"],
+        table_name="test_table",
+        inplace=True
+    )
+    assert result is None
+    assert "test_attr" in graph.vs.attributes()
+
+    # Test error cases
+    with pytest.raises(ValueError, match="Invalid table_type"):
+        data_handling.add_results_table_to_graph(
+            napistu_graph=graph,
+            sbml_dfs=sbml_dfs_glucose_metabolism,
+            table_type="invalid"
+        )
+
+    with pytest.raises(NotImplementedError, match="Reactions are not yet supported"):
+        data_handling.add_results_table_to_graph(
+            napistu_graph=graph,
+            sbml_dfs=sbml_dfs_glucose_metabolism,
+            table_type="reactions"
+        )
+
+def test_add_graph_species_attribute(sbml_dfs_glucose_metabolism):
+    """Test adding species attributes to graph."""
+    # Create a test graph using create_cpr_graph
+    graph = net_create.create_cpr_graph(
+        sbml_dfs_glucose_metabolism,
+        directed=True,
+        graph_type="regulatory"
+    )
+
+    # Add test data to sbml_dfs
+    test_data = pd.DataFrame(
+        {"test_attr": [1.0, 2.0, 3.0]},
+        index=pd.Index(list(sbml_dfs_glucose_metabolism.species.index[:3]), name='s_id')
+    )
+    sbml_dfs_glucose_metabolism.add_species_data("test_table", test_data)
+
+    # Define custom transformations
+    custom_transformations = {"square": lambda x: x ** 2}
+
+    # Test attempting to overwrite an existing vertex attribute
+    collision_attrs = {
+        "species": {
+            "name": {  # Using 'name' which is a required vertex attribute
+                "table": "test_table",
+                "variable": "test_attr",
+                "trans": "identity"
+            }
+        }
+    }
+
+    with pytest.raises(ValueError, match="Attribute 'name' already exists in graph vertices"):
+        data_handling._add_graph_species_attribute(
+            graph,
+            sbml_dfs_glucose_metabolism,
+            collision_attrs
+        )
+
+    # Test basic attribute addition
+    species_graph_attrs = {
+        "species": {
+            "new_attr": {
+                "table": "test_table",
+                "variable": "test_attr",
+                "trans": "identity"
+            }
+        }
+    }
+
+    result = data_handling._add_graph_species_attribute(
+        graph,
+        sbml_dfs_glucose_metabolism,
+        species_graph_attrs
+    )
+
+    assert "new_attr" in result.vs.attributes()
+
+    # Test with custom transformation
+    species_graph_attrs = {
+        "species": {
+            "squared_attr": {
+                "table": "test_table",
+                "variable": "test_attr",
+                "trans": "square"
+            }
+        }
+    }
+
+    result = data_handling._add_graph_species_attribute(
+        graph,
+        sbml_dfs_glucose_metabolism,
+        species_graph_attrs,
+        custom_transformations=custom_transformations
+    )
+
+    assert "squared_attr" in result.vs.attributes()
+
+    # Test error cases
+    with pytest.raises(TypeError, match="species_graph_attrs must be a dict"):
+        data_handling._add_graph_species_attribute(
+            graph,
+            sbml_dfs_glucose_metabolism,
+            species_graph_attrs=[]
+        )
+
+    # Test missing required attributes in graph
+    bad_graph = ig.Graph()
+    bad_graph.add_vertices(3)
+
+    # Use basic transformation to avoid transformation error
+    basic_attrs = {
+        "species": {
+            "new_attr": {
+                "table": "test_table",
+                "variable": "test_attr",
+                "trans": "identity"
+            }
+        }
+    }
+
+    with pytest.raises(ValueError, match="required attributes were missing"):
+        data_handling._add_graph_species_attribute(
+            bad_graph,
+            sbml_dfs_glucose_metabolism,
+            basic_attrs
+        )
