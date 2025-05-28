@@ -26,10 +26,11 @@ except ImportError:
 # Configure logger for this module
 logger = logging.getLogger(__name__)
 
+
 async def get_tutorial_markdown(
     tutorial_id: str,
     tutorial_urls: Dict[str, str] = TUTORIAL_URLS,
-    cache_dir: Path = TUTORIALS_CACHE_DIR
+    cache_dir: Path = TUTORIALS_CACHE_DIR,
 ) -> str:
     """
     Download/cache the notebook if needed, load it, and return the markdown.
@@ -61,19 +62,19 @@ async def get_tutorial_markdown(
     try:
         path = await _ensure_notebook_cached(tutorial_id, tutorial_urls, cache_dir)
         logger.debug(f"Loading notebook for tutorial '{tutorial_id}' from '{path}'")
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, "r", encoding="utf-8") as f:
             notebook = nbformat.read(f, as_version=4)
         logger.debug(f"Parsing notebook for tutorial '{tutorial_id}' to markdown")
         return notebook_to_markdown(notebook)
     except Exception as e:
-        logger.error(f"Error getting tutorial content for tutorial_id='{tutorial_id}': {e}")
+        logger.error(
+            f"Error getting tutorial content for tutorial_id='{tutorial_id}': {e}"
+        )
         raise
 
 
 async def fetch_notebook_from_github(
-    tutorial_id: str,
-    url: str,
-    cache_dir: Path = TUTORIALS_CACHE_DIR
+    tutorial_id: str, url: str, cache_dir: Path = TUTORIALS_CACHE_DIR
 ) -> Path:
     """
     Fetch a notebook from GitHub and cache it locally.
@@ -107,11 +108,13 @@ async def fetch_notebook_from_github(
         response = await client.get(url)
         response.raise_for_status()
         cache_path.write_bytes(response.content)
-    logger.info(f"Downloaded and cached notebook for tutorial '{tutorial_id}' at '{cache_path}'")
+    logger.info(
+        f"Downloaded and cached notebook for tutorial '{tutorial_id}' at '{cache_path}'"
+    )
     return cache_path
 
 
-def notebook_to_markdown(notebook: 'nbformat.NotebookNode') -> str:
+def notebook_to_markdown(notebook: "nbformat.NotebookNode") -> str:
     """
     Convert a Jupyter notebook to Markdown.
 
@@ -135,23 +138,23 @@ def notebook_to_markdown(notebook: 'nbformat.NotebookNode') -> str:
     """
     markdown = []
     for cell in notebook.cells:
-        if cell.cell_type == 'markdown':
+        if cell.cell_type == "markdown":
             markdown.append(cell.source)
-        elif cell.cell_type == 'code':
+        elif cell.cell_type == "code":
             markdown.append("```python")
             markdown.append(cell.source)
             markdown.append("```")
             if cell.outputs:
                 markdown.append("\nOutput:")
                 for output in cell.outputs:
-                    if 'text' in output:
+                    if "text" in output:
                         markdown.append("```")
-                        markdown.append(output['text'])
+                        markdown.append(output["text"])
                         markdown.append("```")
-                    elif 'data' in output:
-                        if 'text/plain' in output['data']:
+                    elif "data" in output:
+                        if "text/plain" in output["data"]:
                             markdown.append("```")
-                            markdown.append(output['data']['text/plain'])
+                            markdown.append(output["data"]["text/plain"])
                             markdown.append("```")
         markdown.append("\n---\n")
     return "\n".join(markdown)
@@ -160,7 +163,7 @@ def notebook_to_markdown(notebook: 'nbformat.NotebookNode') -> str:
 async def _ensure_notebook_cached(
     tutorial_id: str,
     tutorial_urls: Dict[str, str] = TUTORIAL_URLS,
-    cache_dir: Path = TUTORIALS_CACHE_DIR
+    cache_dir: Path = TUTORIALS_CACHE_DIR,
 ) -> Path:
     """
     Ensure the notebook is cached locally, fetching from GitHub if needed.
@@ -194,14 +197,15 @@ async def _ensure_notebook_cached(
     if not os.path.isfile(cache_path):
         url = tutorial_urls[tutorial_id]
         if not url:
-            raise FileNotFoundError(f"No GitHub URL found for tutorial ID: {tutorial_id}")
+            raise FileNotFoundError(
+                f"No GitHub URL found for tutorial ID: {tutorial_id}"
+            )
         await fetch_notebook_from_github(tutorial_id, url, cache_dir)
     return cache_path
 
 
 def _get_cached_notebook_path(
-    tutorial_id: str,
-    cache_dir: Path = TUTORIALS_CACHE_DIR
+    tutorial_id: str, cache_dir: Path = TUTORIALS_CACHE_DIR
 ) -> Path:
     """
     Get the local cache path for a tutorial notebook.

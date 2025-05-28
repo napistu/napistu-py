@@ -269,8 +269,7 @@ def check_entity_data_index_matching(sbml_dfs, table):
 
 
 def get_characteristic_species_ids(
-    sbml_dfs : sbml_dfs_core.SBML_dfs,
-    dogmatic : bool = True
+    sbml_dfs: sbml_dfs_core.SBML_dfs, dogmatic: bool = True
 ) -> pd.DataFrame:
     """
     Get Characteristic Species IDs
@@ -295,7 +294,7 @@ def get_characteristic_species_ids(
 
     # pre-summarize ontologies
     species_identifiers = sbml_dfs.get_identifiers(SBML_DFS.SPECIES)
-    
+
     # drop some BQB_HAS_PART annotations
     species_identifiers = sbml_dfs_core.filter_to_characteristic_species_ids(
         species_identifiers,

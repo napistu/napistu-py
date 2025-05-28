@@ -15,6 +15,7 @@ except ImportError:
         "Documentation utilities require additional dependencies. Install with 'pip install napistu[mcp]'"
     )
 
+
 async def read_read_the_docs(package_toc_url: str) -> dict:
     """
     Recursively parse all modules and submodules starting from the package TOC.
@@ -95,7 +96,7 @@ def _parse_rtd_module_page(html: str, url: Optional[str] = None) -> dict:
         "url": url,
         "functions": {},
         "classes": {},
-        "submodules": _format_submodules(soup)
+        "submodules": _format_submodules(soup),
     }
     # Get module name from <h1>
     h1 = soup.find("h1")
@@ -115,12 +116,14 @@ def _parse_rtd_module_page(html: str, url: Optional[str] = None) -> dict:
     return result
 
 
-async def _process_rtd_package_toc(url: str, css_selector: str = READTHEDOCS_TOC_CSS_SELECTOR) -> dict:
+async def _process_rtd_package_toc(
+    url: str, css_selector: str = READTHEDOCS_TOC_CSS_SELECTOR
+) -> dict:
     """
     Parse the ReadTheDocs package TOC and return a dict of {name: url}.
     """
     page_html = await mcp_utils.load_html_page(url)
-    soup = BeautifulSoup(page_html, 'html.parser')
+    soup = BeautifulSoup(page_html, "html.parser")
     selected = soup.select(css_selector)
     return _parse_module_tags(selected)
 
@@ -157,13 +160,15 @@ def _format_function(sig_dt, doc_dd) -> Dict[str, Any]:
     Returns:
         dict: A dictionary with keys 'name', 'signature', 'id', and 'doc'.
     """
-    name = sig_dt.find("span", class_="sig-name").get_text(strip=True) if sig_dt else None
+    name = (
+        sig_dt.find("span", class_="sig-name").get_text(strip=True) if sig_dt else None
+    )
     signature = sig_dt.get_text(strip=True) if sig_dt else None
     return {
         "name": mcp_utils._clean_signature_text(name),
         "signature": mcp_utils._clean_signature_text(signature),
         "id": sig_dt.get("id") if sig_dt else None,
-        "doc": doc_dd.get_text(" ", strip=True) if doc_dd else None
+        "doc": doc_dd.get_text(" ", strip=True) if doc_dd else None,
     }
 
 
@@ -185,7 +190,7 @@ def _format_attribute(attr_dl) -> Dict[str, Any]:
         "name": mcp_utils._clean_signature_text(name),
         "signature": mcp_utils._clean_signature_text(signature),
         "id": sig.get("id") if sig else None,
-        "doc": doc.get_text(" ", strip=True) if doc else None
+        "doc": doc.get_text(" ", strip=True) if doc else None,
     }
 
 
@@ -202,7 +207,9 @@ def _format_class(class_dl) -> Dict[str, Any]:
     """
     sig = class_dl.find("dt")
     doc = class_dl.find("dd")
-    class_name = sig.find("span", class_="sig-name").get_text(strip=True) if sig else None
+    class_name = (
+        sig.find("span", class_="sig-name").get_text(strip=True) if sig else None
+    )
     methods = {}
     attributes = {}
     if doc:
@@ -216,11 +223,13 @@ def _format_class(class_dl) -> Dict[str, Any]:
                 attributes[attr["name"]] = attr
     return {
         "name": mcp_utils._clean_signature_text(class_name),
-        "signature": mcp_utils._clean_signature_text(sig.get_text(strip=True) if sig else None),
+        "signature": mcp_utils._clean_signature_text(
+            sig.get_text(strip=True) if sig else None
+        ),
         "id": sig.get("id") if sig else None,
         "doc": doc.get_text(" ", strip=True) if doc else None,
         "methods": methods,
-        "attributes": attributes
+        "attributes": attributes,
     }
 
 
@@ -251,18 +260,19 @@ def _format_submodules(soup) -> dict:
                         next_p = a.find_next_sibling("p")
                         if next_p:
                             desc = next_p.get_text(strip=True)
-                    submodules[submod_name] = {
-                        "url": submod_url,
-                        "description": desc
-                    }
+                    submodules[submod_name] = {"url": submod_url, "description": desc}
     return submodules
 
 
-async def _parse_rtd_module_recursive(module_url: str, visited: Optional[Set[str]] = None, docs_dict: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+async def _parse_rtd_module_recursive(
+    module_url: str,
+    visited: Optional[Set[str]] = None,
+    docs_dict: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """
     Recursively parse a module page and all its submodules.
     """
-    
+
     if visited is None:
         visited = set()
     if docs_dict is None:

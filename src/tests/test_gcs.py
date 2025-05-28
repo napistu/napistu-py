@@ -6,6 +6,7 @@ import shutil
 
 from napistu.gcs.downloads import load_public_napistu_asset
 
+
 @pytest.mark.skip_on_windows
 def test_download_and_load_gcs_asset():
 

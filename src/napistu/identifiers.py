@@ -230,7 +230,9 @@ def format_uri_url(uri: str) -> dict:
             ontology = "ensembl_gene"
             identifier, id_ontology, _ = parse_ensembl_id(result.query)  # type: ignore
             if ontology != id_ontology:
-                raise ValueError(f"Ontology mismatch: expected {ontology}, got {id_ontology}")
+                raise ValueError(
+                    f"Ontology mismatch: expected {ontology}, got {id_ontology}"
+                )
         elif netloc == "www.ensembl.org" and split_path[-1] in [
             "transview",
             "Transcript",
@@ -238,12 +240,16 @@ def format_uri_url(uri: str) -> dict:
             ontology = "ensembl_transcript"
             identifier, id_ontology, _ = parse_ensembl_id(result.query)  # type: ignore
             if ontology != id_ontology:
-                raise ValueError(f"Ontology mismatch: expected {ontology}, got {id_ontology}")
+                raise ValueError(
+                    f"Ontology mismatch: expected {ontology}, got {id_ontology}"
+                )
         elif netloc == "www.ensembl.org" and split_path[-1] == "ProteinSummary":
             ontology = "ensembl_protein"
             identifier, id_ontology, _ = parse_ensembl_id(result.query)  # type: ignore
             if ontology != id_ontology:
-                raise ValueError(f"Ontology mismatch: expected {ontology}, got {id_ontology}")
+                raise ValueError(
+                    f"Ontology mismatch: expected {ontology}, got {id_ontology}"
+                )
         elif netloc == "www.ensembl.org" and (
             re.search("ENS[GTP]", split_path[-1])
             or re.search("ENS[A-Z]{3}[GTP]", split_path[-1])
@@ -251,7 +257,9 @@ def format_uri_url(uri: str) -> dict:
             # format ensembl IDs which lack gene/transview
             identifier, implied_ontology, _ = parse_ensembl_id(split_path[-1])
             if implied_ontology != ontology:
-                raise ValueError(f"Implied ontology mismatch: expected {ontology}, got {implied_ontology}")
+                raise ValueError(
+                    f"Implied ontology mismatch: expected {ontology}, got {implied_ontology}"
+                )
         elif netloc == "www.mirbase.org" or netloc == "mirbase.org":
             ontology = "mirbase"
             if re.search("MI[0-9]+", split_path[-1]):
@@ -686,7 +694,9 @@ def ensembl_id_to_url_regex(identifier: str, ontology: str) -> tuple[str, str]:
     # (these letters are not present for humans)
     identifier, implied_ontology, species = parse_ensembl_id(identifier)  # type: ignore
     if implied_ontology != ontology:
-        raise ValueError(f"Implied ontology mismatch: expected {ontology}, got {implied_ontology}")
+        raise ValueError(
+            f"Implied ontology mismatch: expected {ontology}, got {implied_ontology}"
+        )
 
     # create an appropriate regex for validating input
     # this provides testing for other identifiers even if it is redundant with other
@@ -822,24 +832,31 @@ def _check_species_identifiers_table(
 
 
 def _prepare_species_identifiers(
-    sbml_dfs : sbml_dfs_core.SBML_dfs,
-    dogmatic : bool = False,
-    species_identifiers : Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    dogmatic: bool = False,
+    species_identifiers: Optional[pd.DataFrame] = None,
+) -> pd.DataFrame:
     """Accepts and validates species_identifiers, or extracts a fresh table if None."""
 
     if species_identifiers is None:
-        species_identifiers = sbml_dfs_utils.get_characteristic_species_ids(sbml_dfs, dogmatic = dogmatic)
+        species_identifiers = sbml_dfs_utils.get_characteristic_species_ids(
+            sbml_dfs, dogmatic=dogmatic
+        )
     else:
         # check for compatibility
         try:
             # check species_identifiers format
-            
+
             _check_species_identifiers_table(species_identifiers)
             # quick check for compatibility between sbml_dfs and species_identifiers
             _validate_assets_sbml_ids(sbml_dfs, species_identifiers)
         except ValueError as e:
-            logger.warning(f"The provided identifiers are not compatible with your `sbml_dfs` object. Extracting a fresh species identifier table. {e}")
-            species_identifiers = sbml_dfs_utils.get_characteristic_species_ids(sbml_dfs, dogmatic = dogmatic)
+            logger.warning(
+                f"The provided identifiers are not compatible with your `sbml_dfs` object. Extracting a fresh species identifier table. {e}"
+            )
+            species_identifiers = sbml_dfs_utils.get_characteristic_species_ids(
+                sbml_dfs, dogmatic=dogmatic
+            )
 
     return species_identifiers
 

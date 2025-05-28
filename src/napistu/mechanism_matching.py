@@ -26,16 +26,16 @@ logger = logging.getLogger(__name__)
 
 
 def bind_wide_results(
-    sbml_dfs : sbml_dfs_core.SBML_dfs,
-    results_df : pd.DataFrame,
-    results_name : str,
-    ontologies : Optional[Union[Set[str], Dict[str, str]]] = None,
-    dogmatic : bool = False,
-    species_identifiers : Optional[pd.DataFrame] = None,
-    feature_id_var : str = FEATURE_ID_VAR_DEFAULT,
-    numeric_agg : str = RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN,
-    keep_id_col : bool = True,
-    verbose : bool = False
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    results_df: pd.DataFrame,
+    results_name: str,
+    ontologies: Optional[Union[Set[str], Dict[str, str]]] = None,
+    dogmatic: bool = False,
+    species_identifiers: Optional[pd.DataFrame] = None,
+    feature_id_var: str = FEATURE_ID_VAR_DEFAULT,
+    numeric_agg: str = RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN,
+    keep_id_col: bool = True,
+    verbose: bool = False,
 ) -> sbml_dfs_core.SBML_dfs:
     """
     Binds wide results to a sbml_dfs object.
@@ -67,7 +67,7 @@ def bind_wide_results(
         Whether to keep the identifier column in the results_df.
     verbose : bool
         Whether to log cases of 1-to-many and many-to-one mapping and to indicate the behavior for resolving degeneracy
-    
+
     Returns
     -------
     sbml_dfs : sbml_dfs_core.SBML_dfs
@@ -75,37 +75,30 @@ def bind_wide_results(
     """
 
     species_identifiers = identifiers._prepare_species_identifiers(
-        sbml_dfs,
-        dogmatic = dogmatic,
-        species_identifiers = species_identifiers
-        )
-    
+        sbml_dfs, dogmatic=dogmatic, species_identifiers=species_identifiers
+    )
+
     # match
     matched_s_ids_from_wide = match_features_to_wide_pathway_species(
         results_df,
         species_identifiers,
-        ontologies = ontologies,
-        feature_id_var = feature_id_var,
-        verbose = verbose
+        ontologies=ontologies,
+        feature_id_var=feature_id_var,
+        verbose=verbose,
     )
 
     disambiguated_matches = resolve_matches(
-        matched_data = matched_s_ids_from_wide,
-        feature_id_var = feature_id_var,
-        numeric_agg = numeric_agg,
-        keep_id_col = keep_id_col
-        )
-
-    clean_species_data = utils.drop_extra_cols(
-        results_df,
-        disambiguated_matches,
-        always_include = [feature_id_var]
+        matched_data=matched_s_ids_from_wide,
+        feature_id_var=feature_id_var,
+        numeric_agg=numeric_agg,
+        keep_id_col=keep_id_col,
     )
 
-    sbml_dfs.add_species_data(
-        results_name,
-        clean_species_data
-        )
+    clean_species_data = utils.drop_extra_cols(
+        results_df, disambiguated_matches, always_include=[feature_id_var]
+    )
+
+    sbml_dfs.add_species_data(results_name, clean_species_data)
 
     return sbml_dfs
 
@@ -160,9 +153,16 @@ def features_to_pathway_species(
     # Optionally expand identifiers into multiple rows
     if expand_identifiers:
         # Count the number of expansions by counting delimiters
-        n_expansions = feature_identifiers[feature_identifiers_var].astype(str).str.count(identifier_delimiter).sum()
+        n_expansions = (
+            feature_identifiers[feature_identifiers_var]
+            .astype(str)
+            .str.count(identifier_delimiter)
+            .sum()
+        )
         if n_expansions > 0:
-            logger.info(f"Expanding identifiers: {n_expansions} delimiters found in '{feature_identifiers_var}', will expand to more rows.")
+            logger.info(
+                f"Expanding identifiers: {n_expansions} delimiters found in '{feature_identifiers_var}', will expand to more rows."
+            )
 
         # Split, strip whitespace, and explode
         feature_identifiers = feature_identifiers.copy()
@@ -172,7 +172,9 @@ def features_to_pathway_species(
             .str.split(identifier_delimiter)
             .apply(lambda lst: [x.strip() for x in lst])
         )
-        feature_identifiers = feature_identifiers.explode(feature_identifiers_var, ignore_index=True)
+        feature_identifiers = feature_identifiers.explode(
+            feature_identifiers_var, ignore_index=True
+        )
 
     # check identifiers table
     identifiers._check_species_identifiers_table(species_identifiers)
@@ -202,7 +204,9 @@ def features_to_pathway_species(
 
     # map features to pathway species
     pathway_species = feature_identifiers.merge(
-        relevant_identifiers, left_on=feature_identifiers_var, right_on=IDENTIFIERS.IDENTIFIER
+        relevant_identifiers,
+        left_on=feature_identifiers_var,
+        right_on=IDENTIFIERS.IDENTIFIER,
     )
 
     if pathway_species.shape[0] == 0:
@@ -219,7 +223,11 @@ def features_to_pathway_species(
 
 
 def edgelist_to_pathway_species(
-    formatted_edgelist: pd.DataFrame, species_identifiers: pd.DataFrame, ontologies: set, feature_id_var: str = FEATURE_ID_VAR_DEFAULT, verbose: bool = False
+    formatted_edgelist: pd.DataFrame,
+    species_identifiers: pd.DataFrame,
+    ontologies: set,
+    feature_id_var: str = FEATURE_ID_VAR_DEFAULT,
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
     Edgelist to Pathway Species
@@ -283,7 +291,7 @@ def edgelist_to_pathway_species(
         species_identifiers=species_identifiers,
         ontologies=ontologies,
         feature_identifiers_var=feature_id_var,
-        verbose=verbose
+        verbose=verbose,
     )
 
     # add s_ids of both upstream and downstream edges to pathway
@@ -314,7 +322,7 @@ def match_features_to_wide_pathway_species(
     ontologies: Optional[Union[Set[str], Dict[str, str]]] = None,
     feature_identifiers_var: str = IDENTIFIERS.IDENTIFIER,
     feature_id_var: str = FEATURE_ID_VAR_DEFAULT,
-    verbose: bool = False
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
     Convert a wide-format DataFrame with multiple ontology columns to long format,
@@ -389,7 +397,7 @@ def match_features_to_wide_pathway_species(
     results_cols = list(set(wide_df.columns) - set(melt_cols))
     if not results_cols:
         raise ValueError("No results columns found in DataFrame")
-    
+
     logger.info(f"Using columns as results: {results_cols}")
 
     # Melt ontology columns to long format, keeping all results columns
@@ -397,8 +405,8 @@ def match_features_to_wide_pathway_species(
         id_vars=results_cols,
         value_vars=melt_cols,
         var_name=IDENTIFIERS.ONTOLOGY,
-        value_name=feature_identifiers_var
-    ).dropna(subset=[feature_identifiers_var])    
+        value_name=feature_identifiers_var,
+    ).dropna(subset=[feature_identifiers_var])
 
     logger.debug(f"Final long format shape: {long_df.shape}")
 
@@ -407,7 +415,7 @@ def match_features_to_wide_pathway_species(
         feature_identifiers=long_df,
         species_identifiers=species_identifiers,
         ontologies=ontology_cols,
-        feature_identifiers_var=feature_identifiers_var
+        feature_identifiers_var=feature_identifiers_var,
     )
 
     if verbose:
@@ -421,7 +429,7 @@ def match_by_ontology_and_identifier(
     species_identifiers: pd.DataFrame,
     ontologies: Union[str, Set[str], List[str]],
     feature_identifiers_var: str = IDENTIFIERS.IDENTIFIER,
-    verbose: bool = False
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
     Match features to pathway species based on both ontology and identifier matches.
@@ -486,9 +494,11 @@ def match_by_ontology_and_identifier(
     # Process each ontology separately
     for ont in ontologies:
         # Filter feature identifiers to current ontology and drop ontology column
-        ont_features = feature_identifiers[
-            feature_identifiers[IDENTIFIERS.ONTOLOGY] == ont
-        ].drop(columns=[IDENTIFIERS.ONTOLOGY]).copy()
+        ont_features = (
+            feature_identifiers[feature_identifiers[IDENTIFIERS.ONTOLOGY] == ont]
+            .drop(columns=[IDENTIFIERS.ONTOLOGY])
+            .copy()
+        )
 
         if ont_features.empty:
             logger.warning(f"No features found for ontology: {ont}")
@@ -513,7 +523,7 @@ def match_by_ontology_and_identifier(
             species_identifiers=ont_species,
             ontologies={ont},
             feature_identifiers_var=feature_identifiers_var,
-            verbose=verbose
+            verbose=verbose,
         )
 
         if matched.empty:
@@ -528,23 +538,24 @@ def match_by_ontology_and_identifier(
 
     # Combine results from all ontologies
     result = pd.concat(matched_dfs, axis=0, ignore_index=True)
-    
+
     logger.info(
         f"Found {len(result)} total matches across {len(matched_dfs)} ontologies"
     )
-    
-    return result 
+
+    return result
+
 
 def resolve_matches(
-    matched_data: pd.DataFrame, 
-    feature_id_var: str = FEATURE_ID_VAR_DEFAULT, 
+    matched_data: pd.DataFrame,
+    feature_id_var: str = FEATURE_ID_VAR_DEFAULT,
     index_col: str = SBML_DFS.S_ID,
     numeric_agg: str = RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN,
-    keep_id_col: bool = True
+    keep_id_col: bool = True,
 ) -> pd.DataFrame:
     """
     Resolve many-to-1 and 1-to-many matches in matched data.
-    
+
     Parameters
     ----------
     matched_data : pd.DataFrame
@@ -565,7 +576,7 @@ def resolve_matches(
     keep_id_col : bool, default=True
         Whether to keep and rollup the feature_id_var in the output.
         If False, feature_id_var will be dropped from the output.
-        
+
     Returns
     -------
     pd.DataFrame
@@ -573,7 +584,7 @@ def resolve_matches(
         - Many-to-1: numeric columns are aggregated using specified method
         - 1-to-many: adds a count column showing number of matches
         - Index is set to index_col and named accordingly
-        
+
     Raises
     ------
     KeyError
@@ -583,40 +594,47 @@ def resolve_matches(
     """
     # Make a copy to avoid modifying input
     df = matched_data.copy()
-    
+
     # Check for unsupported data types
-    unsupported_dtypes = df.select_dtypes(include=['bool', 'datetime64']).columns
+    unsupported_dtypes = df.select_dtypes(include=["bool", "datetime64"]).columns
     if not unsupported_dtypes.empty:
-        raise TypeError(f"Unsupported data types found in columns: {list(unsupported_dtypes)}. "
-                       "Boolean and datetime columns are not supported.")
-    
+        raise TypeError(
+            f"Unsupported data types found in columns: {list(unsupported_dtypes)}. "
+            "Boolean and datetime columns are not supported."
+        )
+
     # Always require feature_id_var
     if feature_id_var not in df.columns:
         raise KeyError(feature_id_var)
-    
+
     # Deduplicate by feature_id within each s_id using groupby and first BEFORE any further processing
     df = df.groupby([index_col, feature_id_var], sort=False).first().reset_index()
-    
+
     # Use a unique temporary column name for weights
     if RESOLVE_MATCHES_TMP_WEIGHT_COL in df.columns:
-        raise ValueError(f"Temporary weight column name '{RESOLVE_MATCHES_TMP_WEIGHT_COL}' already exists in the input data. Please rename or remove this column and try again.")
-    
+        raise ValueError(
+            f"Temporary weight column name '{RESOLVE_MATCHES_TMP_WEIGHT_COL}' already exists in the input data. Please rename or remove this column and try again."
+        )
+
     # Calculate weights if needed (after deduplication!)
     if numeric_agg == RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN:
         feature_counts = df[feature_id_var].value_counts()
-        df[RESOLVE_MATCHES_TMP_WEIGHT_COL] = 1 / feature_counts[df[feature_id_var]].values
-    
+        df[RESOLVE_MATCHES_TMP_WEIGHT_COL] = (
+            1 / feature_counts[df[feature_id_var]].values
+        )
+
     # Set index for grouping
     df = df.set_index(index_col)
-    
+
     # Use utility to split columns
     always_non_numeric = [feature_id_var] if keep_id_col else []
-    numeric_cols, non_numeric_cols = _split_numeric_non_numeric_columns(df, always_non_numeric=always_non_numeric)
-    
+    numeric_cols, non_numeric_cols = _split_numeric_non_numeric_columns(
+        df, always_non_numeric=always_non_numeric
+    )
+
     # Get aggregator function
     numeric_aggregator = _get_numeric_aggregator(
-        method=numeric_agg, 
-        feature_id_var=feature_id_var
+        method=numeric_agg, feature_id_var=feature_id_var
     )
     resolved = _aggregate_grouped_columns(
         df,
@@ -624,19 +642,19 @@ def resolve_matches(
         non_numeric_cols,
         numeric_aggregator,
         feature_id_var=feature_id_var,
-        numeric_agg=numeric_agg
+        numeric_agg=numeric_agg,
     )
     # Add count of matches per feature_id
     match_counts = matched_data.groupby(index_col)[feature_id_var].nunique()
-    resolved[f'{feature_id_var}_match_count'] = match_counts
-    
+    resolved[f"{feature_id_var}_match_count"] = match_counts
+
     # Drop feature_id_var if not keeping it
     if not keep_id_col and feature_id_var in resolved.columns:
         resolved = resolved.drop(columns=[feature_id_var])
-    
+
     # Ensure index is named consistently
     resolved.index.name = index_col
-    
+
     return resolved
 
 
@@ -1043,11 +1061,11 @@ def _edgelist_to_scids_if_needed(
 
 def _validate_wide_ontologies(
     wide_df: pd.DataFrame,
-    ontologies: Optional[Union[str, Set[str], Dict[str, str]]] = None
+    ontologies: Optional[Union[str, Set[str], Dict[str, str]]] = None,
 ) -> Set[str]:
     """
     Validate ontology specifications against the wide DataFrame and ONTOLOGIES_LIST.
-    
+
     Parameters
     ----------
     wide_df : pd.DataFrame
@@ -1058,12 +1076,12 @@ def _validate_wide_ontologies(
         - Set of columns to treat as ontologies
         - Dict mapping wide column names to ontology names
         - None to automatically detect ontology columns based on ONTOLOGIES_LIST
-        
+
     Returns
     -------
     Set[str]
         Set of validated ontology names. For dictionary mappings, returns the target ontology names.
-        
+
     Raises
     ------
     ValueError
@@ -1078,9 +1096,7 @@ def _validate_wide_ontologies(
         # Check source columns exist in DataFrame
         missing_cols = set(ontologies.keys()) - set(wide_df.columns)
         if missing_cols:
-            raise ValueError(
-                f"Source columns not found in DataFrame: {missing_cols}"
-            )
+            raise ValueError(f"Source columns not found in DataFrame: {missing_cols}")
         # Validate target ontologies against ONTOLOGIES_LIST
         invalid_onts = set(ontologies.values()) - set(ONTOLOGIES_LIST)
         if invalid_onts:
@@ -1089,7 +1105,7 @@ def _validate_wide_ontologies(
             )
         # Return target ontology names instead of source column names
         ontology_cols = set(ontologies.values())
-        
+
     elif isinstance(ontologies, set):
         # Check specified columns exist in DataFrame
         missing_cols = ontologies - set(wide_df.columns)
@@ -1104,7 +1120,7 @@ def _validate_wide_ontologies(
                 f"Invalid ontologies in set: {invalid_onts}. Must be one of: {ONTOLOGIES_LIST}"
             )
         ontology_cols = ontologies
-        
+
     else:
         # Auto-detect ontology columns by matching against ONTOLOGIES_LIST
         ontology_cols = set(wide_df.columns) & set(ONTOLOGIES_LIST)
@@ -1112,25 +1128,25 @@ def _validate_wide_ontologies(
             raise ValueError(
                 f"No valid ontology columns found in DataFrame. Column names must match one of: {ONTOLOGIES_LIST}"
             )
-        logger.info(
-            f"Auto-detected ontology columns: {ontology_cols}"
-        )
-    
+        logger.info(f"Auto-detected ontology columns: {ontology_cols}")
+
     logger.debug(f"Validated ontology columns: {ontology_cols}")
     return ontology_cols
 
 
-def _ensure_feature_id_var(df: pd.DataFrame, feature_id_var: str = FEATURE_ID_VAR_DEFAULT) -> pd.DataFrame:
+def _ensure_feature_id_var(
+    df: pd.DataFrame, feature_id_var: str = FEATURE_ID_VAR_DEFAULT
+) -> pd.DataFrame:
     """
     Ensure the DataFrame has a feature_id column, creating one if it doesn't exist.
-    
+
     Parameters
     ----------
     df : pd.DataFrame
         DataFrame to check/modify
     feature_id_var : str, default=FEATURE_ID_VAR_DEFAULT
         Name of the feature ID column
-        
+
     Returns
     -------
     pd.DataFrame
@@ -1144,12 +1160,12 @@ def _ensure_feature_id_var(df: pd.DataFrame, feature_id_var: str = FEATURE_ID_VA
 
 
 def _get_numeric_aggregator(
-    method: str = RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN, 
+    method: str = RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN,
     feature_id_var: str = FEATURE_ID_VAR_DEFAULT,
 ) -> callable:
     """
     Get aggregation function for numeric columns with various methods.
-    
+
     Parameters
     ----------
     method : str, default="weighted_mean"
@@ -1160,58 +1176,61 @@ def _get_numeric_aggregator(
         - "max": maximum value
     feature_id_var : str, default="feature_id"
         Name of the column specifying a measured feature - used for sorting and weighting
-        
+
     Returns
     -------
     callable
         Aggregation function to use with groupby
-        
+
     Raises
     ------
     ValueError
         If method is not recognized
     """
+
     def weighted_mean(df: pd.DataFrame) -> float:
         # Get values and weights for this group
-        values = df['value']
-        weights = df['weight']
+        values = df["value"]
+        weights = df["weight"]
         # Weights are already normalized globally, just use them directly
         return (values * weights).sum() / weights.sum()
-    
+
     def first_by_id(df: pd.DataFrame) -> float:
         # Sort by feature_id and take first value
-        return df.sort_values(feature_id_var).iloc[0]['value']
-    
+        return df.sort_values(feature_id_var).iloc[0]["value"]
+
     def simple_mean(series: pd.Series) -> float:
         return series.mean()
-    
+
     def simple_max(series: pd.Series) -> float:
         return series.max()
-    
+
     aggregators = {
         RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN: weighted_mean,
         RESOLVE_MATCHES_AGGREGATORS.MEAN: simple_mean,
         RESOLVE_MATCHES_AGGREGATORS.FIRST: first_by_id,
-        RESOLVE_MATCHES_AGGREGATORS.MAX: simple_max
+        RESOLVE_MATCHES_AGGREGATORS.MAX: simple_max,
     }
-    
+
     if method not in aggregators:
-        raise ValueError(f"Unknown aggregation method: {method}. Must be one of {list(aggregators.keys())}")
-    
+        raise ValueError(
+            f"Unknown aggregation method: {method}. Must be one of {list(aggregators.keys())}"
+        )
+
     return aggregators[method]
 
 
 def _split_numeric_non_numeric_columns(df: pd.DataFrame, always_non_numeric=None):
     """
     Utility to split DataFrame columns into numeric and non-numeric, always treating specified columns as non-numeric.
-    
+
     Parameters
     ----------
     df : pd.DataFrame
         The DataFrame to split.
     always_non_numeric : list or set, optional
         Columns to always treat as non-numeric (e.g., ['feature_id']).
-    
+
     Returns
     -------
     numeric_cols : pd.Index
@@ -1222,7 +1241,9 @@ def _split_numeric_non_numeric_columns(df: pd.DataFrame, always_non_numeric=None
     if always_non_numeric is None:
         always_non_numeric = []
     always_non_numeric = set(always_non_numeric)
-    numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns.difference(always_non_numeric)
+    numeric_cols = df.select_dtypes(include=["int64", "float64"]).columns.difference(
+        always_non_numeric
+    )
     non_numeric_cols = df.columns.difference(numeric_cols)
     return numeric_cols, non_numeric_cols
 
@@ -1233,7 +1254,7 @@ def _aggregate_grouped_columns(
     non_numeric_cols,
     numeric_aggregator,
     feature_id_var: str = FEATURE_ID_VAR_DEFAULT,
-    numeric_agg: str = RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN
+    numeric_agg: str = RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN,
 ) -> pd.DataFrame:
     """
     Aggregate numeric and non-numeric columns for grouped DataFrame.
@@ -1241,26 +1262,38 @@ def _aggregate_grouped_columns(
     Returns the combined DataFrame.
     """
     results = []
-    
+
     # Handle non-numeric columns
     if len(non_numeric_cols) > 0:
-        non_numeric_agg = df[non_numeric_cols].groupby(level=0).agg(
-            lambda x: ','.join(sorted(set(x.astype(str))))
+        non_numeric_agg = (
+            df[non_numeric_cols]
+            .groupby(level=0)
+            .agg(lambda x: ",".join(sorted(set(x.astype(str)))))
         )
         results.append(non_numeric_agg)
     # Handle numeric columns
     if len(numeric_cols) > 0:
         numeric_results = {}
         for col in numeric_cols:
-            if numeric_agg in [RESOLVE_MATCHES_AGGREGATORS.FIRST, RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN]:
-                agg_df = pd.DataFrame({
-                    'value': df[col],
-                    feature_id_var: df[feature_id_var]
-                })
+            if numeric_agg in [
+                RESOLVE_MATCHES_AGGREGATORS.FIRST,
+                RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN,
+            ]:
+                agg_df = pd.DataFrame(
+                    {"value": df[col], feature_id_var: df[feature_id_var]}
+                )
                 if numeric_agg == RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN:
-                    agg_df[RESOLVE_MATCHES_TMP_WEIGHT_COL] = df[RESOLVE_MATCHES_TMP_WEIGHT_COL]
+                    agg_df[RESOLVE_MATCHES_TMP_WEIGHT_COL] = df[
+                        RESOLVE_MATCHES_TMP_WEIGHT_COL
+                    ]
                 numeric_results[col] = agg_df.groupby(level=0).apply(
-                    lambda x: numeric_aggregator(x) if numeric_agg != RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN else numeric_aggregator(x.rename(columns={RESOLVE_MATCHES_TMP_WEIGHT_COL: 'weight'}))
+                    lambda x: (
+                        numeric_aggregator(x)
+                        if numeric_agg != RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN
+                        else numeric_aggregator(
+                            x.rename(columns={RESOLVE_MATCHES_TMP_WEIGHT_COL: "weight"})
+                        )
+                    )
                 )
             else:
                 numeric_results[col] = df[col].groupby(level=0).agg(numeric_aggregator)
@@ -1274,29 +1307,47 @@ def _aggregate_grouped_columns(
     return resolved
 
 
-def _log_feature_species_mapping_stats(pathway_species: pd.DataFrame, feature_id_var: str = FEATURE_ID_VAR_DEFAULT):
+def _log_feature_species_mapping_stats(
+    pathway_species: pd.DataFrame, feature_id_var: str = FEATURE_ID_VAR_DEFAULT
+):
     """
     Log statistics about the mapping between feature_id and s_id in the pathway_species DataFrame.
     """
-    
+
     # Percent of feature_ids present one or more times in the output
     n_feature_ids = pathway_species[feature_id_var].nunique()
-    n_input_feature_ids = pathway_species[feature_id_var].max() + 1 if feature_id_var in pathway_species.columns else 0
-    percent_present = 100 * n_feature_ids / n_input_feature_ids if n_input_feature_ids else 0
-    logger.info(f"{percent_present:.1f}% of feature_ids are present one or more times in the output ({n_feature_ids}/{n_input_feature_ids})")
+    n_input_feature_ids = (
+        pathway_species[feature_id_var].max() + 1
+        if feature_id_var in pathway_species.columns
+        else 0
+    )
+    percent_present = (
+        100 * n_feature_ids / n_input_feature_ids if n_input_feature_ids else 0
+    )
+    logger.info(
+        f"{percent_present:.1f}% of feature_ids are present one or more times in the output ({n_feature_ids}/{n_input_feature_ids})"
+    )
 
     # Number of times an s_id maps to 1+ feature_ids (with s_name)
     s_id_counts = pathway_species.groupby(SBML_DFS.S_ID)[feature_id_var].nunique()
     s_id_multi = s_id_counts[s_id_counts > 1]
     logger.info(f"{len(s_id_multi)} s_id(s) map to more than one feature_id.")
     if not s_id_multi.empty:
-        examples = pathway_species[pathway_species[SBML_DFS.S_ID].isin(s_id_multi.index)][[SBML_DFS.S_ID, SBML_DFS.S_NAME, feature_id_var]]
-        logger.info(f"Examples of s_id mapping to multiple feature_ids (showing up to 3):\n{examples.groupby([SBML_DFS.S_ID, SBML_DFS.S_NAME])[feature_id_var].apply(list).head(3)}")
+        examples = pathway_species[
+            pathway_species[SBML_DFS.S_ID].isin(s_id_multi.index)
+        ][[SBML_DFS.S_ID, SBML_DFS.S_NAME, feature_id_var]]
+        logger.info(
+            f"Examples of s_id mapping to multiple feature_ids (showing up to 3):\n{examples.groupby([SBML_DFS.S_ID, SBML_DFS.S_NAME])[feature_id_var].apply(list).head(3)}"
+        )
 
     # Number of times a feature_id maps to 1+ s_ids (with s_name)
     feature_id_counts = pathway_species.groupby(feature_id_var)[SBML_DFS.S_ID].nunique()
     feature_id_multi = feature_id_counts[feature_id_counts > 1]
     logger.info(f"{len(feature_id_multi)} feature_id(s) map to more than one s_id.")
     if not feature_id_multi.empty:
-        examples = pathway_species[pathway_species[feature_id_var].isin(feature_id_multi.index)][[feature_id_var, SBML_DFS.S_ID, SBML_DFS.S_NAME]]
-        logger.info(f"Examples of feature_id mapping to multiple s_ids (showing up to 3):\n{examples.groupby([feature_id_var])[[SBML_DFS.S_ID, SBML_DFS.S_NAME]].apply(lambda df: list(df.itertuples(index=False, name=None))).head(3)}")
+        examples = pathway_species[
+            pathway_species[feature_id_var].isin(feature_id_multi.index)
+        ][[feature_id_var, SBML_DFS.S_ID, SBML_DFS.S_NAME]]
+        logger.info(
+            f"Examples of feature_id mapping to multiple s_ids (showing up to 3):\n{examples.groupby([feature_id_var])[[SBML_DFS.S_ID, SBML_DFS.S_NAME]].apply(lambda df: list(df.itertuples(index=False, name=None))).head(3)}"
+        )

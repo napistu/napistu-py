@@ -15,6 +15,7 @@ from napistu.mcp.profiles import ServerProfile
 
 logger = logging.getLogger(__name__)
 
+
 def create_server(profile: ServerProfile, **kwargs) -> FastMCP:
     """
     Create an MCP server based on a profile configuration.
@@ -25,7 +26,7 @@ def create_server(profile: ServerProfile, **kwargs) -> FastMCP:
         Server profile to use. All configuration must be set in the profile.
     **kwargs
         Additional arguments to pass to the FastMCP constructor such as host and port.
-    
+
     Returns
     -------
     FastMCP
@@ -33,7 +34,7 @@ def create_server(profile: ServerProfile, **kwargs) -> FastMCP:
     """
 
     config = profile.get_config()
-    
+
     # Create the server with FastMCP-specific parameters
     # Pass all kwargs directly to the FastMCP constructor
     mcp = FastMCP(config["server_name"], **kwargs)
@@ -49,12 +50,13 @@ def create_server(profile: ServerProfile, **kwargs) -> FastMCP:
         execution.register_components(
             mcp,
             session_context=config["session_context"],
-            object_registry=config["object_registry"]
+            object_registry=config["object_registry"],
         )
     if config["enable_tutorials"]:
         logger.info("Registering tutorials components")
         tutorials.register_components(mcp)
     return mcp
+
 
 async def initialize_components(profile: ServerProfile) -> None:
     """

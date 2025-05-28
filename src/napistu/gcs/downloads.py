@@ -95,7 +95,7 @@ def download_public_napistu_asset(asset: str, out_path: str) -> None:
     logger.info(f"Download URI: {selected_file}")
 
     utils.download_wget(selected_file, out_path)
-    
+
     if not os.path.isfile(out_path):
         raise FileNotFoundError(f"Download failed: {out_path} was not created.")
 
@@ -197,8 +197,10 @@ def _remove_asset_files_if_needed(asset: str, data_dir: str):
 
     # Remove extracted directory (if any)
     asset_dict = GCS_ASSETS.ASSETS[asset]
-    if asset_dict.get("subassets") is not None or any(archive_filename.endswith(ext) for ext in [".tar.gz", ".tgz", ".zip", ".gz"]):
-        extract_dir = os.path.join(data_dir, archive_filename.split('.')[0])
+    if asset_dict.get("subassets") is not None or any(
+        archive_filename.endswith(ext) for ext in [".tar.gz", ".tgz", ".zip", ".gz"]
+    ):
+        extract_dir = os.path.join(data_dir, archive_filename.split(".")[0])
         if os.path.isdir(extract_dir):
             shutil.rmtree(extract_dir)
             logger.info(f"Removed extracted asset directory: {extract_dir}")
