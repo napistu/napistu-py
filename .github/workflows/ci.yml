@@ -36,9 +36,17 @@ jobs:
         
     - name: Commit auto-fixes (PRs only)
       if: github.event_name == 'pull_request'
-      uses: stefanzweifel/git-auto-commit-action@v4
-      with:
-        commit_message: "Auto-fix linting issues with Black and Ruff"
+      run: |
+        git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        
+        if ! git diff --quiet; then
+          git add .
+          git commit -m "Auto-fix linting issues with Black and Ruff"
+          git push origin HEAD:${{ github.head_ref }}
+        else
+          echo "No changes to commit"
+        fi
         
     - name: Check formatting (main branch pushes)
       if: github.event_name == 'push'
