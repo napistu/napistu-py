@@ -304,7 +304,12 @@ VALID_SBO_ROLES = (
     "OPTIONAL",
 )
 
-# required variables for the edgelist formats used by mechanism_matching
+# specifying weighting schemes schema
+
+DEFAULT_WT_TRANS = "identity"
+
+# required variables for the edgelist formats used by the matching subpackage
+# also used in some network modules
 CPR_EDGELIST = SimpleNamespace(
     S_ID_UPSTREAM="s_id_upstream",
     S_ID_DOWNSTREAM="s_id_downstream",
@@ -331,21 +336,6 @@ CPR_EDGELIST_REQ_VARS = {
 }
 
 CPR_PATH_REQ_VARS = {CPR_EDGELIST.SC_ID_ORIGIN, CPR_EDGELIST.SC_ID_DEST}
-
-FEATURE_ID_VAR_DEFAULT = "feature_id"
-
-RESOLVE_MATCHES_AGGREGATORS = SimpleNamespace(
-    WEIGHTED_MEAN = "weighted_mean",
-    MEAN = "mean",
-    FIRST = "first",
-    MAX = "max"
-)
-
-RESOLVE_MATCHES_TMP_WEIGHT_COL = "__tmp_weight_for_aggregation__"
-
-# specifying weighting schemes schema
-
-DEFAULT_WT_TRANS = "identity"
 
 DEFINED_WEIGHT_TRANSFORMATION = {
     DEFAULT_WT_TRANS: "_wt_transformation_identity",
