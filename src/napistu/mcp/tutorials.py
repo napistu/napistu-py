@@ -20,6 +20,7 @@ _tutorial_cache: Dict[str, Dict[str, str]] = {
 
 logger = logging.getLogger(__name__)
 
+
 async def initialize_components() -> bool:
     """
     Initialize tutorial components by preloading all tutorials into the cache.
@@ -31,8 +32,11 @@ async def initialize_components() -> bool:
     """
     global _tutorial_cache
     for k, v in TUTORIAL_URLS.items():
-        _tutorial_cache[TUTORIALS.TUTORIALS][k] = await tutorials_utils.get_tutorial_markdown(k)
+        _tutorial_cache[TUTORIALS.TUTORIALS][k] = (
+            await tutorials_utils.get_tutorial_markdown(k)
+        )
     return True
+
 
 def register_components(mcp: FastMCP) -> None:
     """
@@ -43,6 +47,7 @@ def register_components(mcp: FastMCP) -> None:
     mcp : FastMCP
         FastMCP server instance.
     """
+
     # Register resources
     @mcp.resource("napistu://tutorials/index")
     async def get_tutorial_index() -> List[Dict[str, Any]]:
@@ -110,8 +115,10 @@ def register_components(mcp: FastMCP) -> None:
         results: List[Dict[str, Any]] = []
         for tutorial_id, content in _tutorial_cache[TUTORIALS.TUTORIALS].items():
             if query.lower() in content.lower():
-                results.append({
-                    TOOL_VARS.ID: tutorial_id,
-                    TOOL_VARS.SNIPPET: mcp_utils.get_snippet(content, query),
-                })
+                results.append(
+                    {
+                        TOOL_VARS.ID: tutorial_id,
+                        TOOL_VARS.SNIPPET: mcp_utils.get_snippet(content, query),
+                    }
+                )
         return results

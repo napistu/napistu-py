@@ -112,7 +112,9 @@ def test_create_cpr_graph():
 
 def test_create_cpr_graph_none_attrs():
     # Should not raise when reaction_graph_attrs is None
-    _ = net_create.create_cpr_graph(sbml_dfs, reaction_graph_attrs=None, graph_type="bipartite")
+    _ = net_create.create_cpr_graph(
+        sbml_dfs, reaction_graph_attrs=None, graph_type="bipartite"
+    )
 
 
 def test_igraph_construction():

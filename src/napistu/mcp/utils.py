@@ -1,5 +1,6 @@
 import httpx
 
+
 def get_snippet(text: str, query: str, context: int = 100) -> str:
     """
     Get a text snippet around a search term.
@@ -25,6 +26,7 @@ def get_snippet(text: str, query: str, context: int = 100) -> str:
         snippet = snippet + "..."
     return snippet
 
+
 async def load_html_page(url: str) -> str:
     """
     Fetch the HTML content of a page from a URL.
@@ -43,4 +45,3 @@ def _clean_signature_text(text: str) -> str:
     if text:
         return text.replace("\uf0c1", "").strip()
     return text
-

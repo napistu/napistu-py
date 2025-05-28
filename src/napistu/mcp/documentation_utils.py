@@ -6,7 +6,12 @@ import base64
 import httpx
 import os
 from napistu.constants import PACKAGE_DEFS
-from napistu.mcp.constants import DEFAULT_GITHUB_API, GITHUB_ISSUES_INDEXED, GITHUB_PRS_INDEXED
+from napistu.mcp.constants import (
+    DEFAULT_GITHUB_API,
+    GITHUB_ISSUES_INDEXED,
+    GITHUB_PRS_INDEXED,
+)
+
 
 async def load_readme_content(readme_url: str) -> str:
     if readme_url.startswith("http://") or readme_url.startswith("https://"):
@@ -15,10 +20,16 @@ async def load_readme_content(readme_url: str) -> str:
             response.raise_for_status()
             return response.text
     else:
-        raise ValueError(f"Only HTTP(S) URLs are supported for documentation paths: {readme_url}")
+        raise ValueError(
+            f"Only HTTP(S) URLs are supported for documentation paths: {readme_url}"
+        )
 
 
-async def list_wiki_pages(repo: str, owner: str = PACKAGE_DEFS.GITHUB_OWNER, github_api: str = DEFAULT_GITHUB_API) -> list:
+async def list_wiki_pages(
+    repo: str,
+    owner: str = PACKAGE_DEFS.GITHUB_OWNER,
+    github_api: str = DEFAULT_GITHUB_API,
+) -> list:
     """
     List all Markdown (.md) page names in a GitHub wiki using the GitHub API.
 
@@ -44,7 +55,12 @@ async def list_wiki_pages(repo: str, owner: str = PACKAGE_DEFS.GITHUB_OWNER, git
         return [item["name"] for item in resp.json() if item["name"].endswith(".md")]
 
 
-async def fetch_wiki_page(page_name: str, repo: str, owner: str = PACKAGE_DEFS.GITHUB_OWNER, github_api: str = DEFAULT_GITHUB_API) -> str:
+async def fetch_wiki_page(
+    page_name: str,
+    repo: str,
+    owner: str = PACKAGE_DEFS.GITHUB_OWNER,
+    github_api: str = DEFAULT_GITHUB_API,
+) -> str:
     """
     Fetch the decoded Markdown content of a given wiki page from a GitHub wiki.
 
@@ -74,7 +90,13 @@ async def fetch_wiki_page(page_name: str, repo: str, owner: str = PACKAGE_DEFS.G
         return content
 
 
-async def list_issues(repo: str, owner: str = PACKAGE_DEFS.GITHUB_OWNER, github_api: str = DEFAULT_GITHUB_API, state: str = GITHUB_ISSUES_INDEXED, include_prs: bool = False) -> list:
+async def list_issues(
+    repo: str,
+    owner: str = PACKAGE_DEFS.GITHUB_OWNER,
+    github_api: str = DEFAULT_GITHUB_API,
+    state: str = GITHUB_ISSUES_INDEXED,
+    include_prs: bool = False,
+) -> list:
     """
     List issues (and optionally PRs) for a given GitHub repository using the GitHub API.
 
@@ -97,11 +119,20 @@ async def list_issues(repo: str, owner: str = PACKAGE_DEFS.GITHUB_OWNER, github_
         Each dict contains: number, title, state, url, and a truncated body (max 500 chars).
     """
     url = f"{github_api}/repos/{owner}/{repo}/issues?state={state}"
-    filter_func = (lambda item: True) if include_prs else (lambda item: 'pull_request' not in item)
+    filter_func = (
+        (lambda item: True)
+        if include_prs
+        else (lambda item: "pull_request" not in item)
+    )
     return await _fetch_github_items(url, filter_func=filter_func)
 
 
-async def list_pull_requests(repo: str, owner: str = PACKAGE_DEFS.GITHUB_OWNER, github_api: str = DEFAULT_GITHUB_API, state: str = GITHUB_PRS_INDEXED) -> list:
+async def list_pull_requests(
+    repo: str,
+    owner: str = PACKAGE_DEFS.GITHUB_OWNER,
+    github_api: str = DEFAULT_GITHUB_API,
+    state: str = GITHUB_PRS_INDEXED,
+) -> list:
     """
     List pull requests for a given GitHub repository using the GitHub API.
 
@@ -125,7 +156,12 @@ async def list_pull_requests(repo: str, owner: str = PACKAGE_DEFS.GITHUB_OWNER, 
     return await _fetch_github_items(url)
 
 
-async def get_issue(repo: str, number: int, owner: str = PACKAGE_DEFS.GITHUB_OWNER, github_api: str = DEFAULT_GITHUB_API) -> dict:
+async def get_issue(
+    repo: str,
+    number: int,
+    owner: str = PACKAGE_DEFS.GITHUB_OWNER,
+    github_api: str = DEFAULT_GITHUB_API,
+) -> dict:
     """
     Get a single issue (or PR) by number from a GitHub repository.
 
@@ -152,6 +188,7 @@ async def get_issue(repo: str, number: int, owner: str = PACKAGE_DEFS.GITHUB_OWN
         item = resp.json()
         return _format_github_issue(item)
 
+
 def _get_github_headers():
     """
     Return headers for GitHub API requests, including Authorization if GITHUB_TOKEN is set.
@@ -170,13 +207,18 @@ def _format_github_issue(item):
     Format a GitHub issue or PR item into a standard dict.
     """
     return {
-        'number': item['number'],
-        'title': item['title'],
-        'state': item['state'],
-        'url': item['html_url'],
-        'body': (item['body'][:500] + '...') if item.get('body') and len(item['body']) > 500 else item.get('body'),
-        'is_pr': 'pull_request' in item or 'merged_at' in item
+        "number": item["number"],
+        "title": item["title"],
+        "state": item["state"],
+        "url": item["html_url"],
+        "body": (
+            (item["body"][:500] + "...")
+            if item.get("body") and len(item["body"]) > 500
+            else item.get("body")
+        ),
+        "is_pr": "pull_request" in item or "merged_at" in item,
     }
+
 
 async def _fetch_github_items(url, filter_func=None):
     """

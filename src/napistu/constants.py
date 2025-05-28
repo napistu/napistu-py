@@ -9,16 +9,16 @@ import pandas as pd
 
 
 PACKAGE_DEFS = SimpleNamespace(
-    NAPISTU = "napistu",
-    GITHUB_OWNER = "napistu",
-    GITHUB_PROJECT_REPO = "napistu",
-    GITHUB_NAPISTU_PY = "napistu-py",
-    GITHUB_NAPISTU_R = "napistu-r",
-    TUTORIALS_URL = "https://github.com/napistu/napistu/wiki",
+    NAPISTU="napistu",
+    GITHUB_OWNER="napistu",
+    GITHUB_PROJECT_REPO="napistu",
+    GITHUB_NAPISTU_PY="napistu-py",
+    GITHUB_NAPISTU_R="napistu-r",
+    TUTORIALS_URL="https://github.com/napistu/napistu/wiki",
     # User-facing functionality should use a user-defined directory but
     # for convenience, we provide a default cache directory for dev-facing
     # workflows
-    CACHE_DIR = "napistu_data",
+    CACHE_DIR="napistu_data",
 )
 
 PROTEINATLAS_SUBCELL_LOC_URL = (
@@ -349,10 +349,7 @@ CPR_PATH_REQ_VARS = {CPR_EDGELIST.SC_ID_ORIGIN, CPR_EDGELIST.SC_ID_DEST}
 FEATURE_ID_VAR_DEFAULT = "feature_id"
 
 RESOLVE_MATCHES_AGGREGATORS = SimpleNamespace(
-    WEIGHTED_MEAN = "weighted_mean",
-    MEAN = "mean",
-    FIRST = "first",
-    MAX = "max"
+    WEIGHTED_MEAN="weighted_mean", MEAN="mean", FIRST="first", MAX="max"
 )
 
 RESOLVE_MATCHES_TMP_WEIGHT_COL = "__tmp_weight_for_aggregation__"

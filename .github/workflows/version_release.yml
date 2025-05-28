@@ -1,0 +1,143 @@
+name: Version Release
+
+on:
+  workflow_run:
+    workflows: ["CI"]  # Must match the name in ci.yml
+    types: [completed]
+    branches: [main]
+
+jobs:
+  check-version:
+    name: Check for Version Change
+    runs-on: ubuntu-latest
+    # Only proceed if CI passed AND setup.cfg was changed
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      contains(github.event.workflow_run.head_commit.modified, 'setup.cfg')
+    outputs:
+      version-changed: ${{ steps.check.outputs.version-changed }}
+      new-version: ${{ steps.check.outputs.new-version }}
+      previous-version: ${{ steps.check.outputs.previous-version }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.workflow_run.head_sha }}
+        fetch-depth: 2  # Only fetch current + previous commit (much faster)
+        
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Check for version change in setup.cfg
+      id: check
+      run: |
+        echo "🔍 Checking for version changes in setup.cfg after successful CI..."
+        
+        # Get current version from setup.cfg
+        get_version() {
+          python -c "
+        import configparser
+        config = configparser.ConfigParser()
+        config.read('setup.cfg')
+        print(config['metadata']['version'])
+        "
+        }
+        
+        CURRENT_VERSION=$(get_version)
+        echo "Current version in setup.cfg: $CURRENT_VERSION"
+        
+        # Get previous version using git show (no checkout needed)
+        git show HEAD~1:setup.cfg > setup.cfg.prev 2>/dev/null || echo -e "[metadata]\nversion = 0.0.0" > setup.cfg.prev
+        PREVIOUS_VERSION=$(python -c "
+        import configparser
+        config = configparser.ConfigParser()
+        config.read('setup.cfg.prev')
+        try:
+            print(config['metadata']['version'])
+        except:
+            print('0.0.0')
+        ")
+        rm -f setup.cfg.prev
+        
+        echo "Previous version: $PREVIOUS_VERSION"
+        
+        # Check if versions are different
+        if [[ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ]]; then
+          echo "✅ Version changed: $PREVIOUS_VERSION → $CURRENT_VERSION"
+          
+          # Fetch tags to check for duplicates
+          git fetch --depth=1 origin --tags
+          if git tag -l | grep -q "^v${CURRENT_VERSION}$"; then
+            echo "⚠️ Tag v${CURRENT_VERSION} already exists, skipping"
+            echo "version-changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "🚀 New version detected after CI success: $CURRENT_VERSION"
+            echo "version-changed=true" >> $GITHUB_OUTPUT
+            echo "new-version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
+            echo "previous-version=${PREVIOUS_VERSION}" >> $GITHUB_OUTPUT
+          fi
+        else
+          echo "ℹ️ No version change detected in setup.cfg"
+          echo "version-changed=false" >> $GITHUB_OUTPUT
+        fi
+
+  validate-version:
+    name: Validate Version Format
+    needs: check-version
+    if: needs.check-version.outputs.version-changed == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Validate semantic version
+      run: |
+        VERSION="${{ needs.check-version.outputs.new-version }}"
+        echo "Validating version format: $VERSION"
+        
+        # Basic semantic version validation (X.Y.Z or X.Y.Z-suffix)
+        if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+          echo "❌ Invalid version format: $VERSION"
+          echo "Expected format: X.Y.Z or X.Y.Z-suffix (e.g., 1.2.3 or 1.2.3-beta)"
+          exit 1
+        fi
+        
+        echo "✅ Version format is valid"
+
+  create-tag:
+    name: Create Release Tag
+    needs: [check-version, validate-version]
+    if: needs.check-version.outputs.version-changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.workflow_run.head_sha }}
+    
+    - name: Create and push tag
+      run: |
+        VERSION="${{ needs.check-version.outputs.new-version }}"
+        PREVIOUS="${{ needs.check-version.outputs.previous-version }}"
+        
+        echo "🏷️ Creating tag v${VERSION} after successful CI"
+        
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        git tag -a "v${VERSION}" -m "Release version ${VERSION}
+
+        ✅ All CI checks passed (lint, test, MCP tests)
+        📈 Version bumped: ${PREVIOUS} → ${VERSION}
+        📦 Ready for PyPI and Docker release
+        🚀 Commit: ${{ github.event.workflow_run.head_sha }}
+        "
+        
+        git push origin "v${VERSION}"
+        
+        echo "✅ Tag v${VERSION} created and pushed"
+        echo "🚀 Release workflow will trigger automatically"

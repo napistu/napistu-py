@@ -1,0 +1,63 @@
+# Dockerfile.mcp
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+# Metadata
+LABEL org.opencontainers.image.title="Napistu MCP Server"
+LABEL org.opencontainers.image.description="MCP server for Napistu Python package"
+LABEL org.opencontainers.image.source="https://github.com/napistu/napistu-py"
+
+# Switch to root for installation
+USER root
+
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
+
+# MCP server specific environment variables
+ENV MCP_PROFILE=remote
+ENV MCP_SERVER_NAME=napistu-cloud-docs
+ENV PORT=8080
+ENV HOST=0.0.0.0
+
+# Create startup script
+COPY <<EOF /usr/local/bin/start-mcp-server.sh
+#!/bin/bash
+set -euo pipefail
+
+# Configuration from environment
+export PORT=\${PORT:-8080}
+export HOST=\${HOST:-0.0.0.0}
+export MCP_PROFILE=\${MCP_PROFILE:-remote}
+export MCP_SERVER_NAME=\${MCP_SERVER_NAME:-napistu-cloud-docs}
+
+echo "🚀 Starting Napistu MCP Server"
+echo "   Host: \$HOST"
+echo "   Port: \$PORT" 
+echo "   Profile: \$MCP_PROFILE"
+echo "   Server Name: \$MCP_SERVER_NAME"
+
+# Validate installation
+python -c "import napistu.mcp; print('✅ MCP components ready')"
+
+# Start the MCP server
+exec python -m napistu.mcp server cloud \\
+    --profile "\$MCP_PROFILE" \\
+    --server-name "\$MCP_SERVER_NAME"
+EOF
+
+RUN chmod +x /usr/local/bin/start-mcp-server.sh
+
+# Expose port
+EXPOSE 8080
+
+# Health check for MCP server
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
+
+# Switch back to non-root user
+USER app
+
+# Start the MCP server
+CMD ["start-mcp-server.sh"]

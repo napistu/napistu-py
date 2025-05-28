@@ -63,29 +63,52 @@ def test_pluck_entity_data_species_identity(sbml_dfs):
     # Create mock data with explicit dtype to ensure cross-platform consistency
     # Fix for issue-42: Use explicit dtypes to avoid platform-specific dtype differences
     # between Windows (int32) and macOS/Linux (int64)
-    mock_df = pd.DataFrame({
-        'string_col': [f"str_{i}" for i in range(10)],
-        'mixed_col': np.arange(-5, 5, dtype=np.int64),  # Explicitly use int64
-        'ones_col': np.ones(10, dtype=np.float64),      # Explicitly use float64
-        'squared_col': np.arange(10, dtype=np.int64),   # Explicitly use int64
-    }, index=species_ids)
+    mock_df = pd.DataFrame(
+        {
+            "string_col": [f"str_{i}" for i in range(10)],
+            "mixed_col": np.arange(-5, 5, dtype=np.int64),  # Explicitly use int64
+            "ones_col": np.ones(10, dtype=np.float64),  # Explicitly use float64
+            "squared_col": np.arange(10, dtype=np.int64),  # Explicitly use int64
+        },
+        index=species_ids,
+    )
     # Assign to species_data
     sbml_dfs.species_data["mock_table"] = mock_df
+
     # Custom transformation: square
     def square(x):
-        return x ** 2
+        return x**2
+
     custom_transformations = {"square": square}
     # Create graph_attrs for species
     graph_attrs = {
         "species": {
-            "string_col": {"table": "mock_table", "variable": "string_col", "trans": "identity"},
-            "mixed_col": {"table": "mock_table", "variable": "mixed_col", "trans": "identity"},
-            "ones_col": {"table": "mock_table", "variable": "ones_col", "trans": "identity"},
-            "squared_col": {"table": "mock_table", "variable": "squared_col", "trans": "square"},
+            "string_col": {
+                "table": "mock_table",
+                "variable": "string_col",
+                "trans": "identity",
+            },
+            "mixed_col": {
+                "table": "mock_table",
+                "variable": "mixed_col",
+                "trans": "identity",
+            },
+            "ones_col": {
+                "table": "mock_table",
+                "variable": "ones_col",
+                "trans": "identity",
+            },
+            "squared_col": {
+                "table": "mock_table",
+                "variable": "squared_col",
+                "trans": "square",
+            },
         }
     }
     # Call pluck_entity_data with custom transformation
-    result = net_create.pluck_entity_data(sbml_dfs, graph_attrs, "species", custom_transformations=custom_transformations)
+    result = net_create.pluck_entity_data(
+        sbml_dfs, graph_attrs, "species", custom_transformations=custom_transformations
+    )
     # Check output
     assert isinstance(result, pd.DataFrame)
     assert set(result.columns) == {"string_col", "mixed_col", "ones_col", "squared_col"}
@@ -94,7 +117,9 @@ def test_pluck_entity_data_species_identity(sbml_dfs):
     pd.testing.assert_series_equal(result["string_col"], mock_df["string_col"])
     pd.testing.assert_series_equal(result["mixed_col"], mock_df["mixed_col"])
     pd.testing.assert_series_equal(result["ones_col"], mock_df["ones_col"])
-    pd.testing.assert_series_equal(result["squared_col"], mock_df["squared_col"].apply(square))
+    pd.testing.assert_series_equal(
+        result["squared_col"], mock_df["squared_col"].apply(square)
+    )
 
 
 def test_pluck_entity_data_missing_species_key(sbml_dfs):
