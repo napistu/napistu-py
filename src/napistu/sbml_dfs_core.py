@@ -8,7 +8,6 @@ from typing import Mapping
 from typing import MutableMapping
 from typing import TYPE_CHECKING
 
-import numpy as np
 import pandas as pd
 from napistu import identifiers
 from napistu import sbml_dfs_utils
