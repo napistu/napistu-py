@@ -1348,17 +1348,13 @@ def _augment_network_nodes(
         )
 
     # include matching s_ids and c_ids of sc_ids
-    # Get original columns before merge
-    original_cols = network_nodes.columns.tolist()
-    
-    # Merge with suffixes on first entry
-    network_nodes_sid = pd.merge(
+    network_nodes_sid = utils._merge_and_log_overwrites(
         network_nodes,
         sbml_dfs.compartmentalized_species[["s_id", "c_id"]],
+        "network nodes",
         left_on="name",
         right_index=True,
-        how="left",
-        suffixes=("_old", "")  # Add suffix to original columns if there's a conflict
+        how="left"
     )
 
     # assign species_data related attributes to s_id
@@ -1366,8 +1362,13 @@ def _augment_network_nodes(
 
     if species_graph_data is not None:
         # add species_graph_data to the network_nodes df, based on s_id
-        network_nodes_wdata = network_nodes_sid.merge(
-            species_graph_data, left_on="s_id", right_index=True, how="left"
+        network_nodes_wdata = utils._merge_and_log_overwrites(
+            network_nodes_sid,
+            species_graph_data,
+            "species graph data",
+            left_on="s_id",
+            right_index=True,
+            how="left"
         )
     else:
         network_nodes_wdata = network_nodes_sid

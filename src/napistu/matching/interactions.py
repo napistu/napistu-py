@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, Union, Set, Dict
 
+import igraph as ig
 import pandas as pd
 
 from napistu import identifiers

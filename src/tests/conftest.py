@@ -3,9 +3,6 @@ from __future__ import annotations
 import os
 import sys
 
-import anndata
-import numpy as np
-import pandas as pd
 
 from napistu import consensus
 from napistu import indices

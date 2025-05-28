@@ -1,11 +1,8 @@
 import numpy as np
 import pandas as pd
 import pytest
-from datetime import datetime
 
-from napistu.constants import IDENTIFIERS, SBML_DFS, ONTOLOGIES
-from napistu.matching.constants import FEATURE_ID_VAR_DEFAULT, RESOLVE_MATCHES_AGGREGATORS
-from napistu.constants import ONTOLOGIES_LIST
+from napistu.matching.constants import FEATURE_ID_VAR_DEFAULT
 from napistu.matching.species import (
     match_features_to_wide_pathway_species,
     match_by_ontology_and_identifier,

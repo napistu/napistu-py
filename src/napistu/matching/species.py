@@ -7,11 +7,7 @@ import numpy as np
 import pandas as pd
 
 from napistu import identifiers
-from napistu import utils
-from napistu import sbml_dfs_core
 from napistu.constants import (
-    CPR_EDGELIST_REQ_VARS,
-    IDENTIFIER_EDGELIST_REQ_VARS,
     ONTOLOGIES_LIST,
     SBML_DFS,
     IDENTIFIERS

@@ -251,9 +251,6 @@ def _create_data_table_column_mapping(entity_data: pd.DataFrame, attribute_names
     """
     valid_data_table_columns = entity_data.columns.tolist()
     
-    # Initialize attribute_names_list
-    attribute_names_list = []
-
     # select the attributes to add
     if attribute_names is None:
         # For None, create identity mapping for all columns

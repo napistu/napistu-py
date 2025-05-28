@@ -6,8 +6,6 @@ import igraph as ig
 import pandas as pd
 
 from napistu.network import data_handling, net_create
-from napistu import sbml_dfs_core
-from napistu.constants import ENTITIES_W_DATA
 
 # Fixtures
 @pytest.fixture
@@ -238,16 +236,17 @@ def test_add_results_table_to_graph(sbml_dfs_glucose_metabolism):
 
     # Test inplace=True
     original_graph = graph.copy()
+    assert "test_attr" not in original_graph.vs.attributes()  # Verify attribute doesn't exist before
     result = data_handling.add_results_table_to_graph(
-        napistu_graph=graph,
+        napistu_graph=original_graph,
         sbml_dfs=sbml_dfs_glucose_metabolism,
         attribute_names=["test_attr"],
         table_name="test_table",
         inplace=True
     )
-    assert result is None
-    assert "test_attr" in graph.vs.attributes()
-
+    assert result is None  # Function should return None when inplace=True
+    assert "test_attr" in original_graph.vs.attributes()  # Verify original graph was modified
+    
     # Test error cases
     with pytest.raises(ValueError, match="Invalid table_type"):
         data_handling.add_results_table_to_graph(

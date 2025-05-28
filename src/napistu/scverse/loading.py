@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import logging 
 from typing import Optional, List, Union, Set, Dict
 
@@ -10,10 +9,8 @@ import mudata
 import numpy as np
 from pydantic import BaseModel, Field, RootModel
 
-from napistu.matching import mount
 from napistu.matching import species
 from napistu.constants import ONTOLOGIES_LIST
-from napistu.matching.constants import FEATURE_ID_VAR_DEFAULT
 from napistu.scverse.constants import ADATA, ADATA_DICTLIKE_ATTRS, ADATA_IDENTITY_ATTRS, ADATA_FEATURELEVEL_ATTRS, ADATA_ARRAY_ATTRS
 
 logger = logging.getLogger(__name__)
