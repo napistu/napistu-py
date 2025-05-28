@@ -41,15 +41,20 @@ jobs:
     - name: Install dependencies
       uses: nick-fields/retry@v2
       with:
-        timeout_minutes: 10
+        timeout_minutes: 15  # Increased timeout
         max_attempts: 3
         retry_on: error
         command: |
           python -m pip install --upgrade pip
-          pip config set global.timeout 300
-          pip config set global.retries 5
+          pip config set global.timeout 600
+          pip config set global.retries 3
+          
+          # Install pandas from wheel first to avoid building from source
+          pip install --only-binary=all pandas || pip install pandas
+          
+          # Install other dependencies
           pip install pytest
-          pip install -e ".[dev,mcp]"
+          pip install -e ".[dev,mcp]" --prefer-binary
         
     - name: Run pytest
       run: |
