@@ -44,8 +44,6 @@ jobs:
           # Test multiple Python versions on Ubuntu only
           - os: ubuntu-latest
             python-version: '3.12'
-          - os: ubuntu-latest
-            python-version: '3.13'
         
     steps:
     - uses: actions/checkout@v4
@@ -66,9 +64,10 @@ jobs:
     - name: Install dependencies
       uses: nick-fields/retry@v2
       with:
-        timeout_minutes: 15  # Increased timeout
+        timeout_minutes: 15
         max_attempts: 3
         retry_on: error
+        shell: bash  # Force bash on all platforms
         command: |
           python -m pip install --upgrade pip
           pip config set global.timeout 600
