@@ -14,8 +14,6 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -26,33 +24,13 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install black ruff
-        pip install -e ".[dev]"
+        pip install -e ".[dev,mcp]"
         
-    - name: Auto-fix formatting and linting (PRs only)
-      if: github.event_name == 'pull_request'
-      run: |
-        black .
-        ruff check --fix . || true
+    - name: Check formatting with Black
+      run: black --check --diff .
         
-    - name: Commit auto-fixes (PRs only)
-      if: github.event_name == 'pull_request'
-      run: |
-        git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        
-        if ! git diff --quiet; then
-          git add .
-          git commit -m "Auto-fix linting issues with Black and Ruff"
-          git push origin HEAD:${{ github.head_ref }}
-        else
-          echo "No changes to commit"
-        fi
-        
-    - name: Check formatting (main branch pushes)
-      if: github.event_name == 'push'
-      run: |
-        black --check --diff .
-        ruff check . --output-format=github
+    - name: Lint with Ruff
+      run: ruff check . --output-format=github
 
   test:
     name: Test (${{ matrix.os }}, Python ${{ matrix.python-version }})
@@ -74,12 +52,27 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-${{ matrix.python-version }}-pip-${{ hashFiles('**/setup.cfg', '**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.python-version }}-pip-
         
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pytest pytest-cov
-        pip install -e ".[dev,mcp]"
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 10
+        max_attempts: 3
+        retry_on: error
+        command: |
+          python -m pip install --upgrade pip
+          pip config set global.timeout 300
+          pip config set global.retries 5
+          pip install pytest pytest-cov
+          pip install -e ".[dev,mcp]"
         
     - name: Run tests with coverage
       run: |
@@ -91,7 +84,3 @@ jobs:
       with:
         file: ./coverage.xml
         fail_ci_if_error: false
-
-    - name: Test MCP functionality
-      run: |
-        python -c "import napistu.mcp; print(f'MCP available: {napistu.mcp.is_available}')"
