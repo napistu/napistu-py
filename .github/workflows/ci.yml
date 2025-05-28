@@ -43,8 +43,6 @@ jobs:
         include:
           # Test multiple Python versions on Ubuntu only
           - os: ubuntu-latest
-            python-version: '3.10'
-          - os: ubuntu-latest
             python-version: '3.12'
         
     steps:
@@ -59,7 +57,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install pytest pytest-cov
-        pip install -e ".[dev]"
+        pip install -e ".[dev,mcp]"
         
     - name: Run tests with coverage
       run: |
@@ -72,25 +70,6 @@ jobs:
         file: ./coverage.xml
         fail_ci_if_error: false
 
-  # Test MCP components separately (optional - more thorough)
-  test-mcp:
-    name: Test MCP Components
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-        
-    - name: Install with MCP extras
-      run: |
-        python -m pip install --upgrade pip
-        pip install pytest
-        pip install -e ".[mcp,dev]"
-        
     - name: Test MCP functionality
       run: |
         python -c "import napistu.mcp; print(f'MCP available: {napistu.mcp.is_available}')"
