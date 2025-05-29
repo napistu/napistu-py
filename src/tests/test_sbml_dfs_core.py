@@ -243,7 +243,7 @@ def test_read_sbml_with_invalid_ids():
 def test_stubbed_compartment():
     compartment = sbml_dfs_core._stub_compartments()
 
-    assert compartment["c_Identifiers"][0].ids[0] == {
+    assert compartment["c_Identifiers"].iloc[0].ids[0] == {
         "ontology": "go",
         "identifier": "GO:0005575",
         "url": "https://www.ebi.ac.uk/QuickGO/term/GO:0005575",
