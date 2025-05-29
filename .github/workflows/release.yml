@@ -34,9 +34,50 @@ env:
   REPOSITORY: napistu-images
 
 jobs:
+  check-release-needed:
+    name: Check if Release Needed
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    outputs:
+      should-release: ${{ steps.check.outputs.should-release }}
+      version: ${{ steps.check.outputs.version }}
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+    
+    - name: Check for version tag on current commit
+      id: check
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "Manual dispatch - proceeding with release"
+          echo "should-release=true" >> $GITHUB_OUTPUT
+          echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          # Check if current commit has a version tag
+          COMMIT_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          git fetch --tags
+          
+          # Find tags pointing to this exact commit
+          VERSION_TAG=$(git tag --points-at "$COMMIT_SHA" | grep '^v[0-9]' | head -n1)
+          
+          if [[ -n "$VERSION_TAG" ]]; then
+            VERSION=${VERSION_TAG#v}
+            echo "Found version tag: $VERSION_TAG for commit $COMMIT_SHA"
+            echo "should-release=true" >> $GITHUB_OUTPUT
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "No version tag found for commit $COMMIT_SHA - skipping release"
+            echo "should-release=false" >> $GITHUB_OUTPUT
+          fi
+        fi
+
   # Quick test before releasing
   test:
     name: Pre-release Tests
+    needs: check-release-needed
+    if: needs.check-release-needed.outputs.should-release == 'true'
     runs-on: ubuntu-latest
     
     steps:
@@ -57,8 +98,10 @@ jobs:
   # Build and publish to PyPI
   pypi:
     name: Publish to PyPI
-    needs: test
-    if: github.event_name != 'workflow_dispatch' || inputs.publish_pypi
+    needs: [check-release-needed, test]
+    if: |
+      needs.check-release-needed.outputs.should-release == 'true' &&
+      (github.event_name != 'workflow_dispatch' || inputs.publish_pypi)
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -83,8 +126,10 @@ jobs:
   # Build and push Docker images
   docker:
     name: Build Docker Images
-    needs: test
-    if: github.event_name != 'workflow_dispatch' || inputs.build_docker
+    needs: [check-release-needed, test]
+    if: |
+      needs.check-release-needed.outputs.should-release == 'true' &&
+      (github.event_name != 'workflow_dispatch' || inputs.build_docker)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -92,22 +137,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-
-    - name: Get version
-      id: version
-      run: |
-        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-          VERSION="${{ inputs.version }}"
-        elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-          # Get the latest tag created by version-release workflow
-          git fetch --tags
-          VERSION=$(git tag -l "v*" | sort -V | tail -n1 | sed 's/^v//')
-        else
-          # Push event with tag
-          VERSION=${GITHUB_REF#refs/tags/v}
-        fi
-        echo "version=${VERSION}" >> $GITHUB_OUTPUT
-        echo "Detected version: ${VERSION}"
 
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
@@ -128,7 +157,7 @@ jobs:
         push: true
         tags: |
           ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:latest
-          ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:${{ steps.version.outputs.version }}
+          ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:${{ needs.check-release-needed.outputs.version }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
@@ -138,62 +167,48 @@ jobs:
         context: .
         file: ./Dockerfile.mcp
         build-args: |
-          BASE_IMAGE=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:${{ steps.version.outputs.version }}
+          BASE_IMAGE=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:${{ needs.check-release-needed.outputs.version }}
         push: true
         tags: |
           ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-mcp-server:latest
-          ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-mcp-server:${{ steps.version.outputs.version }}
+          ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-mcp-server:${{ needs.check-release-needed.outputs.version }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
   # Create GitHub release
   github-release:
     name: Create GitHub Release
-    needs: test
-    if: github.event_name != 'workflow_dispatch' || inputs.create_github_release
+    needs: [check-release-needed, test]
+    if: |
+      needs.check-release-needed.outputs.should-release == 'true' &&
+      (github.event_name != 'workflow_dispatch' || inputs.create_github_release)
     runs-on: ubuntu-latest
     permissions:
       contents: write
       
     steps:
     - uses: actions/checkout@v4
-        
-    - name: Get version
-      id: version
-      run: |
-        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-          VERSION="${{ inputs.version }}"
-        elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-          # Get the latest tag created by version-release workflow
-          git fetch --tags
-          VERSION=$(git tag -l "v*" | sort -V | tail -n1 | sed 's/^v//')
-        else
-          # Push event with tag
-          VERSION=${GITHUB_REF#refs/tags/v}
-        fi
-        echo "version=${VERSION}" >> $GITHUB_OUTPUT
-        echo "Detected version: ${VERSION}"
     
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: v${{ steps.version.outputs.version }}  # Explicitly specify the tag
-        name: Release v${{ steps.version.outputs.version }}
+        tag_name: v${{ needs.check-release-needed.outputs.version }}
+        name: Release v${{ needs.check-release-needed.outputs.version }}
         body: |
           ## Installation
           ```bash
-          pip install napistu==${{ steps.version.outputs.version }}
+          pip install napistu==${{ needs.check-release-needed.outputs.version }}
           ```
           
           ## Docker Images
           ```bash
           # Base image
-          docker pull ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:${{ steps.version.outputs.version }}
+          docker pull ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:${{ needs.check-release-needed.outputs.version }}
           
           # MCP Server
-          docker pull ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-mcp-server:${{ steps.version.outputs.version }}
-          docker run -p 8080:8080 ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-mcp-server:${{ steps.version.outputs.version }}
+          docker pull ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-mcp-server:${{ needs.check-release-needed.outputs.version }}
+          docker run -p 8080:8080 ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-mcp-server:${{ needs.check-release-needed.outputs.version }}
           ```
         draft: false
-        prerelease: ${{ contains(steps.version.outputs.version, '.dev') || contains(steps.version.outputs.version, 'a') || contains(steps.version.outputs.version, 'b') || contains(steps.version.outputs.version, 'rc') }}
+        prerelease: ${{ contains(needs.check-release-needed.outputs.version, '.dev') || contains(needs.check-release-needed.outputs.version, 'a') || contains(needs.check-release-needed.outputs.version, 'b') || contains(needs.check-release-needed.outputs.version, 'rc') }}
         generate_release_notes: true
