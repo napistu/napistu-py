@@ -1127,7 +1127,9 @@ def construct_formula_string(
     ]
 
     rxn_reversible = bool(
-        reactions_df.loc[reaction_species_df[SBML_DFS.R_ID].iloc[0], SBML_DFS.R_ISREVERSIBLE]
+        reactions_df.loc[
+            reaction_species_df[SBML_DFS.R_ID].iloc[0], SBML_DFS.R_ISREVERSIBLE
+        ]
     )  # convert from a np.bool_ to bool if needed
     if not isinstance(rxn_reversible, bool):
         raise TypeError(
@@ -2015,8 +2017,7 @@ def find_underspecified_reactions(
             ),
             how="left",
         )
-        .fillna(False)  # Fill boolean column with False
-        [SBML_DFS.R_ID]
+        .fillna(False)[SBML_DFS.R_ID]  # Fill boolean column with False
         .tolist()
     )
 

@@ -140,7 +140,7 @@ def test_source_tracking():
 
 
 def test_passing_entity_data():
-    
+
     pw_index = indices.PWIndex(os.path.join(test_data, "pw_index.tsv"))
     sbml_dfs_dict = consensus.construct_sbml_dfs_dict(pw_index)
 
@@ -188,7 +188,7 @@ def test_passing_entity_data():
     # in different models has a different value for its reactions_data
     minimal_pw_index = pw_index
     minimal_pw_index.index = minimal_pw_index.index.iloc[0:2]
-    
+
     # Since we're working with a DataFrame, we can use loc to update the file value directly
     minimal_pw_index.index.loc[1, "file"] = minimal_pw_index.index.loc[0, "file"]
 

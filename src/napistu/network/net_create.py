@@ -708,7 +708,7 @@ def _create_cpr_graph_tiered(
         unique_edges[CPR_GRAPH_EDGES.FROM]
         .value_counts()
         # rename values to the child name
-        .to_frame(name=CPR_GRAPH_EDGES.SC_CHILDREN) 
+        .to_frame(name=CPR_GRAPH_EDGES.SC_CHILDREN)
         .reset_index()
         .rename(
             {
@@ -717,7 +717,7 @@ def _create_cpr_graph_tiered(
             axis=1,
         )
     )
-    
+
     # parents
     n_parents = (
         unique_edges[CPR_GRAPH_EDGES.TO]
@@ -733,12 +733,8 @@ def _create_cpr_graph_tiered(
         )
     )
 
-    graph_degree_by_edgelist = (
-        n_children
-        .merge(n_parents, how="outer")
-        .fillna(int(0))
-    )
-    
+    graph_degree_by_edgelist = n_children.merge(n_parents, how="outer").fillna(int(0))
+
     graph_degree_by_edgelist[CPR_GRAPH_EDGES.SC_DEGREE] = (
         graph_degree_by_edgelist[CPR_GRAPH_EDGES.SC_CHILDREN]
         + graph_degree_by_edgelist[CPR_GRAPH_EDGES.SC_PARENTS]
@@ -1493,10 +1489,8 @@ def _augment_network_nodes(
 
     # Note: multiple sc_ids with the same s_id will be assign with the same species_graph_data
 
-    network_nodes_wdata = (
-        network_nodes_wdata
-        .fillna(int(0))
-        .drop(columns=["s_id", "c_id"])
+    network_nodes_wdata = network_nodes_wdata.fillna(int(0)).drop(
+        columns=["s_id", "c_id"]
     )
 
     return network_nodes_wdata
