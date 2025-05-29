@@ -707,28 +707,33 @@ def _create_cpr_graph_tiered(
     n_children = (
         unique_edges[CPR_GRAPH_EDGES.FROM]
         .value_counts()
-        .to_frame()
+        # rename values to the child name
+        .to_frame(name=CPR_GRAPH_EDGES.SC_CHILDREN)
         .reset_index()
         .rename(
             {
-                "index": SBML_DFS.SC_ID,
-                CPR_GRAPH_EDGES.FROM: CPR_GRAPH_EDGES.SC_CHILDREN,
+                CPR_GRAPH_EDGES.FROM: SBML_DFS.SC_ID,
             },
             axis=1,
         )
     )
+
     # parents
     n_parents = (
         unique_edges[CPR_GRAPH_EDGES.TO]
         .value_counts()
-        .to_frame()
+        # rename values to the parent name
+        .to_frame(name=CPR_GRAPH_EDGES.SC_PARENTS)
         .reset_index()
         .rename(
-            {"index": SBML_DFS.SC_ID, CPR_GRAPH_EDGES.TO: CPR_GRAPH_EDGES.SC_PARENTS},
+            {
+                CPR_GRAPH_EDGES.TO: SBML_DFS.SC_ID,
+            },
             axis=1,
         )
     )
-    graph_degree_by_edgelist = n_children.merge(n_parents, how="outer").fillna(0)
+
+    graph_degree_by_edgelist = n_children.merge(n_parents, how="outer").fillna(int(0))
 
     graph_degree_by_edgelist[CPR_GRAPH_EDGES.SC_DEGREE] = (
         graph_degree_by_edgelist[CPR_GRAPH_EDGES.SC_CHILDREN]
@@ -752,7 +757,7 @@ def _create_cpr_graph_tiered(
             axis=1,
         )
         .join(graph_degree_by_edgelist)
-        .fillna(0)
+        .fillna(int(0))
     )
 
     is_from_reaction = all_reaction_edges_df[CPR_GRAPH_EDGES.FROM].isin(
@@ -1484,8 +1489,9 @@ def _augment_network_nodes(
 
     # Note: multiple sc_ids with the same s_id will be assign with the same species_graph_data
 
-    network_nodes_wdata.fillna(0, inplace=True)
-    network_nodes_wdata.drop(columns=["s_id", "c_id"], inplace=True)
+    network_nodes_wdata = network_nodes_wdata.fillna(int(0)).drop(
+        columns=["s_id", "c_id"]
+    )
 
     return network_nodes_wdata
 
