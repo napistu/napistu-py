@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy package files
-COPY pyproject.toml README.md ./
+COPY setup.cfg setup.py pyproject.toml README.md ./
 COPY src/ ./src/
 
 # Install Napistu with all required extras
