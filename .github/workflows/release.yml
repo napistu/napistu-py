@@ -11,6 +11,21 @@ on:
         description: 'Version to release (e.g., 1.0.0)'
         required: true
         type: string
+      publish_pypi:
+        description: 'Publish to PyPI'
+        required: false
+        default: true
+        type: boolean
+      build_docker:
+        description: 'Build Docker images'
+        required: false
+        default: true
+        type: boolean
+      create_github_release:
+        description: 'Create GitHub release'
+        required: false
+        default: true
+        type: boolean
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -43,6 +58,7 @@ jobs:
   pypi:
     name: Publish to PyPI
     needs: test
+    if: github.event_name != 'workflow_dispatch' || inputs.publish_pypi
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -68,6 +84,7 @@ jobs:
   docker:
     name: Build Docker Images
     needs: test
+    if: github.event_name != 'workflow_dispatch' || inputs.build_docker
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -159,6 +176,7 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
+        tag_name: v${{ steps.version.outputs.version }}  # Explicitly specify the tag
         name: Release v${{ steps.version.outputs.version }}
         body: |
           ## Installation
@@ -176,5 +194,5 @@ jobs:
           docker run -p 8080:8080 ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-mcp-server:${{ steps.version.outputs.version }}
           ```
         draft: false
-        prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+        prerelease: ${{ contains(steps.version.outputs.version, '.dev') || contains(steps.version.outputs.version, 'a') || contains(steps.version.outputs.version, 'b') || contains(steps.version.outputs.version, 'rc') }}
         generate_release_notes: true
