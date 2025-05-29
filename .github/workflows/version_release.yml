@@ -10,10 +10,8 @@ jobs:
   check-version:
     name: Check for Version Change
     runs-on: ubuntu-latest
-    # Only proceed if CI passed AND setup.cfg was changed
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      contains(github.event.workflow_run.head_commit.modified, 'setup.cfg')
+    # Only proceed if CI passed
+    if: github.event.workflow_run.conclusion == 'success'
     outputs:
       version-changed: ${{ steps.check.outputs.version-changed }}
       new-version: ${{ steps.check.outputs.new-version }}
@@ -49,38 +47,35 @@ jobs:
         CURRENT_VERSION=$(get_version)
         echo "Current version in setup.cfg: $CURRENT_VERSION"
         
-        # Get previous version using git show (no checkout needed)
-        git show HEAD~1:setup.cfg > setup.cfg.prev 2>/dev/null || echo -e "[metadata]\nversion = 0.0.0" > setup.cfg.prev
-        PREVIOUS_VERSION=$(python -c "
-        import configparser
-        config = configparser.ConfigParser()
-        config.read('setup.cfg.prev')
-        try:
-            print(config['metadata']['version'])
-        except:
-            print('0.0.0')
-        ")
-        rm -f setup.cfg.prev
+        # Fetch tags to get the latest released version
+        git fetch --depth=1 origin --tags
         
-        echo "Previous version: $PREVIOUS_VERSION"
+        # Get the latest version tag (if any)
+        LATEST_TAG=$(git tag -l "v*" | sort -V | tail -n1 || echo "")
+        if [[ -n "$LATEST_TAG" ]]; then
+          LATEST_RELEASED_VERSION=${LATEST_TAG#v}  # Remove 'v' prefix
+          echo "Latest released version: $LATEST_RELEASED_VERSION"
+        else
+          LATEST_RELEASED_VERSION="0.0.0"
+          echo "No previous releases found, comparing against 0.0.0"
+        fi
         
-        # Check if versions are different
-        if [[ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ]]; then
-          echo "✅ Version changed: $PREVIOUS_VERSION → $CURRENT_VERSION"
+        # Check if current version is different from latest released version
+        if [[ "$CURRENT_VERSION" != "$LATEST_RELEASED_VERSION" ]]; then
+          echo "✅ Version changed: $LATEST_RELEASED_VERSION → $CURRENT_VERSION"
           
-          # Fetch tags to check for duplicates
-          git fetch --depth=1 origin --tags
+          # Check if this specific version tag already exists
           if git tag -l | grep -q "^v${CURRENT_VERSION}$"; then
             echo "⚠️ Tag v${CURRENT_VERSION} already exists, skipping"
             echo "version-changed=false" >> $GITHUB_OUTPUT
           else
-            echo "🚀 New version detected after CI success: $CURRENT_VERSION"
+            echo "🚀 New version detected: $CURRENT_VERSION (was $LATEST_RELEASED_VERSION)"
             echo "version-changed=true" >> $GITHUB_OUTPUT
             echo "new-version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
-            echo "previous-version=${PREVIOUS_VERSION}" >> $GITHUB_OUTPUT
+            echo "previous-version=${LATEST_RELEASED_VERSION}" >> $GITHUB_OUTPUT
           fi
         else
-          echo "ℹ️ No version change detected in setup.cfg"
+          echo "ℹ️ Version ${CURRENT_VERSION} already released, no action needed"
           echo "version-changed=false" >> $GITHUB_OUTPUT
         fi
 
