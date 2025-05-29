@@ -1,10 +1,11 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'  # Triggers on tags created by version-release.yml or manually
-  workflow_dispatch:
+  workflow_run:
+    workflows: ["Version Release"]  # Automated: triggers after version-release.yml
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:  # Manual: trigger from GitHub UI
     inputs:
       version:
         description: 'Version to release (e.g., 1.0.0)'
@@ -80,10 +81,16 @@ jobs:
       run: |
         if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
           VERSION="${{ inputs.version }}"
+        elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+          # Get the latest tag created by version-release workflow
+          git fetch --tags
+          VERSION=$(git tag -l "v*" | sort -V | tail -n1 | sed 's/^v//')
         else
+          # Push event with tag
           VERSION=${GITHUB_REF#refs/tags/v}
         fi
         echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Detected version: ${VERSION}"
 
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
@@ -138,10 +145,16 @@ jobs:
       run: |
         if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
           VERSION="${{ inputs.version }}"
+        elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+          # Get the latest tag created by version-release workflow
+          git fetch --tags
+          VERSION=$(git tag -l "v*" | sort -V | tail -n1 | sed 's/^v//')
         else
+          # Push event with tag
           VERSION=${GITHUB_REF#refs/tags/v}
         fi
         echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Detected version: ${VERSION}"
     
     - name: Create Release
       uses: softprops/action-gh-release@v1
