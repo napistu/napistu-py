@@ -91,14 +91,23 @@ jobs:
         VERSION="${{ needs.check-version.outputs.new-version }}"
         echo "Validating version format: $VERSION"
         
-        # Basic semantic version validation (X.Y.Z or X.Y.Z-suffix)
-        if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+        # Python PEP 440 compatible version validation (excluding local versions)
+        # Supports: X.Y.Z, X.Y.Z.devN, X.Y.ZaN, X.Y.ZbN, X.Y.ZrcN, X.Y.Z.postN
+        if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.(dev|post)[0-9]+|[ab][0-9]+|rc[0-9]+)?$ ]]; then
           echo "❌ Invalid version format: $VERSION"
-          echo "Expected format: X.Y.Z or X.Y.Z-suffix (e.g., 1.2.3 or 1.2.3-beta)"
+          echo "Valid formats for releases:"
+          echo "  - X.Y.Z (e.g., 1.2.3)"
+          echo "  - X.Y.Z.devN (e.g., 1.2.3.dev1)"  
+          echo "  - X.Y.ZaN (e.g., 1.2.3a1)"
+          echo "  - X.Y.ZbN (e.g., 1.2.3b1)"
+          echo "  - X.Y.ZrcN (e.g., 1.2.3rc1)"
+          echo "  - X.Y.Z.postN (e.g., 1.2.3.post1)"
+          echo ""
+          echo "Note: Local versions (X.Y.Z+local) are not allowed for releases"
           exit 1
         fi
         
-        echo "✅ Version format is valid"
+        echo "✅ Version format is valid for release"
 
   create-tag:
     name: Create Release Tag
