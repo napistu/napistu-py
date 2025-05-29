@@ -149,7 +149,8 @@ jobs:
   # Create GitHub release
   github-release:
     name: Create GitHub Release
-    needs: [pypi, docker]
+    needs: test
+    if: github.event_name != 'workflow_dispatch' || inputs.create_github_release
     runs-on: ubuntu-latest
     permissions:
       contents: write
