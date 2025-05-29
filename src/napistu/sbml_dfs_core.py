@@ -295,10 +295,7 @@ class SBML_dfs:
             self.compartmentalized_species.join(cspecies_n_connections)
             .join(cspecies_n_children)
             .join(cspecies_n_parents)
-            .fillna(0)
-            .astype(
-                {"sc_degree": "int32", "sc_children": "int32", "sc_parents": "int32"}
-            )
+            .fillna(int(0))  # Explicitly fill with int(0) to avoid downcasting warning
             .merge(species_features, left_on="s_id", right_index=True)
             .drop(columns=["sc_name", "s_id", "c_id"])
         )
@@ -371,7 +368,7 @@ class SBML_dfs:
         all_ids = pd.concat(
             [
                 sbml_dfs_utils._stub_ids(
-                    entity_table[schema[entity_type]["id"]][i].ids
+                    entity_table[schema[entity_type]["id"]].iloc[i].ids
                 ).assign(id=entity_table.index[i])
                 for i in range(0, entity_table.shape[0])
             ]
@@ -975,7 +972,7 @@ def reaction_summary(r_id: str, sbml_dfs: SBML_dfs) -> pd.DataFrame:
                 augmented_matching_reaction_species, sbml_dfs.reactions, SBML_DFS.S_NAME
             )
             + " ["
-            + augmented_matching_reaction_species[SBML_DFS.C_NAME][0]
+            + augmented_matching_reaction_species[SBML_DFS.C_NAME].iloc[0]
             + "]"
         )
     else:
@@ -1130,7 +1127,9 @@ def construct_formula_string(
     ]
 
     rxn_reversible = bool(
-        reactions_df.loc[reaction_species_df[SBML_DFS.R_ID][0], SBML_DFS.R_ISREVERSIBLE]
+        reactions_df.loc[
+            reaction_species_df[SBML_DFS.R_ID].iloc[0], SBML_DFS.R_ISREVERSIBLE
+        ]
     )  # convert from a np.bool_ to bool if needed
     if not isinstance(rxn_reversible, bool):
         raise TypeError(
@@ -2018,7 +2017,7 @@ def find_underspecified_reactions(
             ),
             how="left",
         )
-        .fillna(False)[SBML_DFS.R_ID]
+        .fillna(False)[SBML_DFS.R_ID]  # Fill boolean column with False
         .tolist()
     )
 
