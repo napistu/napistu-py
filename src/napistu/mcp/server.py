@@ -188,5 +188,4 @@ def start_mcp_server(
     logger.info("🚀 Starting MCP server...")
     logger.info(f"Using HTTP transport on http://{env_host}:{env_port}")
 
-    # Simple, standard FastMCP run - no custom parameters
-    mcp.run(transport="streamable-http", host=env_host, port=env_port)
+    mcp.run(transport="streamable-http")
