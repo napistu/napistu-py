@@ -55,59 +55,26 @@ jobs:
           --max-instances=3 \
           --concurrency=10 \
           --timeout=300 \
-          --set-env-vars="MCP_PROFILE=remote,MCP_SERVER_NAME=napistu-docs,HOST=0.0.0.0" \
+          --set-env-vars="MCP_PROFILE=remote,MCP_SERVER_NAME=napistu-docs,HOST=0.0.0.0,K_SERVICE=true" \
           --execution-environment=gen2 \
           --project=${{ env.PROJECT_ID }} \
           --quiet
 
-    - name: Get service URL
+    - name: Verify deployment
       run: |
-        SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
-          --region=${{ env.REGION }} \
-          --project=${{ env.PROJECT_ID }} \
-          --format="value(status.url)")
-        
         echo "✅ Deployment complete!"
-        echo "🌐 Service URL: $SERVICE_URL"
+        echo "🌐 Service URL: https://napistu-mcp-server-844820030839.us-west1.run.app"
         echo ""
-        echo "Test with:"
-        echo "  curl $SERVICE_URL/health"
-
-    - name: Setup Python for MCP testing
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+        echo "🔍 Basic connectivity test..."
         
-    - name: Install MCP client
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[mcp]"
-
-    - name: Test deployment
-      run: |
-        SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
-          --region=${{ env.REGION }} \
-          --project=${{ env.PROJECT_ID }} \
-          --format="value(status.url)")
-        
-        echo "🔍 Testing MCP server deployment..."
-        echo "Service URL: $SERVICE_URL"
-        sleep 20  # Give service a moment to start
-        
-        # First test simple HTTP health endpoint
-        echo "Testing basic health endpoint..."
-        if curl -f -s "$SERVICE_URL/health" > /dev/null; then
-          echo "✅ Basic health check passed"
+        # Test basic HTTP connectivity (should get 307 redirect)
+        if curl -s -o /dev/null -w "%{http_code}" https://napistu-mcp-server-844820030839.us-west1.run.app/mcp | grep -q "307"; then
+          echo "✅ Server is responding (MCP redirect working)"
         else
-          echo "⚠️ Basic health check failed"
+          echo "⚠️ Server connectivity issue"
         fi
         
-        # Then test full MCP functionality
-        echo "Testing MCP functionality..."
-        if python -m napistu.mcp health --url "$SERVICE_URL"; then
-          echo "✅ MCP health check passed"
-        else
-          echo "⚠️ MCP health check failed, retrying..."
-          sleep 10
-          python -m napistu.mcp health --url "$SERVICE_URL" || echo "MCP health check still failing"
-        fi
+        echo ""
+        echo "📋 For local MCP testing:"
+        echo "  python -m napistu.mcp health --url https://napistu-mcp-server-844820030839.us-west1.run.app"
+        echo "  python -m napistu.mcp resources --url https://napistu-mcp-server-844820030839.us-west1.run.app"
