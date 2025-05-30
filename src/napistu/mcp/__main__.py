@@ -3,12 +3,14 @@
 MCP (Model Context Protocol) Server CLI for Napistu.
 """
 
+import asyncio
 import click
 import click_logging
 import logging
 
 import napistu
 from napistu.mcp.server import start_mcp_server
+from napistu.mcp.client import check_server_health, print_health_status
 
 logger = logging.getLogger(napistu.__name__)
 click_logging.basic_config(logger)
@@ -46,14 +48,6 @@ def start_local(server_name):
     start_mcp_server("local", "127.0.0.1", 8765, server_name, "stdio")
 
 
-@server.command(name="remote")
-@click.option("--server-name", type=str, default="napistu-docs")
-@click_logging.simple_verbosity_option(logger)
-def start_remote(server_name):
-    """Start a remote MCP server for documentation and codebase exploration."""
-    start_mcp_server("remote", "0.0.0.0", 8080, server_name, "http")
-
-
 @server.command(name="full")
 @click.option("--server-name", type=str, default="napistu-full")
 @click_logging.simple_verbosity_option(logger)
@@ -62,8 +56,48 @@ def start_full(server_name):
     start_mcp_server("full", "127.0.0.1", 8765, server_name, "stdio")
 
 
-# Add command groups to the CLI
+@cli.command()
+@click.option("--profile", type=click.Choice(["local", "remote", "full"]), default="full",
+              help="Server profile to test")
+@click.option("--transport", type=click.Choice(["stdio", "http"]), default="stdio",
+              help="Transport type to use")
+@click.option("--url", default="http://127.0.0.1:8080", help="Server URL for HTTP transport")
+@click_logging.simple_verbosity_option(logger)
+def test(profile, transport, url):
+    """Test MCP server functionality."""
+    async def run_test():
+        print(f"🧪 Testing Napistu MCP Server ({profile} profile, {transport} transport)")
+        print("=" * 50)
+        
+        health = await check_server_health(transport=transport, server_url=url)
+        print_health_status(health)
+    
+    asyncio.run(run_test())
+
+
+@cli.command()
+@click.option("--profile", type=click.Choice(["local", "remote", "full"]), default="full",
+              help="Server profile to check")
+@click.option("--transport", type=click.Choice(["stdio", "http"]), default="stdio",
+              help="Transport type to use")
+@click.option("--url", default="http://127.0.0.1:8080", help="Server URL for HTTP transport")
+@click_logging.simple_verbosity_option(logger)
+def health(profile, transport, url):
+    """Quick health check of MCP server."""
+    async def run_health_check():
+        print("🏥 Napistu MCP Server Health Check")
+        print("=" * 40)
+        
+        health = await check_server_health(transport=transport, server_url=url)
+        print_health_status(health)
+    
+    asyncio.run(run_health_check())
+
+
+# Add commands to the CLI
 cli.add_command(server)
+cli.add_command(test)
+cli.add_command(health)
 
 
 if __name__ == "__main__":
