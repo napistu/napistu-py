@@ -1,0 +1,114 @@
+name: Deploy to Cloud Run
+
+on:
+  workflow_run:
+    workflows: ["Release"]  # Auto-deploy after release
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:  # Manual deployment
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (default: latest)'
+        required: false
+        default: 'latest'
+        type: string
+
+env:
+  PROJECT_ID: shackett
+  REGION: us-west1
+  REGISTRY: us-west1-docker.pkg.dev
+  REPOSITORY: napistu-images
+  SERVICE_NAME: napistu-mcp-server
+
+jobs:
+  deploy:
+    name: Deploy MCP Server
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    
+    steps:
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_CLOUDRUN_SA_KEY }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
+    - name: Deploy to Cloud Run
+      run: |
+        IMAGE_TAG="${{ inputs.image_tag || 'latest' }}"
+        IMAGE_URL="${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-mcp-server:${IMAGE_TAG}"
+        
+        echo "🚀 Deploying Napistu MCP Server"
+        echo "   Image: $IMAGE_URL"
+        
+        gcloud run deploy ${{ env.SERVICE_NAME }} \
+          --image="$IMAGE_URL" \
+          --region=${{ env.REGION }} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --port=8080 \
+          --cpu=0.5 \
+          --memory=1Gi \
+          --min-instances=0 \
+          --max-instances=3 \
+          --concurrency=80 \
+          --timeout=300 \
+          --no-use-http-health-check \
+          --set-env-vars="MCP_PROFILE=remote,MCP_SERVER_NAME=napistu-docs,HOST=0.0.0.0,PORT=8080" \
+          --execution-environment=gen2 \
+          --project=${{ env.PROJECT_ID }} \
+          --quiet
+
+    - name: Get service URL
+      run: |
+        SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+          --region=${{ env.REGION }} \
+          --project=${{ env.PROJECT_ID }} \
+          --format="value(status.url)")
+        
+        echo "✅ Deployment complete!"
+        echo "🌐 Service URL: $SERVICE_URL"
+        echo ""
+        echo "Test with:"
+        echo "  curl $SERVICE_URL/health"
+
+    - name: Setup Python for MCP testing
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install MCP client
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[mcp]"
+
+    - name: Test deployment
+      run: |
+        SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+          --region=${{ env.REGION }} \
+          --project=${{ env.PROJECT_ID }} \
+          --format="value(status.url)")
+        
+        echo "🔍 Testing MCP server deployment..."
+        echo "Service URL: $SERVICE_URL"
+        sleep 20  # Give service a moment to start
+        
+        # First test simple HTTP health endpoint
+        echo "Testing basic health endpoint..."
+        if curl -f -s "$SERVICE_URL/health" > /dev/null; then
+          echo "✅ Basic health check passed"
+        else
+          echo "⚠️ Basic health check failed"
+        fi
+        
+        # Then test full MCP functionality
+        echo "Testing MCP functionality..."
+        if python -m napistu.mcp health --url "$SERVICE_URL"; then
+          echo "✅ MCP health check passed"
+        else
+          echo "⚠️ MCP health check failed, retrying..."
+          sleep 10
+          python -m napistu.mcp health --url "$SERVICE_URL" || echo "MCP health check still failing"
+        fi

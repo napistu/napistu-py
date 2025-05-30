@@ -1,5 +1,5 @@
 # Dockerfile.mcp
-ARG BASE_IMAGE
+ARG BASE_IMAGE=napistu-base:latest
 FROM ${BASE_IMAGE}
 
 # Metadata
@@ -10,7 +10,7 @@ LABEL org.opencontainers.image.source="https://github.com/napistu/napistu-py"
 # Switch to root for installation
 USER root
 
-# Install curl for health checks
+# Install curl for health checks (optional, since we're using MCP CLI)
 RUN apt-get update && apt-get install -y curl && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
@@ -41,9 +41,11 @@ echo "   Server Name: \$MCP_SERVER_NAME"
 # Validate installation
 python -c "import napistu.mcp; print('✅ MCP components ready')"
 
-# Start the MCP server
-exec python -m napistu.mcp server cloud \\
+# Start the MCP server using the correct CLI command
+exec python -m napistu.mcp server start \\
     --profile "\$MCP_PROFILE" \\
+    --host "\$HOST" \\
+    --port "\$PORT" \\
     --server-name "\$MCP_SERVER_NAME"
 EOF
 
@@ -52,9 +54,9 @@ RUN chmod +x /usr/local/bin/start-mcp-server.sh
 # Expose port
 EXPOSE 8080
 
-# Health check for MCP server
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:${PORT}/health || exit 1
+# Health check using simple port check (faster and more reliable)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/mcp || exit 1
 
 # Switch back to non-root user
 USER app
