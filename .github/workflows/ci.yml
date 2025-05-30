@@ -25,8 +25,8 @@ jobs:
         
     - name: Install dependencies
       run: |
-        uv pip install pytest pytest-cov
-        uv pip install -e ".[dev,mcp]"
+        uv pip install --system pytest pytest-cov
+        uv pip install --system -e ".[dev,mcp]"
         
     - name: Check formatting with Black
       run: black --check --diff .
@@ -62,8 +62,8 @@ jobs:
         
     - name: Install dependencies
       run: |
-        uv pip install pytest pytest-cov
-        uv pip install -e ".[dev,mcp]"
+        uv pip install --system  pytest pytest-cov
+        uv pip install --system -e ".[dev,mcp]"
         
     - name: Run tests with coverage
       run: |
