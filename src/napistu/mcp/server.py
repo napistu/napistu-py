@@ -188,18 +188,5 @@ def start_mcp_server(
     logger.info("🚀 Starting MCP server...")
     logger.info(f"Using HTTP transport on http://{env_host}:{env_port}")
 
-    # Configure for Cloud Run proxy environment
-    if os.getenv("K_SERVICE"):  # Cloud Run environment
-        logger.info("Detected Cloud Run environment")
-        # Run with proxy-friendly settings
-        mcp.run(
-            transport="streamable-http",
-            host=env_host,
-            port=env_port,
-            # Add proxy headers support
-            forwarded_allow_ips="*",
-            proxy_headers=True,
-        )
-    else:
-        # Local development
-        mcp.run(transport="streamable-http", host=env_host, port=env_port)
+    # Simple, standard FastMCP run - no custom parameters
+    mcp.run(transport="streamable-http", host=env_host, port=env_port)

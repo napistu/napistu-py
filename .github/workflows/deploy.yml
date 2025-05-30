@@ -55,7 +55,7 @@ jobs:
           --max-instances=3 \
           --concurrency=10 \
           --timeout=300 \
-          --set-env-vars="MCP_PROFILE=remote,MCP_SERVER_NAME=napistu-docs,HOST=0.0.0.0" \
+          --set-env-vars="MCP_PROFILE=remote,MCP_SERVER_NAME=napistu-docs,HOST=0.0.0.0,FORWARDED_ALLOW_IPS=*" \
           --execution-environment=gen2 \
           --project=${{ env.PROJECT_ID }} \
           --quiet
