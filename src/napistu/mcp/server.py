@@ -147,30 +147,26 @@ def start_mcp_server(
     env_profile = os.getenv("MCP_PROFILE", profile_name)
     env_host = os.getenv("HOST", host)
     env_port = int(os.getenv("PORT", port))
-    env_server_name = os.getenv(
-        "MCP_SERVER_NAME", server_name or f"napistu-{env_profile}"
-    )
+    env_server_name = os.getenv("MCP_SERVER_NAME", server_name or f"napistu-{env_profile}")
 
-    logger.info("Starting Napistu MCP Server")
+    logger.info(f"Starting Napistu MCP Server")
     logger.info(f"  Profile: {env_profile}")
     logger.info(f"  Host: {env_host}")
     logger.info(f"  Port: {env_port}")
     logger.info(f"  Server Name: {env_server_name}")
-    logger.info("  Transport: streamable-http")
+    logger.info(f"  Transport: streamable-http")
 
     # Create session context for execution components
     session_context = {}
     object_registry = {}
 
     # Get profile with configuration
-    profile: ServerProfile = get_profile(
-        env_profile,
-        session_context=session_context,
-        object_registry=object_registry,
-        server_name=env_server_name,
-    )
+    profile: ServerProfile = get_profile(env_profile, 
+                                        session_context=session_context,
+                                        object_registry=object_registry,
+                                        server_name=env_server_name)
 
-    # Create server
+    # Create server with Cloud Run proxy settings
     mcp = create_server(profile, host=env_host, port=env_port)
 
     # Initialize components first (separate async call)
@@ -181,10 +177,25 @@ def start_mcp_server(
 
     # Run initialization
     asyncio.run(init_components())
-
+    
     # Debug info
     logger.info(f"Server settings: {mcp.settings}")
-
+    
     logger.info("🚀 Starting MCP server...")
     logger.info(f"Using HTTP transport on http://{env_host}:{env_port}")
-    mcp.run(transport="streamable-http")
+    
+    # Configure for Cloud Run proxy environment
+    if os.getenv("K_SERVICE"):  # Cloud Run environment
+        logger.info("Detected Cloud Run environment")
+        # Run with proxy-friendly settings
+        mcp.run(
+            transport="streamable-http",
+            host=env_host,
+            port=env_port,
+            # Add proxy headers support
+            forwarded_allow_ips="*",
+            proxy_headers=True
+        )
+    else:
+        # Local development
+        mcp.run(transport="streamable-http", host=env_host, port=env_port)
