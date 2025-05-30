@@ -14,43 +14,38 @@ logger = logging.getLogger(__name__)
 # Type variable for the FastMCP decorator return type
 T = TypeVar('T')
 
-def register_health_endpoint(mcp: FastMCP) -> None:
+# Global cache for component health status
+_health_cache = {
+    "status": "initializing",
+    "components": {},
+    "last_check": None
+}
+
+def register_components(mcp: FastMCP) -> None:
     """
-    Register health check endpoint with the MCP server.
+    Register health check components with the MCP server.
     
     Parameters
     ----------
     mcp : FastMCP
         FastMCP server instance to register the health endpoint with.
-        
-    Returns
-    -------
-    None
-        The function registers endpoints with the provided MCP server.
     """
-    
     @mcp.resource("napistu://health")
     async def health_check() -> Dict[str, Any]:
         """
         Health check endpoint for deployment monitoring.
-        
-        Returns
-        -------
-        Dict[str, Any]
-            Dictionary containing health status information:
-                - status : str
-                    Overall server status ('healthy', 'degraded', or 'unhealthy')
-                - timestamp : str
-                    ISO format timestamp of the health check
-                - version : str
-                    Version of the Napistu package
-                - components : Dict[str, Dict[str, str]]
-                    Status of each component ('healthy', 'inactive', or 'unavailable')
-                - error : str, optional
-                    Error message if status is 'unhealthy'
+        Returns current cached health status.
         """
+        return _health_cache
+
+    @mcp.tool("napistu://health/check")
+    async def check_current_health() -> Dict[str, Any]:
+        """
+        Tool to actively check current component health.
+        This performs real-time checks and updates the cached status.
+        """
+        global _health_cache
         try:
-            # Basic health check - verify server is responsive
             health_status = {
                 "status": "healthy",
                 "timestamp": datetime.utcnow().isoformat(),
@@ -58,7 +53,7 @@ def register_health_endpoint(mcp: FastMCP) -> None:
                 "components": await _check_components()
             }
             
-            # Check if any components failed (only count unavailable as failures, not inactive)
+            # Check if any components failed
             failed_components = [
                 name for name, status in health_status["components"].items() 
                 if status["status"] == "unavailable"
@@ -67,56 +62,71 @@ def register_health_endpoint(mcp: FastMCP) -> None:
             if failed_components:
                 health_status["status"] = "degraded"
                 health_status["failed_components"] = failed_components
+            
+            # Update the global cache with latest status
+            health_status["last_check"] = datetime.utcnow().isoformat()
+            _health_cache.update(health_status)
+            logger.info(f"Updated health cache - Status: {health_status['status']}")
                 
             return health_status
             
         except Exception as e:
             logger.error(f"Health check failed: {e}")
-            return {
+            error_status = {
                 "status": "unhealthy",
                 "error": str(e),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
+                "last_check": datetime.utcnow().isoformat()
             }
+            # Update cache even on error
+            _health_cache.update(error_status)
+            return error_status
 
-    @mcp.tool()
-    async def get_server_info() -> Dict[str, Any]:
-        """
-        Get detailed server information for monitoring.
+async def initialize_components() -> bool:
+    """
+    Initialize health check components.
+    Performs initial health check and caches the result.
+    
+    Returns
+    -------
+    bool
+        True if initialization is successful
+    """
+    global _health_cache
+    
+    logger.info("Initializing health check components...")
+    
+    try:
+        # Check initial component health
+        component_status = await _check_components()
         
-        Returns
-        -------
-        Dict[str, Any]
-            Dictionary containing server configuration and status:
-                - server_name : str
-                    Name of the MCP server
-                - profile : str
-                    Active server profile
-                - python_version : str
-                    Python version running the server
-                - platform : str
-                    Operating system platform
-                - environment : Dict[str, Optional[str]]
-                    Environment variables affecting server behavior
-                - startup_time : str
-                    ISO format timestamp of server startup
-        """
-        import os
-        import sys
+        # Update cache
+        _health_cache.update({
+            "status": "healthy",
+            "components": component_status,
+            "timestamp": datetime.utcnow().isoformat(),
+            "version": _get_version(),
+            "last_check": datetime.utcnow().isoformat()
+        })
         
-        return {
-            "server_name": os.getenv("MCP_SERVER_NAME", "unknown"),
-            "profile": os.getenv("MCP_PROFILE", "unknown"),
-            "python_version": sys.version,
-            "platform": sys.platform,
-            "environment": {
-                "PORT": os.getenv("PORT"),
-                "HOST": os.getenv("HOST"),
-                "MCP_PROFILE": os.getenv("MCP_PROFILE"),
-                "MCP_SERVER_NAME": os.getenv("MCP_SERVER_NAME")
-            },
-            "startup_time": datetime.utcnow().isoformat()
-        }
-
+        # Check for failed components
+        failed_components = [
+            name for name, status in component_status.items() 
+            if status["status"] == "unavailable"
+        ]
+        
+        if failed_components:
+            _health_cache["status"] = "degraded"
+            _health_cache["failed_components"] = failed_components
+        
+        logger.info(f"Health check initialization complete: {_health_cache['status']}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Health check initialization failed: {e}")
+        _health_cache["status"] = "unhealthy"
+        _health_cache["error"] = str(e)
+        return False
 
 def _check_component_health(component_name: str, module_name: str, cache_attr: str) -> Dict[str, str]:
     """
@@ -143,30 +153,39 @@ def _check_component_health(component_name: str, module_name: str, cache_attr: s
     try:
         module = __import__(module_name, fromlist=[component_name])
         cache = getattr(module, cache_attr, None)
+        logger.info(f"Checking {component_name} health - Cache exists: {cache is not None}")
         
         # Component specific checks for actual data
         if cache:
             if component_name == "documentation":
                 # Check if any documentation section has content
                 has_data = any(bool(section) for section in cache.values())
+                logger.info(f"Documentation sections: {list(cache.keys())}")
             elif component_name == "codebase":
                 # Check if any codebase section has content
                 has_data = any(bool(section) for section in cache.values())
+                logger.info(f"Codebase sections: {list(cache.keys())}")
             elif component_name == "tutorials":
                 # Check if tutorials section has content
                 has_data = bool(cache.get("tutorials", {}))
+                logger.info(f"Tutorials cache: {bool(cache.get('tutorials', {}))}")
             elif component_name == "execution":
                 # Check if session context has more than just napistu module
                 has_data = len(cache) > 0
+                logger.info(f"Execution context: {list(cache.keys())}")
             else:
                 has_data = bool(cache)
                 
             if has_data:
+                logger.info(f"{component_name} is healthy")
                 return {"status": "healthy"}
             
+        logger.info(f"{component_name} is inactive")
         return {"status": "inactive"}
     except Exception as e:
+        logger.error(f"{component_name} check failed: {str(e)}")
         return {"status": "unavailable", "error": str(e)}
+
 
 async def _check_components() -> Dict[str, Dict[str, Any]]:
     """
@@ -191,11 +210,17 @@ async def _check_components() -> Dict[str, Dict[str, Any]]:
         "execution": ("napistu.mcp.execution", "_session_context")
     }
     
+    logger.info("Starting component health checks...")
+    logger.info(f"Checking components: {list(component_configs.keys())}")
+    
     # Check each component's cache
-    return {
+    results = {
         name: _check_component_health(name, module_path, cache_attr)
         for name, (module_path, cache_attr) in component_configs.items()
     }
+    
+    logger.info(f"Health check results: {results}")
+    return results
 
 
 def _get_version() -> str:
