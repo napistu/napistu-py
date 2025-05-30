@@ -88,13 +88,15 @@ jobs:
       with:
         python-version: '3.11'
         
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+        
     - name: Install and test
       run: |
-        python -m pip install --upgrade pip
-        pip install pytest
-        pip install -e ".[dev,mcp]"
+        uv pip install pytest pytest-cov
+        uv pip install -e ".[dev,mcp]"
         pytest -x -v  # Stop on first failure for speed
-
+        
   # Build and publish to PyPI
   pypi:
     name: Publish to PyPI
