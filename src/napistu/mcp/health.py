@@ -5,18 +5,28 @@ Health check endpoint for the MCP server when deployed to Cloud Run.
 
 import json
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Callable, TypeVar
 from datetime import datetime
+from fastmcp import FastMCP
 
 logger = logging.getLogger(__name__)
 
+# Type variable for the FastMCP decorator return type
+T = TypeVar('T')
 
-def register_health_endpoint(mcp):
+def register_health_endpoint(mcp: FastMCP) -> None:
     """
     Register health check endpoint with the MCP server.
     
-    Args:
-        mcp: FastMCP server instance
+    Parameters
+    ----------
+    mcp : FastMCP
+        FastMCP server instance to register the health endpoint with.
+        
+    Returns
+    -------
+    None
+        The function registers endpoints with the provided MCP server.
     """
     
     @mcp.resource("napistu://health")
@@ -24,8 +34,20 @@ def register_health_endpoint(mcp):
         """
         Health check endpoint for deployment monitoring.
         
-        Returns:
-            Dictionary with health status information
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary containing health status information:
+                - status : str
+                    Overall server status ('healthy', 'degraded', or 'unhealthy')
+                - timestamp : str
+                    ISO format timestamp of the health check
+                - version : str
+                    Version of the Napistu package
+                - components : Dict[str, Dict[str, str]]
+                    Status of each component ('healthy', 'inactive', or 'unavailable')
+                - error : str, optional
+                    Error message if status is 'unhealthy'
         """
         try:
             # Basic health check - verify server is responsive
@@ -61,8 +83,22 @@ def register_health_endpoint(mcp):
         """
         Get detailed server information for monitoring.
         
-        Returns:
-            Dictionary with server configuration and status
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary containing server configuration and status:
+                - server_name : str
+                    Name of the MCP server
+                - profile : str
+                    Active server profile
+                - python_version : str
+                    Python version running the server
+                - platform : str
+                    Operating system platform
+                - environment : Dict[str, Optional[str]]
+                    Environment variables affecting server behavior
+                - startup_time : str
+                    ISO format timestamp of server startup
         """
         import os
         import sys
@@ -86,13 +122,23 @@ def _check_component_health(component_name: str, module_name: str, cache_attr: s
     """
     Check the health of a single MCP component by verifying its cache is initialized and contains data.
     
-    Args:
-        component_name: Name of the component (for importing)
-        module_name: Full module path for importing
-        cache_attr: Name of the cache/context attribute to check
+    Parameters
+    ----------
+    component_name : str
+        Name of the component (for importing)
+    module_name : str
+        Full module path for importing
+    cache_attr : str
+        Name of the cache/context attribute to check
         
-    Returns:
-        Dictionary with component status and optional error message
+    Returns
+    -------
+    Dict[str, str]
+        Dictionary containing component health status:
+            - status : str
+                One of: 'healthy', 'inactive', or 'unavailable'
+            - error : str, optional
+                Error message if status is 'unavailable'
     """
     try:
         module = __import__(module_name, fromlist=[component_name])
@@ -123,7 +169,20 @@ def _check_component_health(component_name: str, module_name: str, cache_attr: s
         return {"status": "unavailable", "error": str(e)}
 
 async def _check_components() -> Dict[str, Dict[str, Any]]:
-    """Check the health of individual MCP components by verifying their caches."""
+    """
+    Check the health of individual MCP components by verifying their caches.
+    
+    Returns
+    -------
+    Dict[str, Dict[str, Any]]
+        Dictionary mapping component names to their health status:
+            - {component_name} : Dict[str, str]
+                Health status for each component, containing:
+                    - status : str
+                        One of: 'healthy', 'inactive', or 'unavailable'
+                    - error : str, optional
+                        Error message if status is 'unavailable'
+    """
     # Define component configurations - cache vars that indicate initialization
     component_configs = {
         "documentation": ("napistu.mcp.documentation", "_docs_cache"),
@@ -140,7 +199,14 @@ async def _check_components() -> Dict[str, Dict[str, Any]]:
 
 
 def _get_version() -> str:
-    """Get the Napistu version."""
+    """
+    Get the Napistu version.
+    
+    Returns
+    -------
+    str
+        Version string of the Napistu package, or 'unknown' if not available.
+    """
     try:
         import napistu
         return getattr(napistu, "__version__", "unknown")
