@@ -38,25 +38,15 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-3.11-pip-
         
-    - name: Install dependencies
-      uses: nick-fields/retry@v2
-      with:
-        timeout_minutes: 15
-        max_attempts: 3
-        retry_on: error
-        shell: bash  # Force bash on all platforms
-        command: |
-          python -m pip install --upgrade pip
-          pip config set global.timeout 600
-          pip config set global.retries 3
-          
-          # Install pandas from wheel first to avoid building from source
-          pip install --only-binary=all pandas || pip install pandas
-          
-          # Install other dependencies
-          pip install pytest
-          pip install -e ".[dev,mcp]" --prefer-binary
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
         
+    - name: Install dependencies
+      run: |
+        uv pip install --system pytest pytest-cov
+        uv pip install --system -e ".[dev,mcp]"
+          
     - name: Run pytest
       run: |
         pytest -v
