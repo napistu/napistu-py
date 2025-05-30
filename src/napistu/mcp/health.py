@@ -3,9 +3,8 @@
 Health check endpoint for the MCP server when deployed to Cloud Run.
 """
 
-import json
 import logging
-from typing import Dict, Any, Callable, TypeVar
+from typing import Dict, Any, TypeVar
 from datetime import datetime
 from fastmcp import FastMCP
 

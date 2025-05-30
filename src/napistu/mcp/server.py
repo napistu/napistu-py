@@ -151,12 +151,12 @@ def start_mcp_server(
         "MCP_SERVER_NAME", server_name or f"napistu-{env_profile}"
     )
 
-    logger.info(f"Starting Napistu MCP Server")
+    logger.info("Starting Napistu MCP Server")
     logger.info(f"  Profile: {env_profile}")
     logger.info(f"  Host: {env_host}")
     logger.info(f"  Port: {env_port}")
     logger.info(f"  Server Name: {env_server_name}")
-    logger.info(f"  Transport: streamable-http")
+    logger.info("  Transport: streamable-http")
 
     # Create session context for execution components
     session_context = {}
