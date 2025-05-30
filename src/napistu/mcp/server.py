@@ -43,10 +43,6 @@ def create_server(profile: ServerProfile, **kwargs) -> FastMCP:
     # Pass all kwargs directly to the FastMCP constructor
     mcp = FastMCP(config["server_name"], **kwargs)
 
-    # Always register health components
-    health.register_components(mcp)
-    logger.info("Registered health components")
-
     if config["enable_documentation"]:
         logger.info("Registering documentation components")
         documentation.register_components(mcp)
@@ -63,6 +59,11 @@ def create_server(profile: ServerProfile, **kwargs) -> FastMCP:
     if config["enable_tutorials"]:
         logger.info("Registering tutorials components")
         tutorials.register_components(mcp)
+
+    # Always register health components
+    health.register_components(mcp)
+    logger.info("Registered health components")
+
     return mcp
 
 
