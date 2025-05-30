@@ -81,7 +81,7 @@ async def initialize_components(profile: ServerProfile) -> None:
     None
     """
     config = profile.get_config()
-    
+
     if config["enable_documentation"]:
         logger.info("Initializing documentation components")
         await documentation.initialize_components()
@@ -98,24 +98,24 @@ async def initialize_components(profile: ServerProfile) -> None:
     # Initialize health components last since they monitor the other components
     logger.info("Initializing health components")
     await health.initialize_components()
-    
+
 
 def start_mcp_server(
     profile_name: str = "remote",
     host: str = "0.0.0.0",
     port: int = 8080,
-    server_name: str | None = None
+    server_name: str | None = None,
 ) -> None:
     """
     Start MCP server - main entry point for server startup.
-    
+
     The server will be started with HTTP transport on the specified host and port.
     Environment variables can override the default configuration:
     - MCP_PROFILE: Server profile to use
     - HOST: Host to bind to
     - PORT: Port to bind to
     - MCP_SERVER_NAME: Name of the MCP server
-    
+
     Parameters
     ----------
     profile_name : str, optional
@@ -127,12 +127,12 @@ def start_mcp_server(
     server_name : str | None, optional
         Custom name for the MCP server. If None, will be generated from profile name.
         Defaults to None.
-        
+
     Returns
     -------
     None
         This function runs indefinitely until interrupted.
-        
+
     Notes
     -----
     The server uses HTTP transport (streamable-http) for all connections.
@@ -147,7 +147,9 @@ def start_mcp_server(
     env_profile = os.getenv("MCP_PROFILE", profile_name)
     env_host = os.getenv("HOST", host)
     env_port = int(os.getenv("PORT", port))
-    env_server_name = os.getenv("MCP_SERVER_NAME", server_name or f"napistu-{env_profile}")
+    env_server_name = os.getenv(
+        "MCP_SERVER_NAME", server_name or f"napistu-{env_profile}"
+    )
 
     logger.info(f"Starting Napistu MCP Server")
     logger.info(f"  Profile: {env_profile}")
@@ -161,10 +163,12 @@ def start_mcp_server(
     object_registry = {}
 
     # Get profile with configuration
-    profile: ServerProfile = get_profile(env_profile, 
-                                        session_context=session_context,
-                                        object_registry=object_registry,
-                                        server_name=env_server_name)
+    profile: ServerProfile = get_profile(
+        env_profile,
+        session_context=session_context,
+        object_registry=object_registry,
+        server_name=env_server_name,
+    )
 
     # Create server
     mcp = create_server(profile, host=env_host, port=env_port)
@@ -177,10 +181,10 @@ def start_mcp_server(
 
     # Run initialization
     asyncio.run(init_components())
-    
+
     # Debug info
     logger.info(f"Server settings: {mcp.settings}")
-    
+
     logger.info("🚀 Starting MCP server...")
     logger.info(f"Using HTTP transport on http://{env_host}:{env_port}")
     mcp.run(transport="streamable-http")
