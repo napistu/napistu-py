@@ -36,10 +36,10 @@ def register_health_endpoint(mcp):
                 "components": await _check_components()
             }
             
-            # Check if any components failed
+            # Check if any components failed (only count unavailable as failures, not inactive)
             failed_components = [
                 name for name, status in health_status["components"].items() 
-                if status["status"] != "healthy"
+                if status["status"] == "unavailable"
             ]
             
             if failed_components:
@@ -84,7 +84,7 @@ def register_health_endpoint(mcp):
 
 def _check_component_health(component_name: str, module_name: str, cache_attr: str) -> Dict[str, str]:
     """
-    Check the health of a single MCP component.
+    Check the health of a single MCP component by verifying its cache is initialized and contains data.
     
     Args:
         component_name: Name of the component (for importing)
@@ -96,15 +96,35 @@ def _check_component_health(component_name: str, module_name: str, cache_attr: s
     """
     try:
         module = __import__(module_name, fromlist=[component_name])
-        if hasattr(module, cache_attr) and getattr(module, cache_attr):
-            return {"status": "healthy"}
-        return {"status": "not_initialized"}
+        cache = getattr(module, cache_attr, None)
+        
+        # Component specific checks for actual data
+        if cache:
+            if component_name == "documentation":
+                # Check if any documentation section has content
+                has_data = any(bool(section) for section in cache.values())
+            elif component_name == "codebase":
+                # Check if any codebase section has content
+                has_data = any(bool(section) for section in cache.values())
+            elif component_name == "tutorials":
+                # Check if tutorials section has content
+                has_data = bool(cache.get("tutorials", {}))
+            elif component_name == "execution":
+                # Check if session context has more than just napistu module
+                has_data = len(cache) > 0
+            else:
+                has_data = bool(cache)
+                
+            if has_data:
+                return {"status": "healthy"}
+            
+        return {"status": "inactive"}
     except Exception as e:
         return {"status": "unavailable", "error": str(e)}
 
 async def _check_components() -> Dict[str, Dict[str, Any]]:
-    """Check the health of individual MCP components."""
-    # Define component configurations
+    """Check the health of individual MCP components by verifying their caches."""
+    # Define component configurations - cache vars that indicate initialization
     component_configs = {
         "documentation": ("napistu.mcp.documentation", "_docs_cache"),
         "codebase": ("napistu.mcp.codebase", "_codebase_cache"),
@@ -112,7 +132,7 @@ async def _check_components() -> Dict[str, Dict[str, Any]]:
         "execution": ("napistu.mcp.execution", "_session_context")
     }
     
-    # Check each component
+    # Check each component's cache
     return {
         name: _check_component_health(name, module_path, cache_attr)
         for name, (module_path, cache_attr) in component_configs.items()
