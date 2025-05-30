@@ -82,55 +82,41 @@ def register_health_endpoint(mcp):
         }
 
 
+def _check_component_health(component_name: str, module_name: str, cache_attr: str) -> Dict[str, str]:
+    """
+    Check the health of a single MCP component.
+    
+    Args:
+        component_name: Name of the component (for importing)
+        module_name: Full module path for importing
+        cache_attr: Name of the cache/context attribute to check
+        
+    Returns:
+        Dictionary with component status and optional error message
+    """
+    try:
+        module = __import__(module_name, fromlist=[component_name])
+        if hasattr(module, cache_attr) and getattr(module, cache_attr):
+            return {"status": "healthy"}
+        return {"status": "not_initialized"}
+    except Exception as e:
+        return {"status": "unavailable", "error": str(e)}
+
 async def _check_components() -> Dict[str, Dict[str, Any]]:
     """Check the health of individual MCP components."""
-    components = {}
+    # Define component configurations
+    component_configs = {
+        "documentation": ("napistu.mcp.documentation", "_docs_cache"),
+        "codebase": ("napistu.mcp.codebase", "_codebase_cache"),
+        "tutorials": ("napistu.mcp.tutorials", "_tutorial_cache"),
+        "execution": ("napistu.mcp.execution", "_session_context")
+    }
     
-    # Check documentation component
-    try:
-        from napistu.mcp import documentation
-        # Simple check - verify cache is initialized
-        if hasattr(documentation, '_docs_cache') and documentation._docs_cache:
-            components["documentation"] = {"status": "healthy"}
-        else:
-            components["documentation"] = {"status": "not_initialized"}
-    except Exception as e:
-        components["documentation"] = {"status": "error", "error": str(e)}
-    
-    # Check codebase component
-    try:
-        from napistu.mcp import codebase
-        # Simple check - verify cache is initialized
-        if hasattr(codebase, '_codebase_cache') and codebase._codebase_cache:
-            components["codebase"] = {"status": "healthy"}
-        else:
-            components["codebase"] = {"status": "not_initialized"}
-    except Exception as e:
-        components["codebase"] = {"status": "error", "error": str(e)}
-    
-    # Check tutorials component
-    try:
-        from napistu.mcp import tutorials
-        # Simple check - verify cache is initialized
-        if hasattr(tutorials, '_tutorial_cache') and tutorials._tutorial_cache:
-            components["tutorials"] = {"status": "healthy"}
-        else:
-            components["tutorials"] = {"status": "not_initialized"}
-    except Exception as e:
-        components["tutorials"] = {"status": "error", "error": str(e)}
-    
-    # Check execution component
-    try:
-        from napistu.mcp import execution
-        # Simple check - verify context is initialized
-        if hasattr(execution, '_session_context') and execution._session_context:
-            components["execution"] = {"status": "healthy"}
-        else:
-            components["execution"] = {"status": "not_initialized"}
-    except Exception as e:
-        components["execution"] = {"status": "error", "error": str(e)}
-    
-    return components
+    # Check each component
+    return {
+        name: _check_component_health(name, module_path, cache_attr)
+        for name, (module_path, cache_attr) in component_configs.items()
+    }
 
 
 def _get_version() -> str:

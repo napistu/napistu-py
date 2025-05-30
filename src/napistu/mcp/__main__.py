@@ -76,17 +76,19 @@ def test(profile, transport, url):
 
 
 @cli.command()
-@click.option("--profile", type=click.Choice(["local", "remote", "full"]), default="full",
-              help="Server profile to check")
 @click.option("--transport", type=click.Choice(["stdio", "http"]), default="stdio",
               help="Transport type to use")
-@click.option("--url", default="http://127.0.0.1:8080", help="Server URL for HTTP transport")
+@click.option("--url", default="http://127.0.0.1:8765", help="Server URL for HTTP transport (default is local server port)")
 @click_logging.simple_verbosity_option(logger)
-def health(profile, transport, url):
+def health(transport, url):
     """Quick health check of MCP server."""
     async def run_health_check():
         print("🏥 Napistu MCP Server Health Check")
         print("=" * 40)
+        print(f"Transport: {transport}")
+        if transport == "http":
+            print(f"Server URL: {url}")
+        print()
         
         health = await check_server_health(transport=transport, server_url=url)
         print_health_status(health)
