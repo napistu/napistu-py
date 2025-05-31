@@ -45,7 +45,7 @@ async def initialize_components() -> bool:
 
 def register_components(mcp: FastMCP):
     """
-    Register codebase exploration components with the MCP server.
+    Register codebase components with the MCP server.
 
     Args:
         mcp: FastMCP server instance
@@ -54,22 +54,14 @@ def register_components(mcp: FastMCP):
 
     # Register resources
     @mcp.resource("napistu://codebase/summary")
-    async def get_codebase_summary() -> Dict[str, Any]:
+    async def get_codebase_summary():
         """
-        Get a summary of the Napistu codebase structure.
+        Get a summary of all available codebase information.
         """
         return {
             "modules": list(_codebase_cache["modules"].keys()),
-            "top_level_classes": [
-                class_name
-                for class_name, info in _codebase_cache["classes"].items()
-                if "." not in class_name  # Only include top-level classes
-            ],
-            "top_level_functions": [
-                func_name
-                for func_name, info in _codebase_cache["functions"].items()
-                if "." not in func_name  # Only include top-level functions
-            ],
+            "classes": list(_codebase_cache["classes"].keys()),
+            "functions": list(_codebase_cache["functions"].keys()),
         }
 
     @mcp.resource("napistu://codebase/modules/{module_name}")

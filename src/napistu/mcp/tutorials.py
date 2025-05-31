@@ -50,7 +50,7 @@ def register_components(mcp: FastMCP) -> None:
 
     # Register resources
     @mcp.resource("napistu://tutorials/index")
-    async def get_tutorial_index() -> List[Dict[str, Any]]:
+    async def get_tutorials_index() -> List[Dict[str, Any]]:
         """
         Get the index of all available tutorials.
 
