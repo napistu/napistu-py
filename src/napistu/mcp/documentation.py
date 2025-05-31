@@ -136,7 +136,7 @@ def register_components(mcp: FastMCP):
         return await documentation_utils.get_issue(repo, number)
 
     # Register tools
-    @mcp.tool("search_documentation")
+    @mcp.tool()
     async def search_documentation(query: str):
         """
         Search all documentation for a specific query.

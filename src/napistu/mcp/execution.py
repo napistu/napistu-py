@@ -62,8 +62,8 @@ def register_components(mcp, session_context=None, object_registry=None):
     _session_context["napistu"] = napistu
 
     # Register resources
-    @mcp.resource("napistu-local://registry")
-    async def get_registry_summary() -> Dict[str, Any]:
+    @mcp.resource("napistu://execution/registry")
+    async def get_registry():
         """
         Get a summary of all objects registered with the server.
         """
@@ -75,7 +75,7 @@ def register_components(mcp, session_context=None, object_registry=None):
             },
         }
 
-    @mcp.resource("napistu-local://environment")
+    @mcp.resource("napistu://execution/environment")
     async def get_environment_info() -> Dict[str, Any]:
         """
         Get information about the local Python environment.

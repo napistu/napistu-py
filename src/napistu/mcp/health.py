@@ -35,8 +35,8 @@ def register_components(mcp: FastMCP) -> None:
         """
         return _health_cache
 
-    @mcp.tool("napistu://health/check")
-    async def check_current_health() -> Dict[str, Any]:
+    @mcp.tool()
+    async def check_health() -> Dict[str, Any]:
         """
         Tool to actively check current component health.
         This performs real-time checks and updates the cached status.
