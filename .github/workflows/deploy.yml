@@ -50,12 +50,13 @@ jobs:
           --allow-unauthenticated \
           --port=8080 \
           --cpu=1 \
-          --memory=1Gi \
-          --min-instances=0 \
+          --memory=2Gi \
+          --min-instances=1 \
           --max-instances=3 \
           --concurrency=10 \
-          --timeout=300 \
-          --set-env-vars="MCP_PROFILE=remote,MCP_SERVER_NAME=napistu-docs,HOST=0.0.0.0,FORWARDED_ALLOW_IPS=*" \
+          --timeout=600 \
+          --cpu-boost \
+          --set-env-vars="MCP_PROFILE=remote,MCP_SERVER_NAME=napistu-docs,HOST=0.0.0.0,FORWARDED_ALLOW_IPS=*,STARTUP_TIMEOUT=300" \
           --execution-environment=gen2 \
           --project=${{ env.PROJECT_ID }} \
           --quiet
