@@ -89,10 +89,13 @@ def load_and_clean_gtex_data(gtex_data_path: str) -> pd.DataFrame:
     gtex_expression_data[ONTOLOGIES.ENSEMBL_GENE] = gtex_expression_data[GTEX_DEFS.NAME].str.replace(r'\.[0-9]+$', '', regex=True)
     
     # Rename Name column to be more informative
-    gtex_expression_data = gtex_expression_data.rename(columns={GTEX_DEFS.NAME: ONTOLOGIES.ENSEMBL_GENE_VERSION})
+    gtex_expression_data = gtex_expression_data.rename(columns={
+        GTEX_DEFS.NAME: ONTOLOGIES.ENSEMBL_GENE_VERSION,
+        GTEX_DEFS.DESCRIPTION: ONTOLOGIES.SYMBOL
+        })
     
     # Reorder columns to put ID and description columns first
-    first_cols = [ONTOLOGIES.ENSEMBL_GENE, ONTOLOGIES.ENSEMBL_GENE_VERSION, GTEX_DEFS.DESCRIPTION]
+    first_cols = [ONTOLOGIES.ENSEMBL_GENE, ONTOLOGIES.ENSEMBL_GENE_VERSION, ONTOLOGIES.SYMBOL]
     other_cols = [col for col in gtex_expression_data.columns if col not in first_cols]
     gtex_expression_data = gtex_expression_data[first_cols + other_cols]
     
