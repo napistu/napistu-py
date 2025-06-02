@@ -94,10 +94,7 @@ def load_ttrust(target_uri: str):
 )
 @click_logging.simple_verbosity_option(logger)
 def load_proteinatlas_subcell(target_uri: str, url: str):
-    file_ext = constants.PROTEINATLAS_SUBCELL_LOC_URL.split(".")[-1]
-    target_filename = url.split("/")[-1].split(f".{file_ext}")[0]
-    logger.info("Start downloading proteinatlas %s to %s", url, target_uri)
-    utils.download_wget(url, target_uri, target_filename=target_filename)
+    hpa.download_hpa_data(target_uri, url)
 
 
 @load.command(name="gtex-rnaseq-expression")

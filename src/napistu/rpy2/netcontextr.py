@@ -131,37 +131,6 @@ def sbml_dfs_to_rcpr_string_graph(
 
 
 @warn_if_no_rpy2
-def load_and_clean_hpa_data(
-    rcpr,
-    uri_hpa: str,
-):
-    """Load and cleans HPA data using rcpr
-
-    Args:
-        rcpr (): The rpy2 rcpr object
-        uri_hpa (str): The uri of the HPA data
-
-    Returns:
-        rpy2 object: The cleaned HPA data
-    """
-
-    with NamedTemporaryFile() as f:
-        # R cannot work with gcs uris
-        # thus download the file to a temporary
-        # location incase it is a gcs uri
-        if os.path.exists(uri_hpa):
-            # if the file is already a local
-            # file, just use it
-            path_hpa = uri_hpa
-        else:
-            path_hpa = f.name
-            utils.copy_uri(uri_hpa, path_hpa)
-
-        hpa_localization_data = rcpr.load_and_clean_hpa_data(path_hpa)
-    return hpa_localization_data
-
-
-@warn_if_no_rpy2
 def load_and_clean_gtex_data(rcpr_rpy2, uri_gtex: str, by_tissue_zfpkm: bool = False):
     """Load and cleans GTEx data using rcpr
 

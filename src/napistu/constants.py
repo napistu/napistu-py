@@ -21,6 +21,7 @@ PACKAGE_DEFS = SimpleNamespace(
     CACHE_DIR="napistu_data",
 )
 
+# TO DO - delete
 PROTEINATLAS_SUBCELL_LOC_URL = (
     "https://www.proteinatlas.org/download/tsv/subcellular_location.tsv.zip"
 )
@@ -399,8 +400,11 @@ EXPECTED_PW_INDEX_COLUMNS = {
 ONTOLOGIES = SimpleNamespace(
     CHEBI="chebi",
     ENSEMBL_GENE="ensembl_gene",
+    ENSEMBL_GENE_VERSION="ensembl_gene_version",
     ENSEMBL_TRANSCRIPT="ensembl_transcript",
+    ENSEMBL_TRANSCRIPT_VERSION="ensembl_transcript_version",
     ENSEMBL_PROTEIN="ensembl_protein",
+    ENSEMBL_PROTEIN_VERSION="ensembl_protein_version",
     GENE_NAME="gene_name",
     GO="go",
     MIRBASE="mirbase",

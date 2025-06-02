@@ -10,6 +10,24 @@ SPECIES_FULL_NAME_RAT = "Rattus norvegicus"
 SPECIES_FULL_NAME_WORM = "Caenorhabditis elegans"
 
 
+PROTEINATLAS_SUBCELL_LOC_URL = (
+    "https://www.proteinatlas.org/download/tsv/subcellular_location.tsv.zip"
+)
+
+PROTEINATLAS_DEFS = SimpleNamespace(
+    GO_ID="GO id",
+    GENE="Gene",
+)
+
+
+# GTEx
+GTEX_RNASEQ_EXPRESSION_URL = "https://storage.googleapis.com/adult-gtex/bulk-gex/v8/rna-seq/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_median_tpm.gct.gz"
+
+GTEX_DEFS = SimpleNamespace(
+    NAME="Name",
+    DESCRIPTION="Description",
+)
+
 # BIGG
 BIGG_MODEL_URLS = {
     SPECIES_FULL_NAME_HUMAN: "http://bigg.ucsd.edu/static/models/Recon3D.xml",
