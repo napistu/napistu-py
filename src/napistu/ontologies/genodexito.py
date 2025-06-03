@@ -34,6 +34,8 @@ class Genodexito:
         Whether to allow falling back to the other method if preferred fails, by default True
     r_paths : Optional[List[str]], optional
         Optional paths to R libraries for Bioconductor, by default None
+    test_mode : bool, optional
+        If True, limit queries to 1000 genes for testing purposes, by default False
 
     Attributes
     ----------
@@ -45,6 +47,41 @@ class Genodexito:
         Combined wide-format mapping table
     stacked_mappings : Optional[pd.DataFrame]
         Combined long-format mapping table
+
+    Methods
+    -------
+    create_mapping_tables(mappings: Set[str], overwrite: bool = False)
+        Create mapping tables between different ontologies. This is the primary method
+        to fetch and store identifier mappings. Must be called before using other methods.
+
+    merge_mappings(ontologies: Optional[Set[str]] = None)
+        Create a wide-format table where each row is an Entrez gene ID and columns
+        contain the corresponding identifiers in other ontologies.
+
+    stack_mappings(ontologies: Optional[Set[str]] = None)
+        Create a long-format table combining all mappings, with columns for
+        ontology type and identifier values.
+
+    expand_sbml_dfs_ids(sbml_dfs: sbml_dfs_core.SBML_dfs, ontologies: Optional[Set[str]] = None)
+        Update the expanded identifiers for a model by adding additional related
+        ontologies pulled from Bioconductor or MyGene.info.
+
+    Examples
+    --------
+    >>> # Initialize mapper with Python method
+    >>> geno = Genodexito(preferred_method="python")
+    >>> 
+    >>> # Create mapping tables for specific ontologies
+    >>> mappings = {'ensembl_gene', 'symbol', 'uniprot'}
+    >>> geno.create_mapping_tables(mappings)
+    >>> 
+    >>> # Create merged wide-format table
+    >>> geno.merge_mappings()
+    >>> print(geno.merged_mappings.head())
+    >>> 
+    >>> # Create stacked long-format table
+    >>> geno.stack_mappings()
+    >>> print(geno.stacked_mappings.head())
     """
     
     def __init__(
@@ -53,15 +90,23 @@ class Genodexito:
             preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
             allow_fallback: bool = True,
             r_paths: Optional[List[str]] = None,
+            test_mode: bool = False
             ) -> None:
         """
         Initialize unified gene mapper
         
-        Args:
-            species: Species name
-            prefer_bioconductor: Whether to prefer Bioconductor when available  
-            r_paths: R library paths for Bioconductor
-            force_fallback: Force use of fallback even if Bioconductor available
+        Parameters
+        ----------
+        species : str, optional
+            Species name, by default "Homo sapiens"
+        preferred_method : str, optional
+            Which mapping method to try first ("bioconductor" or "python"), by default "bioconductor"
+        allow_fallback : bool, optional
+            Whether to allow falling back to other method if preferred fails, by default True
+        r_paths : Optional[List[str]], optional
+            Optional paths to R libraries for Bioconductor, by default None
+        test_mode : bool, optional
+            If True, limit queries to 1000 genes for testing purposes, by default False
         """
 
         if preferred_method not in GENODEXITO_MAPPERS:
@@ -71,6 +116,7 @@ class Genodexito:
         self.preferred_method = preferred_method
         self.allow_fallback = allow_fallback
         self.r_paths = r_paths
+        self.test_mode = test_mode
 
         self.mappings: Optional[Dict[str, pd.DataFrame]] = None
         self.mapper_used: Optional[str] = None
@@ -114,7 +160,8 @@ class Genodexito:
                     logger.warning(f"Error creating bioconductor mapping tables for {self.species} with {mappings}. Falling back to python.")
                     self.mappings = create_python_mapping_tables(
                         mappings=mappings, 
-                        species=self.species
+                        species=self.species,
+                        test_mode=self.test_mode
                     )
                     self.mapper_used = GENODEXITO_DEFS.PYTHON
                 else:
@@ -125,7 +172,8 @@ class Genodexito:
             try:
                 self.mappings = create_python_mapping_tables(
                     mappings=mappings, 
-                    species=self.species
+                    species=self.species,
+                    test_mode=self.test_mode
                 )
                 self.mapper_used = GENODEXITO_DEFS.PYTHON
             except Exception as e:
