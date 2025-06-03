@@ -11,6 +11,7 @@ CPR_GRAPH_NODES = SimpleNamespace(NAME="name")
 
 CPR_GRAPH_EDGES = SimpleNamespace(
     DIRECTED="directed",
+    DIRECTION="direction",
     FROM="from",
     R_ID=SBML_DFS.R_ID,
     R_ISREVERSIBLE=SBML_DFS.R_ISREVERSIBLE,

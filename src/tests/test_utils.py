@@ -556,6 +556,7 @@ def test_drop_extra_cols():
         {"col1": [1, 2, 3], "col3": [7, 8, 9], "col4": [10, 11, 12]}
     )
     result_subset = drop_extra_cols(df_in, df_out_subset)
+
     assert list(result_subset.columns) == ["col1", "col3"]
     pd.testing.assert_frame_equal(result_subset, df_out_subset[["col1", "col3"]])
 
@@ -566,3 +567,72 @@ def test_drop_extra_cols():
     pd.testing.assert_frame_equal(
         result_subset_with_include, df_out_subset[["col1", "col3", "col4"]]
     )
+
+
+def test_merge_and_log_overwrites(caplog):
+    """Test merge_and_log_overwrites function."""
+
+    # Test basic merge with no conflicts
+    df1 = pd.DataFrame({"id": [1, 2], "value1": ["a", "b"]})
+    df2 = pd.DataFrame({"id": [1, 2], "value2": ["c", "d"]})
+    result = utils._merge_and_log_overwrites(df1, df2, "test", on="id")
+    assert set(result.columns) == {"id", "value1", "value2"}
+    assert len(caplog.records) == 0
+
+    # Test merge with column conflict
+    df1 = pd.DataFrame({"id": [1, 2], "name": ["a", "b"], "value": [10, 20]})
+    df2 = pd.DataFrame({"id": [1, 2], "name": ["c", "d"]})
+    result = utils._merge_and_log_overwrites(df1, df2, "test", on="id")
+
+    # Check that the right columns exist
+    assert set(result.columns) == {"id", "name", "value"}
+    # Check that we got df2's values for the overlapping column
+    assert list(result["name"]) == ["c", "d"]
+    # Check that we kept df1's non-overlapping column
+    assert list(result["value"]) == [10, 20]
+    # Check that the warning was logged
+    assert len(caplog.records) == 1
+    assert "test merge" in caplog.records[0].message
+    assert "name" in caplog.records[0].message
+
+    # Test merge with multiple column conflicts
+    caplog.clear()
+    df1 = pd.DataFrame(
+        {"id": [1, 2], "name": ["a", "b"], "value": [10, 20], "status": ["ok", "ok"]}
+    )
+    df2 = pd.DataFrame(
+        {"id": [1, 2], "name": ["c", "d"], "status": ["pending", "done"]}
+    )
+    result = utils._merge_and_log_overwrites(df1, df2, "test", on="id")
+
+    # Check that the right columns exist
+    assert set(result.columns) == {"id", "name", "value", "status"}
+    # Check that we got df2's values for the overlapping columns
+    assert list(result["name"]) == ["c", "d"]
+    assert list(result["status"]) == ["pending", "done"]
+    # Check that we kept df1's non-overlapping column
+    assert list(result["value"]) == [10, 20]
+    # Check that the warning was logged with both column names
+    assert len(caplog.records) == 1
+    assert "test merge" in caplog.records[0].message
+    assert "name" in caplog.records[0].message
+    assert "status" in caplog.records[0].message
+
+    # Test merge with index
+    caplog.clear()
+    df1 = pd.DataFrame({"name": ["a", "b"], "value": [10, 20]}, index=[1, 2])
+    df2 = pd.DataFrame({"name": ["c", "d"]}, index=[1, 2])
+    result = utils._merge_and_log_overwrites(
+        df1, df2, "test", left_index=True, right_index=True
+    )
+
+    # Check that the right columns exist
+    assert set(result.columns) == {"name", "value"}
+    # Check that we got df2's values for the overlapping column
+    assert list(result["name"]) == ["c", "d"]
+    # Check that we kept df1's non-overlapping column
+    assert list(result["value"]) == [10, 20]
+    # Check that the warning was logged
+    assert len(caplog.records) == 1
+    assert "test merge" in caplog.records[0].message
+    assert "name" in caplog.records[0].message

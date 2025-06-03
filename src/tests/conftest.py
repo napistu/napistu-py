@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 
+
 from napistu import consensus
 from napistu import indices
 from napistu import sbml_dfs_core

@@ -319,7 +319,12 @@ VALID_SBO_ROLES = (
     "OPTIONAL",
 )
 
-# required variables for the edgelist formats used by mechanism_matching
+# specifying weighting schemes schema
+
+DEFAULT_WT_TRANS = "identity"
+
+# required variables for the edgelist formats used by the matching subpackage
+# also used in some network modules
 CPR_EDGELIST = SimpleNamespace(
     S_ID_UPSTREAM="s_id_upstream",
     S_ID_DOWNSTREAM="s_id_downstream",
