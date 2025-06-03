@@ -6,7 +6,7 @@ import pandas as pd
 from napistu import sbml_dfs_core
 from napistu.ontologies.mygene import create_python_mapping_tables
 from napistu.rpy2.rids import create_bioconductor_mapping_tables
-from napistu.constants import SBML_DFS, ONTOLOGIES, IDENTIFIERS, BQB
+from napistu.constants import SBML_DFS, ONTOLOGIES, IDENTIFIERS
 from napistu.ontologies.constants import INTERCONVERTIBLE_GENIC_ONTOLOGIES
 from napistu.ontologies.constants import GENODEXITO_DEFS
 from napistu.ontologies.constants import GENODEXITO_MAPPERS
@@ -14,6 +14,7 @@ from napistu.ontologies.constants import GENODEXITO_MAPPERS
 from napistu import identifiers
 
 logger = logging.getLogger(__name__)
+
 
 class Genodexito:
     """A tool for mapping gene identifiers across ontologies.
@@ -70,31 +71,31 @@ class Genodexito:
     --------
     >>> # Initialize mapper with Python method
     >>> geno = Genodexito(preferred_method="python")
-    >>> 
+    >>>
     >>> # Create mapping tables for specific ontologies
     >>> mappings = {'ensembl_gene', 'symbol', 'uniprot'}
     >>> geno.create_mapping_tables(mappings)
-    >>> 
+    >>>
     >>> # Create merged wide-format table
     >>> geno.merge_mappings()
     >>> print(geno.merged_mappings.head())
-    >>> 
+    >>>
     >>> # Create stacked long-format table
     >>> geno.stack_mappings()
     >>> print(geno.stacked_mappings.head())
     """
-    
+
     def __init__(
-            self,
-            species: str = "Homo sapiens",
-            preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
-            allow_fallback: bool = True,
-            r_paths: Optional[List[str]] = None,
-            test_mode: bool = False
-            ) -> None:
+        self,
+        species: str = "Homo sapiens",
+        preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
+        allow_fallback: bool = True,
+        r_paths: Optional[List[str]] = None,
+        test_mode: bool = False,
+    ) -> None:
         """
         Initialize unified gene mapper
-        
+
         Parameters
         ----------
         species : str, optional
@@ -110,7 +111,9 @@ class Genodexito:
         """
 
         if preferred_method not in GENODEXITO_MAPPERS:
-            raise ValueError(f"Invalid preferred_method: {preferred_method}. Valid methods are {', '.join(GENODEXITO_MAPPERS)}")
+            raise ValueError(
+                f"Invalid preferred_method: {preferred_method}. Valid methods are {', '.join(GENODEXITO_MAPPERS)}"
+            )
 
         self.species = species
         self.preferred_method = preferred_method
@@ -122,8 +125,10 @@ class Genodexito:
         self.mapper_used: Optional[str] = None
         self.merged_mappings: Optional[pd.DataFrame] = None
         self.stacked_mappings: Optional[pd.DataFrame] = None
-    
-    def create_mapping_tables(self, mappings: Set[str], overwrite: bool = False) -> None:
+
+    def create_mapping_tables(
+        self, mappings: Set[str], overwrite: bool = False
+    ) -> None:
         """Create mapping tables between different ontologies.
 
         This is a drop-in replacement for create_bioconductor_mapping_tables that handles
@@ -144,60 +149,61 @@ class Genodexito:
 
         # check for existing mappings
         if self.mappings is not None and not overwrite:
-            logger.warning(f"Mapping tables for {self.species} already exist. Use overwrite=True to create new mappings.")
+            logger.warning(
+                f"Mapping tables for {self.species} already exist. Use overwrite=True to create new mappings."
+            )
             return None
 
         if self.preferred_method == GENODEXITO_DEFS.BIOCONDUCTOR:
             try:
                 self.mappings = create_bioconductor_mapping_tables(
-                    mappings=mappings, 
-                    species=self.species, 
-                    r_paths=self.r_paths
+                    mappings=mappings, species=self.species, r_paths=self.r_paths
                 )
                 self.mapper_used = GENODEXITO_DEFS.BIOCONDUCTOR
             except Exception as e:
                 if self.allow_fallback:
-                    logger.warning(f"Error creating bioconductor mapping tables for {self.species} with {mappings}. Falling back to python.")
+                    logger.warning(
+                        f"Error creating bioconductor mapping tables for {self.species} with {mappings}. Falling back to python."
+                    )
                     self.mappings = create_python_mapping_tables(
-                        mappings=mappings, 
+                        mappings=mappings,
                         species=self.species,
-                        test_mode=self.test_mode
+                        test_mode=self.test_mode,
                     )
                     self.mapper_used = GENODEXITO_DEFS.PYTHON
                 else:
-                    logger.error(f"Error creating bioconductor mapping tables for {self.species} with {mappings} and fallback is disabled.")
+                    logger.error(
+                        f"Error creating bioconductor mapping tables for {self.species} with {mappings} and fallback is disabled."
+                    )
                     raise e
-                
+
         elif self.preferred_method == GENODEXITO_DEFS.PYTHON:
             try:
                 self.mappings = create_python_mapping_tables(
-                    mappings=mappings, 
-                    species=self.species,
-                    test_mode=self.test_mode
+                    mappings=mappings, species=self.species, test_mode=self.test_mode
                 )
                 self.mapper_used = GENODEXITO_DEFS.PYTHON
             except Exception as e:
                 if self.allow_fallback:
-                    logger.warning(f"Error creating mygene Python mapping tables for {self.species} with {mappings}. Trying the bioconductor fallback.")
+                    logger.warning(
+                        f"Error creating mygene Python mapping tables for {self.species} with {mappings}. Trying the bioconductor fallback."
+                    )
                     self.mappings = create_bioconductor_mapping_tables(
-                        mappings=mappings, 
-                        species=self.species,
-                        r_paths=self.r_paths
+                        mappings=mappings, species=self.species, r_paths=self.r_paths
                     )
                     self.mapper_used = GENODEXITO_DEFS.BIOCONDUCTOR
                 else:
-                    logger.error(f"Error creating Python mapping tables for {self.species} with {mappings} and fallback is disabled.")
+                    logger.error(
+                        f"Error creating Python mapping tables for {self.species} with {mappings} and fallback is disabled."
+                    )
                     raise e
-            
+
         else:
             raise ValueError(f"Invalid preferred_method: {self.preferred_method}")
-        
+
         return None
 
-    def merge_mappings(
-            self, 
-            ontologies: Optional[Set[str]] = None
-            ) -> None:
+    def merge_mappings(self, ontologies: Optional[Set[str]] = None) -> None:
         """Merge mappings into a single wide table.
 
         Creates a wide-format table where each row is an Entrez gene ID and
@@ -222,7 +228,7 @@ class Genodexito:
 
         # mappings must exist
         ontologies = self._use_mappings(ontologies)
-        
+
         running_ids = self.mappings[ONTOLOGIES.NCBI_ENTREZ_GENE]
 
         for mapping in ontologies:
@@ -236,11 +242,8 @@ class Genodexito:
         self.merged_mappings = running_ids
 
         return None
-    
-    def stack_mappings(
-        self,
-        ontologies: Optional[Set[str]] = None
-    ) -> None:
+
+    def stack_mappings(self, ontologies: Optional[Set[str]] = None) -> None:
         """Stack mappings into a single long table.
 
         Convert a dict of mappings between Entrez identifiers and other identifiers
@@ -268,7 +271,9 @@ class Genodexito:
         mappings_list = list()
         for ont in ontologies:
             one_mapping_df = (
-                self.mappings[ont].assign(ontology=ont).rename({ont: IDENTIFIERS.IDENTIFIER}, axis=1)
+                self.mappings[ont]
+                .assign(ontology=ont)
+                .rename({ont: IDENTIFIERS.IDENTIFIER}, axis=1)
             )
 
             mappings_list.append(one_mapping_df)
@@ -276,9 +281,7 @@ class Genodexito:
         self.stacked_mappings = pd.concat(mappings_list)
 
     def expand_sbml_dfs_ids(
-        self,
-        sbml_dfs: sbml_dfs_core.SBML_dfs,
-        ontologies: Optional[Set[str]] = None
+        self, sbml_dfs: sbml_dfs_core.SBML_dfs, ontologies: Optional[Set[str]] = None
     ) -> sbml_dfs_core.SBML_dfs:
         """Update the expanded identifiers for a model.
 
@@ -305,7 +308,7 @@ class Genodexito:
         # create mapping tables if they don't exist
         if self.mappings is None:
             self.create_mapping_tables(ontologies)
-        
+
         # select and validate mappings
         ontologies = self._use_mappings(ontologies)
 
@@ -318,7 +321,9 @@ class Genodexito:
         # make sure expanded_ids and original model.species have same number of s_ids
         # if a s_id only in model.species, adding it to expanded_ids.
         if ids.shape[0] != expanded_ids.shape[0]:
-            matched_expanded_ids = expanded_ids.combine_first(ids[SBML_DFS.S_IDENTIFIERS])
+            matched_expanded_ids = expanded_ids.combine_first(
+                ids[SBML_DFS.S_IDENTIFIERS]
+            )
             logger.debug(
                 f"{ids.shape[0] - expanded_ids.shape[0]} "
                 "ids are not included in expanded ids"
@@ -343,11 +348,15 @@ class Genodexito:
             If mappings don't exist or don't contain NCBI_ENTREZ_GENE
         """
         if self.mappings is None:
-            raise ValueError(f"Mapping tables for {self.species} do not exist. Use create_mapping_tables to create new mappings.")
+            raise ValueError(
+                f"Mapping tables for {self.species} do not exist. Use create_mapping_tables to create new mappings."
+            )
 
         # entrez should always be present if any mappings exist
         if ONTOLOGIES.NCBI_ENTREZ_GENE not in self.mappings.keys():
-            raise ValueError(f"Mapping tables for {self.species} do not contain {ONTOLOGIES.NCBI_ENTREZ_GENE}. Use create_mapping_tables to create new mappings.")
+            raise ValueError(
+                f"Mapping tables for {self.species} do not contain {ONTOLOGIES.NCBI_ENTREZ_GENE}. Use create_mapping_tables to create new mappings."
+            )
 
     def _use_mappings(self, ontologies: Optional[Set[str]]) -> Set[str]:
         """Validate and process ontologies for mapping operations.
@@ -369,10 +378,10 @@ class Genodexito:
         """
 
         self._check_mappings()
-        
+
         if ontologies is None:
             return set(self.mappings.keys())
-        
+
         # validate provided mappings to see if they are genic ontologies within the controlled vocabulary
         never_valid_mappings = ontologies - INTERCONVERTIBLE_GENIC_ONTOLOGIES
         if never_valid_mappings:
@@ -405,7 +414,7 @@ class Genodexito:
         Parameters
         ----------
         sbml_dfs : sbml_dfs_core.SBML_dfs
-            A relational pathway model built around reactions interconverting 
+            A relational pathway model built around reactions interconverting
             compartmentalized species
         ontologies : Optional[Set[str]], optional
             Ontologies to add or complete, by default None
@@ -426,8 +435,10 @@ class Genodexito:
 
         ontologies = self._use_mappings(ontologies)
         if self.merged_mappings is None:
-            raise ValueError("Merged mappings do not exist. Use merge_mappings() to create new mappings.")
-        
+            raise ValueError(
+                "Merged mappings do not exist. Use merge_mappings() to create new mappings."
+            )
+
         # pull out all identifiers as a pd.DataFrame
         all_entity_identifiers = sbml_dfs.get_identifiers("species")
         if not isinstance(all_entity_identifiers, pd.DataFrame):
@@ -442,7 +453,9 @@ class Genodexito:
 
         expanded_ontologies = ontologies - starting_ontologies
         if len(expanded_ontologies) == 0:
-            raise ValueError(f"All of the requested ontologies already exist in species' s_Identifiers")
+            raise ValueError(
+                "All of the requested ontologies already exist in species' s_Identifiers"
+            )
 
         # map from existing ontologies to expanded ontologies
         ontology_mappings = list()
@@ -454,7 +467,9 @@ class Genodexito:
                     continue
                 lookup = (
                     self.merged_mappings[[start, end]]
-                    .rename(columns={start: IDENTIFIERS.IDENTIFIER, end: "new_identifier"})
+                    .rename(
+                        columns={start: IDENTIFIERS.IDENTIFIER, end: "new_identifier"}
+                    )
                     .assign(ontology=start)
                     .assign(new_ontology=end)
                 )

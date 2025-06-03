@@ -13,19 +13,20 @@ from napistu.constants import IDENTIFIERS
 from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import ONTOLOGIES
 from napistu.constants import SBML_DFS
-from napistu.ontologies.constants import DOGMATIC_MAPPING_ONTOLOGIES
-from napistu.ontologies.constants import GENE_ONTOLOGIES # noqa: F401
+from napistu.ontologies.constants import INTERCONVERTIBLE_GENIC_ONTOLOGIES
+from napistu.ontologies.constants import GENE_ONTOLOGIES  # noqa: F401
 from napistu.ontologies.constants import GENODEXITO_DEFS
 from napistu.ontologies.constants import NAME_ONTOLOGIES
 from napistu.ontologies.constants import PROTEIN_ONTOLOGIES
 
 logger = logging.getLogger(__name__)
 
+
 def create_dogmatic_sbml_dfs(
     species: str,
     preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
     allow_fallback: bool = True,
-    r_paths: str | None = None
+    r_paths: str | None = None,
 ) -> sbml_dfs_core.SBML_dfs:
     """
     Create Dogmatic SMBL_DFs
@@ -46,7 +47,9 @@ def create_dogmatic_sbml_dfs(
             diverse identifiers
     """
 
-    dogmatic_mappings = _connect_dogmatic_mappings(species, preferred_method, allow_fallback, r_paths)
+    dogmatic_mappings = _connect_dogmatic_mappings(
+        species, preferred_method, allow_fallback, r_paths
+    )
 
     logger.info("Creating inputs for sbml_dfs_from_edgelist()")
 
@@ -94,9 +97,8 @@ def _connect_dogmatic_mappings(
     species: str,
     preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
     allow_fallback: bool = True,
-    r_paths: str | None = None
-    ) -> dict:
-
+    r_paths: str | None = None,
+) -> dict:
     """
     Connect Dogmatic Mappings
 
@@ -119,14 +121,12 @@ def _connect_dogmatic_mappings(
         species=species,
         preferred_method=preferred_method,
         allow_fallback=allow_fallback,
-        r_paths=r_paths
-    )
-    
-    genodexito.create_mapping_tables(
-        mappings=DOGMATIC_MAPPING_ONTOLOGIES
+        r_paths=r_paths,
     )
 
-    genodexito.stack_mappings(ontologies = set(PROTEIN_ONTOLOGIES))
+    genodexito.create_mapping_tables(mappings=INTERCONVERTIBLE_GENIC_ONTOLOGIES)
+
+    genodexito.stack_mappings(ontologies=set(PROTEIN_ONTOLOGIES))
     protein_mappings = genodexito.stacked_mappings
 
     # apply greedy graph-based clustering to connect proteins with a common mapping to entrez
@@ -146,11 +146,9 @@ def _connect_dogmatic_mappings(
     entrez_clusters = protein_mappings_w_clusters[
         [ONTOLOGIES.NCBI_ENTREZ_GENE, "cluster"]
     ].drop_duplicates()
-    other_ontologies = DOGMATIC_MAPPING_ONTOLOGIES.difference(
-        set(PROTEIN_ONTOLOGIES)
-    )
+    other_ontologies = INTERCONVERTIBLE_GENIC_ONTOLOGIES.difference(set(PROTEIN_ONTOLOGIES))
 
-    genodexito.stack_mappings(ontologies = other_ontologies)
+    genodexito.stack_mappings(ontologies=other_ontologies)
     other_mappings = genodexito.stacked_mappings
 
     other_mappings_w_clusters = entrez_clusters.merge(
@@ -159,9 +157,7 @@ def _connect_dogmatic_mappings(
 
     possible_names = pd.concat(
         [
-            protein_mappings_w_clusters.query(
-                "ontology in @NAME_ONTOLOGIES.keys()"
-            ),
+            protein_mappings_w_clusters.query("ontology in @NAME_ONTOLOGIES.keys()"),
             other_mappings_w_clusters.query("ontology in @NAME_ONTOLOGIES.keys()"),
         ]
     )[["cluster", IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER]]
@@ -194,11 +190,9 @@ def _connect_dogmatic_mappings(
     protein_ids = protein_mappings_w_clusters.assign(bqb=BQB.IS)[
         ["cluster", IDENTIFIERS.IDENTIFIER, IDENTIFIERS.ONTOLOGY, IDENTIFIERS.BQB]
     ]
-    gene_ids = other_mappings_w_clusters.query(
-        "ontology in @GENE_ONTOLOGIES"
-    ).assign(bqb=BQB.IS_ENCODED_BY)[
-        ["cluster", IDENTIFIERS.IDENTIFIER, IDENTIFIERS.ONTOLOGY, IDENTIFIERS.BQB]
-    ]
+    gene_ids = other_mappings_w_clusters.query("ontology in @GENE_ONTOLOGIES").assign(
+        bqb=BQB.IS_ENCODED_BY
+    )[["cluster", IDENTIFIERS.IDENTIFIER, IDENTIFIERS.ONTOLOGY, IDENTIFIERS.BQB]]
     entrez_ids = entrez_clusters.assign(
         ontology=ONTOLOGIES.NCBI_ENTREZ_GENE, bqb=BQB.IS_ENCODED_BY
     ).rename(columns={ONTOLOGIES.NCBI_ENTREZ_GENE: IDENTIFIERS.IDENTIFIER})[

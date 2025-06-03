@@ -256,7 +256,7 @@ def format_uri_url(uri: str) -> dict:
         ):
             # format ensembl IDs which lack gene/transview
             identifier, ontology, _ = parse_ensembl_id(split_path[-1])
-                        
+
         elif netloc == "www.mirbase.org" or netloc == "mirbase.org":
             ontology = "mirbase"
             if re.search("MI[0-9]+", split_path[-1]):
