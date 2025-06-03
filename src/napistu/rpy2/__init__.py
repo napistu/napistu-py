@@ -20,7 +20,7 @@ except ImportError:
     logger.warning(
         "rpy2 is not installed. "
         "Some functions will not work. "
-        "Consider installing `cpr[rpy2]`."
+        "Consider installing `napistu[rpy2]`."
     )
 except Exception as e:
     has_rpy2 = False
@@ -34,8 +34,8 @@ def warn_if_no_rpy2(func):
         if not has_rpy2:
             raise ImportError(
                 "This function requires `rpy2`. \n"
-                "Please install `cpr` with the `rpy2` extra dependencies. \n"
-                "For example: `pip install cpr[rpy2]`\n"
+                "Please install `napistu` with the `rpy2` extra dependencies. \n"
+                "For example: `pip install napistu[rpy2]`\n"
             )
         return func(*args, **kwargs)
 
@@ -107,8 +107,8 @@ def report_r_exceptions(function):
         if not has_rpy2:
             raise ImportError(
                 "This function requires `rpy2`. \n"
-                "Please install `cpr` with the `rpy2` extra dependencies. \n"
-                "For example: `pip install cpr[rpy2]`\n"
+                "Please install `napistu` with the `rpy2` extra dependencies. \n"
+                "For example: `pip install napistu[rpy2]`\n"
             )
         try:
             return function(*args, **kwargs)

@@ -85,36 +85,16 @@ def create_cpr_graph(
     if reaction_graph_attrs is None:
         reaction_graph_attrs = {}
 
-    if not isinstance(sbml_dfs, sbml_dfs_core.SBML_dfs):
-        raise TypeError(
-            f"sbml_dfs must be a sbml_dfs_core.SBML_dfs, but was {type(sbml_dfs)}"
-        )
-
-    if not isinstance(reaction_graph_attrs, dict):
-        raise TypeError(
-            f"reaction_graph_attrs must be a dict, but was {type(reaction_graph_attrs)}"
-        )
-
-    if not isinstance(directed, bool):
-        raise TypeError(f"directed must be a bool, but was {type(directed)}")
-
-    if not isinstance(edge_reversed, bool):
-        raise TypeError(f"edge_reverse must be a bool, but was {type(edge_reversed)}")
-
-    if not isinstance(graph_type, str):
-        raise TypeError(f"graph_type must be a str, but was {type(verbose)}")
-
     if graph_type not in VALID_CPR_GRAPH_TYPES:
         raise ValueError(
             f"graph_type is not a valid value ({graph_type}), valid values are {','.join(VALID_CPR_GRAPH_TYPES)}"
         )
 
-    if not isinstance(verbose, bool):
-        raise TypeError(f"verbose must be a bool, but was {type(verbose)}")
-
-    # fail fast in reaction_graph_attrs is not properly formatted
+    # fail fast if reaction_graph_attrs is not properly formatted
     for k in reaction_graph_attrs.keys():
-        _validate_entity_attrs(reaction_graph_attrs[k])
+        _validate_entity_attrs(
+            reaction_graph_attrs[k], custom_transformations=custom_transformations
+        )
 
     working_sbml_dfs = copy.deepcopy(sbml_dfs)
     reaction_species_counts = working_sbml_dfs.reaction_species.value_counts(
@@ -188,7 +168,7 @@ def create_cpr_graph(
             [
                 # assign forward edges
                 augmented_network_edges.assign(
-                    direction=CPR_GRAPH_EDGE_DIRECTIONS.FORWARD
+                    **{CPR_GRAPH_EDGES.DIRECTION: CPR_GRAPH_EDGE_DIRECTIONS.FORWARD}
                 ),
                 # create reverse edges for reversibile reactions
                 _reverse_network_edges(augmented_network_edges),
@@ -196,7 +176,7 @@ def create_cpr_graph(
         )
     else:
         directed_network_edges = augmented_network_edges.assign(
-            direction=CPR_GRAPH_EDGE_DIRECTIONS.UNDIRECTED
+            **{CPR_GRAPH_EDGES.DIRECTION: CPR_GRAPH_EDGE_DIRECTIONS.UNDIRECTED}
         )
 
     # de-duplicate edges
@@ -241,8 +221,8 @@ def create_cpr_graph(
         rev_unique_edges_df[CPR_GRAPH_EDGES.SC_CHILDREN] = unique_edges[
             CPR_GRAPH_EDGES.SC_PARENTS
         ]
-        rev_unique_edges_df[CPR_GRAPH_EDGES.STOICHOMETRY] = unique_edges[
-            CPR_GRAPH_EDGES.STOICHOMETRY
+        rev_unique_edges_df[CPR_GRAPH_EDGES.STOICHIOMETRY] = unique_edges[
+            CPR_GRAPH_EDGES.STOICHIOMETRY
         ] * (-1)
 
         rev_unique_edges_df[CPR_GRAPH_EDGES.DIRECTION] = unique_edges[
@@ -1462,10 +1442,10 @@ def _augment_network_nodes(
         )
 
     # include matching s_ids and c_ids of sc_ids
-    # (the index of network_nodes df) in network_nodes df
-    network_nodes_sid = pd.merge(
+    network_nodes_sid = utils._merge_and_log_overwrites(
         network_nodes,
         sbml_dfs.compartmentalized_species[["s_id", "c_id"]],
+        "network nodes",
         left_on="name",
         right_index=True,
         how="left",
@@ -1481,8 +1461,13 @@ def _augment_network_nodes(
 
     if species_graph_data is not None:
         # add species_graph_data to the network_nodes df, based on s_id
-        network_nodes_wdata = network_nodes_sid.merge(
-            species_graph_data, left_on="s_id", right_index=True, how="left"
+        network_nodes_wdata = utils._merge_and_log_overwrites(
+            network_nodes_sid,
+            species_graph_data,
+            "species graph data",
+            left_on="s_id",
+            right_index=True,
+            how="left",
         )
     else:
         network_nodes_wdata = network_nodes_sid
@@ -1643,7 +1628,7 @@ def _reverse_network_edges(augmented_network_edges: pd.DataFrame) -> pd.DataFram
         )
 
     return transformed_r_reaction_edges.assign(
-        direction=CPR_GRAPH_EDGE_DIRECTIONS.REVERSE
+        **{CPR_GRAPH_EDGES.DIRECTION: CPR_GRAPH_EDGE_DIRECTIONS.REVERSE}
     )
 
 
@@ -1774,23 +1759,45 @@ def _validate_entity_attrs(
     validate_transformations: bool = True,
     custom_transformations: Optional[dict] = None,
 ) -> None:
-    """Validate that graph attributes are a valid format."""
+    """Validate that graph attributes are a valid format.
 
-    assert isinstance(entity_attrs, dict)
-    for v in entity_attrs.values():
+    Parameters
+    ----------
+    entity_attrs : dict
+        Dictionary of entity attributes to validate
+    validate_transformations : bool, optional
+        Whether to validate transformation names, by default True
+    custom_transformations : Optional[dict], optional
+        Dictionary of custom transformation functions, by default None
+        Keys are transformation names, values are transformation functions
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    AssertionError
+        If entity_attrs is not a dictionary
+    ValueError
+        If a transformation is not found in DEFINED_WEIGHT_TRANSFORMATION or custom_transformations
+    """
+    assert isinstance(entity_attrs, dict), "entity_attrs must be a dictionary"
+
+    for k, v in entity_attrs.items():
         # check structure against pydantic config
-        entity_attrs = _EntityAttrValidator(**v).model_dump()
+        validated_attrs = _EntityAttrValidator(**v).model_dump()
 
         if validate_transformations:
-            trans_name = v["trans"]
+            trans_name = validated_attrs.get("trans", DEFAULT_WT_TRANS)
             valid_trans = set(DEFINED_WEIGHT_TRANSFORMATION.keys())
             if custom_transformations:
                 valid_trans = valid_trans.union(set(custom_transformations.keys()))
             if trans_name not in valid_trans:
                 raise ValueError(
-                    f"transformation {trans_name} was not defined as an alias in "
+                    f"transformation '{trans_name}' was not defined as an alias in "
                     "DEFINED_WEIGHT_TRANSFORMATION or custom_transformations. The defined transformations "
-                    f"are {', '.join(valid_trans)}"
+                    f"are {', '.join(sorted(valid_trans))}"
                 )
 
     return None
