@@ -20,15 +20,6 @@ PACKAGE_DEFS = SimpleNamespace(
     # workflows
     CACHE_DIR="napistu_data",
 )
-
-# TO DO - delete
-PROTEINATLAS_SUBCELL_LOC_URL = (
-    "https://www.proteinatlas.org/download/tsv/subcellular_location.tsv.zip"
-)
-
-# GTEx
-GTEX_RNASEQ_EXPRESSION_URL = "https://storage.googleapis.com/adult-gtex/bulk-gex/v8/rna-seq/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_median_tpm.gct.gz"
-
 # Gencode
 GENCODE_URL = "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_26/gencode.v26.transcripts.fa.gz"
 

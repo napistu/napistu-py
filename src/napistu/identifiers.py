@@ -255,11 +255,8 @@ def format_uri_url(uri: str) -> dict:
             or re.search("ENS[A-Z]{3}[GTP]", split_path[-1])
         ):
             # format ensembl IDs which lack gene/transview
-            identifier, implied_ontology, _ = parse_ensembl_id(split_path[-1])
-            if implied_ontology != ontology:
-                raise ValueError(
-                    f"Implied ontology mismatch: expected {ontology}, got {implied_ontology}"
-                )
+            identifier, ontology, _ = parse_ensembl_id(split_path[-1])
+                        
         elif netloc == "www.mirbase.org" or netloc == "mirbase.org":
             ontology = "mirbase"
             if re.search("MI[0-9]+", split_path[-1]):
