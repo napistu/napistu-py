@@ -4,12 +4,12 @@ import logging
 import pandas as pd
 from napistu import utils
 from fs import open_fs
-from typing import Any, Dict, List
-from napistu.constants import ONTOLOGIES, COMPARTMENTS_GO_TERMS
+from napistu.constants import ONTOLOGIES
 from napistu.ingestion.constants import PROTEINATLAS_SUBCELL_LOC_URL, PROTEINATLAS_DEFS
 
 
 logger = logging.getLogger(__name__)
+
 
 def download_hpa_data(target_uri: str, url: str = PROTEINATLAS_SUBCELL_LOC_URL) -> None:
     """Download protein localization data from the Human Protein Atlas.
@@ -37,16 +37,17 @@ def download_hpa_data(target_uri: str, url: str = PROTEINATLAS_SUBCELL_LOC_URL) 
     ValueError
         If target_uri does not end with .tsv
     """
-    if not target_uri.endswith('.tsv'):
+    if not target_uri.endswith(".tsv"):
         raise ValueError(f"Target URI must end with .tsv, got {target_uri}")
-    
+
     file_ext = url.split(".")[-1]
     target_filename = url.split("/")[-1].split(f".{file_ext}")[0]
     logger.info("Start downloading proteinatlas %s to %s", url, target_uri)
     # target_filename is the name of the file in the zip file which will be renamed to target_uri
     utils.download_wget(url, target_uri, target_filename=target_filename)
-    
+
     return None
+
 
 def load_and_clean_hpa_data(hpa_data_path: str) -> pd.DataFrame:
     """Load and format Human Protein Atlas subcellular localization data.
@@ -60,7 +61,7 @@ def load_and_clean_hpa_data(hpa_data_path: str) -> pd.DataFrame:
     -------
     pd.DataFrame
         DataFrame with genes as rows and GO terms as columns. Each cell
-        is a boolean indicating whether that gene (row) is found in that 
+        is a boolean indicating whether that gene (row) is found in that
         compartment (column). Genes with no compartment annotations are filtered out.
 
     Notes
@@ -81,66 +82,65 @@ def load_and_clean_hpa_data(hpa_data_path: str) -> pd.DataFrame:
     """
     # Check file exists
     base_path, file_name = utils.get_source_base_and_path(hpa_data_path)
-    
+
     logger.info("Loading Human Protein Atlas subcellular localization data")
-    
+
     # Read the TSV file using pandas
     with open_fs(base_path) as base_fs:
         with base_fs.open(file_name, "rb") as f:
             protein_subcellular_localizations = pd.read_csv(
-                f,
-                sep="\t", 
-                dtype=str,
-                na_values=[''],
-                keep_default_na=True
+                f, sep="\t", dtype=str, na_values=[""], keep_default_na=True
             )
-    
+
     # Rename Gene column to be more informative
     protein_subcellular_localizations = protein_subcellular_localizations.rename(
         columns={PROTEINATLAS_DEFS.GENE: ONTOLOGIES.ENSEMBL_GENE}
     )
-    
+
     # Convert GO id column to lists
     def _split_go_terms(go_terms):
         if pd.isna(go_terms):
             return []
         return go_terms.split(";")
-    
+
     # Create a list of all gene-GO term pairs
     gene_go_pairs = []
     for _, row in protein_subcellular_localizations.iterrows():
         go_terms = _split_go_terms(row[PROTEINATLAS_DEFS.GO_ID])
         for term in go_terms:
-            gene_go_pairs.append({
-                ONTOLOGIES.ENSEMBL_GENE: row[ONTOLOGIES.ENSEMBL_GENE],
-                ONTOLOGIES.GO: term
-            })
-    
+            gene_go_pairs.append(
+                {
+                    ONTOLOGIES.ENSEMBL_GENE: row[ONTOLOGIES.ENSEMBL_GENE],
+                    ONTOLOGIES.GO: term,
+                }
+            )
+
     # Convert to DataFrame and pivot to create binary matrix
     gene_go_df = pd.DataFrame(gene_go_pairs)
     if len(gene_go_df) == 0:
         raise ValueError("No gene-compartment associations found in the data")
-        
+
     localization_matrix = pd.crosstab(
-        gene_go_df[ONTOLOGIES.ENSEMBL_GENE], 
-        gene_go_df[ONTOLOGIES.GO]
+        gene_go_df[ONTOLOGIES.ENSEMBL_GENE], gene_go_df[ONTOLOGIES.GO]
     ).astype(bool)
-    
+
     # Log number of genes without compartments that were filtered
-    n_total_genes = len(protein_subcellular_localizations[ONTOLOGIES.ENSEMBL_GENE].unique())
+    n_total_genes = len(
+        protein_subcellular_localizations[ONTOLOGIES.ENSEMBL_GENE].unique()
+    )
     n_genes_with_compartments = len(localization_matrix)
     n_filtered = n_total_genes - n_genes_with_compartments
     if n_filtered > 0:
         logger.debug(
             "Filtered out %d genes with no compartment annotations (from %d total genes)",
             n_filtered,
-            n_total_genes
+            n_total_genes,
         )
-    
+
     logger.info(
         "Created localization matrix with shape %d genes x %d compartments",
         localization_matrix.shape[0],
-        localization_matrix.shape[1]
+        localization_matrix.shape[1],
     )
-    
+
     return localization_matrix

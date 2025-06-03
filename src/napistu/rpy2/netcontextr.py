@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import logging
-import os
-from tempfile import NamedTemporaryFile
 from typing import Any
 from typing import Callable
 from typing import Iterable
 
 import pandas as pd
 from napistu import sbml_dfs_core
-from napistu import utils
 from napistu.rpy2 import has_rpy2
 from napistu.rpy2 import warn_if_no_rpy2
 
@@ -128,37 +125,6 @@ def sbml_dfs_to_rcpr_string_graph(
 
     out = ListVector({FIELD_GENES: genes, FIELD_INTERACTIONS: interactions})
     return out
-
-
-@warn_if_no_rpy2
-def load_and_clean_gtex_data(rcpr_rpy2, uri_gtex: str, by_tissue_zfpkm: bool = False):
-    """Load and cleans GTEx data using rcpr
-
-    Args:
-        rcpr_rpy2 (): The rpy2 rcpr object
-        uri_gtex (str): The uri of the GTEx data
-        by_tissue_zfpkm (bool, optional): Whether to return the data normalized
-          by tissue using zfpkm. Defaults to False.
-    Returns:
-        rpy2 object: The cleaned GTEx data
-    """
-    with NamedTemporaryFile() as f:
-        # R cannot work with gcs uris
-        # thus download the file to a temporary
-        # location incase it is a gcs uri
-        if os.path.exists(uri_gtex):
-            # if the file is already a local
-            # file, just use it
-            path_gtex = uri_gtex
-        else:
-            path_gtex = f.name
-            utils.copy_uri(uri_gtex, path_gtex)
-
-        gtex_tissue_data = rcpr_rpy2.load_and_clean_gtex_data(path_gtex)
-
-    if by_tissue_zfpkm:
-        gtex_tissue_data = rcpr_rpy2.gene_expression_by_tissue(gtex_tissue_data)
-    return gtex_tissue_data
 
 
 def annotate_genes(

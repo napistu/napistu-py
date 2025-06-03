@@ -2,6 +2,7 @@ import numpy as np
 
 from napistu.context import discretize
 
+
 def test_peak_selector():
 
     # Test Case 0: No peaks (flat/monotonic)
@@ -24,7 +25,7 @@ def test_peak_selector():
 
     # Test Case 3: Two peaks (bimodal)
     x2 = np.linspace(-5, 5, 100)
-    y2 = 0.6 * np.exp(-0.5 * (x2 + 1.5)**2) + 0.4 * np.exp(-0.5 * (x2 - 1.5)**2)
+    y2 = 0.6 * np.exp(-0.5 * (x2 + 1.5) ** 2) + 0.4 * np.exp(-0.5 * (x2 - 1.5) ** 2)
     peaks2 = discretize.PeakSelector().find_peaks(y2, x2)
 
     assert abs(peaks2.major - 1.46) < 0.01
@@ -33,7 +34,11 @@ def test_peak_selector():
 
     # Test Case 4: Three peaks (trimodal)
     x3 = np.linspace(-8, 8, 100)
-    y3 = 0.4 * np.exp(-0.5 * (x3 + 4)**2) + 0.5 * np.exp(-0.5 * x3**2) + 0.3 * np.exp(-0.5 * (x3 - 4)**2)
+    y3 = (
+        0.4 * np.exp(-0.5 * (x3 + 4) ** 2)
+        + 0.5 * np.exp(-0.5 * x3**2)
+        + 0.3 * np.exp(-0.5 * (x3 - 4) ** 2)
+    )
     peaks3 = discretize.PeakSelector().find_peaks(y3, x3)
 
     assert abs(peaks3.major - 3.95) < 0.01

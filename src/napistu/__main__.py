@@ -18,6 +18,7 @@ from napistu import indices
 from napistu import sbml_dfs_core
 from napistu import utils
 from napistu.ingestion import bigg
+from napistu.ingestion import hpa
 from napistu.ingestion import reactome
 from napistu.ingestion import sbml
 from napistu.ingestion import string
@@ -94,7 +95,7 @@ def load_ttrust(target_uri: str):
 )
 @click_logging.simple_verbosity_option(logger)
 def load_proteinatlas_subcell(target_uri: str, url: str):
-    hpa.download_hpa_data(target_uri, url)
+    hpa.download_proteinatlas_subcell(target_uri, url)
 
 
 @load.command(name="gtex-rnaseq-expression")
@@ -552,7 +553,7 @@ def filter_hpa_gene_compartments(
     logger.info("Load sbml_dfs model")
     model: sbml.SBML_dfs = utils.load_pickle(model_uri)  # type: ignore
     logger.info("Load and clean hpa data")
-    dat_hpa = netcontextr.load_and_clean_hpa_data(rcpr, hpa_file_uri)
+    dat_hpa = hpa.load_and_clean_hpa_data(rcpr, hpa_file_uri)
     logger.info("Convert sbml_dfs to rcpr string graph")
     model_r = netcontextr.sbml_dfs_to_rcpr_string_graph(model)
     logger.info("Annotate genes with HPA compartments")

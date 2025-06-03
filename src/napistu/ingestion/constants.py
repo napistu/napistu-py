@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from napistu.constants import ONTOLOGIES
 
 SPECIES_FULL_NAME_HUMAN = "Homo sapiens"
 SPECIES_FULL_NAME_MOUSE = "Mus musculus"
@@ -29,8 +28,6 @@ GTEX_DEFS = SimpleNamespace(
     NAME="Name",
     DESCRIPTION="Description",
 )
-
-GTEX_ONTOLOGIES = {ONTOLOGIES.ENSEMBL_GENE, ONTOLOGIES.ENSEMBL_GENE_VERSION, ONTOLOGIES.SYMBOL}
 
 # BIGG
 BIGG_MODEL_URLS = {
