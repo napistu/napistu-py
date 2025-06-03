@@ -2,7 +2,12 @@ import pandas as pd
 from napistu.network import net_create
 
 from napistu.network import precompute
-from napistu.matching.interactions import edgelist_to_pathway_species, edgelist_to_scids, filter_to_direct_mechanistic_interactions, filter_to_indirect_mechanistic_interactions
+from napistu.matching.interactions import (
+    edgelist_to_pathway_species,
+    edgelist_to_scids,
+    filter_to_direct_mechanistic_interactions,
+    filter_to_indirect_mechanistic_interactions,
+)
 
 
 def test_edgelist_to_pathway_species(sbml_dfs):
@@ -71,16 +76,14 @@ def test_direct_and_indirect_mechanism_matching(sbml_dfs_glucose_metabolism):
 
     assert direct_interactions.shape == (2, 10)
 
-    indirect_interactions = (
-        filter_to_indirect_mechanistic_interactions(
-            formatted_edgelist=edgelist,
-            sbml_dfs=sbml_dfs_glucose_metabolism,
-            species_identifiers=species_identifiers,
-            cpr_graph=cpr_graph,
-            ontologies={"chebi"},
-            precomputed_distances=None,
-            max_path_length=10,
-        )
+    indirect_interactions = filter_to_indirect_mechanistic_interactions(
+        formatted_edgelist=edgelist,
+        sbml_dfs=sbml_dfs_glucose_metabolism,
+        species_identifiers=species_identifiers,
+        cpr_graph=cpr_graph,
+        ontologies={"chebi"},
+        precomputed_distances=None,
+        max_path_length=10,
     )
 
     assert indirect_interactions.shape == (6, 12)
@@ -90,16 +93,14 @@ def test_direct_and_indirect_mechanism_matching(sbml_dfs_glucose_metabolism):
         cpr_graph, weights_vars=["weights"]
     )
 
-    indirect_interactions_w_precompute = (
-        filter_to_indirect_mechanistic_interactions(
-            formatted_edgelist=edgelist,
-            sbml_dfs=sbml_dfs_glucose_metabolism,
-            species_identifiers=species_identifiers,
-            cpr_graph=cpr_graph,
-            ontologies={"chebi"},
-            precomputed_distances=precomputed_distances,
-            max_path_length=10,
-        )
+    indirect_interactions_w_precompute = filter_to_indirect_mechanistic_interactions(
+        formatted_edgelist=edgelist,
+        sbml_dfs=sbml_dfs_glucose_metabolism,
+        species_identifiers=species_identifiers,
+        cpr_graph=cpr_graph,
+        ontologies={"chebi"},
+        precomputed_distances=precomputed_distances,
+        max_path_length=10,
     )
 
     assert all(

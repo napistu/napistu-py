@@ -1,0 +1,81 @@
+name: Deploy to Cloud Run
+
+on:
+  workflow_run:
+    workflows: ["Release"]  # Auto-deploy after release
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:  # Manual deployment
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (default: latest)'
+        required: false
+        default: 'latest'
+        type: string
+
+env:
+  PROJECT_ID: shackett
+  REGION: us-west1
+  REGISTRY: us-west1-docker.pkg.dev
+  REPOSITORY: napistu-images
+  SERVICE_NAME: napistu-mcp-server
+
+jobs:
+  deploy:
+    name: Deploy MCP Server
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    
+    steps:
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_CLOUDRUN_SA_KEY }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
+    - name: Deploy to Cloud Run
+      run: |
+        IMAGE_TAG="${{ inputs.image_tag || 'latest' }}"
+        IMAGE_URL="${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-mcp-server:${IMAGE_TAG}"
+        
+        echo "🚀 Deploying Napistu MCP Server"
+        echo "   Image: $IMAGE_URL"
+        
+        gcloud run deploy ${{ env.SERVICE_NAME }} \
+          --image="$IMAGE_URL" \
+          --region=${{ env.REGION }} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --port=8080 \
+          --cpu=1 \
+          --memory=2Gi \
+          --min-instances=1 \
+          --max-instances=3 \
+          --concurrency=10 \
+          --timeout=600 \
+          --cpu-boost \
+          --set-env-vars="MCP_PROFILE=remote,MCP_SERVER_NAME=napistu-docs,HOST=0.0.0.0,FORWARDED_ALLOW_IPS=*,STARTUP_TIMEOUT=300" \
+          --execution-environment=gen2 \
+          --project=${{ env.PROJECT_ID }} \
+          --quiet
+
+    - name: Verify deployment
+      run: |
+        echo "✅ Deployment complete!"
+        echo "🌐 Service URL: https://napistu-mcp-server-844820030839.us-west1.run.app"
+        echo ""
+        echo "🔍 Basic connectivity test..."
+        
+        # Test basic HTTP connectivity (should get 307 redirect)
+        if curl -s -o /dev/null -w "%{http_code}" https://napistu-mcp-server-844820030839.us-west1.run.app/mcp | grep -q "307"; then
+          echo "✅ Server is responding (MCP redirect working)"
+        else
+          echo "⚠️ Server connectivity issue"
+        fi
+        
+        echo ""
+        echo "📋 For local MCP testing:"
+        echo "  python -m napistu.mcp health --url https://napistu-mcp-server-844820030839.us-west1.run.app"
+        echo "  python -m napistu.mcp resources --url https://napistu-mcp-server-844820030839.us-west1.run.app"

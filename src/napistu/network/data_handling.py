@@ -22,14 +22,13 @@ def add_results_table_to_graph(
     graph_attr_modified: str = "vertices",
     transformation: Optional[Callable] = None,
     custom_transformations: Optional[Dict[str, Callable]] = None,
-    inplace: bool = True
+    inplace: bool = True,
 ):
-    
     """
     Add Results Table to Graph
 
     This function extracts one or more attributes from an sbml_dfs species_data table, applies an optional transformation, and adds the result as a vertex attributes to a Napistu graph.
-    
+
     Parameters
     ----------
     napistu_graph: igraph.Graph
@@ -38,7 +37,7 @@ def add_results_table_to_graph(
         The sbml_dfs object containing the species_data table.
     attribute_names: str or list of str, optional
         Either:
-            - The name of the attribute to add to the graph. 
+            - The name of the attribute to add to the graph.
             - A list of attribute names to add to the graph.
             - A regular expression pattern to match attribute names.
             - If None, all attributes in the species_data table will be added.
@@ -57,7 +56,7 @@ def add_results_table_to_graph(
         A dictionary of custom transformations which could be applied to the attributes. The keys are the transformation names and the values are the transformation functions.
     inplace: bool, optional
         If True, the attribute will be added to the graph in place. If False, a new graph will be returned.
-    
+
     Returns
     -------
     napistu_graph: igraph.Graph
@@ -68,7 +67,9 @@ def add_results_table_to_graph(
         napistu_graph = copy.deepcopy(napistu_graph)
 
     if table_type not in ENTITIES_W_DATA:
-        raise ValueError(f"Invalid table_type: {table_type}. Must be one of {ENTITIES_W_DATA}")    
+        raise ValueError(
+            f"Invalid table_type: {table_type}. Must be one of {ENTITIES_W_DATA}"
+        )
     if table_type == SBML_DFS.REACTIONS:
         raise NotImplementedError("Reactions are not yet supported")
 
@@ -78,25 +79,27 @@ def add_results_table_to_graph(
 
     # filter to attributes of interest
     logger.debug("Creating a mapping of attributes to add")
-    attribute_mapping = _create_data_table_column_mapping(data_table, attribute_names, table_type)    
+    attribute_mapping = _create_data_table_column_mapping(
+        data_table, attribute_names, table_type
+    )
 
     if transformation is None:
         transformation = DEFAULT_WT_TRANS
 
     # create the configuration dict which is used by lower-level functions
     reaction_attrs = _create_graph_attrs_config(
-        column_mapping = attribute_mapping,
-        data_type = table_type,
-        table_name = table_name,
-        transformation = transformation
+        column_mapping=attribute_mapping,
+        data_type=table_type,
+        table_name=table_name,
+        transformation=transformation,
     )
 
     # add the attribute to the graph
     napistu_graph = _add_graph_species_attribute(
         napistu_graph,
         sbml_dfs,
-        species_graph_attrs = reaction_attrs,
-        custom_transformations = custom_transformations,
+        species_graph_attrs=reaction_attrs,
+        custom_transformations=custom_transformations,
     )
 
     return napistu_graph if not inplace else None
@@ -144,7 +147,9 @@ def _add_graph_species_attribute(
     sp_graph_key_list = []
     sp_node_attr_list = []
     for k in species_graph_attrs.keys():
-        net_create._validate_entity_attrs(species_graph_attrs[k], custom_transformations=custom_transformations)
+        net_create._validate_entity_attrs(
+            species_graph_attrs[k], custom_transformations=custom_transformations
+        )
 
         sp_graph_key_list.append(k)
         sp_node_attr_list.append(list(species_graph_attrs[k].keys()))
@@ -178,8 +183,11 @@ def _add_graph_species_attribute(
     return cpr_graph
 
 
-def _select_sbml_dfs_data_table(sbml_dfs: sbml_dfs_core.SBML_dfs, table_name: Optional[str] = None, table_type: str = "species") -> pd.DataFrame:
-
+def _select_sbml_dfs_data_table(
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    table_name: Optional[str] = None,
+    table_type: str = "species",
+) -> pd.DataFrame:
     """
     Select an SBML_dfs data table by name and type.
 
@@ -201,29 +209,40 @@ def _select_sbml_dfs_data_table(sbml_dfs: sbml_dfs_core.SBML_dfs, table_name: Op
 
     # validate table_type
     if table_type not in ENTITIES_W_DATA:
-        raise ValueError(f"Invalid table_type: {table_type}. Must be one of {ENTITIES_W_DATA}")    
+        raise ValueError(
+            f"Invalid table_type: {table_type}. Must be one of {ENTITIES_W_DATA}"
+        )
     table_type_data_attr = f"{table_type}_data"
 
     # validate table_name
     data_attr = getattr(sbml_dfs, table_type_data_attr)
-    
+
     if len(data_attr) == 0:
         raise ValueError(f"No {table_type} data found in sbml_dfs")
     valid_table_names = list(data_attr.keys())
 
     if table_name is None:
         if len(data_attr) != 1:
-            raise ValueError(f"Expected a single {table_type} data table but found {len(data_attr)}")
+            raise ValueError(
+                f"Expected a single {table_type} data table but found {len(data_attr)}"
+            )
         table_name = valid_table_names[0]
-    
+
     if table_name not in valid_table_names:
-        raise ValueError(f"Invalid table_name: {table_name}. Must be one of {valid_table_names}")
-    
+        raise ValueError(
+            f"Invalid table_name: {table_name}. Must be one of {valid_table_names}"
+        )
+
     entity_data = data_attr[table_name]
 
     return entity_data
 
-def _create_data_table_column_mapping(entity_data: pd.DataFrame, attribute_names: Union[str, List[str], Dict[str, str]], table_type: Optional[str] = "species") -> Dict[str, str]:
+
+def _create_data_table_column_mapping(
+    entity_data: pd.DataFrame,
+    attribute_names: Union[str, List[str], Dict[str, str]],
+    table_type: Optional[str] = "species",
+) -> Dict[str, str]:
     """
     Select attributes from an sbml_dfs data table.
 
@@ -235,7 +254,7 @@ def _create_data_table_column_mapping(entity_data: pd.DataFrame, attribute_names
         The data table to select attributes from.
     attribute_names: str or list of str, optional
         Either:
-            - The name of the attribute to add to the graph. 
+            - The name of the attribute to add to the graph.
             - A list of attribute names to add to the graph.
             - A regular expression pattern to match attribute names.
             - A dictionary with attributes as names and re-named attributes as values.
@@ -250,7 +269,7 @@ def _create_data_table_column_mapping(entity_data: pd.DataFrame, attribute_names
         For non-renamed columns, the mapping will be identity (original -> original).
     """
     valid_data_table_columns = entity_data.columns.tolist()
-    
+
     # select the attributes to add
     if attribute_names is None:
         # For None, create identity mapping for all columns
@@ -261,45 +280,66 @@ def _create_data_table_column_mapping(entity_data: pd.DataFrame, attribute_names
             return {attribute_names: attribute_names}
         else:
             # try to find a regex match
-            matching_attrs = [attr for attr in valid_data_table_columns if re.match(attribute_names, attr)]
+            matching_attrs = [
+                attr
+                for attr in valid_data_table_columns
+                if re.match(attribute_names, attr)
+            ]
             if len(matching_attrs) == 0:
-                raise ValueError(f"No attributes found matching {attribute_names} as a literal or regular expression. Valid attributes: {valid_data_table_columns}")
+                raise ValueError(
+                    f"No attributes found matching {attribute_names} as a literal or regular expression. Valid attributes: {valid_data_table_columns}"
+                )
             return {attr: attr for attr in matching_attrs}
     elif isinstance(attribute_names, list):
         # Validate that all attributes exist
-        invalid_attributes = [attr for attr in attribute_names if attr not in valid_data_table_columns]
+        invalid_attributes = [
+            attr for attr in attribute_names if attr not in valid_data_table_columns
+        ]
         if len(invalid_attributes) > 0:
-            raise ValueError(f"The following attributes were missing from the {table_type}_data table: {invalid_attributes}. Valid attributes: {valid_data_table_columns}")
+            raise ValueError(
+                f"The following attributes were missing from the {table_type}_data table: {invalid_attributes}. Valid attributes: {valid_data_table_columns}"
+            )
         return {attr: attr for attr in attribute_names}
     elif isinstance(attribute_names, dict):
         # validate the keys exist in the table
-        invalid_keys = [key for key in attribute_names.keys() if key not in valid_data_table_columns]
+        invalid_keys = [
+            key for key in attribute_names.keys() if key not in valid_data_table_columns
+        ]
         if len(invalid_keys) > 0:
-            raise ValueError(f"The following source columns were missing from the {table_type}_data table: {invalid_keys}. Valid columns: {valid_data_table_columns}")
-        
+            raise ValueError(
+                f"The following source columns were missing from the {table_type}_data table: {invalid_keys}. Valid columns: {valid_data_table_columns}"
+            )
+
         # validate that new column names don't conflict with existing ones
         # except when a column is being renamed to itself
         conflicting_names = [
-            new_name for old_name, new_name in attribute_names.items()
+            new_name
+            for old_name, new_name in attribute_names.items()
             if new_name in valid_data_table_columns and new_name != old_name
         ]
         if conflicting_names:
-            raise ValueError(f"The following new column names conflict with existing columns: {conflicting_names}")
-        
+            raise ValueError(
+                f"The following new column names conflict with existing columns: {conflicting_names}"
+            )
+
         if len(attribute_names) == 0:
-            raise ValueError(f"No attributes found in the dictionary. Valid attributes: {valid_data_table_columns}")
-            
+            raise ValueError(
+                f"No attributes found in the dictionary. Valid attributes: {valid_data_table_columns}"
+            )
+
         return attribute_names
     else:
         # shouldn't be reached - for clarity
-        raise ValueError(f"Invalid type for attribute_names: {type(attribute_names)}. Must be str, list, dict, or None.")
+        raise ValueError(
+            f"Invalid type for attribute_names: {type(attribute_names)}. Must be str, list, dict, or None."
+        )
 
 
 def _create_graph_attrs_config(
     column_mapping: Dict[str, str],
     data_type: str,
     table_name: str,
-    transformation: str = "identity"
+    transformation: str = "identity",
 ) -> Dict[str, Dict[str, Dict[str, str]]]:
     """
     Create a configuration dictionary for graph attributes.
@@ -331,12 +371,12 @@ def _create_graph_attrs_config(
         }
     """
     graph_attrs = {data_type: {}}
-    
+
     for original_col, new_col in column_mapping.items():
         graph_attrs[data_type][new_col] = {
             "table": table_name,
             "variable": original_col,
-            "trans": transformation
+            "trans": transformation,
         }
-    
+
     return graph_attrs

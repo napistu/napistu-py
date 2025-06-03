@@ -35,9 +35,13 @@ def create_go_parents_df(go_basic_obo_df: pd.DataFrame) -> pd.DataFrame:
 
     # this is currently at 4496 rows - this is expected to slowly increase
     if cc_parents.shape[0] < 4496:
-        raise ValueError(f"Expected at least 4496 rows in cc_parents, got {cc_parents.shape[0]}")
+        raise ValueError(
+            f"Expected at least 4496 rows in cc_parents, got {cc_parents.shape[0]}"
+        )
     if cc_parents.shape[0] >= 5000:
-        raise ValueError(f"Expected fewer than 5000 rows in cc_parents, got {cc_parents.shape[0]}")
+        raise ValueError(
+            f"Expected fewer than 5000 rows in cc_parents, got {cc_parents.shape[0]}"
+        )
 
     # convert from a list of strings to a list of dicts then expand so each
     # dict is its own row
@@ -51,9 +55,13 @@ def create_go_parents_df(go_basic_obo_df: pd.DataFrame) -> pd.DataFrame:
 
     # currently at 4688 rows - this may increase or decrease but will do so slowly
     if go_parents_df.shape[0] <= 4600:
-        raise ValueError(f"Expected more than 4600 rows in go_parents_df, got {go_parents_df.shape[0]}")
+        raise ValueError(
+            f"Expected more than 4600 rows in go_parents_df, got {go_parents_df.shape[0]}"
+        )
     if go_parents_df.shape[0] >= 5000:
-        raise ValueError(f"Expected fewer than 5000 rows in go_parents_df, got {go_parents_df.shape[0]}")
+        raise ValueError(
+            f"Expected fewer than 5000 rows in go_parents_df, got {go_parents_df.shape[0]}"
+        )
 
     return go_parents_df
 
@@ -250,7 +258,9 @@ def _isa_str_list_to_dict_list(isa_list: list) -> list[dict[str, Any]]:
     isa_dict_list = list()
     for split_val in split_vals:
         if len(split_val) != 2:
-            raise ValueError(f"Expected tuple of length 2, got {len(split_val)}: {split_val}")
+            raise ValueError(
+                f"Expected tuple of length 2, got {len(split_val)}: {split_val}"
+            )
         isa_dict_list.append({"parent_id": split_val[0], "parent_name": split_val[1]})
 
     return isa_dict_list

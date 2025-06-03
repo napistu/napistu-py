@@ -5,6 +5,7 @@ import inspect
 
 from typing import Optional
 
+
 def personalized_pagerank_by_attribute(
     g: ig.Graph,
     attribute: str,
@@ -57,16 +58,14 @@ def personalized_pagerank_by_attribute(
                 raise ValueError(f"Invalid argument for personalized_pagerank: {k}")
 
     # Personalized PageRank (no normalization, igraph handles it)
-    pr_attr = g.personalized_pagerank(reset=attr.tolist(), damping=damping, **additional_propagation_args)
+    pr_attr = g.personalized_pagerank(
+        reset=attr.tolist(), damping=damping, **additional_propagation_args
+    )
 
     # Node names
     names = g.vs["name"] if "name" in g.vs.attributes() else list(range(g.vcount()))
 
-    data = {
-        "name": names,
-        "pagerank_by_attribute": pr_attr,
-        attribute: attr
-    }
+    data = {"name": names, "pagerank_by_attribute": pr_attr, attribute: attr}
 
     # Uniform PPR over nonzero attribute nodes
     if calculate_uniform_dist:
@@ -76,7 +75,9 @@ def personalized_pagerank_by_attribute(
             raise ValueError("No nonzero attribute values for uniform PPR.")
         uniform_vec = np.zeros_like(attr, dtype=float)
         uniform_vec[used_in_uniform] = 1.0 / n_uniform
-        pr_uniform = g.personalized_pagerank(reset=uniform_vec.tolist(), damping=damping, **additional_propagation_args)
+        pr_uniform = g.personalized_pagerank(
+            reset=uniform_vec.tolist(), damping=damping, **additional_propagation_args
+        )
         data["pagerank_uniform"] = pr_uniform
 
     return pd.DataFrame(data)
@@ -89,21 +90,29 @@ def _ensure_nonnegative_vertex_attribute(g: ig.Graph, attribute: str):
     Missing or None values are treated as 0.
     Raises ValueError if attribute is missing for all vertices or all values are zero.
     """
-    
-    all_missing = all((attribute not in v.attributes() or v[attribute] is None) for v in g.vs)
+
+    all_missing = all(
+        (attribute not in v.attributes() or v[attribute] is None) for v in g.vs
+    )
     if all_missing:
         raise ValueError(f"Vertex attribute '{attribute}' is missing for all vertices.")
-    
+
     values = [
-        v[attribute] if (attribute in v.attributes() and v[attribute] is not None) else 0.0
+        (
+            v[attribute]
+            if (attribute in v.attributes() and v[attribute] is not None)
+            else 0.0
+        )
         for v in g.vs
     ]
-    
+
     arr = np.array(values, dtype=float)
-    
+
     if np.all(arr == 0):
-        raise ValueError(f"Vertex attribute '{attribute}' is zero for all vertices; cannot use as reset vector.")
+        raise ValueError(
+            f"Vertex attribute '{attribute}' is zero for all vertices; cannot use as reset vector."
+        )
     if np.any(arr < 0):
         raise ValueError(f"Attribute '{attribute}' contains negative values.")
-    
+
     return arr

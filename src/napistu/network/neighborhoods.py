@@ -1592,8 +1592,12 @@ def _calculate_path_attrs(
     neighborhood_path_entities.update({x: {x} for x in edgeless_nodes})
 
     if path_attributes_df.shape[0] != len(neighborhood_paths):
-        raise ValueError("path_attributes_df row count must match number of neighborhood_paths")
+        raise ValueError(
+            "path_attributes_df row count must match number of neighborhood_paths"
+        )
     if len(neighborhood_path_entities) != len(neighborhood_paths):
-        raise ValueError("neighborhood_path_entities length must match number of neighborhood_paths")
+        raise ValueError(
+            "neighborhood_path_entities length must match number of neighborhood_paths"
+        )
 
     return path_attributes_df, neighborhood_path_entities

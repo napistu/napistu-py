@@ -734,10 +734,10 @@ def ensure_pd_df(pd_df_or_series: pd.DataFrame | pd.Series) -> pd.DataFrame:
 def drop_extra_cols(
     df_in: pd.DataFrame,
     df_out: pd.DataFrame,
-    always_include: Optional[List[str]] = None
+    always_include: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """Remove columns in df_out that are not in df_in, except those specified in always_include.
-    
+
     Parameters
     ----------
     df_in : pd.DataFrame
@@ -746,33 +746,33 @@ def drop_extra_cols(
         DataFrame to filter columns from
     always_include : Optional[List[str]], optional
         List of column names to always include in output, even if not in df_in
-        
+
     Returns
     -------
     pd.DataFrame
         DataFrame with columns filtered to match df_in plus any always_include columns.
         Column order follows df_in, with always_include columns appended at the end.
-        
+
     Examples
     --------
     >>> df_in = pd.DataFrame({'a': [1], 'b': [2]})
     >>> df_out = pd.DataFrame({'a': [3], 'c': [4], 'd': [5]})
     >>> _drop_extra_cols(df_in, df_out)
     # Returns DataFrame with just column 'a'
-    
+
     >>> _drop_extra_cols(df_in, df_out, always_include=['d'])
     # Returns DataFrame with columns ['a', 'd']
     """
     # Handle None case for always_include
     if always_include is None:
         always_include = []
-    
+
     # Get columns to retain: intersection with df_in plus always_include
     retained_cols = df_in.columns.intersection(df_out.columns).union(always_include)
-    
+
     # Filter to only columns that exist in df_out
     retained_cols = retained_cols.intersection(df_out.columns)
-    
+
     # Order columns: first those matching df_in's order, then any remaining always_include
     ordered_cols = []
     # Add columns that are in df_in in their original order
@@ -783,15 +783,12 @@ def drop_extra_cols(
     for col in always_include:
         if col in retained_cols and col not in ordered_cols:
             ordered_cols.append(col)
-    
+
     return df_out.loc[:, ordered_cols]
 
 
 def _merge_and_log_overwrites(
-    left_df: pd.DataFrame,
-    right_df: pd.DataFrame,
-    merge_context: str,
-    **merge_kwargs
+    left_df: pd.DataFrame, right_df: pd.DataFrame, merge_context: str, **merge_kwargs
 ) -> pd.DataFrame:
     """
     Merge two DataFrames and log any column overwrites.
@@ -816,7 +813,7 @@ def _merge_and_log_overwrites(
     original_cols = left_df.columns.tolist()
 
     # Ensure we're using the correct suffixes
-    merge_kwargs['suffixes'] = ("_old", "")
+    merge_kwargs["suffixes"] = ("_old", "")
 
     # Perform merge
     merged_df = pd.merge(left_df, right_df, **merge_kwargs)

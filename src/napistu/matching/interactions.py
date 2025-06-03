@@ -14,7 +14,7 @@ from napistu.constants import (
     IDENTIFIER_EDGELIST_REQ_VARS,
     CPR_EDGELIST,
     SBML_DFS,
-    IDENTIFIERS
+    IDENTIFIERS,
 )
 from napistu.network.constants import CPR_GRAPH_EDGES
 from napistu.matching.constants import FEATURE_ID_VAR_DEFAULT
@@ -22,8 +22,13 @@ from napistu.network import paths
 
 logger = logging.getLogger(__name__)
 
+
 def edgelist_to_pathway_species(
-    formatted_edgelist: pd.DataFrame, species_identifiers: pd.DataFrame, ontologies: set, feature_id_var: str = FEATURE_ID_VAR_DEFAULT, verbose: bool = False
+    formatted_edgelist: pd.DataFrame,
+    species_identifiers: pd.DataFrame,
+    ontologies: set,
+    feature_id_var: str = FEATURE_ID_VAR_DEFAULT,
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
     Edgelist to Pathway Species
@@ -87,7 +92,7 @@ def edgelist_to_pathway_species(
         species_identifiers=species_identifiers,
         ontologies=ontologies,
         feature_identifiers_var=feature_id_var,
-        verbose=verbose
+        verbose=verbose,
     )
 
     # add s_ids of both upstream and downstream edges to pathway

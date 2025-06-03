@@ -45,7 +45,9 @@ def format_psi(
     # the root should be an entrySet if this is a PSI 3.0 file
     entry_set = et.getroot()
     if entry_set.tag != PSI_MI_INTACT_XML_NAMESPACE + "entrySet":
-        raise ValueError(f"Expected root tag to be {PSI_MI_INTACT_XML_NAMESPACE + 'entrySet'}, got {entry_set.tag}")
+        raise ValueError(
+            f"Expected root tag to be {PSI_MI_INTACT_XML_NAMESPACE + 'entrySet'}, got {entry_set.tag}"
+        )
 
     entry_nodes = entry_set.findall(f"./{PSI_MI_INTACT_XML_NAMESPACE}entry")
 
@@ -99,7 +101,9 @@ def _format_entry(an_entry) -> dict[str, Any]:
     """Extract a single XML entry of interactors and interactions."""
 
     if an_entry.tag != PSI_MI_INTACT_XML_NAMESPACE + "entry":
-        raise ValueError(f"Expected entry tag to be {PSI_MI_INTACT_XML_NAMESPACE + 'entry'}, got {an_entry.tag}")
+        raise ValueError(
+            f"Expected entry tag to be {PSI_MI_INTACT_XML_NAMESPACE + 'entry'}, got {an_entry.tag}"
+        )
 
     entry_dict = {
         "source": _format_entry_source(an_entry),
@@ -172,7 +176,9 @@ def _format_entry_interactor(interactor) -> dict[str, Any]:
     """Format a single molecular interactor in an interaction list XML node."""
 
     if interactor.tag != PSI_MI_INTACT_XML_NAMESPACE + "interactor":
-        raise ValueError(f"Expected interactor tag to be {PSI_MI_INTACT_XML_NAMESPACE + 'interactor'}, got {interactor.tag}")
+        raise ValueError(
+            f"Expected interactor tag to be {PSI_MI_INTACT_XML_NAMESPACE + 'interactor'}, got {interactor.tag}"
+        )
 
     # optional full name
     interactor_name_node = interactor.find(
@@ -242,7 +248,9 @@ def _format_entry_interaction(interaction) -> dict[str, Any]:
     """Format a single interaction in an XML interaction list."""
 
     if interaction.tag != PSI_MI_INTACT_XML_NAMESPACE + "interaction":
-        raise ValueError(f"Expected interaction tag to be {PSI_MI_INTACT_XML_NAMESPACE + 'interaction'}, got {interaction.tag}")
+        raise ValueError(
+            f"Expected interaction tag to be {PSI_MI_INTACT_XML_NAMESPACE + 'interaction'}, got {interaction.tag}"
+        )
 
     interaction_name = interaction.find(
         f"./{PSI_MI_INTACT_XML_NAMESPACE}names/{PSI_MI_INTACT_XML_NAMESPACE}shortLabel"
@@ -265,7 +273,9 @@ def _format_entry_interaction_participants(interaction_participant) -> dict[str,
     """Format the participants in an XML interaction."""
 
     if interaction_participant.tag != PSI_MI_INTACT_XML_NAMESPACE + "participant":
-        raise ValueError(f"Expected participant tag to be {PSI_MI_INTACT_XML_NAMESPACE + 'participant'}, got {interaction_participant.tag}")
+        raise ValueError(
+            f"Expected participant tag to be {PSI_MI_INTACT_XML_NAMESPACE + 'participant'}, got {interaction_participant.tag}"
+        )
 
     out = {
         "interactor_id": interaction_participant.attrib["id"],

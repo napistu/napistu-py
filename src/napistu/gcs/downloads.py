@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import pathlib
 import re
 import shutil
 from pydantic import BaseModel
@@ -10,7 +9,9 @@ from typing import Optional
 
 from napistu import utils
 from napistu.gcs.constants import GCS_ASSETS
+
 from napistu.gcs.constants import INIT_DATA_DIR_MSG
+from napistu.gcs.utils import _initialize_data_dir
 
 logger = logging.getLogger(__name__)
 
@@ -94,23 +95,9 @@ def download_public_napistu_asset(asset: str, out_path: str) -> None:
     logger.info(f"Download URI: {selected_file}")
 
     utils.download_wget(selected_file, out_path)
-    
+
     if not os.path.isfile(out_path):
         raise FileNotFoundError(f"Download failed: {out_path} was not created.")
-
-    return None
-
-
-def _initialize_data_dir(data_dir: str, init_msg: str = INIT_DATA_DIR_MSG) -> None:
-    """Create a data directory if it doesn't exist."""
-
-    if not os.path.isdir(data_dir):
-
-        logger.warning(INIT_DATA_DIR_MSG.format(data_dir=data_dir))
-
-        # Artifact directory not found; creating {parentdir}")
-        logger.warning(f"Trying to create {data_dir}")
-        pathlib.Path(data_dir).mkdir(parents=True, exist_ok=True)
 
     return None
 
@@ -210,8 +197,10 @@ def _remove_asset_files_if_needed(asset: str, data_dir: str):
 
     # Remove extracted directory (if any)
     asset_dict = GCS_ASSETS.ASSETS[asset]
-    if asset_dict.get("subassets") is not None or any(archive_filename.endswith(ext) for ext in [".tar.gz", ".tgz", ".zip", ".gz"]):
-        extract_dir = os.path.join(data_dir, archive_filename.split('.')[0])
+    if asset_dict.get("subassets") is not None or any(
+        archive_filename.endswith(ext) for ext in [".tar.gz", ".tgz", ".zip", ".gz"]
+    ):
+        extract_dir = os.path.join(data_dir, archive_filename.split(".")[0])
         if os.path.isdir(extract_dir):
             shutil.rmtree(extract_dir)
             logger.info(f"Removed extracted asset directory: {extract_dir}")

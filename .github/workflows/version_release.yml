@@ -1,0 +1,147 @@
+name: Version Release
+
+on:
+  workflow_run:
+    workflows: ["CI"]  # Must match the name in ci.yml
+    types: [completed]
+    branches: [main]
+
+jobs:
+  check-version:
+    name: Check for Version Change
+    runs-on: ubuntu-latest
+    # Only proceed if CI passed
+    if: github.event.workflow_run.conclusion == 'success'
+    outputs:
+      version-changed: ${{ steps.check.outputs.version-changed }}
+      new-version: ${{ steps.check.outputs.new-version }}
+      previous-version: ${{ steps.check.outputs.previous-version }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.workflow_run.head_sha }}
+        fetch-depth: 2  # Only fetch current + previous commit (much faster)
+        
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Check for version change in setup.cfg
+      id: check
+      run: |
+        echo "🔍 Checking for version changes in setup.cfg after successful CI..."
+        
+        # Get current version from setup.cfg
+        get_version() {
+          python -c "
+        import configparser
+        config = configparser.ConfigParser()
+        config.read('setup.cfg')
+        print(config['metadata']['version'])
+        "
+        }
+        
+        CURRENT_VERSION=$(get_version)
+        echo "Current version in setup.cfg: $CURRENT_VERSION"
+        
+        # Fetch tags to get the latest released version
+        git fetch --depth=1 origin --tags
+        
+        # Get the latest version tag (if any)
+        LATEST_TAG=$(git tag -l "v*" | sort -V | tail -n1 || echo "")
+        if [[ -n "$LATEST_TAG" ]]; then
+          LATEST_RELEASED_VERSION=${LATEST_TAG#v}  # Remove 'v' prefix
+          echo "Latest released version: $LATEST_RELEASED_VERSION"
+        else
+          LATEST_RELEASED_VERSION="0.0.0"
+          echo "No previous releases found, comparing against 0.0.0"
+        fi
+        
+        # Check if current version is different from latest released version
+        if [[ "$CURRENT_VERSION" != "$LATEST_RELEASED_VERSION" ]]; then
+          echo "✅ Version changed: $LATEST_RELEASED_VERSION → $CURRENT_VERSION"
+          
+          # Check if this specific version tag already exists
+          if git tag -l | grep -q "^v${CURRENT_VERSION}$"; then
+            echo "⚠️ Tag v${CURRENT_VERSION} already exists, skipping"
+            echo "version-changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "🚀 New version detected: $CURRENT_VERSION (was $LATEST_RELEASED_VERSION)"
+            echo "version-changed=true" >> $GITHUB_OUTPUT
+            echo "new-version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
+            echo "previous-version=${LATEST_RELEASED_VERSION}" >> $GITHUB_OUTPUT
+          fi
+        else
+          echo "ℹ️ Version ${CURRENT_VERSION} already released, no action needed"
+          echo "version-changed=false" >> $GITHUB_OUTPUT
+        fi
+
+  validate-version:
+    name: Validate Version Format
+    needs: check-version
+    if: needs.check-version.outputs.version-changed == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Validate semantic version
+      run: |
+        VERSION="${{ needs.check-version.outputs.new-version }}"
+        echo "Validating version format: $VERSION"
+        
+        # Python PEP 440 compatible version validation (excluding local versions)
+        # Supports: X.Y.Z, X.Y.Z.devN, X.Y.ZaN, X.Y.ZbN, X.Y.ZrcN, X.Y.Z.postN
+        if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.(dev|post)[0-9]+|[ab][0-9]+|rc[0-9]+)?$ ]]; then
+          echo "❌ Invalid version format: $VERSION"
+          echo "Valid formats for releases:"
+          echo "  - X.Y.Z (e.g., 1.2.3)"
+          echo "  - X.Y.Z.devN (e.g., 1.2.3.dev1)"  
+          echo "  - X.Y.ZaN (e.g., 1.2.3a1)"
+          echo "  - X.Y.ZbN (e.g., 1.2.3b1)"
+          echo "  - X.Y.ZrcN (e.g., 1.2.3rc1)"
+          echo "  - X.Y.Z.postN (e.g., 1.2.3.post1)"
+          echo ""
+          echo "Note: Local versions (X.Y.Z+local) are not allowed for releases"
+          exit 1
+        fi
+        
+        echo "✅ Version format is valid for release"
+
+  create-tag:
+    name: Create Release Tag
+    needs: [check-version, validate-version]
+    if: needs.check-version.outputs.version-changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.workflow_run.head_sha }}
+    
+    - name: Create and push tag
+      run: |
+        VERSION="${{ needs.check-version.outputs.new-version }}"
+        PREVIOUS="${{ needs.check-version.outputs.previous-version }}"
+        
+        echo "🏷️ Creating tag v${VERSION} after successful CI"
+        
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        git tag -a "v${VERSION}" -m "Release version ${VERSION}
+
+        ✅ All CI checks passed (lint, test, MCP tests)
+        📈 Version bumped: ${PREVIOUS} → ${VERSION}
+        📦 Ready for PyPI and Docker release
+        🚀 Commit: ${{ github.event.workflow_run.head_sha }}
+        "
+        
+        git push origin "v${VERSION}"
+        
+        echo "✅ Tag v${VERSION} created and pushed"
+        echo "🚀 Release workflow will trigger automatically"

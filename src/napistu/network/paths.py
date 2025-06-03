@@ -9,9 +9,7 @@ import igraph as ig
 import pandas as pd
 from napistu import sbml_dfs_core
 from napistu import utils
-from napistu.constants import (
-    CPR_PATH_REQ_VARS
-)
+from napistu.constants import CPR_PATH_REQ_VARS
 from napistu.constants import MINI_SBO_NAME_TO_POLARITY
 from napistu.constants import MINI_SBO_TO_NAME
 from napistu.network import net_utils

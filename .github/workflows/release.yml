@@ -1,0 +1,216 @@
+name: Release
+
+on:
+  workflow_run:
+    workflows: ["Version Release"]  # Automated: triggers after version-release.yml
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:  # Manual: trigger from GitHub UI
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+      publish_pypi:
+        description: 'Publish to PyPI'
+        required: false
+        default: true
+        type: boolean
+      build_docker:
+        description: 'Build Docker images'
+        required: false
+        default: true
+        type: boolean
+      create_github_release:
+        description: 'Create GitHub release'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: us-west1
+  REGISTRY: us-west1-docker.pkg.dev
+  REPOSITORY: napistu-images
+
+jobs:
+  check-release-needed:
+    name: Check if Release Needed
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    outputs:
+      should-release: ${{ steps.check.outputs.should-release }}
+      version: ${{ steps.check.outputs.version }}
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+    
+    - name: Check for version tag on current commit
+      id: check
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "Manual dispatch - proceeding with release"
+          echo "should-release=true" >> $GITHUB_OUTPUT
+          echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          # Check if current commit has a version tag
+          COMMIT_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          git fetch --tags
+          
+          # Find tags pointing to this exact commit
+          VERSION_TAG=$(git tag --points-at "$COMMIT_SHA" | grep '^v[0-9]' | head -n1)
+          
+          if [[ -n "$VERSION_TAG" ]]; then
+            VERSION=${VERSION_TAG#v}
+            echo "Found version tag: $VERSION_TAG for commit $COMMIT_SHA"
+            echo "should-release=true" >> $GITHUB_OUTPUT
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "No version tag found for commit $COMMIT_SHA - skipping release"
+            echo "should-release=false" >> $GITHUB_OUTPUT
+          fi
+        fi
+
+  # Quick test before releasing
+  test:
+    name: Pre-release Tests
+    needs: check-release-needed
+    if: needs.check-release-needed.outputs.should-release == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+        
+    - name: Install and test
+      run: |
+        uv pip install --system pytest pytest-cov
+        uv pip install --system -e ".[dev,mcp]"
+        pytest -x -v  # Stop on first failure for speed
+
+  # Build and publish to PyPI
+  pypi:
+    name: Publish to PyPI
+    needs: [check-release-needed, test]
+    if: |
+      needs.check-release-needed.outputs.should-release == 'true' &&
+      (github.event_name != 'workflow_dispatch' || inputs.publish_pypi)
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Build package
+      run: |
+        python -m pip install --upgrade pip build
+        python -m build
+        
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+
+  # Build and push Docker images
+  docker:
+    name: Build Docker Images
+    needs: [check-release-needed, test]
+    if: |
+      needs.check-release-needed.outputs.should-release == 'true' &&
+      (github.event_name != 'workflow_dispatch' || inputs.build_docker)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Configure Docker for Artifact Registry
+      run: gcloud auth configure-docker ${{ env.REGISTRY }}
+
+    - name: Build and push base image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.base
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:latest
+          ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:${{ needs.check-release-needed.outputs.version }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build and push MCP server image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.mcp
+        build-args: |
+          BASE_IMAGE=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:${{ needs.check-release-needed.outputs.version }}
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-mcp-server:latest
+          ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-mcp-server:${{ needs.check-release-needed.outputs.version }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # Create GitHub release
+  github-release:
+    name: Create GitHub Release
+    needs: [check-release-needed, test]
+    if: |
+      needs.check-release-needed.outputs.should-release == 'true' &&
+      (github.event_name != 'workflow_dispatch' || inputs.create_github_release)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ needs.check-release-needed.outputs.version }}
+        name: Release v${{ needs.check-release-needed.outputs.version }}
+        body: |
+          ## Installation
+          ```bash
+          pip install napistu==${{ needs.check-release-needed.outputs.version }}
+          ```
+          
+          ## Docker Images
+          ```bash
+          # Base image
+          docker pull ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:${{ needs.check-release-needed.outputs.version }}
+          
+          # MCP Server
+          docker pull ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-mcp-server:${{ needs.check-release-needed.outputs.version }}
+          docker run -p 8080:8080 ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-mcp-server:${{ needs.check-release-needed.outputs.version }}
+          ```
+        draft: false
+        prerelease: ${{ contains(needs.check-release-needed.outputs.version, '.dev') || contains(needs.check-release-needed.outputs.version, 'a') || contains(needs.check-release-needed.outputs.version, 'b') || contains(needs.check-release-needed.outputs.version, 'rc') }}
+        generate_release_notes: true

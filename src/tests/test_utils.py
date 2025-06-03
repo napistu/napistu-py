@@ -18,6 +18,7 @@ from testcontainers.core.container import DockerContainer
 
 from napistu.utils import drop_extra_cols
 
+
 @fixture(scope="session")
 def gcs_storage():
     """A container running a GCS emulator"""
@@ -491,114 +492,104 @@ def test_click_str_to_list():
 def test_drop_extra_cols():
     """Test the _drop_extra_cols function for removing and reordering columns."""
     # Setup test DataFrames
-    df_in = pd.DataFrame({
-        'col1': [1, 2, 3],
-        'col2': [4, 5, 6],
-        'col3': [7, 8, 9]
-    })
-    
-    df_out = pd.DataFrame({
-        'col2': [10, 11, 12],
-        'col3': [13, 14, 15],
-        'col4': [16, 17, 18],  # Extra column that should be dropped
-        'col1': [19, 20, 21]   # Different order than df_in
-    })
-    
+    df_in = pd.DataFrame({"col1": [1, 2, 3], "col2": [4, 5, 6], "col3": [7, 8, 9]})
+
+    df_out = pd.DataFrame(
+        {
+            "col2": [10, 11, 12],
+            "col3": [13, 14, 15],
+            "col4": [16, 17, 18],  # Extra column that should be dropped
+            "col1": [19, 20, 21],  # Different order than df_in
+        }
+    )
+
     # Test basic functionality without always_include
     result = drop_extra_cols(df_in, df_out)
-    
+
     # Check that extra column was dropped
-    assert 'col4' not in result.columns
-    
+    assert "col4" not in result.columns
+
     # Check that columns are in the same order as df_in
     assert list(result.columns) == list(df_in.columns)
-    
+
     # Check that values are preserved
     pd.testing.assert_frame_equal(
         result,
-        pd.DataFrame({
-            'col1': [19, 20, 21],
-            'col2': [10, 11, 12],
-            'col3': [13, 14, 15]
-        })[list(df_in.columns)]  # Ensure same column order
+        pd.DataFrame(
+            {"col1": [19, 20, 21], "col2": [10, 11, 12], "col3": [13, 14, 15]}
+        )[
+            list(df_in.columns)
+        ],  # Ensure same column order
     )
-    
+
     # Test with always_include
-    result_with_include = drop_extra_cols(df_in, df_out, always_include=['col4'])
-    
+    result_with_include = drop_extra_cols(df_in, df_out, always_include=["col4"])
+
     # Check that col4 is retained and appears at the end
-    assert list(result_with_include.columns) == list(df_in.columns) + ['col4']
-    assert result_with_include['col4'].equals(df_out['col4'])
-    
+    assert list(result_with_include.columns) == list(df_in.columns) + ["col4"]
+    assert result_with_include["col4"].equals(df_out["col4"])
+
     # Test with always_include containing non-existent column
-    result_non_existent = drop_extra_cols(df_in, df_out, always_include=['col4', 'col5'])
-    assert list(result_non_existent.columns) == list(df_in.columns) + ['col4']
-    
+    result_non_existent = drop_extra_cols(
+        df_in, df_out, always_include=["col4", "col5"]
+    )
+    assert list(result_non_existent.columns) == list(df_in.columns) + ["col4"]
+
     # Test with always_include containing column from df_in
-    result_overlap = drop_extra_cols(df_in, df_out, always_include=['col1', 'col4'])
-    assert list(result_overlap.columns) == list(df_in.columns) + ['col4']
-    
+    result_overlap = drop_extra_cols(df_in, df_out, always_include=["col1", "col4"])
+    assert list(result_overlap.columns) == list(df_in.columns) + ["col4"]
+
     # Test with no overlapping columns but some in always_include
-    df_out_no_overlap = pd.DataFrame({
-        'col4': [1, 2, 3],
-        'col5': [4, 5, 6]
-    })
+    df_out_no_overlap = pd.DataFrame({"col4": [1, 2, 3], "col5": [4, 5, 6]})
     result_no_overlap = drop_extra_cols(df_in, df_out_no_overlap)
     assert result_no_overlap.empty
     assert list(result_no_overlap.columns) == []
-    
-    result_no_overlap_with_include = drop_extra_cols(df_in, df_out_no_overlap, always_include=['col4'])
-    assert list(result_no_overlap_with_include.columns) == ['col4']
-    assert result_no_overlap_with_include['col4'].equals(df_out_no_overlap['col4'])
-    
+
+    result_no_overlap_with_include = drop_extra_cols(
+        df_in, df_out_no_overlap, always_include=["col4"]
+    )
+    assert list(result_no_overlap_with_include.columns) == ["col4"]
+    assert result_no_overlap_with_include["col4"].equals(df_out_no_overlap["col4"])
+
     # Test with subset of columns
-    df_out_subset = pd.DataFrame({
-        'col1': [1, 2, 3],
-        'col3': [7, 8, 9],
-        'col4': [10, 11, 12]
-    })
+    df_out_subset = pd.DataFrame(
+        {"col1": [1, 2, 3], "col3": [7, 8, 9], "col4": [10, 11, 12]}
+    )
     result_subset = drop_extra_cols(df_in, df_out_subset)
-    assert list(result_subset.columns) == ['col1', 'col3']
-    pd.testing.assert_frame_equal(result_subset, df_out_subset[['col1', 'col3']])
-    
-    result_subset_with_include = drop_extra_cols(df_in, df_out_subset, always_include=['col4'])
-    assert list(result_subset_with_include.columns) == ['col1', 'col3', 'col4']
-    pd.testing.assert_frame_equal(result_subset_with_include, df_out_subset[['col1', 'col3', 'col4']])
+
+    assert list(result_subset.columns) == ["col1", "col3"]
+    pd.testing.assert_frame_equal(result_subset, df_out_subset[["col1", "col3"]])
+
+    result_subset_with_include = drop_extra_cols(
+        df_in, df_out_subset, always_include=["col4"]
+    )
+    assert list(result_subset_with_include.columns) == ["col1", "col3", "col4"]
+    pd.testing.assert_frame_equal(
+        result_subset_with_include, df_out_subset[["col1", "col3", "col4"]]
+    )
+
 
 def test_merge_and_log_overwrites(caplog):
     """Test merge_and_log_overwrites function."""
-    
+
     # Test basic merge with no conflicts
-    df1 = pd.DataFrame({
-        'id': [1, 2],
-        'value1': ['a', 'b']
-    })
-    df2 = pd.DataFrame({
-        'id': [1, 2],
-        'value2': ['c', 'd']
-    })
+    df1 = pd.DataFrame({"id": [1, 2], "value1": ["a", "b"]})
+    df2 = pd.DataFrame({"id": [1, 2], "value2": ["c", "d"]})
     result = utils._merge_and_log_overwrites(df1, df2, "test", on="id")
-    assert set(result.columns) == {'id', 'value1', 'value2'}
+    assert set(result.columns) == {"id", "value1", "value2"}
     assert len(caplog.records) == 0
 
     # Test merge with column conflict
-    df1 = pd.DataFrame({
-        'id': [1, 2],
-        'name': ['a', 'b'],
-        'value': [10, 20]
-    })
-    df2 = pd.DataFrame({
-        'id': [1, 2],
-        'name': ['c', 'd']
-    })
+    df1 = pd.DataFrame({"id": [1, 2], "name": ["a", "b"], "value": [10, 20]})
+    df2 = pd.DataFrame({"id": [1, 2], "name": ["c", "d"]})
     result = utils._merge_and_log_overwrites(df1, df2, "test", on="id")
-    
+
     # Check that the right columns exist
-    assert set(result.columns) == {'id', 'name', 'value'}
+    assert set(result.columns) == {"id", "name", "value"}
     # Check that we got df2's values for the overlapping column
-    assert list(result['name']) == ['c', 'd']
+    assert list(result["name"]) == ["c", "d"]
     # Check that we kept df1's non-overlapping column
-    assert list(result['value']) == [10, 20]
+    assert list(result["value"]) == [10, 20]
     # Check that the warning was logged
     assert len(caplog.records) == 1
     assert "test merge" in caplog.records[0].message
@@ -606,26 +597,21 @@ def test_merge_and_log_overwrites(caplog):
 
     # Test merge with multiple column conflicts
     caplog.clear()
-    df1 = pd.DataFrame({
-        'id': [1, 2],
-        'name': ['a', 'b'],
-        'value': [10, 20],
-        'status': ['ok', 'ok']
-    })
-    df2 = pd.DataFrame({
-        'id': [1, 2],
-        'name': ['c', 'd'],
-        'status': ['pending', 'done']
-    })
+    df1 = pd.DataFrame(
+        {"id": [1, 2], "name": ["a", "b"], "value": [10, 20], "status": ["ok", "ok"]}
+    )
+    df2 = pd.DataFrame(
+        {"id": [1, 2], "name": ["c", "d"], "status": ["pending", "done"]}
+    )
     result = utils._merge_and_log_overwrites(df1, df2, "test", on="id")
-    
+
     # Check that the right columns exist
-    assert set(result.columns) == {'id', 'name', 'value', 'status'}
+    assert set(result.columns) == {"id", "name", "value", "status"}
     # Check that we got df2's values for the overlapping columns
-    assert list(result['name']) == ['c', 'd']
-    assert list(result['status']) == ['pending', 'done']
+    assert list(result["name"]) == ["c", "d"]
+    assert list(result["status"]) == ["pending", "done"]
     # Check that we kept df1's non-overlapping column
-    assert list(result['value']) == [10, 20]
+    assert list(result["value"]) == [10, 20]
     # Check that the warning was logged with both column names
     assert len(caplog.records) == 1
     assert "test merge" in caplog.records[0].message
@@ -634,24 +620,18 @@ def test_merge_and_log_overwrites(caplog):
 
     # Test merge with index
     caplog.clear()
-    df1 = pd.DataFrame({
-        'name': ['a', 'b'],
-        'value': [10, 20]
-    }, index=[1, 2])
-    df2 = pd.DataFrame({
-        'name': ['c', 'd']
-    }, index=[1, 2])
+    df1 = pd.DataFrame({"name": ["a", "b"], "value": [10, 20]}, index=[1, 2])
+    df2 = pd.DataFrame({"name": ["c", "d"]}, index=[1, 2])
     result = utils._merge_and_log_overwrites(
-        df1, df2, "test", 
-        left_index=True, right_index=True
+        df1, df2, "test", left_index=True, right_index=True
     )
-    
+
     # Check that the right columns exist
-    assert set(result.columns) == {'name', 'value'}
+    assert set(result.columns) == {"name", "value"}
     # Check that we got df2's values for the overlapping column
-    assert list(result['name']) == ['c', 'd']
+    assert list(result["name"]) == ["c", "d"]
     # Check that we kept df1's non-overlapping column
-    assert list(result['value']) == [10, 20]
+    assert list(result["value"]) == [10, 20]
     # Check that the warning was logged
     assert len(caplog.records) == 1
     assert "test merge" in caplog.records[0].message

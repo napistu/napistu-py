@@ -3,4 +3,5 @@ dist
 build
 __pycache__
 
+napistu_data
 docs/source/generated/

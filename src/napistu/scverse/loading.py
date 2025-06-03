@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import logging 
+import logging
 from typing import Optional, List, Union, Set, Dict
 
 import anndata
@@ -11,7 +11,13 @@ from pydantic import BaseModel, Field, RootModel
 
 from napistu.matching import species
 from napistu.constants import ONTOLOGIES_LIST
-from napistu.scverse.constants import ADATA, ADATA_DICTLIKE_ATTRS, ADATA_IDENTITY_ATTRS, ADATA_FEATURELEVEL_ATTRS, ADATA_ARRAY_ATTRS
+from napistu.scverse.constants import (
+    ADATA,
+    ADATA_DICTLIKE_ATTRS,
+    ADATA_IDENTITY_ATTRS,
+    ADATA_FEATURELEVEL_ATTRS,
+    ADATA_ARRAY_ATTRS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +29,7 @@ def prepare_anndata_results_df(
     results_attrs: Optional[List[str]] = None,
     ontologies: Optional[Union[Set[str], Dict[str, str]]] = None,
     index_which_ontology: Optional[str] = None,
-    table_colnames: Optional[List[str]] = None
+    table_colnames: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """
     Prepare a results table from an AnnData object for use in Napistu.
@@ -68,16 +74,20 @@ def prepare_anndata_results_df(
         If table_type is not one of: "var", "varm", or "X"
         If index_which_ontology already exists in var table
     """
-    
+
     if table_type not in ADATA_FEATURELEVEL_ATTRS:
-        raise ValueError(f"table_type must be one of {ADATA_FEATURELEVEL_ATTRS}, got {table_type}")
+        raise ValueError(
+            f"table_type must be one of {ADATA_FEATURELEVEL_ATTRS}, got {table_type}"
+        )
 
     # pull out the table containing results
     raw_results_table = _load_raw_table(adata, table_type, table_name)
 
     # convert the raw results to a pd.DataFrame with rows corresponding to vars and columns
     # being attributes of interest
-    results_data_table = _select_results_attrs(adata, raw_results_table, table_type, results_attrs, table_colnames)
+    results_data_table = _select_results_attrs(
+        adata, raw_results_table, table_type, results_attrs, table_colnames
+    )
 
     # Extract and validate ontologies from var table
     var_ontologies = _extract_ontologies(adata.var, ontologies, index_which_ontology)
@@ -91,11 +101,17 @@ def prepare_anndata_results_df(
 
 def prepare_mudata_results_df(
     mdata: mudata.MuData,
-    mudata_ontologies: Union["MultiModalityOntologyConfig", Dict[str, Dict[str, Union[Optional[Union[Set[str], Dict[str, str]]], Optional[str]]]]],
+    mudata_ontologies: Union[
+        "MultiModalityOntologyConfig",
+        Dict[
+            str,
+            Dict[str, Union[Optional[Union[Set[str], Dict[str, str]]], Optional[str]]],
+        ],
+    ],
     table_type: str = ADATA.VAR,
     table_name: Optional[str] = None,
     results_attrs: Optional[List[str]] = None,
-    table_colnames: Optional[List[str]] = None
+    table_colnames: Optional[List[str]] = None,
 ) -> Dict[str, pd.DataFrame]:
     """
     Prepare results tables from a MuData object for use in Napistu, with modality-specific ontology handling.
@@ -142,7 +158,9 @@ def prepare_mudata_results_df(
         If any modality is missing from mudata_ontologies
     """
     if table_type not in ADATA_FEATURELEVEL_ATTRS:
-        raise ValueError(f"table_type must be one of {ADATA_FEATURELEVEL_ATTRS}, got {table_type}")
+        raise ValueError(
+            f"table_type must be one of {ADATA_FEATURELEVEL_ATTRS}, got {table_type}"
+        )
 
     # Convert dict config to MultiModalityOntologyConfig if needed
     if isinstance(mudata_ontologies, dict):
@@ -161,10 +179,14 @@ def prepare_mudata_results_df(
 
     # Convert the raw results to a pd.DataFrame with rows corresponding to vars and columns
     # being attributes of interest
-    results_data_table = _select_results_attrs(mdata, raw_results_table, table_type, results_attrs, table_colnames)
+    results_data_table = _select_results_attrs(
+        mdata, raw_results_table, table_type, results_attrs, table_colnames
+    )
 
     # Split results by modality
-    split_results_data_tables = _split_mdata_results_by_modality(mdata, results_data_table)
+    split_results_data_tables = _split_mdata_results_by_modality(
+        mdata, results_data_table
+    )
 
     # Extract each modality's ontology table and then merge it with
     # the modality's data table
@@ -172,18 +194,17 @@ def prepare_mudata_results_df(
     for modality in mdata.mod.keys():
         # Get ontology config for this modality
         modality_ontology_spec = mudata_ontologies[modality]
-        
+
         # Extract ontologies according to the modality's specification
         ontology_table = _extract_ontologies(
             mdata.mod[modality].var,
             modality_ontology_spec.ontologies,
-            modality_ontology_spec.index_which_ontology
+            modality_ontology_spec.index_which_ontology,
         )
-        
+
         # Combine ontologies with results
         split_results_tables[modality] = pd.concat(
-            [ontology_table, split_results_data_tables[modality]],
-            axis=1
+            [ontology_table, split_results_data_tables[modality]], axis=1
         )
 
     return split_results_tables
@@ -192,14 +213,13 @@ def prepare_mudata_results_df(
 def _load_raw_table(
     adata: Union[anndata.AnnData, mudata.MuData],
     table_type: str,
-    table_name: Optional[str] = None
+    table_name: Optional[str] = None,
 ) -> Union[pd.DataFrame, np.ndarray]:
-    
     """
     Load an AnnData table.
-    
+
     This function loads an AnnData table and returns it as a pd.DataFrame.
-    
+
     Parameters
     ----------
     adata : anndata.AnnData or mudata.MuData
@@ -214,33 +234,33 @@ def _load_raw_table(
     pd.DataFrame or np.ndarray
         The loaded table.
     """
-    
+
     valid_attrs = ADATA_DICTLIKE_ATTRS | ADATA_IDENTITY_ATTRS
     if table_type not in valid_attrs:
-        raise ValueError(f"table_type {table_type} is not a valid AnnData attribute. Valid attributes are: {valid_attrs}")
+        raise ValueError(
+            f"table_type {table_type} is not a valid AnnData attribute. Valid attributes are: {valid_attrs}"
+        )
 
     if table_type in ADATA_IDENTITY_ATTRS:
         if table_name is not None:
-            logger.debug(f"table_name {table_name} is not None, but table_type is in IDENTITY_TABLES. "
-                        f"table_name will be ignored.")
+            logger.debug(
+                f"table_name {table_name} is not None, but table_type is in IDENTITY_TABLES. "
+                f"table_name will be ignored."
+            )
         return getattr(adata, table_type)
 
     # pull out a dict-like attribute
-    return _get_table_from_dict_attr(
-        adata,
-        table_type,
-        table_name
-    )
-    
-    
+    return _get_table_from_dict_attr(adata, table_type, table_name)
+
+
 def _get_table_from_dict_attr(
     adata: Union[anndata.AnnData, mudata.MuData],
     attr_name: str,
-    table_name: Optional[str] = None
+    table_name: Optional[str] = None,
 ) -> Union[pd.DataFrame, np.ndarray]:
     """
     Get a table from a dict-like AnnData attribute (varm, layers, etc.)
-    
+
     Parameters
     ----------
     adata : anndata.AnnData or mudata.MuData
@@ -251,13 +271,13 @@ def _get_table_from_dict_attr(
         Specific table name to retrieve. If None and only one table exists,
         that table will be returned. If None and multiple tables exist,
         raises ValueError
-        
+
     Returns
     -------
     Union[pd.DataFrame, np.ndarray]
         The table data. For array-type attributes (varm, varp, X, layers),
         returns numpy array. For other attributes, returns DataFrame
-        
+
     Raises
     ------
     ValueError
@@ -268,31 +288,37 @@ def _get_table_from_dict_attr(
     """
 
     if attr_name not in ADATA_DICTLIKE_ATTRS:
-        raise ValueError(f"attr_name {attr_name} is not a dict-like AnnData attribute. Valid attributes are: {ADATA_DICTLIKE_ATTRS}")
+        raise ValueError(
+            f"attr_name {attr_name} is not a dict-like AnnData attribute. Valid attributes are: {ADATA_DICTLIKE_ATTRS}"
+        )
 
     attr_dict = getattr(adata, attr_name)
     available_tables = list(attr_dict.keys())
-    
+
     if len(available_tables) == 0:
         raise ValueError(f"No tables found in adata.{attr_name}")
     elif (len(available_tables) > 1) and (table_name is None):
-        raise ValueError(f"Multiple tables found in adata.{attr_name} and table_name is not specified. "
-                        f"Available: {available_tables}")
+        raise ValueError(
+            f"Multiple tables found in adata.{attr_name} and table_name is not specified. "
+            f"Available: {available_tables}"
+        )
     elif (len(available_tables) == 1) and (table_name is None):
         return attr_dict[available_tables[0]]
     elif table_name not in available_tables:
-        raise ValueError(f"table_name '{table_name}' not found in adata.{attr_name}. "
-                        f"Available: {available_tables}")
+        raise ValueError(
+            f"table_name '{table_name}' not found in adata.{attr_name}. "
+            f"Available: {available_tables}"
+        )
     else:
         return attr_dict[table_name]
-    
+
 
 def _select_results_attrs(
     adata: anndata.AnnData,
     raw_results_table: Union[pd.DataFrame, np.ndarray],
     table_type: str,
     results_attrs: Optional[List[str]] = None,
-    table_colnames: Optional[List[str]] = None
+    table_colnames: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """
     Select results attributes from an AnnData object.
@@ -319,17 +345,23 @@ def _select_results_attrs(
     pd.DataFrame
         A DataFrame containing the formatted results.
     """
-    logger.debug(f"_select_results_attrs called with table_type={table_type}, results_attrs={results_attrs}")
+    logger.debug(
+        f"_select_results_attrs called with table_type={table_type}, results_attrs={results_attrs}"
+    )
 
     # Validate that array-type tables are not passed as DataFrames
     if table_type in ADATA_ARRAY_ATTRS and isinstance(raw_results_table, pd.DataFrame):
-        raise ValueError(f"Table type {table_type} must be a numpy array, not a DataFrame. Got {type(raw_results_table)}")
+        raise ValueError(
+            f"Table type {table_type} must be a numpy array, not a DataFrame. Got {type(raw_results_table)}"
+        )
 
     if isinstance(raw_results_table, pd.DataFrame):
         if results_attrs is not None:
             # Get available columns for better error message
             available_attrs = raw_results_table.columns.tolist()
-            missing_attrs = [attr for attr in results_attrs if attr not in available_attrs]
+            missing_attrs = [
+                attr for attr in results_attrs if attr not in available_attrs
+            ]
             if missing_attrs:
                 raise ValueError(
                     f"The following results attributes were not found: {missing_attrs}\n"
@@ -341,14 +373,11 @@ def _select_results_attrs(
         return results_table_data
 
     # Convert sparse matrix to dense if needed
-    if hasattr(raw_results_table, 'toarray'):
+    if hasattr(raw_results_table, "toarray"):
         raw_results_table = raw_results_table.toarray()
 
     valid_attrs = _get_valid_attrs_for_feature_level_array(
-        adata,
-        table_type,
-        raw_results_table,
-        table_colnames
+        adata, table_type, raw_results_table, table_colnames
     )
 
     if results_attrs is not None:
@@ -370,21 +399,26 @@ def _select_results_attrs(
             positions = [adata.obs.index.get_loc(attr) for attr in results_attrs]
             selected_array = raw_results_table[positions, :]
 
-        results_table_data = _create_results_df(selected_array, results_attrs, adata.var.index, table_type)
+        results_table_data = _create_results_df(
+            selected_array, results_attrs, adata.var.index, table_type
+        )
     else:
-        results_table_data = _create_results_df(raw_results_table, valid_attrs, adata.var.index, table_type)
+        results_table_data = _create_results_df(
+            raw_results_table, valid_attrs, adata.var.index, table_type
+        )
 
     return results_table_data
+
 
 def _get_valid_attrs_for_feature_level_array(
     adata: anndata.AnnData,
     table_type: str,
     raw_results_table: np.ndarray,
-    table_colnames: Optional[List[str]] = None
+    table_colnames: Optional[List[str]] = None,
 ) -> list[str]:
     """
     Get valid attributes for a feature-level array.
-    
+
     Parameters
     ----------
     adata : anndata.AnnData
@@ -395,19 +429,21 @@ def _get_valid_attrs_for_feature_level_array(
         The raw results table for dimension validation
     table_colnames : Optional[List[str]]
         Column names for varm tables
-        
+
     Returns
     -------
     list[str]
         List of valid attributes for this table type
-        
+
     Raises
     ------
     ValueError
         If table_type is invalid or if table_colnames validation fails for varm tables
     """
     if table_type not in ADATA_ARRAY_ATTRS:
-        raise ValueError(f"table_type {table_type} is not a valid AnnData array attribute. Valid attributes are: {ADATA_ARRAY_ATTRS}")
+        raise ValueError(
+            f"table_type {table_type} is not a valid AnnData array attribute. Valid attributes are: {ADATA_ARRAY_ATTRS}"
+        )
 
     if table_type in [ADATA.X, ADATA.LAYERS]:
         valid_attrs = adata.obs.index.tolist()
@@ -417,20 +453,19 @@ def _get_valid_attrs_for_feature_level_array(
         if table_colnames is None:
             raise ValueError("table_colnames is required for varm tables")
         if len(table_colnames) != raw_results_table.shape[1]:
-            raise ValueError(f"table_colnames must have length {raw_results_table.shape[1]}")
+            raise ValueError(
+                f"table_colnames must have length {raw_results_table.shape[1]}"
+            )
         valid_attrs = table_colnames
 
     return valid_attrs
 
 
 def _create_results_df(
-    array: np.ndarray,
-    attrs: List[str],
-    var_index: pd.Index,
-    table_type: str
+    array: np.ndarray, attrs: List[str], var_index: pd.Index, table_type: str
 ) -> pd.DataFrame:
     """Create a DataFrame with the right orientation based on table type.
-    
+
     For varm/varp tables:
         - rows are vars (var_index)
         - columns are attrs (features/selected vars)
@@ -440,17 +475,10 @@ def _create_results_df(
         - then transpose to get vars as rows
     """
     if table_type in [ADATA.VARM, ADATA.VARP]:
-        return pd.DataFrame(
-            array,
-            index=var_index,
-            columns=attrs
-        )
+        return pd.DataFrame(array, index=var_index, columns=attrs)
     else:
-        return pd.DataFrame(
-            array,
-            index=attrs,
-            columns=var_index
-        ).T
+        return pd.DataFrame(array, index=attrs, columns=var_index).T
+
 
 def _split_mdata_results_by_modality(
     mdata: mudata.MuData,
@@ -458,14 +486,14 @@ def _split_mdata_results_by_modality(
 ) -> Dict[str, pd.DataFrame]:
     """
     Split a results table by modality and verify compatibility with var tables.
-    
+
     Parameters
     ----------
     mdata : mudata.MuData
         MuData object containing multiple modalities
     results_data_table : pd.DataFrame
         Results table with vars as rows, typically from prepare_anndata_results_df()
-        
+
     Returns
     -------
     Dict[str, pd.DataFrame]
@@ -473,7 +501,7 @@ def _split_mdata_results_by_modality(
         Each DataFrame contains just the results for that modality.
         The index of each DataFrame is guaranteed to match the corresponding
         modality's var table for later merging.
-        
+
     Raises
     ------
     ValueError
@@ -482,38 +510,38 @@ def _split_mdata_results_by_modality(
     """
     # Initialize results dictionary
     results: Dict[str, pd.DataFrame] = {}
-    
+
     # Process each modality
     for modality in mdata.mod.keys():
         # Get the var_names for this modality
         mod_vars = mdata.mod[modality].var_names
-        
+
         # Check if all modality vars exist in results
         missing_vars = set(mod_vars) - set(results_data_table.index)
         if missing_vars:
             raise ValueError(
                 f"Index mismatch in {modality}: vars {missing_vars} not found in results table"
             )
-        
+
         # Extract results for this modality
         mod_results = results_data_table.loc[mod_vars]
-        
+
         # Verify index alignment with var table
         if not mod_results.index.equals(mdata.mod[modality].var.index):
             raise ValueError(
                 f"Index mismatch in {modality}: var table and results subset have different indices"
             )
-        
+
         # Store just the results
         results[modality] = mod_results
-    
+
     return results
 
 
 def _extract_ontologies(
     var_table: pd.DataFrame,
     ontologies: Optional[Union[Set[str], Dict[str, str]]] = None,
-    index_which_ontology: Optional[str] = None
+    index_which_ontology: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Extract ontology columns from a var table, optionally including the index as an ontology.
@@ -566,13 +594,14 @@ def _extract_ontologies(
                 f"Duplicate rename values found in ontologies mapping: {duplicates}. "
                 "Each ontology must be renamed to a unique value."
             )
-        
+
         # Check for existing columns with rename values
         existing_rename_cols = set(rename_values) & set(var_table.columns)
         if existing_rename_cols:
             # Filter out cases where we're mapping a column to itself
             actual_conflicts = {
-                rename_val for src, rename_val in ontologies.items()
+                rename_val
+                for src, rename_val in ontologies.items()
                 if rename_val in existing_rename_cols and src != rename_val
             }
             if actual_conflicts:
@@ -602,19 +631,21 @@ def _extract_ontologies(
 
 class ModalityOntologyConfig(BaseModel):
     """Configuration for ontology handling in a single modality."""
+
     ontologies: Optional[Union[Set[str], Dict[str, str]]] = Field(
         description="Ontology configuration. Can be either:\n"
-                   "- None to automatically detect valid ontology columns\n"
-                   "- Set of columns to treat as ontologies\n"
-                   "- Dict mapping wide column names to ontology names"
+        "- None to automatically detect valid ontology columns\n"
+        "- Set of columns to treat as ontologies\n"
+        "- Dict mapping wide column names to ontology names"
     )
     index_which_ontology: Optional[str] = Field(
-        default=None,
-        description="If provided, extract the index as this ontology"
+        default=None, description="If provided, extract the index as this ontology"
     )
+
 
 class MultiModalityOntologyConfig(RootModel):
     """Configuration for ontology handling across multiple modalities."""
+
     root: Dict[str, ModalityOntologyConfig]
 
     def __getitem__(self, key: str) -> ModalityOntologyConfig:
@@ -624,7 +655,13 @@ class MultiModalityOntologyConfig(RootModel):
         return self.root.items()
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Dict[str, Union[Optional[Union[Set[str], Dict[str, str]]], Optional[str]]]]) -> "MultiModalityOntologyConfig":
+    def from_dict(
+        cls,
+        data: Dict[
+            str,
+            Dict[str, Union[Optional[Union[Set[str], Dict[str, str]]], Optional[str]]],
+        ],
+    ) -> "MultiModalityOntologyConfig":
         """
         Create a MultiModalityOntologyConfig from a dictionary.
 
@@ -643,10 +680,12 @@ class MultiModalityOntologyConfig(RootModel):
         MultiModalityOntologyConfig
             Validated ontology configuration
         """
-        return cls(root={
-            modality: ModalityOntologyConfig(**config)
-            for modality, config in data.items()
-        })
+        return cls(
+            root={
+                modality: ModalityOntologyConfig(**config)
+                for modality, config in data.items()
+            }
+        )
 
     def __iter__(self):
         return iter(self.root)

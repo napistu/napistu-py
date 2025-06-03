@@ -245,7 +245,9 @@ def _find_invalid_entities(
         # pull out the annotations that start with the table being evaluated
         remove_df = invalid_entities[invalid_entities["table"] == tab]
         if not isinstance(remove_df, pd.DataFrame):
-            raise TypeError(f"remove_df must be a pandas DataFrame, but got {type(remove_df).__name__}")
+            raise TypeError(
+                f"remove_df must be a pandas DataFrame, but got {type(remove_df).__name__}"
+            )
 
         invalid_remove_vars = (
             remove_df["variable"][~remove_df["variable"].isin(tab_vars)]
