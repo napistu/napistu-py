@@ -636,3 +636,45 @@ def test_merge_and_log_overwrites(caplog):
     assert len(caplog.records) == 1
     assert "test merge" in caplog.records[0].message
     assert "name" in caplog.records[0].message
+
+
+def test_matrix_to_edgelist():
+    # Test case 1: Basic functionality with numeric indices
+    matrix = np.array([[1, 2, np.nan], [np.nan, 3, 4], [5, np.nan, 6]])
+    expected_edgelist = pd.DataFrame(
+        {
+            "row": [0, 0, 1, 1, 2, 2],
+            "column": [0, 1, 1, 2, 0, 2],
+            "value": np.array([1, 2, 3, 4, 5, 6], dtype=np.float64),
+        }
+    )
+    result = utils.matrix_to_edgelist(matrix)
+    pd.testing.assert_frame_equal(result, expected_edgelist)
+
+    # Test case 2: With row and column labels
+    row_labels = ["A", "B", "C"]
+    col_labels = ["X", "Y", "Z"]
+    expected_labeled_edgelist = pd.DataFrame(
+        {
+            "row": ["A", "A", "B", "B", "C", "C"],
+            "column": ["X", "Y", "Y", "Z", "X", "Z"],
+            "value": np.array([1, 2, 3, 4, 5, 6], dtype=np.float64),
+        }
+    )
+    result_labeled = utils.matrix_to_edgelist(
+        matrix, row_labels=row_labels, col_labels=col_labels
+    )
+    pd.testing.assert_frame_equal(result_labeled, expected_labeled_edgelist)
+
+    # Test case 3: Empty matrix (all NaN)
+    empty_matrix = np.full((2, 2), np.nan)
+    empty_result = utils.matrix_to_edgelist(empty_matrix)
+    assert empty_result.empty
+
+    # Test case 4: Single value matrix
+    single_matrix = np.array([[1]])
+    expected_single = pd.DataFrame(
+        {"row": [0], "column": [0], "value": np.array([1], dtype=np.int64)}
+    )
+    result_single = utils.matrix_to_edgelist(single_matrix)
+    pd.testing.assert_frame_equal(result_single, expected_single)

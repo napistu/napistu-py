@@ -19,6 +19,7 @@ from typing import List
 from urllib.parse import urlparse
 
 import igraph as ig
+import numpy as np
 import pandas as pd
 import requests
 from napistu.constants import FILE_EXT_GZ
@@ -885,6 +886,20 @@ def format_identifiers_as_edgelist(
     )
 
     return df
+
+
+def matrix_to_edgelist(matrix, row_labels=None, col_labels=None):
+    rows, cols = np.where(~np.isnan(matrix))
+
+    edgelist = pd.DataFrame(
+        {
+            "row": rows if row_labels is None else [row_labels[i] for i in rows],
+            "column": cols if col_labels is None else [col_labels[i] for i in cols],
+            "value": matrix[rows, cols],
+        }
+    )
+
+    return edgelist
 
 
 def find_weakly_connected_subgraphs(edgelist: pd.DataFrame) -> pd.DataFrame:

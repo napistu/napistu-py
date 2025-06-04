@@ -3,9 +3,10 @@ from __future__ import annotations
 import copy
 import pytest
 import pandas as pd
-from napistu.context.filter import (
+from napistu.context.filtering import (
     filter_species_by_attribute,
     find_species_with_attribute,
+    _binarize_species_data,
 )
 
 
@@ -152,3 +153,147 @@ def test_filter_species_by_attribute(sbml_dfs_with_test_data):
     ]
 
     assert all(filtered_sbml_dfs.species_data["location"].isin(VALID_COMPARTMENTS))
+
+
+def test_binarize_species_data():
+    # Create test data with different column types
+    test_data = pd.DataFrame(
+        {
+            "bool_col": [True, False, True],
+            "binary_int": [1, 0, 1],
+            "non_binary_int": [1, 2, 3],
+            "float_col": [1.5, 2.5, 3.5],
+            "str_col": ["a", "b", "c"],
+        }
+    )
+
+    # Run the binarization
+    binary_df = _binarize_species_data(test_data)
+
+    # Check that only boolean and binary columns were kept
+    assert set(binary_df.columns) == {"bool_col", "binary_int"}
+
+    # Check that boolean was converted to int
+    assert (
+        binary_df["bool_col"].dtype == "int32" or binary_df["bool_col"].dtype == "int64"
+    )
+    assert binary_df["bool_col"].tolist() == [1, 0, 1]
+
+    # Check that binary int remained the same
+    assert binary_df["binary_int"].tolist() == [1, 0, 1]
+
+    # Test with only non-binary columns
+    non_binary_data = pd.DataFrame(
+        {
+            "non_binary_int": [1, 2, 3],
+            "float_col": [1.5, 2.5, 3.5],
+        }
+    )
+
+    # Should raise ValueError when no binary columns are found
+    with pytest.raises(ValueError, match="No binary or boolean columns found"):
+        _binarize_species_data(non_binary_data)
+
+    # Test with empty DataFrame
+    empty_data = pd.DataFrame()
+    with pytest.raises(ValueError, match="No binary or boolean columns found"):
+        _binarize_species_data(empty_data)
+
+
+def test_potential_reaction_contexts_in_evaluate_reaction_context_sufficiency():
+    """Test potential reaction contexts in evaluate_reaction_context_sufficiency()"""
+
+    reaction_w_regulators = pd.DataFrame(
+        {
+            "gene": ["A", "B", "C", "D", "E", "F", "G"],
+            "stoi": [-1, -1, 1, 1, 0, 0, 0],
+            "role": [
+                "substrate",
+                "substrate",
+                "product",
+                "product",
+                "catalyst",
+                "catalyst",
+                "activator",
+            ],
+        }
+    )
+
+    # missing substrates -> inoperable
+    result = evaluate_reaction_context_sufficiency(
+        reaction_w_regulators,
+        reaction_w_regulators.iloc[1:],  # Remove first row (slice(-1) equivalent)
+    )
+    assert result is None
+
+    # missing one enzyme -> operable
+    result = evaluate_reaction_context_sufficiency(
+        reaction_w_regulators,
+        reaction_w_regulators.drop(
+            reaction_w_regulators.index[4]
+        ),  # Remove 5th row (slice(-5) equivalent)
+    )
+    assert len(result) == 6
+
+    # missing one product -> inoperable
+    result = evaluate_reaction_context_sufficiency(
+        reaction_w_regulators,
+        reaction_w_regulators.drop(
+            reaction_w_regulators.index[2]
+        ),  # Remove 3rd row (slice(-3) equivalent)
+    )
+    assert result is None
+
+    # missing all enzymes -> inoperable
+    result = evaluate_reaction_context_sufficiency(
+        reaction_w_regulators,
+        reaction_w_regulators.iloc[
+            0:4
+        ],  # Keep only first 4 rows (slice(1:4) equivalent)
+    )
+    assert result is None
+
+    # missing regulators -> operable
+    result = evaluate_reaction_context_sufficiency(
+        reaction_w_regulators,
+        reaction_w_regulators.drop(
+            reaction_w_regulators.index[6]
+        ),  # Remove 7th row (slice(-7) equivalent)
+    )
+    assert len(result) == 6
+
+    weird_reaction_w_interactors = pd.DataFrame(
+        {
+            "gene": ["A", "B", "C"],
+            "stoi": [-1, 1, 1],
+            "role": ["interactor", "interactor", "interactor"],
+        }
+    )
+
+    # throw a warning for a weird interaction format
+    with pytest.warns(UserWarning, match="interactor"):
+        evaluate_reaction_context_sufficiency(
+            weird_reaction_w_interactors, weird_reaction_w_interactors
+        )
+
+    reaction_w_interactors = pd.DataFrame(
+        {"gene": ["A", "B"], "stoi": [-1, 1], "role": ["interactor", "interactor"]}
+    )
+
+    result = evaluate_reaction_context_sufficiency(
+        reaction_w_regulators, reaction_w_regulators.iloc[0:4]  # Keep only first 4 rows
+    )
+    assert result is None
+
+    # missing one interactor
+    result = evaluate_reaction_context_sufficiency(
+        reaction_w_interactors,
+        reaction_w_interactors.iloc[1:],  # Remove first row (slice(-1) equivalent)
+    )
+    assert result is None
+
+    # identify function looks good
+    result = evaluate_reaction_context_sufficiency(
+        reaction_w_interactors, reaction_w_interactors
+    )
+    assert len(result) == 2

@@ -1,10 +1,95 @@
 import copy
 import logging
-from typing import Union, List, Optional
+from typing import Union, List, Optional, Iterable
+
 import pandas as pd
+
 from napistu import sbml_dfs_core
+from napistu.constants import SBML_DFS, MINI_SBO_TO_NAME, SBO_NAME_TO_ROLE
 
 logger = logging.getLogger(__name__)
+
+
+def find_underspecified_reactions(
+    sbml_dfs: sbml_dfs_core.SBML_dfs, sc_ids: Iterable[str]
+) -> set[str]:
+    """
+    Find Underspecified reactions
+
+    Identity reactions which should be removed if a set of molecular species are removed
+    from the system.
+
+    Params:
+    sbml_dfs (SBML_dfs):
+        A pathway representation
+    sc_ids (list[str])
+        A list of compartmentalized species ids (sc_ids) which will be removed.
+
+    Returns:
+    underspecified_reactions (set[str]):
+        A list of reactions which should be removed because they will not occur once
+        \"sc_ids\" are removed.
+
+    """
+
+    updated_reaction_species = sbml_dfs.reaction_species.copy()
+    updated_reaction_species["new"] = ~updated_reaction_species[SBML_DFS.SC_ID].isin(
+        sc_ids
+    )
+
+    updated_reaction_species = (
+        updated_reaction_species.assign(
+            sbo_role=updated_reaction_species[SBML_DFS.SBO_TERM]
+        )
+        .replace({"sbo_role": MINI_SBO_TO_NAME})
+        .replace({"sbo_role": SBO_NAME_TO_ROLE})
+    )
+
+    reactions_with_lost_defining_members = set(
+        updated_reaction_species.query("~new")
+        .query("sbo_role == 'DEFINING'")[SBML_DFS.R_ID]
+        .tolist()
+    )
+
+    N_reactions_with_lost_defining_members = len(reactions_with_lost_defining_members)
+    if N_reactions_with_lost_defining_members > 0:
+        logger.info(
+            f"Removing {N_reactions_with_lost_defining_members} reactions which have lost at least one defining species"
+        )
+
+    # for each reaction what are the required sbo_terms?
+    reactions_with_requirements = (
+        updated_reaction_species.query("sbo_role == 'REQUIRED'")[
+            ["r_id", "sbo_term", "new"]
+        ]
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+
+    # which required members are still present after removing some entries
+    reactions_with_lost_requirements = set(
+        reactions_with_requirements.query("~new")
+        .merge(
+            reactions_with_requirements.query("new").rename(
+                {"new": "still_present"}, axis=1
+            ),
+            how="left",
+        )
+        .fillna(False)[SBML_DFS.R_ID]  # Fill boolean column with False
+        .tolist()
+    )
+
+    N_reactions_with_lost_requirements = len(reactions_with_lost_requirements)
+    if N_reactions_with_lost_requirements > 0:
+        logger.info(
+            f"Removing {N_reactions_with_lost_requirements} reactions which have lost all required members"
+        )
+
+    underspecified_reactions = reactions_with_lost_defining_members.union(
+        reactions_with_lost_requirements
+    )
+
+    return underspecified_reactions
 
 
 def filter_species_by_attribute(
@@ -47,19 +132,13 @@ def filter_species_by_attribute(
         If species_data_table is not found in sbml_dfs.species_data
         If attribute_name is not found in the species data table columns
     """
-    # Check if species_data_table exists in sbml_dfs.species_data
-    if species_data_table not in sbml_dfs.species_data:
-        raise ValueError(
-            f"species_data_table {species_data_table} not found in sbml_dfs.species_data. "
-            f"Available tables: {sbml_dfs.species_data.keys()}"
-        )
 
     # If not inplace, make a copy
     if not inplace:
         sbml_dfs = copy.deepcopy(sbml_dfs)
 
     # Get the species data
-    species_data = sbml_dfs.species_data[species_data_table]
+    species_data = sbml_dfs.select_species_data(species_data_table)
 
     # Find species that match the filter criteria (including negation)
     species_to_remove = find_species_with_attribute(
@@ -143,3 +222,29 @@ def find_species_with_attribute(
 
     # Return species that match our criteria
     return species_data[final_mask].index.tolist()
+
+
+def _binarize_species_data(species_data: pd.DataFrame) -> pd.DataFrame:
+
+    binary_series = []
+    for c in species_data.columns:
+        if species_data[c].dtype == "bool":
+            binary_series.append(species_data[c].astype(int))
+        elif species_data[c].dtype == "int64":
+            if species_data[c].isin([0, 1]).all():
+                binary_series.append(species_data[c])
+            else:
+                continue
+        else:
+            continue
+
+    if len(binary_series) == 0:
+        raise ValueError("No binary or boolean columns found")
+
+    binary_df = pd.concat(binary_series, axis=1)
+
+    if len(binary_df.columns) != len(species_data.columns):
+        left_out = set(species_data.columns) - set(binary_df.columns)
+        logger.warning(f"Some columns were not binarized: {', '.join(left_out)}")
+
+    return binary_df
