@@ -1,95 +1,14 @@
 import copy
 import logging
-from typing import Union, List, Optional, Iterable
+from typing import Union, List, Optional
 
 import pandas as pd
 
 from napistu import sbml_dfs_core
-from napistu.constants import SBML_DFS, MINI_SBO_TO_NAME, SBO_NAME_TO_ROLE
+from napistu import utils
+from napistu.constants import SBML_DFS
 
 logger = logging.getLogger(__name__)
-
-
-def find_underspecified_reactions(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, sc_ids: Iterable[str]
-) -> set[str]:
-    """
-    Find Underspecified reactions
-
-    Identity reactions which should be removed if a set of molecular species are removed
-    from the system.
-
-    Params:
-    sbml_dfs (SBML_dfs):
-        A pathway representation
-    sc_ids (list[str])
-        A list of compartmentalized species ids (sc_ids) which will be removed.
-
-    Returns:
-    underspecified_reactions (set[str]):
-        A list of reactions which should be removed because they will not occur once
-        \"sc_ids\" are removed.
-
-    """
-
-    updated_reaction_species = sbml_dfs.reaction_species.copy()
-    updated_reaction_species["new"] = ~updated_reaction_species[SBML_DFS.SC_ID].isin(
-        sc_ids
-    )
-
-    updated_reaction_species = (
-        updated_reaction_species.assign(
-            sbo_role=updated_reaction_species[SBML_DFS.SBO_TERM]
-        )
-        .replace({"sbo_role": MINI_SBO_TO_NAME})
-        .replace({"sbo_role": SBO_NAME_TO_ROLE})
-    )
-
-    reactions_with_lost_defining_members = set(
-        updated_reaction_species.query("~new")
-        .query("sbo_role == 'DEFINING'")[SBML_DFS.R_ID]
-        .tolist()
-    )
-
-    N_reactions_with_lost_defining_members = len(reactions_with_lost_defining_members)
-    if N_reactions_with_lost_defining_members > 0:
-        logger.info(
-            f"Removing {N_reactions_with_lost_defining_members} reactions which have lost at least one defining species"
-        )
-
-    # for each reaction what are the required sbo_terms?
-    reactions_with_requirements = (
-        updated_reaction_species.query("sbo_role == 'REQUIRED'")[
-            ["r_id", "sbo_term", "new"]
-        ]
-        .drop_duplicates()
-        .reset_index(drop=True)
-    )
-
-    # which required members are still present after removing some entries
-    reactions_with_lost_requirements = set(
-        reactions_with_requirements.query("~new")
-        .merge(
-            reactions_with_requirements.query("new").rename(
-                {"new": "still_present"}, axis=1
-            ),
-            how="left",
-        )
-        .fillna(False)[SBML_DFS.R_ID]  # Fill boolean column with False
-        .tolist()
-    )
-
-    N_reactions_with_lost_requirements = len(reactions_with_lost_requirements)
-    if N_reactions_with_lost_requirements > 0:
-        logger.info(
-            f"Removing {N_reactions_with_lost_requirements} reactions which have lost all required members"
-        )
-
-    underspecified_reactions = reactions_with_lost_defining_members.union(
-        reactions_with_lost_requirements
-    )
-
-    return underspecified_reactions
 
 
 def filter_species_by_attribute(
@@ -166,6 +85,31 @@ def filter_species_by_attribute(
     return None if inplace else sbml_dfs
 
 
+def filter_reactions_with_disconnected_cspecies(
+    sbml_dfs, species_data_table, inplace=False
+):
+
+    if inplace:
+        sbml_dfs = copy.deepcopy(sbml_dfs)
+
+    # find how many conditions a pair of species cooccur in
+    cooccurence_edgelist = _create_cooccurence_edgelist(sbml_dfs, species_data_table)
+
+    reactions_to_remove = _find_reactions_with_disconnected_cspecies(
+        cooccurence_edgelist, sbml_dfs
+    )
+
+    if len(reactions_to_remove) == 0:
+        logger.warning("No reactions will be pruned based on non-cooccurrence.")
+    else:
+        logger.info(
+            f"Pruning {len(reactions_to_remove)} reactions based on non-cooccurrence."
+        )
+        sbml_dfs.remove_reactions(reactions_to_remove)
+
+    return None if inplace else sbml_dfs
+
+
 def find_species_with_attribute(
     species_data: pd.DataFrame,
     attribute_name: str,
@@ -222,6 +166,118 @@ def find_species_with_attribute(
 
     # Return species that match our criteria
     return species_data[final_mask].index.tolist()
+
+
+def _find_reactions_with_disconnected_cspecies(
+    coccurrence_edgelist: pd.DataFrame,
+    sbml_dfs: Optional[sbml_dfs_core.SBML_dfs],
+    cooccurence_threshold: int = 0,  #  noqa
+) -> set:
+    """
+    Find reactions with disconnected cspecies.
+
+    This function finds reactions with disconnected cspecies based on the cooccurrence matrix.
+    Only cspecies which are DEFINING are considered because these are AND rules for reaction operability.
+    It returns the set of reaction ids with disconnected cspecies.
+
+    Parameters
+    ----------
+    coccurrence_edgelist : pd.DataFrame
+        The cooccurrence edgelist.
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The SBML_dfs object.
+    cooccurence_threshold : int
+        The threshold for cooccurrence. Values equal to or below this threshold are considered disconnected.
+
+
+    Returns
+    -------
+    set
+        The set of reaction ids with disconnected cspecies.
+
+    """
+
+    utils.match_pd_vars(
+        coccurrence_edgelist, {"s_id_1", "s_id_2", "cooccurence"}
+    ).assert_present()
+    sbml_dfs._validate_table(SBML_DFS.REACTION_SPECIES)
+    sbml_dfs._validate_table(SBML_DFS.COMPARTMENTALIZED_SPECIES)
+
+    reaction_species = sbml_dfs_core.add_sbo_role(sbml_dfs.reaction_species)
+
+    logger.info(
+        "Finding disconnected pairss of cspecies based on the zero values in the coccurrence_edgelist"
+    )
+
+    # map to cspcies
+    disconnected_cspecies = (
+        coccurrence_edgelist.query("cooccurence <= @cooccurence_threshold")
+        .merge(
+            sbml_dfs.compartmentalized_species[[SBML_DFS.S_ID]]
+            .reset_index(drop=False)
+            .rename(columns={SBML_DFS.S_ID: "s_id_1", SBML_DFS.SC_ID: "sc_id_1"}),
+            how="left",
+        )
+        .merge(
+            sbml_dfs.compartmentalized_species[[SBML_DFS.S_ID]]
+            .reset_index(drop=False)
+            .rename(columns={SBML_DFS.S_ID: "s_id_2", SBML_DFS.SC_ID: "sc_id_2"}),
+            how="left",
+        )
+    )
+
+    # remove defining attributes which don't occur since these are AND rules
+    # ignore required attributes since these are OR rules and do not require cooccurrence
+
+    defining_reaction_species = reaction_species.query("sbo_role == 'DEFINING'")[
+        [SBML_DFS.R_ID, SBML_DFS.SC_ID]
+    ].drop_duplicates()
+
+    logger.info(
+        "Finding reactions with disconnected cspecies based on the cooccurrence matrix"
+    )
+    # since any 2 pairs of cspecies being missing together would stop a reaction from operating, we can convert reaction_species to an edgelist by self-joining on reaction id
+    invalid_defining_non_cooccurring = (
+        (
+            defining_reaction_species.rename(columns={SBML_DFS.SC_ID: "sc_id_1"}).merge(
+                defining_reaction_species.rename(columns={SBML_DFS.SC_ID: "sc_id_2"}),
+                on=SBML_DFS.R_ID,
+                how="left",
+            )
+        )
+        .query("sc_id_1 != sc_id_2")
+        .merge(disconnected_cspecies, on=["sc_id_1", "sc_id_2"], how="inner")
+    )
+
+    invalid_defining_non_cooccurring_reactions = set(
+        invalid_defining_non_cooccurring[SBML_DFS.R_ID].unique()
+    )
+
+    return invalid_defining_non_cooccurring_reactions
+
+
+def _create_cooccurence_edgelist(
+    sbml_dfs: sbml_dfs_core.SBML_dfs, species_data_table: str
+):
+
+    species_data = sbml_dfs.select_species_data(species_data_table)
+
+    # select all binary columns (results in {0, 1})
+    # convert to numpy ndarray
+    binary_matrix = _binarize_species_data(species_data).to_numpy()
+
+    # x * t(x)
+    cooccurrence_matrix = binary_matrix @ binary_matrix.T
+    # convert to a binary matrix
+
+    cooccurence_edgelist = utils.matrix_to_edgelist(
+        cooccurrence_matrix,
+        row_labels=species_data.index.tolist(),
+        col_labels=species_data.index.tolist(),
+    ).rename(columns={"row": "s_id_1", "column": "s_id_2", "value": "cooccurence"})
+
+    # calculate the cooccurrence matrix
+    return cooccurence_edgelist
 
 
 def _binarize_species_data(species_data: pd.DataFrame) -> pd.DataFrame:

@@ -3,10 +3,13 @@ from __future__ import annotations
 import copy
 import pytest
 import pandas as pd
+from napistu import sbml_dfs_core
+from napistu.constants import SBML_DFS
 from napistu.context.filtering import (
     filter_species_by_attribute,
     find_species_with_attribute,
     _binarize_species_data,
+    filter_reactions_with_disconnected_cspecies,
 )
 
 
@@ -198,3 +201,67 @@ def test_binarize_species_data():
     empty_data = pd.DataFrame()
     with pytest.raises(ValueError, match="No binary or boolean columns found"):
         _binarize_species_data(empty_data)
+
+
+def test_filter_reactions_with_disconnected_cspecies(sbml_dfs):
+    # 1. Select first few reactions
+    first_reactions = list(sbml_dfs.reactions.index[:5])
+
+    # 2. Find defining species in these reactions
+    reaction_species = sbml_dfs_core.add_sbo_role(sbml_dfs.reaction_species)
+    defining_species = (
+        reaction_species[reaction_species[SBML_DFS.R_ID].isin(first_reactions)]
+        .query("sbo_role == 'DEFINING'")
+        # at most 1 record for an sc_id in a reaction (generally true anyways)
+        .groupby([SBML_DFS.R_ID, SBML_DFS.SC_ID])
+        .first()
+        .reset_index(drop=False)
+        .groupby(SBML_DFS.R_ID)
+        .head(2)  # Take 2 defining species per reaction
+    )
+
+    # 3. Get species IDs for these compartmentalized species
+    species_info = defining_species.merge(
+        sbml_dfs.compartmentalized_species[[SBML_DFS.S_ID]],
+        left_on=SBML_DFS.SC_ID,
+        right_index=True,
+    )
+
+    # Filter out reactions that have less than 2 distinct s_ids (transport reactions)
+    valid_reactions = (
+        species_info.groupby(SBML_DFS.R_ID)[SBML_DFS.S_ID]
+        .nunique()
+        .pipe(lambda x: x[x >= 2])
+        .index
+    )
+    species_info = species_info[species_info[SBML_DFS.R_ID].isin(valid_reactions)]
+
+    # 4. Create binary occurrence data where DISJOINT_S_ID is in a different comaprtment from the other top species
+    # this should result in removing disconnected_reactions from the sbml_dfs
+    DISJOINT_S_ID = species_info.value_counts("s_id").index[0]
+    disconnected_reactions = set(
+        species_info["r_id"][species_info["s_id"] == DISJOINT_S_ID].tolist()
+    )
+
+    # mock data
+    mock_species_data = pd.DataFrame({SBML_DFS.S_ID: species_info["s_id"].unique()})
+    mock_species_data["compartment_A"] = [
+        1 if s_id == DISJOINT_S_ID else 0 for s_id in mock_species_data[SBML_DFS.S_ID]
+    ]
+    mock_species_data["compartment_B"] = [
+        0 if s_id == DISJOINT_S_ID else 1 for s_id in mock_species_data[SBML_DFS.S_ID]
+    ]
+    mock_species_data.set_index(SBML_DFS.S_ID, inplace=True)
+
+    sbml_dfs.add_species_data("test_data", mock_species_data)
+
+    # Run the filter function
+    filtered_sbml_dfs = filter_reactions_with_disconnected_cspecies(
+        sbml_dfs, "test_data", inplace=False
+    )
+
+    filtered_first_reactions = [
+        r for r in first_reactions if r not in filtered_sbml_dfs.reactions.index
+    ]
+
+    assert set(filtered_first_reactions) == disconnected_reactions
