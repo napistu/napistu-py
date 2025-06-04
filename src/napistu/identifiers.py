@@ -563,16 +563,6 @@ def create_uri_url(ontology: str, identifier: str, strict: bool = True) -> str:
 
     """
 
-    # check input types
-    if not isinstance(ontology, str):
-        raise TypeError(f"ontology was an {type(ontology).__name__} and must be a str")
-    if not isinstance(identifier, str):
-        raise TypeError(
-            f"identifier was an {type(identifier).__name__} and must be a str"
-        )
-    if not isinstance(strict, bool):
-        raise TypeError(f"strict was an {type(strict).__name__} and must be a bool")
-
     # default to no id_regex
     id_regex = None
 

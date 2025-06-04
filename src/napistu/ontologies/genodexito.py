@@ -224,9 +224,14 @@ class Genodexito:
         ------
         ValueError
             If mappings don't exist or requested ontologies are invalid
+        TypeError
+            If any identifiers are not strings
+        ValueError
+            If any mapping tables contain NA values
         """
 
-        # mappings must exist
+        # mappings must exist and be valid
+        self._check_mappings()
         ontologies = self._use_mappings(ontologies)
 
         running_ids = self.mappings[ONTOLOGIES.NCBI_ENTREZ_GENE]
@@ -264,8 +269,14 @@ class Genodexito:
         ------
         ValueError
             If mappings don't exist or requested ontologies are invalid
+        TypeError
+            If any identifiers are not strings
+        ValueError
+            If any mapping tables contain NA values
         """
 
+        # mappings must exist and be valid
+        self._check_mappings()
         ontologies = self._use_mappings(ontologies)
 
         mappings_list = list()
@@ -346,6 +357,10 @@ class Genodexito:
         ------
         ValueError
             If mappings don't exist or don't contain NCBI_ENTREZ_GENE
+        TypeError
+            If any identifiers are not strings
+        ValueError
+            If any mapping tables contain NA values
         """
         if self.mappings is None:
             raise ValueError(
@@ -357,6 +372,39 @@ class Genodexito:
             raise ValueError(
                 f"Mapping tables for {self.species} do not contain {ONTOLOGIES.NCBI_ENTREZ_GENE}. Use create_mapping_tables to create new mappings."
             )
+
+        # Check that all identifiers are strings
+        for ontology, df in self.mappings.items():
+            # Check index (which should be NCBI_ENTREZ_GENE)
+            if not df.index.dtype == "object":
+                raise TypeError(
+                    f"Index of mapping table for {ontology} contains non-string values. "
+                    f"Found type: {df.index.dtype}"
+                )
+
+            # Check all columns
+            for col in df.columns:
+                if not df[col].dtype == "object":
+                    raise TypeError(
+                        f"Column {col} in mapping table for {ontology} contains non-string values. "
+                        f"Found type: {df[col].dtype}"
+                    )
+
+            # Check for NA values in index
+            if df.index.isna().any():
+                raise ValueError(
+                    f"Mapping table for {ontology} contains NA values in index (NCBI_ENTREZ_GENE). "
+                    f"Found {df.index.isna().sum()} NA values."
+                )
+
+            # Check for NA values in columns
+            na_counts = df.isna().sum()
+            if na_counts.any():
+                na_cols = na_counts[na_counts > 0].index.tolist()
+                raise ValueError(
+                    f"Mapping table for {ontology} contains NA values in columns: {na_cols}. "
+                    f"NA counts per column: {na_counts[na_cols].to_dict()}"
+                )
 
     def _use_mappings(self, ontologies: Optional[Set[str]]) -> Set[str]:
         """Validate and process ontologies for mapping operations.
@@ -377,7 +425,10 @@ class Genodexito:
             If mappings don't exist or ontologies are invalid
         """
 
-        self._check_mappings()
+        if self.mappings is None:
+            raise ValueError(
+                f"Mapping tables for {self.species} do not exist. Use create_mapping_tables to create new mappings."
+            )
 
         if ontologies is None:
             return set(self.mappings.keys())
@@ -444,6 +495,11 @@ class Genodexito:
         if not isinstance(all_entity_identifiers, pd.DataFrame):
             raise TypeError("all_entity_identifiers must be a pandas DataFrame")
 
+        logger.debug(
+            f"Initial all_entity_identifiers dtypes: {all_entity_identifiers.dtypes}"
+        )
+        logger.debug(f"Initial merged_mappings dtypes: {self.merged_mappings.dtypes}")
+
         # find entries in valid_expanded_ontologies which are already present
         # these are the entries that will be used to expand to other ontologies
         # or fill in ontologies with incomplete annotations
@@ -473,9 +529,13 @@ class Genodexito:
                     .assign(ontology=start)
                     .assign(new_ontology=end)
                 )
+                logger.debug(f"Lookup table dtypes for {start}->{end}: {lookup.dtypes}")
                 ontology_mappings.append(lookup)
 
         ontology_mappings_df = pd.concat(ontology_mappings).dropna()
+        logger.debug(
+            f"Concatenated ontology_mappings_df dtypes: {ontology_mappings_df.dtypes}"
+        )
 
         # old identifiers joined with new identifiers
 
@@ -494,6 +554,7 @@ class Genodexito:
                 IDENTIFIERS.BQB,
             ]
         ].merge(ontology_mappings_df)
+        logger.debug(f"Merged identifiers dtypes: {merged_identifiers.dtypes}")
 
         # new, possibly redundant identifiers
         new_identifiers = merged_identifiers[
@@ -504,6 +565,7 @@ class Genodexito:
                 "new_identifier": IDENTIFIERS.IDENTIFIER,
             }
         )
+        logger.debug(f"New identifiers dtypes: {new_identifiers.dtypes}")
 
         expanded_identifiers_df = (
             pd.concat(
@@ -526,6 +588,9 @@ class Genodexito:
             .first()
             .reset_index()
             .set_index(table_pk_var)
+        )
+        logger.debug(
+            f"Final expanded_identifiers_df dtypes: {expanded_identifiers_df.dtypes}"
         )
 
         # create a dictionary of new Identifiers objects

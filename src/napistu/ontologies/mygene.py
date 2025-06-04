@@ -153,7 +153,7 @@ def _format_mygene_fields(mappings: Set[str]) -> Set[str]:
     Returns
     -------
     Set[str]
-        Set of valid MyGene.info field names
+        Set of valid MyGene.info field names including NCBI_ENTREZ_GENE
 
     Raises
     ------
@@ -172,10 +172,9 @@ def _format_mygene_fields(mappings: Set[str]) -> Set[str]:
         f"Creating mapping tables from entrez genes to/from {', '.join(mappings)}"
     )
 
-    # Get all requested MyGene fields + entrez whether requested or not
-    mygene_fields = {MYGENE_DEFS.NCBI_ENTREZ_GENE} | {
-        NAPISTU_TO_MYGENE_FIELDS[ontology] for ontology in mappings
-    }
+    # Convert ontologies to MyGene fields and ensure NCBI_ENTREZ_GENE is included
+    mygene_fields = {NAPISTU_TO_MYGENE_FIELDS[ontology] for ontology in mappings}
+    mygene_fields.add(MYGENE_DEFS.NCBI_ENTREZ_GENE)
 
     return mygene_fields
 

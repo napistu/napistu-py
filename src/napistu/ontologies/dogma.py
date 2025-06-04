@@ -146,7 +146,11 @@ def _connect_dogmatic_mappings(
     entrez_clusters = protein_mappings_w_clusters[
         [ONTOLOGIES.NCBI_ENTREZ_GENE, "cluster"]
     ].drop_duplicates()
-    other_ontologies = INTERCONVERTIBLE_GENIC_ONTOLOGIES.difference(set(PROTEIN_ONTOLOGIES))
+    # check for the other ontologies aside from proteins and entrez (since that's in the index)
+    other_ontologies = INTERCONVERTIBLE_GENIC_ONTOLOGIES.difference(
+        set(PROTEIN_ONTOLOGIES)
+    )
+    other_ontologies.discard(ONTOLOGIES.NCBI_ENTREZ_GENE)
 
     genodexito.stack_mappings(ontologies=other_ontologies)
     other_mappings = genodexito.stacked_mappings
