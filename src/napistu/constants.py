@@ -288,26 +288,30 @@ MINI_SBO_NAME_TO_POLARITY = {
 # affect whether a reaction can occur
 # for example, if I remove any substrate a reaction won't occur
 # but I would have to remove all catalysts for it to not occur
+SBO_ROLES_DEFS = SimpleNamespace(
+    DEFINING="DEFINING", REQUIRED="REQUIRED", OPTIONAL="OPTIONAL", SBO_ROLE="sbo_role"
+)
+
 SBO_NAME_TO_ROLE = {
-    SBOTERM_NAMES.REACTANT: "DEFINING",
-    SBOTERM_NAMES.PRODUCT: "DEFINING",
-    SBOTERM_NAMES.INTERACTOR: "DEFINING",
-    SBOTERM_NAMES.CATALYST: "REQUIRED",
-    SBOTERM_NAMES.INHIBITOR: "OPTIONAL",
-    SBOTERM_NAMES.STIMULATOR: "OPTIONAL",
-    SBOTERM_NAMES.MODIFIER: "OPTIONAL",
+    SBOTERM_NAMES.REACTANT: SBO_ROLES_DEFS.DEFINING,
+    SBOTERM_NAMES.PRODUCT: SBO_ROLES_DEFS.DEFINING,
+    SBOTERM_NAMES.INTERACTOR: SBO_ROLES_DEFS.DEFINING,
+    SBOTERM_NAMES.CATALYST: SBO_ROLES_DEFS.REQUIRED,
+    SBOTERM_NAMES.INHIBITOR: SBO_ROLES_DEFS.OPTIONAL,
+    SBOTERM_NAMES.STIMULATOR: SBO_ROLES_DEFS.OPTIONAL,
+    SBOTERM_NAMES.MODIFIER: SBO_ROLES_DEFS.OPTIONAL,
 }
 
 # see also https://github.com/calico/netcontextr/blob/main/R/reactionTrimmingFunctions.R
 VALID_SBO_ROLES = (
     # there is a direct correspondence between the set of defining entries and the identity of a reaction
     # e.g., the stoichiometery of a metabolic reaction or the members of a protein-protein interaction
-    "DEFINING",
+    SBO_ROLES_DEFS.DEFINING,
     # 1+ entries are needed if entries were initially defined. i.e., reactions which require a catalyst
     # would no longer exist if the catalyst was removed, but many reactions do not require a catalyst.
-    "REQUIRED",
+    SBO_ROLES_DEFS.REQUIRED,
     # 0+ entries. optional species can be added or removed to a reaction without changing its identity
-    "OPTIONAL",
+    SBO_ROLES_DEFS.OPTIONAL,
 )
 
 # specifying weighting schemes schema

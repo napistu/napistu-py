@@ -10,7 +10,7 @@ from napistu.ingestion import sbml
 from napistu.modify import pathwayannot
 
 from napistu import identifiers as napistu_identifiers
-from napistu.constants import SBML_DFS
+from napistu.constants import SBML_DFS, SBOTERM_NAMES
 from napistu.sbml_dfs_core import SBML_dfs
 
 
@@ -369,3 +369,88 @@ def test_get_identifiers_handles_missing_values():
     assert result.shape[0] == 0 or all(
         result[SBML_DFS.S_ID] == "s1"
     ), "Only Identifiers objects should be returned."
+
+
+def test_find_underspecified_reactions():
+
+    reaction_w_regulators = pd.DataFrame(
+        {
+            SBML_DFS.SC_ID: ["A", "B", "C", "D", "E", "F", "G"],
+            SBML_DFS.STOICHIOMETRY: [-1, -1, 1, 1, 0, 0, 0],
+            SBML_DFS.SBO_TERM: [
+                SBOTERM_NAMES.REACTANT,
+                SBOTERM_NAMES.REACTANT,
+                SBOTERM_NAMES.PRODUCT,
+                SBOTERM_NAMES.PRODUCT,
+                SBOTERM_NAMES.CATALYST,
+                SBOTERM_NAMES.CATALYST,
+                SBOTERM_NAMES.STIMULATOR,
+            ],
+        }
+    ).assign(r_id="bar")
+    reaction_w_regulators[SBML_DFS.RSC_ID] = [
+        f"rsc_{i}" for i in range(len(reaction_w_regulators))
+    ]
+    reaction_w_regulators.set_index(SBML_DFS.RSC_ID, inplace=True)
+    reaction_w_regulators = sbml_dfs_core.add_sbo_role(reaction_w_regulators)
+
+    reaction_w_interactors = pd.DataFrame(
+        {
+            SBML_DFS.SC_ID: ["A", "B"],
+            SBML_DFS.STOICHIOMETRY: [-1, 1],
+            SBML_DFS.SBO_TERM: [SBOTERM_NAMES.REACTANT, SBOTERM_NAMES.REACTANT],
+        }
+    ).assign(r_id="baz")
+    reaction_w_interactors[SBML_DFS.RSC_ID] = [
+        f"rsc_{i}" for i in range(len(reaction_w_interactors))
+    ]
+    reaction_w_interactors.set_index(SBML_DFS.RSC_ID, inplace=True)
+    reaction_w_interactors = sbml_dfs_core.add_sbo_role(reaction_w_interactors)
+
+    working_reactions = reaction_w_regulators.copy()
+    working_reactions["new"] = True
+    working_reactions.loc["rsc_0", "new"] = False
+    working_reactions
+    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
+    assert result == {"bar"}
+
+    # missing one enzyme -> operable
+    working_reactions = reaction_w_regulators.copy()
+    working_reactions["new"] = True
+    working_reactions.loc["rsc_4", "new"] = False
+    working_reactions
+    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
+    assert result == set()
+
+    # missing one product -> inoperable
+    working_reactions = reaction_w_regulators.copy()
+    working_reactions["new"] = True
+    working_reactions.loc["rsc_2", "new"] = False
+    working_reactions
+    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
+    assert result == {"bar"}
+
+    # missing all enzymes -> inoperable
+    working_reactions = reaction_w_regulators.copy()
+    working_reactions["new"] = True
+    working_reactions.loc["rsc_4", "new"] = False
+    working_reactions.loc["rsc_5", "new"] = False
+    working_reactions
+    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
+    assert result == {"bar"}
+
+    # missing regulators -> operable
+    working_reactions = reaction_w_regulators.copy()
+    working_reactions["new"] = True
+    working_reactions.loc["rsc_6", "new"] = False
+    working_reactions
+    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
+    assert result == set()
+
+    # remove an interactor
+    working_reactions = reaction_w_interactors.copy()
+    working_reactions["new"] = True
+    working_reactions.loc["rsc_0", "new"] = False
+    working_reactions
+    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
+    assert result == {"baz"}

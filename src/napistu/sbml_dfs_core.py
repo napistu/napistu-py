@@ -31,6 +31,7 @@ from napistu.constants import MINI_SBO_TO_NAME
 from napistu.constants import ONTOLOGIES
 from napistu.constants import SBO_NAME_TO_ROLE
 from napistu.constants import SBOTERM_NAMES
+from napistu.constants import SBO_ROLES_DEFS
 from napistu.constants import CHARACTERISTIC_COMPLEX_ONTOLOGIES
 from napistu.ingestion import sbml
 from fs import open_fs
@@ -675,7 +676,7 @@ class SBML_dfs:
         """
 
         # find reactions which should be totally removed since they are losing critical species
-        removed_reactions = find_underspecified_reactions(self, sc_ids)
+        removed_reactions = _find_underspecified_reactions_by_scids(self, sc_ids)
         self.remove_reactions(removed_reactions)
 
         self._remove_compartmentalized_species(sc_ids)
@@ -2327,7 +2328,95 @@ def stub_ids(ids):
         return pd.DataFrame(ids)
 
 
+def add_sbo_role(reaction_species: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add an sbo_role column to the reaction_species table.
+
+    The sbo_role column is a string column that contains the SBO role of the reaction species.
+    The values in the sbo_role column are taken from the sbo_term column.
+
+    The sbo_role column is added to the reaction_species table by mapping the sbo_term column to the SBO_NAME_TO_ROLE dictionary.
+    """
+
+    validate_sbml_dfs_table(reaction_species, SBML_DFS.REACTION_SPECIES)
+
+    reaction_species = (
+        reaction_species.assign(sbo_role=reaction_species[SBML_DFS.SBO_TERM])
+        .replace({SBO_ROLES_DEFS.SBO_ROLE: MINI_SBO_TO_NAME})
+        .replace({SBO_ROLES_DEFS.SBO_ROLE: SBO_NAME_TO_ROLE})
+    )
+
+    undefined_roles = set(reaction_species[SBO_ROLES_DEFS.SBO_ROLE].unique()) - set(
+        SBO_NAME_TO_ROLE.values()
+    )
+    if len(undefined_roles) > 0:
+        logger.warning(
+            f"The following SBO roles are not defined: {undefined_roles}. They will be treated as {SBO_ROLES_DEFS.OPTIONAL} when determining reaction operability."
+        )
+        mask = reaction_species[SBO_ROLES_DEFS.SBO_ROLE].isin(undefined_roles)
+        reaction_species.loc[mask, SBO_ROLES_DEFS.SBO_ROLE] = SBO_ROLES_DEFS.OPTIONAL
+
+    return reaction_species
+
+
 def find_underspecified_reactions(
+    reaction_species_w_roles: pd.DataFrame,
+) -> pd.DataFrame:
+
+    # check that both sbo_role and "new" are present
+    if SBO_ROLES_DEFS.SBO_ROLE not in reaction_species_w_roles.columns:
+        raise ValueError(
+            "The sbo_role column is not present in the reaction_species_w_roles table. Please call add_sbo_role() first."
+        )
+    if "new" not in reaction_species_w_roles.columns:
+        raise ValueError(
+            "The new column is not present in the reaction_species_w_roles table. This should indicate what cspecies would be preserved in the reaction should it be preserved."
+        )
+    # check that new is a boolean column
+    if reaction_species_w_roles["new"].dtype != bool:
+        raise ValueError(
+            "The new column is not a boolean column. Please ensure that the new column is a boolean column. This should indicate what cspecies would be preserved in the reaction should it be preserved."
+        )
+
+    reactions_with_lost_defining_members = set(
+        reaction_species_w_roles.query("~new")
+        .query("sbo_role == 'DEFINING'")[SBML_DFS.R_ID]
+        .tolist()
+    )
+
+    N_reactions_with_lost_defining_members = len(reactions_with_lost_defining_members)
+    if N_reactions_with_lost_defining_members > 0:
+        logger.info(
+            f"Removing {N_reactions_with_lost_defining_members} reactions which have lost at least one defining species"
+        )
+
+    # find the cases where all "new" values for a given (r_id, sbo_term) are False
+    reactions_with_lost_requirements = set(
+        reaction_species_w_roles
+        # drop already filtered reactions
+        .query("r_id not in @reactions_with_lost_defining_members")
+        .query("sbo_role == 'REQUIRED'")
+        # which entries which have some required attribute have all False values for that attribute
+        .groupby([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
+        .agg({"new": "any"})
+        .query("new == False")
+        .index.get_level_values(SBML_DFS.R_ID)
+    )
+
+    N_reactions_with_lost_requirements = len(reactions_with_lost_requirements)
+    if N_reactions_with_lost_requirements > 0:
+        logger.info(
+            f"Removing {N_reactions_with_lost_requirements} reactions which have lost all required members"
+        )
+
+    underspecified_reactions = reactions_with_lost_defining_members.union(
+        reactions_with_lost_requirements
+    )
+
+    return underspecified_reactions
+
+
+def _find_underspecified_reactions_by_scids(
     sbml_dfs: SBML_dfs, sc_ids: Iterable[str]
 ) -> set[str]:
     """
@@ -2354,57 +2443,8 @@ def find_underspecified_reactions(
         sc_ids
     )
 
-    updated_reaction_species = (
-        updated_reaction_species.assign(
-            sbo_role=updated_reaction_species[SBML_DFS.SBO_TERM]
-        )
-        .replace({"sbo_role": MINI_SBO_TO_NAME})
-        .replace({"sbo_role": SBO_NAME_TO_ROLE})
-    )
-
-    reactions_with_lost_defining_members = set(
-        updated_reaction_species.query("~new")
-        .query("sbo_role == 'DEFINING'")[SBML_DFS.R_ID]
-        .tolist()
-    )
-
-    N_reactions_with_lost_defining_members = len(reactions_with_lost_defining_members)
-    if N_reactions_with_lost_defining_members > 0:
-        logger.info(
-            f"Removing {N_reactions_with_lost_defining_members} reactions which have lost at least one defining species"
-        )
-
-    # for each reaction what are the required sbo_terms?
-    reactions_with_requirements = (
-        updated_reaction_species.query("sbo_role == 'REQUIRED'")[
-            ["r_id", "sbo_term", "new"]
-        ]
-        .drop_duplicates()
-        .reset_index(drop=True)
-    )
-
-    # which required members are still present after removing some entries
-    reactions_with_lost_requirements = set(
-        reactions_with_requirements.query("~new")
-        .merge(
-            reactions_with_requirements.query("new").rename(
-                {"new": "still_present"}, axis=1
-            ),
-            how="left",
-        )
-        .fillna(False)[SBML_DFS.R_ID]  # Fill boolean column with False
-        .tolist()
-    )
-
-    N_reactions_with_lost_requirements = len(reactions_with_lost_requirements)
-    if N_reactions_with_lost_requirements > 0:
-        logger.info(
-            f"Removing {N_reactions_with_lost_requirements} reactions which have lost all required members"
-        )
-
-    underspecified_reactions = reactions_with_lost_defining_members.union(
-        reactions_with_lost_requirements
-    )
+    updated_reaction_species = add_sbo_role(updated_reaction_species)
+    underspecified_reactions = find_underspecified_reactions(updated_reaction_species)
 
     return underspecified_reactions
 
