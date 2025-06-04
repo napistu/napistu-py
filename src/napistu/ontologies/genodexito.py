@@ -495,11 +495,6 @@ class Genodexito:
         if not isinstance(all_entity_identifiers, pd.DataFrame):
             raise TypeError("all_entity_identifiers must be a pandas DataFrame")
 
-        logger.debug(
-            f"Initial all_entity_identifiers dtypes: {all_entity_identifiers.dtypes}"
-        )
-        logger.debug(f"Initial merged_mappings dtypes: {self.merged_mappings.dtypes}")
-
         # find entries in valid_expanded_ontologies which are already present
         # these are the entries that will be used to expand to other ontologies
         # or fill in ontologies with incomplete annotations
@@ -529,13 +524,10 @@ class Genodexito:
                     .assign(ontology=start)
                     .assign(new_ontology=end)
                 )
-                logger.debug(f"Lookup table dtypes for {start}->{end}: {lookup.dtypes}")
+
                 ontology_mappings.append(lookup)
 
         ontology_mappings_df = pd.concat(ontology_mappings).dropna()
-        logger.debug(
-            f"Concatenated ontology_mappings_df dtypes: {ontology_mappings_df.dtypes}"
-        )
 
         # old identifiers joined with new identifiers
 
@@ -554,7 +546,6 @@ class Genodexito:
                 IDENTIFIERS.BQB,
             ]
         ].merge(ontology_mappings_df)
-        logger.debug(f"Merged identifiers dtypes: {merged_identifiers.dtypes}")
 
         # new, possibly redundant identifiers
         new_identifiers = merged_identifiers[
@@ -565,7 +556,6 @@ class Genodexito:
                 "new_identifier": IDENTIFIERS.IDENTIFIER,
             }
         )
-        logger.debug(f"New identifiers dtypes: {new_identifiers.dtypes}")
 
         expanded_identifiers_df = (
             pd.concat(
@@ -588,9 +578,6 @@ class Genodexito:
             .first()
             .reset_index()
             .set_index(table_pk_var)
-        )
-        logger.debug(
-            f"Final expanded_identifiers_df dtypes: {expanded_identifiers_df.dtypes}"
         )
 
         # create a dictionary of new Identifiers objects

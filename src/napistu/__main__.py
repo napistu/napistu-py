@@ -30,11 +30,12 @@ from napistu.modify import uncompartmentalize
 from napistu.network import net_create
 from napistu.network import net_utils
 from napistu.network import precompute
+from napistu.ontologies.genodexito import Genodexito
+from napistu.ontologies import dogma
 from napistu.rpy2 import has_rpy2
 from fs import open_fs
 
 if has_rpy2:
-    from napistu.rpy2 import rids
     from napistu.rpy2 import netcontextr, callr
 
 logger = logging.getLogger(napistu.__name__)
@@ -417,31 +418,39 @@ def apply_manual_curations(model_uri: str, curation_dir: str, output_model_uri: 
 
 
 @refine.command(name="expand_identifiers")
-@click.argument("model_uri", type=str)
+@click.argument("sbml_dfs_uri", type=str)
 @click.argument("output_model_uri", type=str)
-@click.option(
-    "--id-type",
-    "-u",
-    type=click.Choice(["species", "compartments", "reactions"]),
-    default="species",
-)
 @click.option("--species", "-s", default="Homo sapiens", type=str)
 @click.option(
     "--ontologies", "-o", multiple=True, type=str, help="Ontologies to add or complete"
 )
+@click.option(
+    "--preferred_method",
+    "-p",
+    default="bioconductor",
+    type=str,
+    help="Preferred method to use for identifier expansion",
+)
+@click.option(
+    "--allow_fallback",
+    "-a",
+    default=True,
+    type=bool,
+    help="Allow fallback to other methods if preferred method fails",
+)
 def expand_identifiers(
-    model_uri: str,
+    sbml_dfs_uri: str,
     output_model_uri: str,
-    id_type: str,
     species: str,
     ontologies: list[str],
+    preferred_method: str,
+    allow_fallback: bool,
 ):
     """Expand identifiers of a model
 
     Args:
-        model_uri (str): uri of model in sbml dfs format
+        sbml_dfs_uri (str): uri of model in sbml dfs format
         output_model_uri (str): output uri of model in sbml dfs format
-        id_type (str): identifier type, one of: species, compartments, reactions
         species (str): Species to use
         ontologies (list[str]): ontologies to add or update
 
@@ -449,20 +458,41 @@ def expand_identifiers(
     > cpr refine expand_identifiers gs://<uri> ./test.pickle -o ensembl_gene
     """
 
-    model: sbml.SBML_dfs = utils.load_pickle(model_uri)  # type: ignore
+    sbml_dfs: sbml.SBML_dfs = utils.load_pickle(sbml_dfs_uri)  # type: ignore
     if len(ontologies) == 0:
         raise ValueError("No ontologies to expand specified.")
-    expanded_ids = rids.expand_identifiers(model, id_type, species, ontologies)
-    rids.update_expanded_identifiers(model, id_type, expanded_ids)
-    utils.save_pickle(output_model_uri, model)
+
+    Genodexito(
+        species=species,
+        preferred_method=preferred_method,
+        allow_fallback=allow_fallback,
+    ).expand_sbml_dfs_ids(sbml_dfs, ontologies=ontologies)
+
+    utils.save_pickle(output_model_uri, sbml_dfs)
 
 
 @integrate.command(name="dogmatic_scaffold")
 @click.argument("output_model_uri", type=str)
 @click.option("--species", "-s", default="Homo sapiens", type=str)
+@click.option(
+    "--preferred_method",
+    "-p",
+    default="bioconductor",
+    type=str,
+    help="Preferred method to use for identifier expansion",
+)
+@click.option(
+    "--allow_fallback",
+    "-a",
+    default=True,
+    type=bool,
+    help="Allow fallback to other methods if preferred method fails",
+)
 def dogmatic_scaffold(
     output_model_uri: str,
     species: str,
+    preferred_method: str,
+    allow_fallback: bool,
 ):
     """Dogmatic Scaffold
 
@@ -474,7 +504,12 @@ def dogmatic_scaffold(
     > cpr integrate dogmatic_scaffold ./test.pickle
     """
 
-    dogmatic_sbml_dfs = rids.create_dogmatic_sbml_dfs(species)
+    dogmatic_sbml_dfs = dogma.create_dogmatic_sbml_dfs(
+        species=species,
+        preferred_method=preferred_method,
+        allow_fallback=allow_fallback,
+    )
+
     utils.save_pickle(output_model_uri, dogmatic_sbml_dfs)
 
 

@@ -61,14 +61,15 @@ def load_and_clean_hpa_data(hpa_data_path: str) -> pd.DataFrame:
     -------
     pd.DataFrame
         DataFrame with genes as rows and GO terms as columns. Each cell
-        is a boolean indicating whether that gene (row) is found in that
+        is a binary value (0 or 1) indicating whether that gene (row) is found in that
         compartment (column). Genes with no compartment annotations are filtered out.
 
     Notes
     -----
     This function loads subcellular localization data from the Human Protein Atlas
     and creates a binary matrix where rows are genes and columns are GO terms,
-    with True indicating that a gene is localized to that compartment.
+    with 1 indicating that a gene is localized to that compartment and 0 indicating
+    it is not.
 
     The function filters out genes that have no compartment annotations and logs
     information about the number of genes filtered and the final matrix dimensions.
@@ -122,7 +123,7 @@ def load_and_clean_hpa_data(hpa_data_path: str) -> pd.DataFrame:
 
     localization_matrix = pd.crosstab(
         gene_go_df[ONTOLOGIES.ENSEMBL_GENE], gene_go_df[ONTOLOGIES.GO]
-    ).astype(bool)
+    ).astype(int)
 
     # Log number of genes without compartments that were filtered
     n_total_genes = len(

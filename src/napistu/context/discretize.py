@@ -32,7 +32,7 @@ def discretize_expression_data(
     min_row_sum: int, optional
         The minimum row sum to use for filtering constituatively un-expressed genes
     zfpm_threshold: float, optional
-        The zFPKM threshold to use for discretization. Samples with zFPKM values below this threshold are considered as unexpressed in the sample/condition..
+        The zFPKM threshold to use for discretization. Samples with zFPKM values below this threshold are considered as unexpressed (0) in the sample/condition.
     min_peakheight: float, optional
         The minimum peak height to use for peak detection
     min_peakdistance: int, optional
@@ -45,7 +45,7 @@ def discretize_expression_data(
     Returns
     -------
     tuple of pandas DataFrames
-        A tuple of two pandas DataFrames. The first DataFrame contains the zFPKM-transformed expression data with the metadata attributes merged on the left. The second DataFrame contains the expression data with the is_expressed mask merged on the left.
+        A tuple of two pandas DataFrames. The first DataFrame contains the zFPKM-transformed expression data with the metadata attributes merged on the left. The second DataFrame contains the expression data with binary values (0 for unexpressed, 1 for expressed) merged on the left.
 
     """
 
@@ -90,7 +90,7 @@ def discretize_expression_data(
         verbose=verbose,
     )
 
-    is_expressed = zfpkm_df > zfpm_threshold
+    is_expressed = (zfpkm_df > zfpm_threshold).astype(int)
     n_expressed = sum(is_expressed.values.flatten())
     expression_fraction = round(n_expressed / zfpkm_df.size, 3)
     logger.info(f"Expression fraction: {expression_fraction}")
