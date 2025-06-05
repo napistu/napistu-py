@@ -462,7 +462,7 @@ def _identify_species_needing_transport_reactions(
     )
 
     # create a directed graph
-    directed_graph = net_create.create_cpr_graph(
+    directed_graph = net_create.create_napistu_graph(
         sbml_dfs, directed=True, graph_type="bipartite"
     )
 

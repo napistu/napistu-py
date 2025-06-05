@@ -17,7 +17,7 @@ def test_safe_fill():
     ]
 
 
-def test_cpr_graph_to_pandas_dfs():
+def test_napistu_graph_to_pandas_dfs():
     graph_data = [
         (0, 1),
         (0, 2),
@@ -31,7 +31,7 @@ def test_cpr_graph_to_pandas_dfs():
     ]
 
     g = ig.Graph(graph_data, directed=True)
-    vs, es = net_utils.cpr_graph_to_pandas_dfs(g)
+    vs, es = net_utils.napistu_graph_to_pandas_dfs(g)
 
     assert all(vs["index"] == list(range(0, 7)))
     assert (
@@ -44,17 +44,19 @@ def test_cpr_graph_to_pandas_dfs():
 
 def test_validate_graph_attributes(sbml_dfs):
 
-    cpr_graph = net_create.process_cpr_graph(
+    napistu_graph = net_create.process_napistu_graph(
         sbml_dfs, directed=True, weighting_strategy="topology"
     )
 
     assert (
-        net_utils._validate_edge_attributes(cpr_graph, ["weights", "upstream_weights"])
+        net_utils._validate_edge_attributes(
+            napistu_graph, ["weights", "upstream_weights"]
+        )
         is None
     )
-    assert net_utils._validate_vertex_attributes(cpr_graph, "node_type") is None
+    assert net_utils._validate_vertex_attributes(napistu_graph, "node_type") is None
     with pytest.raises(ValueError):
-        net_utils._validate_vertex_attributes(cpr_graph, "baz")
+        net_utils._validate_vertex_attributes(napistu_graph, "baz")
 
 
 def test_pluck_entity_data_species_identity(sbml_dfs):
@@ -142,7 +144,7 @@ def test_pluck_entity_data_empty_species_dict(sbml_dfs):
 
 if __name__ == "__main__":
     test_safe_fill()
-    test_cpr_graph_to_pandas_dfs()
+    test_napistu_graph_to_pandas_dfs()
     test_validate_graph_attributes()
     test_pluck_entity_data_species_identity()
     test_pluck_entity_data_missing_species_key()

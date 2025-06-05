@@ -42,7 +42,7 @@ def test_edgelist_to_pathway_species(sbml_dfs):
 
 def test_direct_and_indirect_mechanism_matching(sbml_dfs_glucose_metabolism):
 
-    cpr_graph = net_create.process_cpr_graph(sbml_dfs_glucose_metabolism)
+    napistu_graph = net_create.process_napistu_graph(sbml_dfs_glucose_metabolism)
 
     edgelist = pd.DataFrame(
         [
@@ -80,7 +80,7 @@ def test_direct_and_indirect_mechanism_matching(sbml_dfs_glucose_metabolism):
         formatted_edgelist=edgelist,
         sbml_dfs=sbml_dfs_glucose_metabolism,
         species_identifiers=species_identifiers,
-        cpr_graph=cpr_graph,
+        napistu_graph=napistu_graph,
         ontologies={"chebi"},
         precomputed_distances=None,
         max_path_length=10,
@@ -90,14 +90,14 @@ def test_direct_and_indirect_mechanism_matching(sbml_dfs_glucose_metabolism):
 
     # confirm that we get the same thing even when using precomputed distances
     precomputed_distances = precompute.precompute_distances(
-        cpr_graph, weights_vars=["weights"]
+        napistu_graph, weights_vars=["weights"]
     )
 
     indirect_interactions_w_precompute = filter_to_indirect_mechanistic_interactions(
         formatted_edgelist=edgelist,
         sbml_dfs=sbml_dfs_glucose_metabolism,
         species_identifiers=species_identifiers,
-        cpr_graph=cpr_graph,
+        napistu_graph=napistu_graph,
         ontologies={"chebi"},
         precomputed_distances=precomputed_distances,
         max_path_length=10,

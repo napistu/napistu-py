@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def find_shortest_reaction_paths(
-    cpr_graph: ig.Graph,
+    napistu_graph: ig.Graph,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     origin: str,
     dest: str | list,
@@ -31,7 +31,7 @@ def find_shortest_reaction_paths(
 
     Parameters
     ----------
-    cpr_graph : igraph.Graph
+    napistu_graph : igraph.Graph
         A bipartite network connecting molecular species and reactions
     sbml_dfs : sbml_dfs_core.SBML_dfs
         A model formed by aggregating pathways
@@ -63,7 +63,7 @@ def find_shortest_reaction_paths(
         # igraph throws warnings for each pair of unconnected species
         warnings.simplefilter("ignore")
 
-        shortest_paths = cpr_graph.get_all_shortest_paths(
+        shortest_paths = napistu_graph.get_all_shortest_paths(
             origin, to=dest, weights=weight_var
         )
 
@@ -75,24 +75,24 @@ def find_shortest_reaction_paths(
         # igraph throws warnings for each pair of unconnected species
         warnings.simplefilter("ignore")
 
-        shortest_paths = cpr_graph.get_all_shortest_paths(
+        shortest_paths = napistu_graph.get_all_shortest_paths(
             origin, to=dest, weights=weight_var
         )
 
     # summarize the graph which is being evaluated
-    cpr_graph_names = [v.attributes()["name"] for v in cpr_graph.vs]
+    napistu_graph_names = [v.attributes()["name"] for v in napistu_graph.vs]
 
-    cpr_graph_edges = pd.DataFrame(
+    napistu_graph_edges = pd.DataFrame(
         {
-            "from": cpr_graph.es.get_attribute_values("from"),
-            "to": cpr_graph.es.get_attribute_values("to"),
-            "weights": cpr_graph.es.get_attribute_values(weight_var),
-            "sbo_term": cpr_graph.es.get_attribute_values("sbo_term"),
-            "direction": cpr_graph.es.get_attribute_values("direction"),
+            "from": napistu_graph.es.get_attribute_values("from"),
+            "to": napistu_graph.es.get_attribute_values("to"),
+            "weights": napistu_graph.es.get_attribute_values(weight_var),
+            "sbo_term": napistu_graph.es.get_attribute_values("sbo_term"),
+            "direction": napistu_graph.es.get_attribute_values("direction"),
         }
     )
 
-    directed = cpr_graph.is_directed()
+    directed = napistu_graph.is_directed()
 
     # format shortest paths
     # summaries of nodes
@@ -103,7 +103,7 @@ def find_shortest_reaction_paths(
     entry = 0
     for path in shortest_paths:
         path_df = (
-            pd.DataFrame({"node": [cpr_graph_names[x] for x in path]})
+            pd.DataFrame({"node": [napistu_graph_names[x] for x in path]})
             .reset_index()
             .rename(columns={"index": "step"})
             .assign(path=entry)
@@ -119,7 +119,7 @@ def find_shortest_reaction_paths(
 
         if directed:
             path_edges = path_edges.merge(
-                cpr_graph_edges,
+                napistu_graph_edges,
                 left_on=["from", "to"],
                 right_on=["from", "to"],
             )
@@ -148,7 +148,7 @@ def find_shortest_reaction_paths(
                     ]
                 )
                 .merge(
-                    cpr_graph_edges,
+                    napistu_graph_edges,
                     left_on=["from", "to"],
                     right_on=["from", "to"],
                     # keep at most 1 entry per step
@@ -221,7 +221,7 @@ def find_shortest_reaction_paths(
 
 
 def find_all_shortest_reaction_paths(
-    cpr_graph: ig.Graph,
+    napistu_graph: ig.Graph,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     target_species_paths: pd.DataFrame,
     weight_var: str = "weights",
@@ -234,7 +234,7 @@ def find_all_shortest_reaction_paths(
 
     Parameters
     ----------
-    cpr_graph : igraph.Graph
+    napistu_graph : igraph.Graph
         A bipartite network connecting molecular species and reactions
     sbml_dfs : SBML_dfs
         A model formed by aggregating pathways
@@ -273,7 +273,7 @@ def find_all_shortest_reaction_paths(
         one_search = target_species_paths.iloc[i]
 
         paths = find_shortest_reaction_paths(
-            cpr_graph,
+            napistu_graph,
             sbml_dfs,
             origin=one_search["sc_id_origin"],
             dest=one_search["sc_id_dest"],
@@ -322,7 +322,7 @@ def find_all_shortest_reaction_paths(
         .drop(columns=["index", "step", "path", "origin", "dest"])
     )
 
-    directed = cpr_graph.is_directed()
+    directed = napistu_graph.is_directed()
     paths_graph = ig.Graph.DictList(
         vertices=unique_path_nodes.to_dict("records"),
         edges=all_shortest_reaction_path_edges_df.to_dict("records"),

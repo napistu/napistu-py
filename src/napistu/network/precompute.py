@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def precompute_distances(
-    cpr_graph: ig.Graph,
+    napistu_graph: ig.Graph,
     max_steps: int = -1,
     max_score_q: float = float(1),
     partition_size: int = int(5000),
@@ -24,7 +24,7 @@ def precompute_distances(
 
     Parameters
     ----------
-    cpr_graph: ig.Graph
+    napistu_graph: ig.Graph
         An igraph network model
     max_steps: int
         The maximum number of steps between pairs of species to save a distance
@@ -60,11 +60,11 @@ def precompute_distances(
         raise ValueError(f"max_score_q must be between 0 and 1 but was {max_score_q}")
 
     # make sure weight vars exist
-    net_utils._validate_edge_attributes(cpr_graph, weights_vars)
+    net_utils._validate_edge_attributes(napistu_graph, weights_vars)
 
     # assign molecular species to partitions
     vs_to_partition = pd.DataFrame(
-        {"sc_id": cpr_graph.vs["name"], "node_type": cpr_graph.vs["node_type"]}
+        {"sc_id": napistu_graph.vs["name"], "node_type": napistu_graph.vs["node_type"]}
     ).query("node_type == 'species'")
 
     n_paritions = math.ceil(vs_to_partition.shape[0] / partition_size)
@@ -79,7 +79,7 @@ def precompute_distances(
         pd.concat(
             [
                 _calculate_distances_subset(
-                    cpr_graph,
+                    napistu_graph,
                     vs_to_partition,
                     vs_to_partition.loc[uq_part],
                     weights_vars=weights_vars,
@@ -103,7 +103,7 @@ def precompute_distances(
 
 
 def _calculate_distances_subset(
-    cpr_graph: ig.Graph,
+    napistu_graph: ig.Graph,
     vs_to_partition: pd.DataFrame,
     one_partition: pd.DataFrame,
     weights_vars: list[str] = ["weights", "upstream_weights"],
@@ -113,7 +113,7 @@ def _calculate_distances_subset(
     d_steps = (
         pd.DataFrame(
             np.array(
-                cpr_graph.distances(
+                napistu_graph.distances(
                     source=one_partition["sc_id"], target=vs_to_partition["sc_id"]
                 )
             ),
@@ -131,7 +131,7 @@ def _calculate_distances_subset(
         d_weights_subset = (
             pd.DataFrame(
                 np.array(
-                    cpr_graph.distances(
+                    napistu_graph.distances(
                         source=one_partition["sc_id"],
                         target=vs_to_partition["sc_id"],
                         weights=weight_type,

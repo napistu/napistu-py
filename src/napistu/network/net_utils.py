@@ -19,8 +19,8 @@ from napistu.constants import SBML_DFS
 from napistu.constants import SOURCE_SPEC
 
 from napistu.identifiers import _validate_assets_sbml_ids
-from napistu.network.constants import CPR_GRAPH_NODES
-from napistu.network.constants import CPR_GRAPH_TYPES
+from napistu.network.constants import NAPISTU_GRAPH_NODES
+from napistu.network.constants import NAPISTU_GRAPH_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +191,10 @@ def export_networks(
     model_prefix: str,
     outdir: str,
     directeds: list[bool] = [True, False],
-    graph_types: list[str] = [CPR_GRAPH_TYPES.BIPARTITE, CPR_GRAPH_TYPES.REGULATORY],
+    graph_types: list[str] = [
+        NAPISTU_GRAPH_TYPES.BIPARTITE,
+        NAPISTU_GRAPH_TYPES.REGULATORY,
+    ],
 ) -> None:
     """
     Exports Networks
@@ -242,7 +245,7 @@ def export_networks(
             )
             print(f"Exporting {graph_type} network to {export_pkl_path}")
 
-            network_graph = net_create.process_cpr_graph(
+            network_graph = net_create.process_napistu_graph(
                 sbml_dfs=sbml_dfs,
                 directed=directed,
                 graph_type=graph_type,
@@ -306,10 +309,10 @@ def read_network_pkl(
     return network_graph
 
 
-def filter_to_largest_subgraph(cpr_graph: ig.Graph) -> ig.Graph:
+def filter_to_largest_subgraph(napistu_graph: ig.Graph) -> ig.Graph:
     """Filter a graph to its largest weakly connected component."""
 
-    component_members = cpr_graph.components(mode="weak")
+    component_members = napistu_graph.components(mode="weak")
     component_sizes = [len(x) for x in component_members]
 
     top_component_members = [
@@ -318,14 +321,14 @@ def filter_to_largest_subgraph(cpr_graph: ig.Graph) -> ig.Graph:
         if s == max(component_sizes)
     ][0]
 
-    largest_subgraph = cpr_graph.induced_subgraph(top_component_members)
+    largest_subgraph = napistu_graph.induced_subgraph(top_component_members)
 
     return largest_subgraph
 
 
 def validate_assets(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    cpr_graph: ig.Graph,
+    napistu_graph: ig.Graph,
     precomputed_distances: pd.DataFrame,
     identifiers_df: pd.DataFrame,
 ) -> None:
@@ -337,10 +340,10 @@ def validate_assets(
     Args:
         sbml_dfs (sbml_dfs_core.SBML_dfs):
             A pathway representation.
-        cpr_graph (igraph.Graph):
+        napistu_graph (igraph.Graph):
             A network-based representation of "sbml_dfs".
         precomputed_distances (pd.DataFrame):
-            Precomputed distances between vertices in "cpr_graph".
+            Precomputed distances between vertices in "napistu_graph".
         identifiers_df (pd.DataFrame):
             A table of systematic identifiers for compartmentalized species in "sbml_dfs".
 
@@ -350,13 +353,13 @@ def validate_assets(
 
     """
 
-    # compare cpr_graph to sbml_dfs
+    # compare napistu_graph to sbml_dfs
     # test for consistent sc_id to sc_name mappings
-    _validate_assets_sbml_graph(sbml_dfs, cpr_graph)
+    _validate_assets_sbml_graph(sbml_dfs, napistu_graph)
 
-    # compare precomputed_distances to cpr_graph
+    # compare precomputed_distances to napistu_graph
     # test whether dircetly connected sc_ids are in the same reaction
-    _validate_assets_graph_dist(cpr_graph, precomputed_distances)
+    _validate_assets_graph_dist(napistu_graph, precomputed_distances)
 
     # compare identifiers_df to sbml_dfs
     # do the (sc_id, s_name) tuples in in identifiers match (sc_id, s_name) tuples in sbml_dfs
@@ -365,14 +368,14 @@ def validate_assets(
     return None
 
 
-def cpr_graph_to_pandas_dfs(cpr_graph: ig.Graph):
+def napistu_graph_to_pandas_dfs(napistu_graph: ig.Graph):
     """
     CPR Graph to Pandas DataFrames
 
     Take an igraph representation of a network and turn it into vertices and edges tables.
 
     Args:
-        cpr_graph(ig.Graph): an igraph network
+        napistu_graph(ig.Graph): an igraph network
 
     Returns:
         vertices (pd.DataFrame):
@@ -382,12 +385,12 @@ def cpr_graph_to_pandas_dfs(cpr_graph: ig.Graph):
     """
 
     vertices = pd.DataFrame(
-        [{**{"index": v.index}, **v.attributes()} for v in cpr_graph.vs]
+        [{**{"index": v.index}, **v.attributes()} for v in napistu_graph.vs]
     )
     edges = pd.DataFrame(
         [
             {**{"source": e.source, "target": e.target}, **e.attributes()}
-            for e in cpr_graph.es
+            for e in napistu_graph.es
         ]
     )
 
@@ -402,7 +405,7 @@ def safe_fill(x, fill_width=15):
 
 
 def read_graph_attrs_spec(graph_attrs_spec_uri: str) -> dict:
-    """Read a YAML file containing the specification for adding reaction- and/or species-attributes to a cpr_graph."""
+    """Read a YAML file containing the specification for adding reaction- and/or species-attributes to a napistu_graph."""
 
     with open(graph_attrs_spec_uri) as f:
         graph_attrs_spec = yaml.safe_load(f)
@@ -442,7 +445,7 @@ def _create_network_save_string(
 
 
 def _create_induced_subgraph(
-    cpr_graph: ig.Graph, vertices=None, n_vertices: int = 5000
+    napistu_graph: ig.Graph, vertices=None, n_vertices: int = 5000
 ) -> ig.Graph:
     """
     Utility function for creating subgraphs including a set of vertices and their connections
@@ -452,21 +455,21 @@ def _create_induced_subgraph(
     if vertices is not None:
         selected_vertices = vertices
     else:
-        vertex_names = cpr_graph.vs[CPR_GRAPH_NODES.NAME]
+        vertex_names = napistu_graph.vs[NAPISTU_GRAPH_NODES.NAME]
         selected_vertices = random.sample(vertex_names, n_vertices)
 
-    subgraph = cpr_graph.induced_subgraph(selected_vertices)
+    subgraph = napistu_graph.induced_subgraph(selected_vertices)
 
     return subgraph
 
 
 def _validate_assets_sbml_graph(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, cpr_graph: ig.Graph
+    sbml_dfs: sbml_dfs_core.SBML_dfs, napistu_graph: ig.Graph
 ) -> None:
-    """ "Check an sbml_dfs model and cpr_graph for inconsistencies."""
+    """ "Check an sbml_dfs model and napistu_graph for inconsistencies."""
 
     vertices = pd.DataFrame(
-        [{**{"index": v.index}, **v.attributes()} for v in cpr_graph.vs]
+        [{**{"index": v.index}, **v.attributes()} for v in napistu_graph.vs]
     )
 
     matched_cspecies = sbml_dfs.compartmentalized_species.reset_index()[
@@ -487,19 +490,19 @@ def _validate_assets_sbml_graph(
         example_names = mismatched_names[: min(10, len(mismatched_names))]
 
         raise ValueError(
-            f"{len(mismatched_names)} species names do not match between sbml_dfs and cpr_graph: {example_names}"
+            f"{len(mismatched_names)} species names do not match between sbml_dfs and napistu_graph: {example_names}"
         )
 
     return None
 
 
 def _validate_assets_graph_dist(
-    cpr_graph: ig.Graph, precomputed_distances: pd.DataFrame
+    napistu_graph: ig.Graph, precomputed_distances: pd.DataFrame
 ) -> None:
-    """ "Check an cpr_graph and precomputed distances table for inconsistencies."""
+    """ "Check an napistu_graph and precomputed distances table for inconsistencies."""
 
     edges = pd.DataFrame(
-        [{**{"index": e.index}, **e.attributes()} for e in cpr_graph.es]
+        [{**{"index": e.index}, **e.attributes()} for e in napistu_graph.es]
     )
 
     direct_interactions = precomputed_distances.query("path_length == 1")
@@ -514,7 +517,7 @@ def _validate_assets_graph_dist(
     if inconsistent_weights.shape[0] > 0:
         logger.warning(
             f"{inconsistent_weights.shape[0]} edges' weights are inconsistent between",
-            "edges in the cpr_graph and length 1 paths in precomputed_distances."
+            "edges in the napistu_graph and length 1 paths in precomputed_distances."
             f"This is {inconsistent_weights.shape[0] / edges_with_distances.shape[0]:.2%} of all edges.",
         )
 
@@ -617,5 +620,4 @@ def _validate_vertex_attributes(graph: ig.Graph, vertex_attributes: list[str]) -
         raise ValueError(
             f"{n_missing_attrs} vertex attributes were missing ({', '.join(missing_attributes)}). The available vertex attributes are {', '.join(available_attributes)}"
         )
-
     return None

@@ -106,7 +106,7 @@ def add_results_table_to_graph(
 
 
 def _add_graph_species_attribute(
-    cpr_graph: ig.Graph,
+    napistu_graph: ig.Graph,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     species_graph_attrs: dict,
     custom_transformations: Optional[dict] = None,
@@ -121,7 +121,7 @@ def _add_graph_species_attribute(
 
     Parameters
     ----------
-    cpr_graph : ig.Graph
+    napistu_graph : ig.Graph
         The igraph network to augment.
     sbml_dfs : sbml_dfs_core.SBML_dfs
         The SBML_dfs object containing species data.
@@ -158,14 +158,14 @@ def _add_graph_species_attribute(
     flat_sp_node_attr_list = [item for items in sp_node_attr_list for item in items]
 
     # Check for attribute collisions before proceeding
-    existing_attrs = set(cpr_graph.vs.attributes())
+    existing_attrs = set(napistu_graph.vs.attributes())
     for attr in flat_sp_node_attr_list:
         if attr in existing_attrs:
             raise ValueError(f"Attribute '{attr}' already exists in graph vertices")
 
     logger.info("Adding meta-data from species_data")
 
-    curr_network_nodes_df = cpr_graph.get_vertex_dataframe()
+    curr_network_nodes_df = napistu_graph.get_vertex_dataframe()
 
     # add species-level attributes to nodes dataframe
     augmented_network_nodes_df = net_create._augment_network_nodes(
@@ -178,9 +178,9 @@ def _add_graph_species_attribute(
     # Add each attribute to the graph vertices
     for vs_attr in flat_sp_node_attr_list:
         logger.info(f"Adding new attribute {vs_attr} to vertices")
-        cpr_graph.vs[vs_attr] = augmented_network_nodes_df[vs_attr].values
+        napistu_graph.vs[vs_attr] = augmented_network_nodes_df[vs_attr].values
 
-    return cpr_graph
+    return napistu_graph
 
 
 def _select_sbml_dfs_data_table(

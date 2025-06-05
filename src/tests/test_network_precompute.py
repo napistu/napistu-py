@@ -20,7 +20,7 @@ sbml_model = sbml.SBML(sbml_path).model
 sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
 sbml_dfs.validate()
 
-cpr_graph = net_create.process_cpr_graph(
+napistu_graph = net_create.process_napistu_graph(
     sbml_dfs, graph_type="bipartite", directed=True, weighting_strategy="topology"
 )
 
@@ -33,7 +33,7 @@ ORDER = 20
 TOP_N = 20
 
 precomputed_distances = precompute.precompute_distances(
-    cpr_graph, max_steps=30000, max_score_q=1
+    napistu_graph, max_steps=30000, max_score_q=1
 )
 
 
@@ -55,7 +55,9 @@ def test_precomputed_distances_shortest_paths():
         _,
         _,
         _,
-    ) = paths.find_all_shortest_reaction_paths(cpr_graph, sbml_dfs, all_species_pairs)
+    ) = paths.find_all_shortest_reaction_paths(
+        napistu_graph, sbml_dfs, all_species_pairs
+    )
 
     shortest_path_weights = (
         path_vertices.groupby(["origin", "dest", "path"])["weights"]
@@ -101,7 +103,7 @@ def test_precomputed_distances_shortest_paths():
 
     # using the precomputed distances generates the same result as excluding it
     (precompute_path_vertices, _, _, _) = paths.find_all_shortest_reaction_paths(
-        cpr_graph,
+        napistu_graph,
         sbml_dfs,
         all_species_pairs,
         precomputed_distances=precomputed_distances,
@@ -139,7 +141,7 @@ def test_precomputed_distances_neighborhoods():
 
     pruned_neighborhoods_precomputed = neighborhoods.find_and_prune_neighborhoods(
         sbml_dfs,
-        cpr_graph,
+        napistu_graph,
         compartmentalized_species,
         precomputed_distances=precomputed_distances,
         network_type=NETWORK_TYPE,
@@ -150,7 +152,7 @@ def test_precomputed_distances_neighborhoods():
 
     pruned_neighborhoods_otf = neighborhoods.find_and_prune_neighborhoods(
         sbml_dfs,
-        cpr_graph,
+        napistu_graph,
         compartmentalized_species,
         precomputed_distances=None,
         network_type=NETWORK_TYPE,

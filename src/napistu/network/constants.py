@@ -7,9 +7,12 @@ from types import SimpleNamespace
 from napistu.constants import SBML_DFS
 from napistu.constants import SBOTERM_NAMES
 
-CPR_GRAPH_NODES = SimpleNamespace(NAME="name")
+# Graph types
+VALID_NAPISTU_GRAPH_TYPES = {"bipartite", "regulatory", "surrogate"}
 
-CPR_GRAPH_EDGES = SimpleNamespace(
+NAPISTU_GRAPH_NODES = SimpleNamespace(NAME="name")
+
+NAPISTU_GRAPH_EDGES = SimpleNamespace(
     DIRECTED="directed",
     DIRECTION="direction",
     FROM="from",
@@ -27,50 +30,36 @@ CPR_GRAPH_EDGES = SimpleNamespace(
     WEIGHTS="weights",
 )
 
-# variables which should be in cpr graph's edges
-CPR_GRAPH_REQUIRED_EDGE_VARS = {
-    CPR_GRAPH_EDGES.FROM,
-    CPR_GRAPH_EDGES.TO,
-    CPR_GRAPH_EDGES.SBO_TERM,
-    CPR_GRAPH_EDGES.STOICHIOMETRY,
-    CPR_GRAPH_EDGES.SC_PARENTS,
-    CPR_GRAPH_EDGES.SC_CHILDREN,
-}
-
-# nomenclature for individual fields
-
-CPR_GRAPH_NODE_TYPES = SimpleNamespace(REACTION="reaction", SPECIES="species")
-
-VALID_CPR_GRAPH_NODE_TYPES = [
-    CPR_GRAPH_NODE_TYPES.REACTION,
-    CPR_GRAPH_NODE_TYPES.SPECIES,
-]
-
-CPR_GRAPH_EDGE_DIRECTIONS = SimpleNamespace(
+NAPISTU_GRAPH_EDGE_DIRECTIONS = SimpleNamespace(
     FORWARD="forward", REVERSE="reverse", UNDIRECTED="undirected"
 )
 
-# network-level nomenclature
+NAPISTU_GRAPH_REQUIRED_EDGE_VARS = {
+    NAPISTU_GRAPH_EDGES.FROM,
+    NAPISTU_GRAPH_EDGES.TO,
+    NAPISTU_GRAPH_EDGES.DIRECTION,
+}
 
-CPR_GRAPH_TYPES = SimpleNamespace(
+NAPISTU_GRAPH_NODE_TYPES = SimpleNamespace(SPECIES="species", REACTION="reaction")
+
+VALID_NAPISTU_GRAPH_NODE_TYPES = [
+    NAPISTU_GRAPH_NODE_TYPES.REACTION,
+    NAPISTU_GRAPH_NODE_TYPES.SPECIES,
+]
+
+NAPISTU_GRAPH_TYPES = SimpleNamespace(
     BIPARTITE="bipartite", REGULATORY="regulatory", SURROGATE="surrogate"
 )
 
-VALID_CPR_GRAPH_TYPES = [
-    CPR_GRAPH_TYPES.BIPARTITE,
-    CPR_GRAPH_TYPES.REGULATORY,
-    CPR_GRAPH_TYPES.SURROGATE,
-]
-
-CPR_WEIGHTING_STRATEGIES = SimpleNamespace(
+NAPISTU_WEIGHTING_STRATEGIES = SimpleNamespace(
     CALIBRATED="calibrated", MIXED="mixed", TOPOLOGY="topology", UNWEIGHTED="unweighted"
 )
 
 VALID_WEIGHTING_STRATEGIES = [
-    CPR_WEIGHTING_STRATEGIES.UNWEIGHTED,
-    CPR_WEIGHTING_STRATEGIES.TOPOLOGY,
-    CPR_WEIGHTING_STRATEGIES.MIXED,
-    CPR_WEIGHTING_STRATEGIES.CALIBRATED,
+    NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
+    NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY,
+    NAPISTU_WEIGHTING_STRATEGIES.MIXED,
+    NAPISTU_WEIGHTING_STRATEGIES.CALIBRATED,
 ]
 
 # the regulatory graph defines a hierarchy of upstream and downstream
@@ -81,7 +70,7 @@ REGULATORY_GRAPH_HIERARCHY = [
     [SBOTERM_NAMES.MODIFIER, SBOTERM_NAMES.STIMULATOR, SBOTERM_NAMES.INHIBITOR],
     [SBOTERM_NAMES.CATALYST],
     [SBOTERM_NAMES.REACTANT],
-    [CPR_GRAPH_NODE_TYPES.REACTION],
+    [NAPISTU_GRAPH_NODE_TYPES.REACTION],
     # normally we don't expect interactors to be defined because they are handled by
     # net_create._format_interactors_for_regulatory_graph() but include them here
     # until Issue #102 is solved
@@ -99,7 +88,7 @@ SURROGATE_GRAPH_HIERARCHY = [
     [SBOTERM_NAMES.MODIFIER, SBOTERM_NAMES.STIMULATOR, SBOTERM_NAMES.INHIBITOR],
     [SBOTERM_NAMES.REACTANT],
     [SBOTERM_NAMES.CATALYST],
-    [CPR_GRAPH_NODE_TYPES.REACTION],
+    [NAPISTU_GRAPH_NODE_TYPES.REACTION],
     # normally we don't expect interactors to be defined because they are handled by
     # net_create._format_interactors_for_regulatory_graph() but include them here
     # until Issue #102 is solved

@@ -1,4 +1,4 @@
-"""The CLI for cpr"""
+"""The CLI for Napistu"""
 
 from __future__ import annotations
 
@@ -17,6 +17,8 @@ from napistu import constants
 from napistu import indices
 from napistu import sbml_dfs_core
 from napistu import utils
+from napistu.context import filtering
+from napistu.context import mount
 from napistu.ingestion import bigg
 from napistu.ingestion import hpa
 from napistu.ingestion import reactome
@@ -33,6 +35,7 @@ from napistu.network import precompute
 from napistu.ontologies.genodexito import Genodexito
 from napistu.ontologies import dogma
 from napistu.rpy2 import has_rpy2
+from napistu.constants import ONTOLOGIES, RESOLVE_MATCHES_AGGREGATORS
 from fs import open_fs
 
 if has_rpy2:
@@ -410,7 +413,7 @@ def apply_manual_curations(model_uri: str, curation_dir: str, output_model_uri: 
     """Apply manual curations to a consensus model
 
     The curation dir is a directory containing the manual curations
-    Check cpr.curation.curate_sbml_dfs for more information.
+    Check napistu.modify.curation.curate_sbml_dfs for more information.
     """
     model = utils.load_pickle(model_uri)
     model = curation.curate_sbml_dfs(curation_dir=curation_dir, sbml_dfs=model)
@@ -569,12 +572,12 @@ def filter_gtex_tissue(
 
 
 @refine.command(name="filter_hpa_compartments")
-@click.argument("model_uri", type=str)
+@click.argument("sbml_dfs_uri", type=str)
 @click.argument("hpa_file_uri", type=str)
 @click.argument("output_model_uri", type=str)
 @click_logging.simple_verbosity_option(logger)
 def filter_hpa_gene_compartments(
-    model_uri: str, hpa_file_uri: str, output_model_uri: str
+    sbml_dfs_uri: str, hpa_file_uri: str, output_model_uri: str
 ):
     """Filter an interaction network using the human protein atlas
 
@@ -583,24 +586,27 @@ def filter_hpa_gene_compartments(
 
     Only interactions between genes in the same compartment are kept.
     """
-    logger.info("Get rcpr from R")
-    rcpr = callr.get_rcpr()
+
     logger.info("Load sbml_dfs model")
-    model: sbml.SBML_dfs = utils.load_pickle(model_uri)  # type: ignore
+    sbml_dfs: sbml.SBML_dfs = utils.load_pickle(sbml_dfs_uri)  # type: ignore
     logger.info("Load and clean hpa data")
-    dat_hpa = hpa.load_and_clean_hpa_data(rcpr, hpa_file_uri)
-    logger.info("Convert sbml_dfs to rcpr string graph")
-    model_r = netcontextr.sbml_dfs_to_rcpr_string_graph(model)
+    dat_hpa = hpa.load_and_clean_hpa_data(hpa_file_uri)
     logger.info("Annotate genes with HPA compartments")
-    model_r_annot = netcontextr.annotate_genes(rcpr, model_r, dat_hpa, "compartment")
-    logger.info("Trim network by gene attribute")
-    model_r_trim = netcontextr.trim_network_by_gene_attribute(
-        rcpr, model_r_annot, "compartment"
+    mount.bind_wide_results(
+        sbml_dfs=sbml_dfs,
+        results_df=dat_hpa.reset_index(drop=False),
+        results_name="hpa",
+        ontologies={ONTOLOGIES.ENSEMBL_GENE},
+        numeric_agg=RESOLVE_MATCHES_AGGREGATORS.MAX,
     )
-    logger.info("Apply trimmed network")
-    netcontextr.apply_context_to_sbml_dfs(model, model_r_trim)
-    logger.info("Save model to %s", output_model_uri)
-    utils.save_pickle(output_model_uri, model)
+    logger.info(
+        "Trim network removing reactions with species in different compartments"
+    )
+    filtering.filter_reactions_with_disconnected_cspecies(
+        sbml_dfs, "hpa", inplace=False
+    )
+    logger.info("Save sbml_dfs to %s", output_model_uri)
+    utils.save_pickle(output_model_uri, sbml_dfs)
 
 
 @click.group()
@@ -661,7 +667,7 @@ def export_igraph(
     else:
         graph_attrs_spec = net_utils.read_graph_attrs_spec(graph_attrs_spec_uri)
 
-    cpr_graph = net_create.process_cpr_graph(
+    napistu_graph = net_create.process_napistu_graph(
         model,
         reaction_graph_attrs=graph_attrs_spec,
         directed=directed,
@@ -675,11 +681,11 @@ def export_igraph(
     with open_fs(base, create=True, writeable=True) as fs:
         with fs.openbin(path, "wb") as f:
             if format == "gml":
-                cpr_graph.write_gml(f)
+                napistu_graph.write_gml(f)
             elif format == "edgelist":
-                cpr_graph.write_edgelist(f)
+                napistu_graph.write_edgelist(f)
             elif format == "pickle":
-                pickle.dump(cpr_graph, f)
+                pickle.dump(napistu_graph, f)
             else:
                 raise ValueError("Unknown format: %s" % format)
 
@@ -737,11 +743,11 @@ def export_precomputed_distances(
     with open_fs(base) as fs:
         with fs.openbin(path) as f:
             if format == "gml":
-                cpr_graph = ig.Graph.Read_GML(f)
+                napistu_graph = ig.Graph.Read_GML(f)
             elif format == "edgelist":
-                cpr_graph = ig.Graph.Read_Edgelist(f)
+                napistu_graph = ig.Graph.Read_Edgelist(f)
             elif format == "pickle":
-                cpr_graph = ig.Graph.Read_Pickle(f)
+                napistu_graph = ig.Graph.Read_Pickle(f)
             else:
                 raise ValueError("Unknown format: %s" % format)
 
@@ -749,7 +755,7 @@ def export_precomputed_distances(
     weights_vars_list = utils.click_str_to_list(weights_vars)
 
     precomputed_distances = precompute.precompute_distances(
-        cpr_graph,
+        napistu_graph,
         max_steps=max_steps,
         max_score_q=max_score_q,
         partition_size=partition_size,

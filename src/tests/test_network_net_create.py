@@ -105,21 +105,21 @@ reaction_species_examples_dict["no_substrate"] = pd.DataFrame(
 ).set_index(["r_id", "sbo_term"])
 
 
-def test_create_cpr_graph():
-    _ = net_create.create_cpr_graph(sbml_dfs, graph_type="bipartite")
-    _ = net_create.create_cpr_graph(sbml_dfs, graph_type="regulatory")
-    _ = net_create.create_cpr_graph(sbml_dfs, graph_type="surrogate")
+def test_create_napistu_graph():
+    _ = net_create.create_napistu_graph(sbml_dfs, graph_type="bipartite")
+    _ = net_create.create_napistu_graph(sbml_dfs, graph_type="regulatory")
+    _ = net_create.create_napistu_graph(sbml_dfs, graph_type="surrogate")
 
 
-def test_create_cpr_graph_edge_reversed():
+def test_create_napistu_graph_edge_reversed():
     """Test that edge_reversed=True properly reverses edges in the graph for all graph types."""
     # Test each graph type
     for graph_type in ["bipartite", "regulatory", "surrogate"]:
         # Create graphs with and without edge reversal
-        normal_graph = net_create.create_cpr_graph(
+        normal_graph = net_create.create_napistu_graph(
             sbml_dfs, graph_type=graph_type, directed=True, edge_reversed=False
         )
-        reversed_graph = net_create.create_cpr_graph(
+        reversed_graph = net_create.create_napistu_graph(
             sbml_dfs, graph_type=graph_type, directed=True, edge_reversed=True
         )
 
@@ -171,20 +171,20 @@ def test_create_cpr_graph_edge_reversed():
             ), f"Parents/children not properly swapped in {graph_type} graph"
 
 
-def test_create_cpr_graph_none_attrs():
+def test_create_napistu_graph_none_attrs():
     # Should not raise when reaction_graph_attrs is None
-    _ = net_create.create_cpr_graph(
+    _ = net_create.create_napistu_graph(
         sbml_dfs, reaction_graph_attrs=None, graph_type="bipartite"
     )
 
 
 def test_igraph_construction():
-    _ = net_create.process_cpr_graph(sbml_dfs)
+    _ = net_create.process_napistu_graph(sbml_dfs)
 
 
-def test_process_cpr_graph_none_attrs():
+def test_process_napistu_graph_none_attrs():
     # Should not raise when reaction_graph_attrs is None
-    _ = net_create.process_cpr_graph(sbml_dfs, reaction_graph_attrs=None)
+    _ = net_create.process_napistu_graph(sbml_dfs, reaction_graph_attrs=None)
 
 
 @pytest.mark.skip_on_windows
@@ -230,7 +230,7 @@ def test_shortest_paths():
     )
 
     # directed graph
-    cpr_graph = net_create.process_cpr_graph(
+    napistu_graph = net_create.process_napistu_graph(
         sbml_dfs, directed=True, weighting_strategy="topology"
     )
     (
@@ -239,11 +239,11 @@ def test_shortest_paths():
         edge_sources,
         paths_graph,
     ) = paths.find_all_shortest_reaction_paths(
-        cpr_graph, sbml_dfs, target_species_paths, weight_var="weights"
+        napistu_graph, sbml_dfs, target_species_paths, weight_var="weights"
     )
 
     # undirected graph
-    cpr_graph = net_create.process_cpr_graph(
+    napistu_graph = net_create.process_napistu_graph(
         sbml_dfs, directed=False, weighting_strategy="topology"
     )
     (
@@ -252,7 +252,7 @@ def test_shortest_paths():
         edge_sources,
         paths_graph,
     ) = paths.find_all_shortest_reaction_paths(
-        cpr_graph, sbml_dfs, target_species_paths, weight_var="weights"
+        napistu_graph, sbml_dfs, target_species_paths, weight_var="weights"
     )
 
     assert all_shortest_reaction_paths_df.shape[0] == 3
@@ -265,13 +265,13 @@ def test_neighborhood():
     query_sc_species = net_utils.compartmentalize_species(sbml_dfs, source_species)
     compartmentalized_species = query_sc_species["sc_id"].tolist()
 
-    cpr_graph = net_create.process_cpr_graph(
+    napistu_graph = net_create.process_napistu_graph(
         sbml_dfs, directed=True, weighting_strategy="topology"
     )
 
     neighborhood = neighborhoods.find_neighborhoods(
         sbml_dfs,
-        cpr_graph,
+        napistu_graph,
         compartmentalized_species=compartmentalized_species,
         order=3,
     )
@@ -455,7 +455,7 @@ def test_entity_validation():
 ################################################
 
 if __name__ == "__main__":
-    test_create_cpr_graph()
+    test_create_napistu_graph()
     test_igraph_loading()
     test_igraph_construction()
     test_shortest_paths()
