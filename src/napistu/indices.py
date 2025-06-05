@@ -21,7 +21,7 @@ def create_pathway_index_df(
     model_species: dict[str, str],
     base_path: str,
     source_name: str,
-    file_extension: str = ".sbml"
+    file_extension: str = ".sbml",
 ) -> pd.DataFrame:
     """Create a pathway index DataFrame from model definitions.
 
@@ -65,11 +65,10 @@ def create_pathway_index_df(
         }
         for species in model_keys.keys()
     }
-    
+
     models_df = pd.DataFrame(models).T
     models_df["sbml_path"] = [
-        os.path.join(base_path, k) + file_extension
-        for k in models_df.index.tolist()
+        os.path.join(base_path, k) + file_extension for k in models_df.index.tolist()
     ]
     models_df["file"] = [os.path.basename(x) for x in models_df["sbml_path"]]
 

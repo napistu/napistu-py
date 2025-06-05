@@ -196,17 +196,13 @@ def test_sbml_dfs_remove_reactions_check_species(sbml_dfs):
     # find all r_ids for a species and check if
     # removing all these reactions also removes the species
     s_id = sbml_dfs.species.index[0]
-    dat = (
-        sbml_dfs.compartmentalized_species.query("s_id == @s_id").merge(
-            sbml_dfs.reaction_species, on="sc_id"
-        )
-    )[["r_id", "sc_id"]]
-    r_ids = dat["r_id"]
-    sc_ids = dat["sc_id"]
+    dat = sbml_dfs.compartmentalized_species.query("s_id == @s_id").merge(
+        sbml_dfs.reaction_species, left_index=True, right_on="sc_id"
+    )
+    r_ids = dat["r_id"].unique()
     sbml_dfs.remove_reactions(r_ids, remove_species=True)
-    for sc_id in sc_ids:
-        assert sc_id not in sbml_dfs.compartmentalized_species.index
     assert s_id not in sbml_dfs.species.index
+    sbml_dfs.validate()
 
 
 def test_formula(sbml_dfs):
@@ -454,3 +450,46 @@ def test_find_underspecified_reactions():
     working_reactions
     result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
     assert result == {"baz"}
+
+
+def test_remove_entity_data_success(sbml_dfs_w_data):
+    """Test successful removal of entity data."""
+    # Get initial data
+    initial_species_data_keys = set(sbml_dfs_w_data.species_data.keys())
+    initial_reactions_data_keys = set(sbml_dfs_w_data.reactions_data.keys())
+
+    # Remove species data
+    sbml_dfs_w_data._remove_entity_data(SBML_DFS.SPECIES, "test_species")
+    assert "test_species" not in sbml_dfs_w_data.species_data
+    assert set(sbml_dfs_w_data.species_data.keys()) == initial_species_data_keys - {
+        "test_species"
+    }
+
+    # Remove reactions data
+    sbml_dfs_w_data._remove_entity_data(SBML_DFS.REACTIONS, "test_reactions")
+    assert "test_reactions" not in sbml_dfs_w_data.reactions_data
+    assert set(sbml_dfs_w_data.reactions_data.keys()) == initial_reactions_data_keys - {
+        "test_reactions"
+    }
+
+    # Validate the model is still valid after removals
+    sbml_dfs_w_data.validate()
+
+
+def test_remove_entity_data_nonexistent(sbml_dfs_w_data, caplog):
+    """Test warning when trying to remove nonexistent entity data."""
+    # Try to remove nonexistent species data
+    sbml_dfs_w_data._remove_entity_data(SBML_DFS.SPECIES, "nonexistent_label")
+    assert "Label 'nonexistent_label' not found in species_data" in caplog.text
+    assert set(sbml_dfs_w_data.species_data.keys()) == {"test_species"}
+
+    # Clear the log
+    caplog.clear()
+
+    # Try to remove nonexistent reactions data
+    sbml_dfs_w_data._remove_entity_data(SBML_DFS.REACTIONS, "nonexistent_label")
+    assert "Label 'nonexistent_label' not found in reactions_data" in caplog.text
+    assert set(sbml_dfs_w_data.reactions_data.keys()) == {"test_reactions"}
+
+    # Validate the model is still valid
+    sbml_dfs_w_data.validate()

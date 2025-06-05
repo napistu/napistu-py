@@ -14,18 +14,12 @@ test_data = os.path.join(test_path, "test_data")
 def test_create_pathway_index_df():
     """Test the creation of pathway index DataFrame."""
     # Test input data
-    model_keys = {
-        "human": "model1",
-        "mouse": "model2"
-    }
+    model_keys = {"human": "model1", "mouse": "model2"}
     model_urls = {
         "human": "http://example.com/model1.xml",
-        "mouse": "http://example.com/model2.xml"
+        "mouse": "http://example.com/model2.xml",
     }
-    model_species = {
-        "human": "Homo sapiens",
-        "mouse": "Mus musculus"
-    }
+    model_species = {"human": "Homo sapiens", "mouse": "Mus musculus"}
     base_path = "/test/path"
     source_name = "TestSource"
 
@@ -35,7 +29,7 @@ def test_create_pathway_index_df():
         model_urls=model_urls,
         model_species=model_species,
         base_path=base_path,
-        source_name=source_name
+        source_name=source_name,
     )
 
     # Expected date in YYYYMMDD format
@@ -44,11 +38,17 @@ def test_create_pathway_index_df():
     # Assertions
     assert isinstance(result, pd.DataFrame), "Result should be a pandas DataFrame"
     assert len(result) == 2, "Should have 2 rows for 2 models"
-    
+
     # Check required columns exist
     required_columns = {
-        "url", "species", "sbml_path", "file", 
-        "date", "pathway_id", "name", "source"
+        "url",
+        "species",
+        "sbml_path",
+        "file",
+        "date",
+        "pathway_id",
+        "name",
+        "source",
     }
     assert set(result.columns) == required_columns, "Missing required columns"
 
@@ -68,9 +68,11 @@ def test_create_pathway_index_df():
         model_species=model_species,
         base_path=base_path,
         source_name=source_name,
-        file_extension=".xml"
+        file_extension=".xml",
     )
-    assert result_custom_ext.iloc[0]["file"].endswith(".xml"), "Custom extension not applied"
+    assert result_custom_ext.iloc[0]["file"].endswith(
+        ".xml"
+    ), "Custom extension not applied"
 
 
 def test_pwindex_from_file():

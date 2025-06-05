@@ -20,8 +20,6 @@ PACKAGE_DEFS = SimpleNamespace(
     # workflows
     CACHE_DIR="napistu_data",
 )
-# Gencode
-GENCODE_URL = "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_26/gencode.v26.transcripts.fa.gz"
 
 FILE_EXT_ZIP = "zip"
 FILE_EXT_GZ = "gz"
@@ -122,6 +120,11 @@ SBML_DFS_SCHEMA = SimpleNamespace(
 )
 
 ENTITIES_W_DATA = {SBML_DFS.SPECIES, SBML_DFS.REACTIONS}
+
+ENTITIES_TO_ENTITY_DATA = {
+    SBML_DFS.SPECIES: SBML_DFS.SPECIES_DATA,
+    SBML_DFS.REACTIONS: SBML_DFS.REACTIONS_DATA,
+}
 
 REQUIRED_REACTION_FROMEDGELIST_COLUMNS = [
     "sc_id_up",

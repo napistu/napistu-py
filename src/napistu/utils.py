@@ -17,7 +17,6 @@ from typing import Union
 from typing import Optional
 from typing import List
 from urllib.parse import urlparse
-import datetime
 
 import igraph as ig
 import numpy as np
@@ -263,7 +262,12 @@ def write_file_contents_to_path(path: str, contents) -> None:
 
 
 def download_wget(
-    url: str, path, target_filename: str = None, verify: bool = True, timeout: int = 30, max_retries: int = 3
+    url: str,
+    path,
+    target_filename: str = None,
+    verify: bool = True,
+    timeout: int = 30,
+    max_retries: int = 3,
 ) -> None:
     """Downloads file / archive with wget
 

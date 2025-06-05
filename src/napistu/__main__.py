@@ -13,7 +13,6 @@ import napistu
 import igraph as ig
 import pandas as pd
 from napistu import consensus as cpr_consensus
-from napistu import constants
 from napistu import indices
 from napistu import sbml_dfs_core
 from napistu import utils
@@ -45,6 +44,7 @@ logger = logging.getLogger(napistu.__name__)
 click_logging.basic_config(logger)
 
 ALL = "all"
+
 
 @click.group()
 def cli():
@@ -553,6 +553,8 @@ def filter_gtex_tissue(
         attribute_value=0,
         inplace=True,
     )
+    # remove the gtex species data from the sbml_dfs
+    sbml_dfs.remove_species_data("gtex")
 
     logger.info("Save sbml_dfs to %s", output_model_uri)
     utils.save_pickle(output_model_uri, sbml_dfs)
@@ -592,6 +594,8 @@ def filter_hpa_gene_compartments(
     filtering.filter_reactions_with_disconnected_cspecies(
         sbml_dfs, "hpa", inplace=False
     )
+    sbml_dfs.remove_species_data("hpa")
+
     logger.info("Save sbml_dfs to %s", output_model_uri)
     utils.save_pickle(output_model_uri, sbml_dfs)
 

@@ -32,6 +32,8 @@ from napistu.constants import ONTOLOGIES
 from napistu.constants import SBO_NAME_TO_ROLE
 from napistu.constants import SBOTERM_NAMES
 from napistu.constants import SBO_ROLES_DEFS
+from napistu.constants import ENTITIES_W_DATA
+from napistu.constants import ENTITIES_TO_ENTITY_DATA
 from napistu.constants import CHARACTERISTIC_COMPLEX_ONTOLOGIES
 from napistu.ingestion import sbml
 from fs import open_fs
@@ -638,6 +640,12 @@ class SBML_dfs:
             )
         self.species_data[label] = data
 
+    def remove_species_data(self, label: str):
+        """
+        Remove species data by label.
+        """
+        self._remove_entity_data(SBML_DFS.SPECIES, label)
+
     def add_reactions_data(self, label: str, data: pd.DataFrame):
         """
         Add additional reaction data with validation.
@@ -660,6 +668,12 @@ class SBML_dfs:
                 f"{label} already exists in reactions_data. Drop it first."
             )
         self.reactions_data[label] = data
+
+    def remove_reactions_data(self, label: str):
+        """
+        Remove reactions data by label.
+        """
+        self._remove_entity_data(SBML_DFS.REACTIONS, label)
 
     def remove_compartmentalized_species(self, sc_ids: Iterable[str]):
         """
@@ -708,27 +722,6 @@ class SBML_dfs:
         if remove_species:
             self._remove_unused_cspecies()
             self._remove_unused_species()
-
-    def _validate_table(self, table: str) -> None:
-        """
-        Validate a table in this SBML_dfs object against its schema.
-
-        This is an internal method that validates a table that is part of this SBML_dfs
-        object against the schema stored in self.schema.
-
-        Parameters
-        ----------
-        table : str
-            Name of the table to validate
-
-        Raises
-        ------
-        ValueError
-            If the table does not conform to its schema
-        """
-        table_schema = self.schema[table]
-        table_data = getattr(self, table)
-        _perform_sbml_dfs_table_validation(table_data, table_schema, table)
 
     def validate(self):
         """
@@ -906,6 +899,56 @@ class SBML_dfs:
 
         # Get the species data
         return self.species_data[species_data_table]
+
+    def _validate_table(self, table: str) -> None:
+        """
+        Validate a table in this SBML_dfs object against its schema.
+
+        This is an internal method that validates a table that is part of this SBML_dfs
+        object against the schema stored in self.schema.
+
+        Parameters
+        ----------
+        table : str
+            Name of the table to validate
+
+        Raises
+        ------
+        ValueError
+            If the table does not conform to its schema
+        """
+        table_schema = self.schema[table]
+        table_data = getattr(self, table)
+        _perform_sbml_dfs_table_validation(table_data, table_schema, table)
+
+    def _remove_entity_data(self, entity_type: str, label: str) -> None:
+        """
+        Remove data from species_data or reactions_data by table name and label.
+
+        Parameters
+        ----------
+        entity_type : str
+            Name of the table to remove data from ('species' or 'reactions')
+        label : str
+            Label of the data to remove
+
+        Notes
+        -----
+        If the label does not exist, a warning will be logged that includes the existing labels.
+        """
+        if entity_type not in ENTITIES_W_DATA:
+            raise ValueError("table_name must be either 'species' or 'reactions'")
+
+        data_dict = getattr(self, ENTITIES_TO_ENTITY_DATA[entity_type])
+        if label not in data_dict:
+            existing_labels = list(data_dict.keys())
+            logger.warning(
+                f"Label '{label}' not found in {ENTITIES_TO_ENTITY_DATA[entity_type]}. "
+                f"Existing labels: {existing_labels}"
+            )
+            return
+
+        del data_dict[label]
 
     def _remove_unused_cspecies(self):
         """Removes compartmentalized species that are no

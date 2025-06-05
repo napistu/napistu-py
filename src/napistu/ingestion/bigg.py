@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import datetime
 import logging
 import os
 from typing import Iterable
@@ -11,8 +10,6 @@ from napistu import sbml_dfs_core
 from napistu import utils
 from napistu.consensus import construct_sbml_dfs_dict
 from napistu.ingestion import sbml
-from napistu.ingestion.constants import BIGG_MODEL_FIELD_SPECIES
-from napistu.ingestion.constants import BIGG_MODEL_FIELD_URL
 from napistu.ingestion.constants import BIGG_MODEL_KEYS
 from napistu.ingestion.constants import BIGG_MODEL_URLS
 from napistu.ingestion.constants import BIGG_RECON3D_FIELD_ANNOTATION
@@ -49,7 +46,7 @@ def bigg_sbml_download(bg_pathway_root: str, overwrite: bool = False) -> None:
             SPECIES_FULL_NAME_YEAST: SPECIES_FULL_NAME_YEAST,
         },
         base_path=bg_pathway_root,
-        source_name="BiGG"
+        source_name="BiGG",
     )
 
     with open_fs(bg_pathway_root, create=True) as bg_fs:
