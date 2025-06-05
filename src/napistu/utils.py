@@ -17,6 +17,7 @@ from typing import Union
 from typing import Optional
 from typing import List
 from urllib.parse import urlparse
+import datetime
 
 import igraph as ig
 import numpy as np
@@ -262,22 +263,37 @@ def write_file_contents_to_path(path: str, contents) -> None:
 
 
 def download_wget(
-    url: str, path, target_filename: str = None, verify: bool = True
+    url: str, path, target_filename: str = None, verify: bool = True, timeout: int = 30, max_retries: int = 3
 ) -> None:
-    """Downloades file / archive with wget
+    """Downloads file / archive with wget
 
     Args:
         url (str): url
         path (FilePath | WriteBuffer): file path or buffer
         target_filename (str): specific file to extract from ZIP if URL is a ZIP file
         verify (bool): verify argument to pass to requests.get
+        timeout (int): timeout in seconds for the request
+        max_retries (int): number of times to retry the download if it fails
 
     Returns:
         None
     """
-    r = requests.get(url, allow_redirects=True, verify=verify)
-    # throw an exception if one was generated
-    r.raise_for_status()
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=max_retries,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+
+    try:
+        r = session.get(url, allow_redirects=True, verify=verify, timeout=timeout)
+        r.raise_for_status()
+    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+        logger.error(f"Failed to download {url} after {max_retries} retries: {str(e)}")
+        raise
 
     # check if the content is a ZIP file
     if (

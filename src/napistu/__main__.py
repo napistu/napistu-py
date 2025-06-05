@@ -18,7 +18,7 @@ from napistu import indices
 from napistu import sbml_dfs_core
 from napistu import utils
 from napistu.context import filtering
-from napistu.context import mount
+from napistu.matching import mount
 from napistu.ingestion import bigg
 from napistu.ingestion import gtex
 from napistu.ingestion import hpa
@@ -35,18 +35,16 @@ from napistu.network import net_utils
 from napistu.network import precompute
 from napistu.ontologies.genodexito import Genodexito
 from napistu.ontologies import dogma
-from napistu.rpy2 import has_rpy2
-from napistu.constants import ONTOLOGIES, RESOLVE_MATCHES_AGGREGATORS
+from napistu.constants import ONTOLOGIES
+from napistu.constants import RESOLVE_MATCHES_AGGREGATORS
+from napistu.ingestion.constants import PROTEINATLAS_SUBCELL_LOC_URL
+from napistu.ingestion.constants import GTEX_RNASEQ_EXPRESSION_URL
 from fs import open_fs
-
-if has_rpy2:
-    pass
 
 logger = logging.getLogger(napistu.__name__)
 click_logging.basic_config(logger)
 
 ALL = "all"
-
 
 @click.group()
 def cli():
@@ -95,12 +93,12 @@ def load_ttrust(target_uri: str):
 @click.option(
     "--url",
     type=str,
-    default=constants.PROTEINATLAS_SUBCELL_LOC_URL,
+    default=PROTEINATLAS_SUBCELL_LOC_URL,
     help="URL to download the zipped protein atlas subcellular localization tsv from.",
 )
 @click_logging.simple_verbosity_option(logger)
 def load_proteinatlas_subcell(target_uri: str, url: str):
-    hpa.download_proteinatlas_subcell(target_uri, url)
+    hpa.download_hpa_data(target_uri, url)
 
 
 @load.command(name="gtex-rnaseq-expression")
@@ -108,13 +106,12 @@ def load_proteinatlas_subcell(target_uri: str, url: str):
 @click.option(
     "--url",
     type=str,
-    default=constants.GTEX_RNASEQ_EXPRESSION_URL,
+    default=GTEX_RNASEQ_EXPRESSION_URL,
     help="URL to download the gtex file from.",
 )
 @click_logging.simple_verbosity_option(logger)
 def load_gtex_rnaseq(target_uri: str, url: str):
-    logger.info("Start downloading gtex %s to %s", url, target_uri)
-    utils.download_wget(url, target_uri)
+    gtex.download_gtex_rnaseq(target_uri, url)
 
 
 @load.command(name="string-db")

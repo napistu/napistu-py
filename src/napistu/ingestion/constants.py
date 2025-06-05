@@ -10,7 +10,6 @@ SPECIES_FULL_NAME_YEAST = "Saccharomyces cerevisiae"
 SPECIES_FULL_NAME_RAT = "Rattus norvegicus"
 SPECIES_FULL_NAME_WORM = "Caenorhabditis elegans"
 
-
 PROTEINATLAS_SUBCELL_LOC_URL = (
     "https://www.proteinatlas.org/download/tsv/subcellular_location.tsv.zip"
 )

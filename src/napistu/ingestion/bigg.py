@@ -40,33 +40,17 @@ def bigg_sbml_download(bg_pathway_root: str, overwrite: bool = False) -> None:
     """
     utils.initialize_dir(bg_pathway_root, overwrite)
 
-    bigg_models = {
-        BIGG_MODEL_KEYS[SPECIES_FULL_NAME_HUMAN]: {
-            BIGG_MODEL_FIELD_URL: BIGG_MODEL_URLS[SPECIES_FULL_NAME_HUMAN],
-            BIGG_MODEL_FIELD_SPECIES: SPECIES_FULL_NAME_HUMAN,
+    bigg_models_df = indices.create_pathway_index_df(
+        model_keys=BIGG_MODEL_KEYS,
+        model_urls=BIGG_MODEL_URLS,
+        model_species={
+            SPECIES_FULL_NAME_HUMAN: SPECIES_FULL_NAME_HUMAN,
+            SPECIES_FULL_NAME_MOUSE: SPECIES_FULL_NAME_MOUSE,
+            SPECIES_FULL_NAME_YEAST: SPECIES_FULL_NAME_YEAST,
         },
-        BIGG_MODEL_KEYS[SPECIES_FULL_NAME_MOUSE]: {
-            BIGG_MODEL_FIELD_URL: BIGG_MODEL_URLS[SPECIES_FULL_NAME_MOUSE],
-            BIGG_MODEL_FIELD_SPECIES: SPECIES_FULL_NAME_MOUSE,
-        },
-        BIGG_MODEL_KEYS[SPECIES_FULL_NAME_YEAST]: {
-            BIGG_MODEL_FIELD_URL: BIGG_MODEL_URLS[SPECIES_FULL_NAME_YEAST],
-            BIGG_MODEL_FIELD_SPECIES: SPECIES_FULL_NAME_YEAST,
-        },
-    }
-    bigg_models_df = pd.DataFrame(bigg_models).T
-    bigg_models_df["sbml_path"] = [
-        os.path.join(bg_pathway_root, k) + ".sbml"
-        for k in bigg_models_df.index.tolist()
-    ]
-    bigg_models_df["file"] = [os.path.basename(x) for x in bigg_models_df["sbml_path"]]
-
-    # add other attributes which will be used in the pw_index
-    bigg_models_df["date"] = datetime.date.today().strftime("%Y%m%d")
-    bigg_models_df.index = bigg_models_df.index.rename("pathway_id")
-    bigg_models_df = bigg_models_df.reset_index()
-    bigg_models_df["name"] = bigg_models_df["pathway_id"]
-    bigg_models_df = bigg_models_df.assign(source="BiGG")
+        base_path=bg_pathway_root,
+        source_name="BiGG"
+    )
 
     with open_fs(bg_pathway_root, create=True) as bg_fs:
         for _, row in bigg_models_df.iterrows():
@@ -107,18 +91,41 @@ def construct_bigg_consensus(
     species: str | Iterable[str] | None = None,
     outdir: str | None = None,
 ) -> sbml_dfs_core.SBML_dfs:
-    """Constructs a BiGG SBML DFs Pathway Representation
+    """Construct a BiGG SBML DFs pathway representation.
 
-    Attention: curently this does work only for a singly model. Integraiton of multiple
-    models is not supported yet in BiGG.
+    Parameters
+    ----------
+    pw_index_inp : str or indices.PWIndex
+        PWIndex object or URI pointing to PWIndex
+    species : str or Iterable[str] or None, optional
+        One or more species to filter by, by default None (no filtering)
+    outdir : str or None, optional
+        Output directory used to cache results, by default None
 
-    Args:
-        pw_index_inp (str | indices.PWIndex): PWIndex or uri pointing to PWIndex
-        species (str | Iterable[str] | None): one or more species to filter by. Default: no filtering
-        outdir (str | None, optional): output directory used to cache results. Defaults to None.
+    Returns
+    -------
+    sbml_dfs_core.SBML_dfs
+        A consensus SBML representation
 
-    Returns:
-        sbml_dfs_core.SBML_dfs: A consensus SBML
+    Notes
+    -----
+    Currently this only works for a single model. Integration of multiple
+    models is not yet supported in BiGG.
+
+    The function:
+    1. Loads/validates the pathway index
+    2. Constructs SBML DFs dictionary
+    3. Processes the single model:
+        - Infers compartmentalization for species without location
+        - Names compartmentalized species
+        - Validates the final model
+
+    Raises
+    ------
+    ValueError
+        If pw_index_inp is neither a PWIndex nor a string
+    NotImplementedError
+        If attempting to merge multiple models
     """
     if isinstance(pw_index_inp, str):
         pw_index = indices.adapt_pw_index(pw_index_inp, species=species, outdir=outdir)

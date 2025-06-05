@@ -206,7 +206,7 @@ def _find_reactions_with_disconnected_cspecies(
     reaction_species = sbml_dfs_core.add_sbo_role(sbml_dfs.reaction_species)
 
     logger.info(
-        "Finding disconnected pairss of cspecies based on the zero values in the coccurrence_edgelist"
+        "Finding disconnected pairs of cspecies based on the zero values in the coccurrence_edgelist"
     )
 
     # map to cspcies
