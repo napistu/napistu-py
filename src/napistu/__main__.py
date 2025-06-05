@@ -20,6 +20,7 @@ from napistu import utils
 from napistu.context import filtering
 from napistu.context import mount
 from napistu.ingestion import bigg
+from napistu.ingestion import gtex
 from napistu.ingestion import hpa
 from napistu.ingestion import reactome
 from napistu.ingestion import sbml
@@ -39,7 +40,7 @@ from napistu.constants import ONTOLOGIES, RESOLVE_MATCHES_AGGREGATORS
 from fs import open_fs
 
 if has_rpy2:
-    from napistu.rpy2 import netcontextr, callr
+    pass
 
 logger = logging.getLogger(napistu.__name__)
 click_logging.basic_config(logger)
@@ -517,20 +518,13 @@ def dogmatic_scaffold(
 
 
 @refine.command(name="filter_gtex_tissue")
-@click.argument("model_uri", type=str)
+@click.argument("sbml_dfs_uri", type=str)
 @click.argument("gtex_file_uri", type=str)
 @click.argument("output_model_uri", type=str)
 @click.argument("tissue", type=str)
-@click.option(
-    "--filter-non-genic-reactions",
-    "-f",
-    default=False,
-    type=bool,
-    help="Filter reactions not involving genes?",
-)
 @click_logging.simple_verbosity_option(logger)
 def filter_gtex_tissue(
-    model_uri: str,
+    sbml_dfs_uri: str,
     gtex_file_uri: str,
     output_model_uri: str,
     tissue: str,
@@ -540,35 +534,31 @@ def filter_gtex_tissue(
 
     This uses zfpkm values derived from gtex to filter the model.
     """
-    logger.info("Get rcpr from R")
-    rcpr = callr.get_rcpr()
-    logger.info("Load sbml_dfs model")
-    model: sbml.SBML_dfs = utils.load_pickle(model_uri)  # type: ignore
-    logger.info("Load and clean gtex tissue expression")
-    dat_gtex = netcontextr.load_and_clean_gtex_data(
-        rcpr, gtex_file_uri, by_tissue_zfpkm=True
-    )
-    logger.info("Convert sbml_dfs to rcpr reaction graph")
-    model_r = netcontextr.sbml_dfs_to_rcpr_reactions(model)
-    logger.info("Annotate genes with gtex tissue expression")
-    model_r_annot = netcontextr.annotate_genes(rcpr, model_r, dat_gtex, "tissue")
-    logger.info("Trim network by gene attribute")
-    model_r_trim = netcontextr.trim_reactions_by_gene_attribute(
-        rcpr, model_r_annot, "tissue", tissue
-    )
-    logger.info("Apply trimmed network")
 
-    if filter_non_genic_reactions:
-        logger.info("Filter non genic reactions")
-        considered_reactions = None
-    else:
-        logger.info("Keep genic reactions")
-        considered_reactions = rcpr._get_rids_from_rcpr_reactions(model_r)
-    netcontextr.apply_reactions_context_to_sbml_dfs(
-        model, model_r_trim, considered_reactions=considered_reactions
+    logger.info("Load sbml_dfs model")
+    sbml_dfs: sbml.SBML_dfs = utils.load_pickle(sbml_dfs_uri)  # type: ignore
+    logger.info("Load and clean gtex tissue expression")
+    dat_gtex = gtex.load_and_clean_gtex_data(gtex_file_uri)
+    logger.info("Annotate genes with gtex tissue expression")
+    mount.bind_wide_results(
+        sbml_dfs=sbml_dfs,
+        results_df=dat_gtex.reset_index(drop=False),
+        results_name="gtex",
+        ontologies={ONTOLOGIES.ENSEMBL_GENE},
+        numeric_agg=RESOLVE_MATCHES_AGGREGATORS.MAX,
     )
-    logger.info("Save model to %s", output_model_uri)
-    utils.save_pickle(output_model_uri, model)
+    logger.info("Trim network by gene attribute")
+    filtering.filter_species_by_attribute(
+        sbml_dfs,
+        "gtex",
+        attribute_name=tissue,
+        # remove entries which are NOT in the liver
+        attribute_value=0,
+        inplace=True,
+    )
+
+    logger.info("Save sbml_dfs to %s", output_model_uri)
+    utils.save_pickle(output_model_uri, sbml_dfs)
 
 
 @refine.command(name="filter_hpa_compartments")
