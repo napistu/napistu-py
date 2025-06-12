@@ -443,7 +443,7 @@ def expand_identifiers(
     sbml_dfs_uri: str,
     output_model_uri: str,
     species: str,
-    ontologies: list[str],
+    ontologies: set[str],
     preferred_method: str,
     allow_fallback: bool,
 ):
@@ -453,12 +453,11 @@ def expand_identifiers(
         sbml_dfs_uri (str): uri of model in sbml dfs format
         output_model_uri (str): output uri of model in sbml dfs format
         species (str): Species to use
-        ontologies (list[str]): ontologies to add or update
+        ontologies (set[str]): ontologies to add or update
 
     Example call:
     > cpr refine expand_identifiers gs://<uri> ./test.pickle -o ensembl_gene
     """
-
     sbml_dfs: sbml.SBML_dfs = utils.load_pickle(sbml_dfs_uri)  # type: ignore
     if len(ontologies) == 0:
         raise ValueError("No ontologies to expand specified.")

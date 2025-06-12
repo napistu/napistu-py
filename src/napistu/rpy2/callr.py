@@ -95,8 +95,9 @@ def get_rbase(
             r_paths. Defaults to None.
 
     Returns:
-        _type_: _description_
+        The base R package
     """
+
     base = importr("base")
     if r_paths is not None:
         base._libPaths(r_paths)
@@ -105,7 +106,7 @@ def get_rbase(
 
 @warn_if_no_rpy2
 @report_r_exceptions
-def pandas_to_r_dataframe(df: pd.DataFrame) -> rpy2.robjects.DataFrame:
+def pandas_to_r_dataframe(df: pd.DataFrame):
     """Convert a pandas dataframe to an R dataframe
 
     This uses the rpy2-arrow functionality
@@ -117,6 +118,7 @@ def pandas_to_r_dataframe(df: pd.DataFrame) -> rpy2.robjects.DataFrame:
     Returns:
         rpy2.robjects.DataFrame: R dataframe
     """
+
     conv = _get_py2rpy_pandas_conv()
     with (ro.default_converter + conv).context():
         r_df = ro.conversion.get_conversion().py2rpy(df)
@@ -134,6 +136,7 @@ def r_dataframe_to_pandas(rdf: rpy2.robjects.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Pandas dataframe
     """
+
     with (ro.default_converter + pandas2ri.converter).context():
         df = ro.conversion.get_conversion().rpy2py(rdf)
     return df
@@ -151,6 +154,7 @@ def _get_py2rpy_pandas_conv():
     Returns:
         Callable: The converter function
     """
+
     base = get_rbase()
     # We use the converter included in rpy2-arrow as template.
     conv = rpy2.robjects.conversion.Converter(

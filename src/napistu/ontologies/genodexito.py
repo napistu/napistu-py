@@ -2,16 +2,15 @@ from typing import Dict, List, Optional, Set
 import logging
 
 import pandas as pd
+from pydantic import BaseModel, Field, field_validator
 
 from napistu import sbml_dfs_core
+from napistu import identifiers
 from napistu.ontologies.mygene import create_python_mapping_tables
-from napistu.rpy2.rids import create_bioconductor_mapping_tables
 from napistu.constants import SBML_DFS, ONTOLOGIES, IDENTIFIERS
 from napistu.ontologies.constants import INTERCONVERTIBLE_GENIC_ONTOLOGIES
 from napistu.ontologies.constants import GENODEXITO_DEFS
 from napistu.ontologies.constants import GENODEXITO_MAPPERS
-
-from napistu import identifiers
 
 logger = logging.getLogger(__name__)
 
@@ -109,18 +108,22 @@ class Genodexito:
         test_mode : bool, optional
             If True, limit queries to 1000 genes for testing purposes, by default False
         """
+        # Validate configuration using Pydantic model
+        config = GenodexitoConfig(
+            species=species,
+            preferred_method=preferred_method,
+            allow_fallback=allow_fallback,
+            r_paths=r_paths,
+            test_mode=test_mode,
+        )
 
-        if preferred_method not in GENODEXITO_MAPPERS:
-            raise ValueError(
-                f"Invalid preferred_method: {preferred_method}. Valid methods are {', '.join(GENODEXITO_MAPPERS)}"
-            )
+        self.species = config.species
+        self.preferred_method = config.preferred_method
+        self.allow_fallback = config.allow_fallback
+        self.r_paths = config.r_paths
+        self.test_mode = config.test_mode
 
-        self.species = species
-        self.preferred_method = preferred_method
-        self.allow_fallback = allow_fallback
-        self.r_paths = r_paths
-        self.test_mode = test_mode
-
+        # Initialize empty attributes
         self.mappings: Optional[Dict[str, pd.DataFrame]] = None
         self.mapper_used: Optional[str] = None
         self.merged_mappings: Optional[pd.DataFrame] = None
@@ -156,6 +159,9 @@ class Genodexito:
 
         if self.preferred_method == GENODEXITO_DEFS.BIOCONDUCTOR:
             try:
+                # Only import R functionality when needed
+                from napistu.rpy2.rids import create_bioconductor_mapping_tables
+
                 self.mappings = create_bioconductor_mapping_tables(
                     mappings=mappings, species=self.species, r_paths=self.r_paths
                 )
@@ -188,6 +194,9 @@ class Genodexito:
                     logger.warning(
                         f"Error creating mygene Python mapping tables for {self.species} with {mappings}. Trying the bioconductor fallback."
                     )
+                    # Only import R functionality when needed
+                    from napistu.rpy2.rids import create_bioconductor_mapping_tables
+
                     self.mappings = create_bioconductor_mapping_tables(
                         mappings=mappings, species=self.species, r_paths=self.r_paths
                     )
@@ -315,6 +324,17 @@ class Genodexito:
         # If no ontologies specified, use all available ones
         if ontologies is None:
             ontologies = INTERCONVERTIBLE_GENIC_ONTOLOGIES
+        else:
+            # Ensure ncbi_entrez_gene is included in the ontologies
+            ontologies = set(ontologies)
+            ontologies.add(ONTOLOGIES.NCBI_ENTREZ_GENE)
+
+            invalid_ontologies = ontologies - INTERCONVERTIBLE_GENIC_ONTOLOGIES
+            if invalid_ontologies:
+                raise ValueError(
+                    f"Invalid ontologies: {', '.join(invalid_ontologies)}.\n"
+                    f"Valid options are: {', '.join(sorted(INTERCONVERTIBLE_GENIC_ONTOLOGIES))}"
+                )
 
         # create mapping tables if they don't exist
         if self.mappings is None:
@@ -434,7 +454,7 @@ class Genodexito:
             return set(self.mappings.keys())
 
         # validate provided mappings to see if they are genic ontologies within the controlled vocabulary
-        never_valid_mappings = ontologies - INTERCONVERTIBLE_GENIC_ONTOLOGIES
+        never_valid_mappings = set(ontologies) - INTERCONVERTIBLE_GENIC_ONTOLOGIES
         if never_valid_mappings:
             raise ValueError(
                 f"Invalid mappings: {', '.join(never_valid_mappings)}. "
@@ -442,7 +462,7 @@ class Genodexito:
             )
 
         # validate provided mappings against existing mappings
-        missing_mappings = ontologies - set(self.mappings.keys())
+        missing_mappings = set(ontologies) - set(self.mappings.keys())
         if missing_mappings:
             raise ValueError(
                 f"Missing mappings: {', '.join(missing_mappings)}. "
@@ -501,6 +521,11 @@ class Genodexito:
         starting_ontologies = ontologies.intersection(
             set(all_entity_identifiers["ontology"])
         )
+
+        if len(starting_ontologies) == 0:
+            raise ValueError(
+                f"None of the ontologies currently in the sbml_dfs match `ontologies`. The currently included ontologies are {set(all_entity_identifiers['ontology'])}. If there are major genic ontologies in this list then you may need to use ontologies.clean_ontologies() to convert from aliases to ontologies in the ONTOLOGIES controlled vocabulary."
+            )
 
         expanded_ontologies = ontologies - starting_ontologies
         if len(expanded_ontologies) == 0:
@@ -591,6 +616,52 @@ class Genodexito:
 
         return output
 
+class GenodexitoConfig(BaseModel):
+    """Configuration for Genodexito with validation.
+    
+    Attributes:
+        species: Species name to use for mapping
+        preferred_method: Which mapping method to try first
+        allow_fallback: Whether to allow fallback to other method
+        r_paths: Optional paths to R libraries
+        test_mode: Whether to limit queries for testing
+    """
+    species: str = Field(default="Homo sapiens", description="Species name to use")
+    preferred_method: str = Field(
+        default=GENODEXITO_DEFS.BIOCONDUCTOR,
+        description="Which mapping method to try first"
+    )
+    allow_fallback: bool = Field(
+        default=True,
+        description="Whether to allow fallback to other method"
+    )
+    r_paths: Optional[List[str]] = Field(
+        default=None,
+        description="Optional paths to R libraries"
+    )
+    test_mode: bool = Field(
+        default=False,
+        description="Whether to limit queries for testing"
+    )
+
+    @field_validator("preferred_method")
+    @classmethod
+    def validate_preferred_method(cls, v: str) -> str:
+        """Validate that preferred_method is one of the allowed values."""
+        if v not in {GENODEXITO_DEFS.BIOCONDUCTOR, GENODEXITO_DEFS.PYTHON}:
+            raise ValueError(
+                f"Invalid preferred_method: {v}. "
+                f"Must be one of: {GENODEXITO_DEFS.BIOCONDUCTOR}, {GENODEXITO_DEFS.PYTHON}"
+            )
+        return v
+
+    @field_validator("r_paths")
+    @classmethod
+    def validate_r_paths(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        """Validate that r_paths contains only strings."""
+        if v is not None and not all(isinstance(path, str) for path in v):
+            raise ValueError("All elements in r_paths must be strings")
+        return v
 
 def _expand_identifiers_new_entries(
     sysid: str, expanded_identifiers_df: pd.DataFrame
