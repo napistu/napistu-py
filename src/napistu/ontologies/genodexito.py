@@ -7,10 +7,9 @@ from pydantic import BaseModel, Field, field_validator
 from napistu import sbml_dfs_core
 from napistu import identifiers
 from napistu.ontologies.mygene import create_python_mapping_tables
-from napistu.constants import SBML_DFS, ONTOLOGIES, IDENTIFIERS
+from napistu.constants import SBML_DFS, ONTOLOGIES, IDENTIFIERS, SBML_DFS_SCHEMA
 from napistu.ontologies.constants import INTERCONVERTIBLE_GENIC_ONTOLOGIES
 from napistu.ontologies.constants import GENODEXITO_DEFS
-from napistu.ontologies.constants import GENODEXITO_MAPPERS
 
 logger = logging.getLogger(__name__)
 
@@ -557,8 +556,7 @@ class Genodexito:
         # old identifiers joined with new identifiers
 
         # first, define the names of keys and ids
-        table_pk_var = sbml_dfs.schema["species"]["pk"]
-        table_id_var = sbml_dfs.schema["species"]["id"]
+        table_pk_var = SBML_DFS_SCHEMA.SCHEMA[SBML_DFS.SPECIES]["pk"]
 
         # retain bqb terms to define how an identifier is related to sid
         # this relation will be preserved for the new ids
@@ -582,43 +580,32 @@ class Genodexito:
             }
         )
 
-        expanded_identifiers_df = (
-            pd.concat(
-                [
-                    all_entity_identifiers[
-                        [
-                            table_pk_var,
-                            IDENTIFIERS.ONTOLOGY,
-                            IDENTIFIERS.IDENTIFIER,
-                            IDENTIFIERS.URL,
-                            IDENTIFIERS.BQB,
-                        ]
-                    ],
-                    new_identifiers,
-                    # ignore new identifier if it already exists
-                ]
-            )
-            # remove duplicated identifiers
-            .groupby([table_pk_var, IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER])
-            .first()
-            .reset_index()
-            .set_index(table_pk_var)
+        expanded_identifiers_df = pd.concat(
+            [
+                all_entity_identifiers[
+                    [
+                        table_pk_var,
+                        IDENTIFIERS.ONTOLOGY,
+                        IDENTIFIERS.IDENTIFIER,
+                        IDENTIFIERS.URL,
+                        IDENTIFIERS.BQB,
+                    ]
+                ],
+                new_identifiers,
+                # ignore new identifier if it already exists
+            ]
         )
 
-        # create a dictionary of new Identifiers objects
-        expanded_identifiers_dict = {
-            i: _expand_identifiers_new_entries(i, expanded_identifiers_df)
-            for i in expanded_identifiers_df.index.unique()
-        }
-
-        output = pd.Series(expanded_identifiers_dict).rename(table_id_var)
-        output.index.name = table_pk_var
+        output = identifiers.df_to_identifiers(
+            expanded_identifiers_df, SBML_DFS.SPECIES
+        )
 
         return output
 
+
 class GenodexitoConfig(BaseModel):
     """Configuration for Genodexito with validation.
-    
+
     Attributes:
         species: Species name to use for mapping
         preferred_method: Which mapping method to try first
@@ -626,22 +613,20 @@ class GenodexitoConfig(BaseModel):
         r_paths: Optional paths to R libraries
         test_mode: Whether to limit queries for testing
     """
+
     species: str = Field(default="Homo sapiens", description="Species name to use")
     preferred_method: str = Field(
         default=GENODEXITO_DEFS.BIOCONDUCTOR,
-        description="Which mapping method to try first"
+        description="Which mapping method to try first",
     )
     allow_fallback: bool = Field(
-        default=True,
-        description="Whether to allow fallback to other method"
+        default=True, description="Whether to allow fallback to other method"
     )
     r_paths: Optional[List[str]] = Field(
-        default=None,
-        description="Optional paths to R libraries"
+        default=None, description="Optional paths to R libraries"
     )
     test_mode: bool = Field(
-        default=False,
-        description="Whether to limit queries for testing"
+        default=False, description="Whether to limit queries for testing"
     )
 
     @field_validator("preferred_method")
@@ -662,17 +647,3 @@ class GenodexitoConfig(BaseModel):
         if v is not None and not all(isinstance(path, str) for path in v):
             raise ValueError("All elements in r_paths must be strings")
         return v
-
-def _expand_identifiers_new_entries(
-    sysid: str, expanded_identifiers_df: pd.DataFrame
-) -> identifiers.Identifiers:
-    """Expand Identifiers to include Bioconductor annotations"""
-    entry = expanded_identifiers_df.loc[sysid]
-
-    if type(entry) is pd.Series:
-        sysis_id_list = [entry.to_dict()]
-    else:
-        # multiple annotations
-        sysis_id_list = list(entry.reset_index(drop=True).T.to_dict().values())
-
-    return identifiers.Identifiers(sysis_id_list)

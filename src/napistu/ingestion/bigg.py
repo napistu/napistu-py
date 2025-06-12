@@ -10,6 +10,7 @@ from napistu import sbml_dfs_core
 from napistu import utils
 from napistu.consensus import construct_sbml_dfs_dict
 from napistu.ingestion import sbml
+from napistu.ontologies.aliases import update_species_ontology_aliases
 from napistu.ingestion.constants import BIGG_MODEL_KEYS
 from napistu.ingestion.constants import BIGG_MODEL_URLS
 from napistu.ingestion.constants import BIGG_RECON3D_FIELD_ANNOTATION
@@ -146,5 +147,6 @@ def construct_bigg_consensus(
     # fix missing compartimentalization
     model = sbml_dfs_core.infer_uncompartmentalized_species_location(model)
     model = sbml_dfs_core.name_compartmentalized_species(model)
+    update_species_ontology_aliases(model)
     model.validate()
     return model

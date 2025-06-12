@@ -22,6 +22,8 @@ from napistu.constants import ENSEMBL_MOLECULE_TYPES_FROM_ONTOLOGY
 from napistu.constants import ENSEMBL_SPECIES_FROM_CODE
 from napistu.constants import ENSEMBL_SPECIES_TO_CODE
 from napistu.constants import SPECIES_IDENTIFIERS_REQUIRED_VARS
+from napistu.constants import SBML_DFS_SCHEMA
+from napistu.constants import IDENTIFIERS_REQUIRED_VARS
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +172,61 @@ def merge_identifiers(identifier_series: pd.Series) -> Identifiers:
             itertools.chain.from_iterable(identifier_series.map(lambda x: x.ids))
         )
         return Identifiers(merged_ids)
+
+
+def df_to_identifiers(df: pd.DataFrame, entity_type: str) -> pd.Series:
+    """
+    Convert a DataFrame of identifier information to a Series of Identifiers objects.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing identifier information with required columns:
+        ontology, identifier, url, bqb
+    index_col : str
+        Name of the column to use as index for the output Series
+
+    Returns
+    -------
+    pd.Series
+        Series indexed by index_col containing Identifiers objects
+    """
+
+    if entity_type not in SBML_DFS_SCHEMA.SCHEMA:
+        raise ValueError(f"Invalid entity type: {entity_type}")
+
+    table_schema = SBML_DFS_SCHEMA.SCHEMA[entity_type]
+    if "id" not in table_schema:
+        raise ValueError(f"The entity type {entity_type} does not have an id column")
+
+    table_pk_var = table_schema["pk"]
+    expected_columns = set([table_pk_var]) | IDENTIFIERS_REQUIRED_VARS
+    missing_columns = expected_columns - set(df.columns)
+    if missing_columns:
+        raise ValueError(
+            f"The DataFrame does not contain the required columns: {missing_columns}"
+        )
+
+    # Process identifiers to remove duplicates
+    indexed_df = (
+        df
+        # remove duplicated identifiers
+        .groupby([table_pk_var, IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER])
+        .first()
+        .reset_index()
+        .set_index(table_pk_var)
+    )
+
+    # create a dictionary of new Identifiers objects
+    expanded_identifiers_dict = {
+        i: _expand_identifiers_new_entries(i, indexed_df)
+        for i in indexed_df.index.unique()
+    }
+
+    output = pd.Series(expanded_identifiers_dict).rename(table_schema["id"])
+    output.index.name = table_pk_var
+
+    return output
 
 
 def format_uri(uri: str, biological_qualifier_type: str | None = None) -> Identifiers:
@@ -878,6 +935,21 @@ def _validate_assets_sbml_ids(
         )
 
     return None
+
+
+def _expand_identifiers_new_entries(
+    sysid: str, expanded_identifiers_df: pd.DataFrame
+) -> Identifiers:
+    """Create an identifiers object from an index entry in a dataframe"""
+    entry = expanded_identifiers_df.loc[sysid]
+
+    if type(entry) is pd.Series:
+        sysis_id_list = [entry.to_dict()]
+    else:
+        # multiple annotations
+        sysis_id_list = list(entry.reset_index(drop=True).T.to_dict().values())
+
+    return Identifiers(sysis_id_list)
 
 
 class _IdentifierValidator(BaseModel):
