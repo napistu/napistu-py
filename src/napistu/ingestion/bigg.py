@@ -147,6 +147,6 @@ def construct_bigg_consensus(
     # fix missing compartimentalization
     model = sbml_dfs_core.infer_uncompartmentalized_species_location(model)
     model = sbml_dfs_core.name_compartmentalized_species(model)
-    update_species_ontology_aliases(model)
+    rename_species_ontologies(model)
     model.validate()
     return model
