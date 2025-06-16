@@ -4,7 +4,7 @@ import pytest
 import pandas as pd
 from napistu import identifiers
 from napistu.constants import IDENTIFIERS, SBML_DFS
-from napistu.ontologies import aliases
+from napistu.ontologies import renaming
 
 
 @pytest.fixture
@@ -61,13 +61,13 @@ def mock_sbml_dfs():
     return MockSBMLDfs()
 
 
-def test_update_species_ontology_aliases_basic(mock_sbml_dfs):
+def test_rename_species_ontologies_basic(mock_sbml_dfs):
     """Test basic alias updating functionality."""
     # Define test aliases
     test_aliases = {"ncbi_entrez_gene": {"ncbigene"}, "uniprot": {"uniprot_id"}}
 
     # Update aliases
-    aliases.update_species_ontology_aliases(mock_sbml_dfs, test_aliases)
+    renaming.rename_species_ontologies(mock_sbml_dfs, test_aliases)
 
     # Get updated identifiers
     updated_ids = mock_sbml_dfs.get_identifiers(SBML_DFS.SPECIES)
@@ -79,17 +79,17 @@ def test_update_species_ontology_aliases_basic(mock_sbml_dfs):
     assert "uniprot_id" not in set(updated_ids[IDENTIFIERS.ONTOLOGY])
 
 
-def test_update_species_ontology_aliases_no_overlap(mock_sbml_dfs):
+def test_rename_species_ontologies_no_overlap(mock_sbml_dfs):
     """Test that error is raised when no aliases overlap with data."""
     # Define aliases that don't match any existing ontologies
     test_aliases = {"ensembl_gene": {"ensembl"}}
 
     # Should raise ValueError due to no overlap
     with pytest.raises(ValueError, match="do not overlap"):
-        aliases.update_species_ontology_aliases(mock_sbml_dfs, test_aliases)
+        renaming.rename_species_ontologies(mock_sbml_dfs, test_aliases)
 
 
-def test_update_species_ontology_aliases_partial_update(mock_sbml_dfs):
+def test_rename_species_ontologies_partial_update(mock_sbml_dfs):
     """Test that partial updates work correctly."""
     # Define aliases that only update some ontologies
     test_aliases = {
@@ -98,7 +98,7 @@ def test_update_species_ontology_aliases_partial_update(mock_sbml_dfs):
     }
 
     # Update aliases
-    aliases.update_species_ontology_aliases(mock_sbml_dfs, test_aliases)
+    renaming.rename_species_ontologies(mock_sbml_dfs, test_aliases)
 
     # Get updated identifiers
     updated_ids = mock_sbml_dfs.get_identifiers(SBML_DFS.SPECIES)

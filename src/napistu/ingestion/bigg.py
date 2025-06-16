@@ -10,7 +10,7 @@ from napistu import sbml_dfs_core
 from napistu import utils
 from napistu.consensus import construct_sbml_dfs_dict
 from napistu.ingestion import sbml
-from napistu.ontologies.aliases import update_species_ontology_aliases
+from napistu.ontologies.renaming import rename_species_ontologies
 from napistu.ingestion.constants import BIGG_MODEL_KEYS
 from napistu.ingestion.constants import BIGG_MODEL_URLS
 from napistu.ingestion.constants import BIGG_RECON3D_FIELD_ANNOTATION

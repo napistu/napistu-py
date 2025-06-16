@@ -28,7 +28,7 @@ if has_rpy2:
 
 @warn_if_no_rpy2
 @report_r_exceptions
-def get_rcpr(
+def get_napistu_r_package(
     r_paths: list[str] | None = None,
 ):
     """

@@ -17,9 +17,42 @@ from napistu import identifiers, sbml_dfs_core
 logger = logging.getLogger(__name__)
 
 
-def update_species_ontology_aliases(
+def rename_species_ontologies(
     sbml_dfs: sbml_dfs_core.SBML_dfs, aliases=ONTOLOGY_SPECIES_ALIASES
 ):
+    """
+    Rename ontologies in the species identifiers table of an SBML_dfs object using provided aliases.
+
+    This function updates the ontology names in the species identifiers of the given SBML_dfs object
+    according to the provided alias mapping. It validates the alias mapping, logs which ontologies will be updated,
+    and replaces any matching aliases in the species identifiers with their canonical ontology names.
+
+    Parameters
+    ----------
+    sbml_dfs : napistu.sbml_dfs_core.SBML_dfs
+        The SBML_dfs object whose species table will be updated in-place.
+    aliases : dict[str, set[str]], optional
+        Dictionary mapping canonical ontology names to sets of their aliases. By default, uses ONTOLOGY_SPECIES_ALIASES.
+        All keys must be valid ontologies from ONTOLOGIES_LIST. Values must not overlap between keys or with keys themselves.
+
+    Returns
+    -------
+    None
+        The function updates sbml_dfs.species in-place and does not return a value.
+
+    Raises
+    ------
+    ValueError
+        If the alias mapping is invalid (e.g., keys not in ONTOLOGIES_LIST, overlapping values, or values used as keys),
+        or if there is no overlap between the provided aliases and the ontologies present in the species identifiers.
+
+    Examples
+    --------
+    >>> from napistu.ontologies.renaming import rename_species_ontologies
+    >>> sbml_dfs = ...  # an SBML_dfs object
+    >>> aliases = {"ncbi_entrez_gene": {"ncbigene", "ncbi_gene"}, "uniprot": {"uniprot_id"}}
+    >>> rename_species_ontologies(sbml_dfs, aliases)
+    """
 
     species_identifiers = sbml_dfs.get_identifiers(SBML_DFS.SPECIES)
 
