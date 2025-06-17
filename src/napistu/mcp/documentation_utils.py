@@ -2,7 +2,6 @@
 Utilities for loading and processing documentation.
 """
 
-import base64
 import httpx
 import os
 from napistu.constants import PACKAGE_DEFS
@@ -25,69 +24,35 @@ async def load_readme_content(readme_url: str) -> str:
         )
 
 
-async def list_wiki_pages(
-    repo: str,
-    owner: str = PACKAGE_DEFS.GITHUB_OWNER,
-    github_api: str = DEFAULT_GITHUB_API,
-) -> list:
-    """
-    List all Markdown (.md) page names in a GitHub wiki using the GitHub API.
-
-    Parameters
-    ----------
-    repo : str, optional
-        The repository name.
-    owner : str, optional
-        The GitHub username or organization (default is 'napistu').
-    github_api : str, optional
-        The GitHub API base URL (default is 'https://api.github.com').
-
-    Returns
-    -------
-    list of str
-        List of page names (e.g., ['Home.md', 'Some-Page.md'])
-    """
-    wiki_repo = f"{repo}.wiki"
-    url = f"{github_api}/repos/{owner}/{wiki_repo}/contents/"
-    async with httpx.AsyncClient(headers=_get_github_headers()) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-        return [item["name"] for item in resp.json() if item["name"].endswith(".md")]
-
-
 async def fetch_wiki_page(
     page_name: str,
-    repo: str,
+    repo: str = PACKAGE_DEFS.GITHUB_PROJECT_REPO,
     owner: str = PACKAGE_DEFS.GITHUB_OWNER,
-    github_api: str = DEFAULT_GITHUB_API,
 ) -> str:
     """
-    Fetch the decoded Markdown content of a given wiki page from a GitHub wiki.
+    Fetch wiki page content using raw GitHub URLs.
 
     Parameters
     ----------
     page_name : str
-        The name of the page file (e.g., 'Home.md').
-    repo : str, optional
-        The repository name.
-    owner : str, optional
-        The GitHub username or organization (default is 'napistu').
-    github_api : str, optional
-        The GitHub API base URL (default is 'https://api.github.com').
+        The name of the page (without .md extension for wiki pages)
+    repo : str
+        The repository name
+    owner : str
+        The GitHub username or organization
 
     Returns
     -------
     str
-        The Markdown content as a string.
+        The raw Markdown content
     """
-    wiki_repo = f"{repo}.wiki"
-    url = f"{github_api}/repos/{owner}/{wiki_repo}/contents/{page_name}"
-    async with httpx.AsyncClient(headers=_get_github_headers()) as client:
+    # Use raw.githubusercontent.com for wiki pages
+    url = f"https://raw.githubusercontent.com/wiki/{owner}/{repo}/{page_name}.md"
+
+    async with httpx.AsyncClient() as client:
         resp = await client.get(url)
         resp.raise_for_status()
-        data = resp.json()
-        content = base64.b64decode(data["content"]).decode("utf-8")
-        return content
+        return resp.text
 
 
 async def list_issues(
