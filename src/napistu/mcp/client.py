@@ -1,4 +1,3 @@
-# src/napistu/mcp/client.py
 """
 MCP client for testing and interacting with Napistu MCP servers.
 """
@@ -8,20 +7,19 @@ import logging
 from typing import Optional, Dict, Any, Mapping
 
 from fastmcp import Client
+from napistu.mcp.config import MCPClientConfig
 
 logger = logging.getLogger(__name__)
 
 
-async def check_server_health(
-    server_url: str = "http://127.0.0.1:8765",
-) -> Optional[Dict[str, Any]]:
+async def check_server_health(config: MCPClientConfig) -> Optional[Dict[str, Any]]:
     """
     Health check using FastMCP client.
 
     Parameters
     ----------
-    server_url : str, optional
-        Server URL for HTTP transport. Defaults to 'http://127.0.0.1:8765'.
+    config : MCPClientConfig
+        Client configuration object with validated settings.
 
     Returns
     -------
@@ -37,13 +35,10 @@ async def check_server_health(
             - components : Dict[str, Dict[str, str]]
                 Status of each component ('healthy', 'inactive', or 'unavailable')
     """
-
     try:
-        # FastMCP streamable-http requires the /mcp path
-        mcp_url = server_url.rstrip("/") + "/mcp"
-        logger.info(f"Connecting to MCP server at: {mcp_url}")
+        logger.info(f"Connecting to MCP server at: {config.mcp_url}")
 
-        client = Client(mcp_url)
+        client = Client(config.mcp_url)
 
         async with client:
             logger.info("✅ FastMCP client connected")
@@ -137,16 +132,14 @@ def print_health_status(health: Optional[Mapping[str, Any]]) -> None:
         print(f"Version: {health['version']}")
 
 
-async def list_server_resources(
-    server_url: str = "http://127.0.0.1:8765",
-) -> Optional[list]:
+async def list_server_resources(config: MCPClientConfig) -> Optional[list]:
     """
     List all available resources on the MCP server.
 
     Parameters
     ----------
-    server_url : str, optional
-        Server URL for HTTP transport. Defaults to 'http://127.0.0.1:8765'.
+    config : MCPClientConfig
+        Client configuration object with validated settings.
 
     Returns
     -------
@@ -154,10 +147,9 @@ async def list_server_resources(
         List of available resources, or None if failed.
     """
     try:
-        mcp_url = server_url.rstrip("/") + "/mcp"
-        logger.info(f"Listing resources from: {mcp_url}")
+        logger.info(f"Listing resources from: {config.mcp_url}")
 
-        client = Client(mcp_url)
+        client = Client(config.mcp_url)
 
         async with client:
             resources = await client.list_resources()
@@ -170,7 +162,7 @@ async def list_server_resources(
 
 
 async def read_server_resource(
-    resource_uri: str, server_url: str = "http://127.0.0.1:8765"
+    resource_uri: str, config: MCPClientConfig
 ) -> Optional[str]:
     """
     Read a specific resource from the MCP server.
@@ -179,8 +171,8 @@ async def read_server_resource(
     ----------
     resource_uri : str
         URI of the resource to read (e.g., 'napistu://health')
-    server_url : str, optional
-        Server URL for HTTP transport. Defaults to 'http://127.0.0.1:8765'.
+    config : MCPClientConfig
+        Client configuration object with validated settings.
 
     Returns
     -------
@@ -188,10 +180,9 @@ async def read_server_resource(
         Resource content as text, or None if failed.
     """
     try:
-        mcp_url = server_url.rstrip("/") + "/mcp"
-        logger.info(f"Reading resource {resource_uri} from: {mcp_url}")
+        logger.info(f"Reading resource {resource_uri} from: {config.mcp_url}")
 
-        client = Client(mcp_url)
+        client = Client(config.mcp_url)
 
         async with client:
             result = await client.read_resource(resource_uri)

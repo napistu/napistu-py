@@ -1,4 +1,3 @@
-# src/napistu/mcp/__main__.py
 """
 MCP (Model Context Protocol) Server CLI for Napistu.
 """
@@ -15,6 +14,15 @@ from napistu.mcp.client import (
     print_health_status,
     list_server_resources,
     read_server_resource,
+)
+from napistu.mcp.config import (
+    validate_server_config_flags,
+    validate_client_config_flags,
+    server_config_options,
+    client_config_options,
+    local_server_config,
+    local_client_config,
+    production_client_config,
 )
 
 logger = logging.getLogger(napistu.__name__)
@@ -37,155 +45,203 @@ def server():
 @click.option(
     "--profile", type=click.Choice(["local", "remote", "full"]), default="remote"
 )
-@click.option("--host", type=str, default="127.0.0.1")
-@click.option("--port", type=int, default=8765)
-@click.option("--server-name", type=str)
+@server_config_options
 @click_logging.simple_verbosity_option(logger)
-def start_server(profile, host, port, server_name):
+def start_server(profile, production, local, host, port, server_name):
     """Start an MCP server with the specified profile."""
-    start_mcp_server(profile, host, port, server_name)
+    try:
+        config = validate_server_config_flags(
+            local, production, host, port, server_name
+        )
+
+        click.echo("Starting server with configuration:")
+        click.echo(f"  Profile: {profile}")
+        click.echo(f"  Host: {config.host}")
+        click.echo(f"  Port: {config.port}")
+        click.echo(f"  Server Name: {config.server_name}")
+
+        start_mcp_server(profile, config)
+
+    except click.BadParameter as e:
+        raise click.ClickException(str(e))
 
 
 @server.command(name="local")
-@click.option("--server-name", type=str, default="napistu-local")
 @click_logging.simple_verbosity_option(logger)
-def start_local(server_name):
+def start_local():
     """Start a local MCP server optimized for function execution."""
-    start_mcp_server("local", "127.0.0.1", 8765, server_name)
+    config = local_server_config()
+    click.echo("Starting local development server (execution profile)")
+    click.echo(f"  Host: {config.host}")
+    click.echo(f"  Port: {config.port}")
+    click.echo(f"  Server Name: {config.server_name}")
+
+    start_mcp_server("local", config)
 
 
 @server.command(name="full")
-@click.option("--server-name", type=str, default="napistu-full")
 @click_logging.simple_verbosity_option(logger)
-def start_full(server_name):
+def start_full():
     """Start a full MCP server with all components enabled (local debugging)."""
-    start_mcp_server("full", "127.0.0.1", 8765, server_name)
+    config = local_server_config()
+    # Override server name for full profile
+    config.server_name = "napistu-full"
+
+    click.echo("Starting full development server (all components)")
+    click.echo(f"  Host: {config.host}")
+    click.echo(f"  Port: {config.port}")
+    click.echo(f"  Server Name: {config.server_name}")
+
+    start_mcp_server("full", config)
 
 
 @cli.command()
-@click.option("--url", default="http://127.0.0.1:8765", help="Server URL")
+@client_config_options
 @click_logging.simple_verbosity_option(logger)
-def health(url):
+def health(production, local, host, port, https):
     """Quick health check of MCP server."""
 
     async def run_health_check():
-        print("🏥 Napistu MCP Server Health Check")
-        print("=" * 40)
-        print(f"Server URL: {url}")
-        print()
+        try:
+            config = validate_client_config_flags(local, production, host, port, https)
 
-        health = await check_server_health(server_url=url)
-        print_health_status(health)
+            print("🏥 Napistu MCP Server Health Check")
+            print("=" * 40)
+            print(f"Server URL: {config.base_url}")
+            print()
+
+            health = await check_server_health(config)
+            print_health_status(health)
+
+        except click.BadParameter as e:
+            raise click.ClickException(str(e))
 
     asyncio.run(run_health_check())
 
 
 @cli.command()
-@click.option("--url", default="http://127.0.0.1:8765", help="Server URL")
+@client_config_options
 @click_logging.simple_verbosity_option(logger)
-def resources(url):
+def resources(production, local, host, port, https):
     """List all available resources on the MCP server."""
 
     async def run_list_resources():
-        print("📋 Napistu MCP Server Resources")
-        print("=" * 40)
-        print(f"Server URL: {url}")
-        print()
+        try:
+            config = validate_client_config_flags(local, production, host, port, https)
 
-        resources = await list_server_resources(server_url=url)
+            print("📋 Napistu MCP Server Resources")
+            print("=" * 40)
+            print(f"Server URL: {config.base_url}")
+            print()
 
-        if resources:
-            print(f"Found {len(resources)} resources:")
-            for resource in resources:
-                print(f"  📄 {resource.uri}")
-                if resource.name != resource.uri:
-                    print(f"      Name: {resource.name}")
-                if hasattr(resource, "description") and resource.description:
-                    print(f"      Description: {resource.description}")
-                print()
-        else:
-            print("❌ Could not retrieve resources")
+            resources = await list_server_resources(config)
+
+            if resources:
+                print(f"Found {len(resources)} resources:")
+                for resource in resources:
+                    print(f"  📄 {resource.uri}")
+                    if resource.name != resource.uri:
+                        print(f"      Name: {resource.name}")
+                    if hasattr(resource, "description") and resource.description:
+                        print(f"      Description: {resource.description}")
+                    print()
+            else:
+                print("❌ Could not retrieve resources")
+
+        except click.BadParameter as e:
+            raise click.ClickException(str(e))
 
     asyncio.run(run_list_resources())
 
 
 @cli.command()
 @click.argument("resource_uri")
-@click.option("--url", default="http://127.0.0.1:8765", help="Server URL")
+@client_config_options
 @click.option(
     "--output", type=click.File("w"), default="-", help="Output file (default: stdout)"
 )
 @click_logging.simple_verbosity_option(logger)
-def read(resource_uri, url, output):
+def read(resource_uri, production, local, host, port, https, output):
     """Read a specific resource from the MCP server."""
 
     async def run_read_resource():
-        print(
-            f"📖 Reading Resource: {resource_uri}",
-            file=output if output.name != "<stdout>" else None,
-        )
-        print(f"Server URL: {url}", file=output if output.name != "<stdout>" else None)
-        print("=" * 50, file=output if output.name != "<stdout>" else None)
+        try:
+            config = validate_client_config_flags(local, production, host, port, https)
 
-        content = await read_server_resource(resource_uri, server_url=url)
-
-        if content:
-            print(content, file=output)
-        else:
             print(
-                "❌ Could not read resource",
+                f"📖 Reading Resource: {resource_uri}",
                 file=output if output.name != "<stdout>" else None,
             )
+            print(
+                f"Server URL: {config.base_url}",
+                file=output if output.name != "<stdout>" else None,
+            )
+            print("=" * 50, file=output if output.name != "<stdout>" else None)
+
+            content = await read_server_resource(resource_uri, config)
+
+            if content:
+                print(content, file=output)
+            else:
+                print(
+                    "❌ Could not read resource",
+                    file=output if output.name != "<stdout>" else None,
+                )
+
+        except click.BadParameter as e:
+            raise click.ClickException(str(e))
 
     asyncio.run(run_read_resource())
 
 
 @cli.command()
-@click.option("--local-url", default="http://127.0.0.1:8765", help="Local server URL")
-@click.option("--remote-url", required=True, help="Remote server URL")
 @click_logging.simple_verbosity_option(logger)
-def compare(local_url, remote_url):
-    """Compare health between local and remote servers."""
+def compare():
+    """Compare health between local development and production servers."""
 
     async def run_comparison():
-        print("🔍 Local vs Remote Server Comparison")
+
+        local_config = local_client_config()
+        production_config = production_client_config()
+
+        print("🔍 Local vs Production Server Comparison")
         print("=" * 50)
 
-        print(f"\n📍 Local Server: {local_url}")
-        local_health = await check_server_health(server_url=local_url)
+        print(f"\n📍 Local Server: {local_config.base_url}")
+        local_health = await check_server_health(local_config)
         print_health_status(local_health)
 
-        print(f"\n🌐 Remote Server: {remote_url}")
-        remote_health = await check_server_health(server_url=remote_url)
-        print_health_status(remote_health)
+        print(f"\n🌐 Production Server: {production_config.base_url}")
+        production_health = await check_server_health(production_config)
+        print_health_status(production_health)
 
         # Compare results
         print("\n📊 Comparison Summary:")
-        if local_health and remote_health:
+        if local_health and production_health:
             local_components = local_health.get("components", {})
-            remote_components = remote_health.get("components", {})
+            production_components = production_health.get("components", {})
 
             all_components = set(local_components.keys()) | set(
-                remote_components.keys()
+                production_components.keys()
             )
 
             for component in sorted(all_components):
                 local_status = local_components.get(component, {}).get(
                     "status", "missing"
                 )
-                remote_status = remote_components.get(component, {}).get(
+                production_status = production_components.get(component, {}).get(
                     "status", "missing"
                 )
 
-                if local_status == remote_status == "healthy":
+                if local_status == production_status == "healthy":
                     icon = "✅"
-                elif local_status != remote_status:
+                elif local_status != production_status:
                     icon = "⚠️ "
                 else:
                     icon = "❌"
 
                 print(
-                    f"  {icon} {component}: Local={local_status}, Remote={remote_status}"
+                    f"  {icon} {component}: Local={local_status}, Production={production_status}"
                 )
         else:
             print("  ❌ Cannot compare - one or both servers unreachable")
