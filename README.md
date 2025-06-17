@@ -19,8 +19,8 @@ pip install .
 ```
 
 ## Documentation
-📘 **Full Documentation**: [https://napistu.readthedocs.io](https://napistu.readthedocs.io)
-** Wiki **: [napistu/wiki](https://github.com/napistu/napistu/wiki)
+- 📘 **Library Documentation**: [napistu.readthedocs.io](https://napistu.readthedocs.io)
+- 🚸 **Project Documentation**: [napistu/wiki](https://github.com/napistu/napistu/wiki)
 
 ### Quick Links
 - [Installation Guide](https://napistu.readthedocs.io/en/latest/installation.html)
