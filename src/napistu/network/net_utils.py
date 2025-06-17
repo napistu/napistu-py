@@ -5,8 +5,7 @@ import os
 import random
 import textwrap
 import yaml
-from typing import Any
-from typing import Sequence
+from typing import Any, Optional, Sequence
 
 import igraph as ig
 import numpy as np
@@ -328,9 +327,9 @@ def filter_to_largest_subgraph(napistu_graph: ig.Graph) -> ig.Graph:
 
 def validate_assets(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    napistu_graph: ig.Graph,
-    precomputed_distances: pd.DataFrame,
-    identifiers_df: pd.DataFrame,
+    napistu_graph: Optional[ig.Graph] = None,
+    precomputed_distances: Optional[pd.DataFrame] = None,
+    identifiers_df: Optional[pd.DataFrame] = None,
 ) -> None:
     """
     Validate Assets
@@ -339,31 +338,43 @@ def validate_assets(
 
     Args:
         sbml_dfs (sbml_dfs_core.SBML_dfs):
-            A pathway representation.
-        napistu_graph (igraph.Graph):
+            A pathway representation. (Required)
+        napistu_graph (igraph.Graph, optional):
             A network-based representation of "sbml_dfs".
-        precomputed_distances (pd.DataFrame):
+        precomputed_distances (pd.DataFrame, optional):
             Precomputed distances between vertices in "napistu_graph".
-        identifiers_df (pd.DataFrame):
+        identifiers_df (pd.DataFrame, optional):
             A table of systematic identifiers for compartmentalized species in "sbml_dfs".
 
     Returns:
         None
-
-
     """
 
-    # compare napistu_graph to sbml_dfs
-    # test for consistent sc_id to sc_name mappings
-    _validate_assets_sbml_graph(sbml_dfs, napistu_graph)
+    if (
+        napistu_graph is None
+        and precomputed_distances is None
+        and identifiers_df is None
+    ):
+        logger.warning(
+            "validate_assets: Only sbml_dfs was provided; nothing to validate."
+        )
+        return None
 
-    # compare precomputed_distances to napistu_graph
-    # test whether dircetly connected sc_ids are in the same reaction
-    _validate_assets_graph_dist(napistu_graph, precomputed_distances)
+    # Validate napistu_graph if provided
+    if napistu_graph is not None:
+        _validate_assets_sbml_graph(sbml_dfs, napistu_graph)
 
-    # compare identifiers_df to sbml_dfs
-    # do the (sc_id, s_name) tuples in in identifiers match (sc_id, s_name) tuples in sbml_dfs
-    _validate_assets_sbml_ids(sbml_dfs, identifiers_df)
+    # Validate precomputed_distances if provided (requires napistu_graph)
+    if precomputed_distances is not None:
+        if napistu_graph is None:
+            raise ValueError(
+                "napistu_graph must be provided if precomputed_distances is provided."
+            )
+        _validate_assets_graph_dist(napistu_graph, precomputed_distances)
+
+    # Validate identifiers_df if provided
+    if identifiers_df is not None:
+        _validate_assets_sbml_ids(sbml_dfs, identifiers_df)
 
     return None
 

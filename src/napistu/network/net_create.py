@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from napistu import sbml_dfs_core
 from napistu import utils
+from napistu.network import napistu_graph_core
 
 from napistu.constants import DEFAULT_WT_TRANS
 from napistu.constants import DEFINED_WEIGHT_TRANSFORMATION
@@ -44,14 +45,14 @@ def create_napistu_graph(
     reaction_graph_attrs: Optional[dict] = None,
     directed: bool = True,
     edge_reversed: bool = False,
-    graph_type: str = NAPISTU_GRAPH_TYPES.BIPARTITE,
+    graph_type: str = NAPISTU_GRAPH_TYPES.REGULATORY,
     verbose: bool = False,
     custom_transformations: Optional[dict] = None,
-) -> ig.Graph:
+) -> napistu_graph_core.NapistuGraph:
     """
     Create CPR Graph
 
-    Create an igraph network from a mechanistic network using one of a set of graph_types.
+    Create a NapistuGraph network from a mechanistic network using one of a set of graph_types.
 
     Parameters
     ----------
@@ -78,7 +79,7 @@ def create_napistu_graph(
 
     Returns:
     ----------
-    An Igraph network
+    A NapistuGraph network
     """
 
     if reaction_graph_attrs is None:
@@ -163,7 +164,6 @@ def create_napistu_graph(
         "Creating reverse reactions for reversible reactions on a directed graph"
     )
     if directed:
-
         directed_network_edges = pd.concat(
             [
                 # assign forward edges
@@ -172,7 +172,7 @@ def create_napistu_graph(
                         NAPISTU_GRAPH_EDGES.DIRECTION: NAPISTU_GRAPH_EDGE_DIRECTIONS.FORWARD
                     }
                 ),
-                # create reverse edges for reversibile reactions
+                # create reverse edges for reversible reactions
                 _reverse_network_edges(augmented_network_edges),
             ]
         )
@@ -213,48 +213,24 @@ def create_napistu_graph(
 
             logger.warning(utils.style_df(example_duplicates, headers="keys"))
 
-    # reverse edge directions if edge_reversed is True:
-
-    if edge_reversed:
-        rev_unique_edges_df = unique_edges.copy()
-        rev_unique_edges_df[NAPISTU_GRAPH_EDGES.FROM] = unique_edges[
-            NAPISTU_GRAPH_EDGES.TO
-        ]
-        rev_unique_edges_df[NAPISTU_GRAPH_EDGES.TO] = unique_edges[
-            NAPISTU_GRAPH_EDGES.FROM
-        ]
-        rev_unique_edges_df[NAPISTU_GRAPH_EDGES.SC_PARENTS] = unique_edges[
-            NAPISTU_GRAPH_EDGES.SC_CHILDREN
-        ]
-        rev_unique_edges_df[NAPISTU_GRAPH_EDGES.SC_CHILDREN] = unique_edges[
-            NAPISTU_GRAPH_EDGES.SC_PARENTS
-        ]
-        rev_unique_edges_df[NAPISTU_GRAPH_EDGES.STOICHIOMETRY] = unique_edges[
-            NAPISTU_GRAPH_EDGES.STOICHIOMETRY
-        ] * (-1)
-
-        rev_unique_edges_df[NAPISTU_GRAPH_EDGES.DIRECTION] = unique_edges[
-            NAPISTU_GRAPH_EDGES.DIRECTION
-        ].replace(
-            {
-                NAPISTU_GRAPH_EDGE_DIRECTIONS.REVERSE: NAPISTU_GRAPH_EDGE_DIRECTIONS.FORWARD,
-                NAPISTU_GRAPH_EDGE_DIRECTIONS.FORWARD: NAPISTU_GRAPH_EDGE_DIRECTIONS.REVERSE,
-            }
-        )
-    else:
-        # unchanged if edge_reversed is False:
-        rev_unique_edges_df = unique_edges
-
     # convert nodes and edgelist into an igraph network
-
-    logger.info("Formatting napistu_graph output")
-    napistu_graph = ig.Graph.DictList(
+    logger.info("Formatting cpr_graph output")
+    napistu_ig_graph = ig.Graph.DictList(
         vertices=network_nodes_df.to_dict("records"),
-        edges=rev_unique_edges_df.to_dict("records"),
+        edges=unique_edges.to_dict("records"),
         directed=directed,
         vertex_name_attr=NAPISTU_GRAPH_NODES.NAME,
         edge_foreign_keys=(NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO),
     )
+
+    # Always return NapistuGraph
+    napistu_graph = napistu_graph_core.NapistuGraph.from_igraph(
+        napistu_ig_graph, graph_type=graph_type, is_reversed=edge_reversed
+    )
+
+    if edge_reversed:
+        logger.info("Applying edge reversal using reversal utilities")
+        napistu_graph.reverse_edges()
 
     return napistu_graph
 
