@@ -48,7 +48,8 @@ def collect_resources_and_tools(mcp: FastMCP) -> Tuple[List[str], List[str]]:
 def test_documentation_naming():
     """Test that documentation component uses valid names."""
     mcp = FastMCP("test")
-    documentation.register_components(mcp)
+    documentation_component = documentation.get_component()
+    documentation_component.register(mcp)
 
     resource_paths, tool_names = collect_resources_and_tools(mcp)
 
@@ -64,7 +65,8 @@ def test_documentation_naming():
 def test_codebase_naming():
     """Test that codebase component uses valid names."""
     mcp = FastMCP("test")
-    codebase.register_components(mcp)
+    codebase_component = codebase.get_component()
+    codebase_component.register(mcp)
 
     resource_paths, tool_names = collect_resources_and_tools(mcp)
 
@@ -80,7 +82,8 @@ def test_codebase_naming():
 def test_tutorials_naming():
     """Test that tutorials component uses valid names."""
     mcp = FastMCP("test")
-    tutorials.register_components(mcp)
+    tutorials_component = tutorials.get_component()
+    tutorials_component.register(mcp)
 
     resource_paths, tool_names = collect_resources_and_tools(mcp)
 
@@ -96,7 +99,14 @@ def test_tutorials_naming():
 def test_execution_naming():
     """Test that execution component uses valid names."""
     mcp = FastMCP("test")
-    execution.register_components(mcp)
+
+    # Create execution component with test session context
+    test_session_context = {}
+    test_object_registry = {}
+    execution_component = execution.create_component(
+        session_context=test_session_context, object_registry=test_object_registry
+    )
+    execution_component.register(mcp)
 
     resource_paths, tool_names = collect_resources_and_tools(mcp)
 
@@ -129,11 +139,25 @@ def test_all_components_naming():
     """Test that all components together use valid names without conflicts."""
     mcp = FastMCP("test")
 
-    # Register all components
-    documentation.register_components(mcp)
-    codebase.register_components(mcp)
-    tutorials.register_components(mcp)
-    execution.register_components(mcp)
+    # Register all components using new class-based API
+    documentation_component = documentation.get_component()
+    documentation_component.register(mcp)
+
+    codebase_component = codebase.get_component()
+    codebase_component.register(mcp)
+
+    tutorials_component = tutorials.get_component()
+    tutorials_component.register(mcp)
+
+    # Create execution component with test context
+    test_session_context = {}
+    test_object_registry = {}
+    execution_component = execution.create_component(
+        session_context=test_session_context, object_registry=test_object_registry
+    )
+    execution_component.register(mcp)
+
+    # Health component still uses legacy registration
     health.register_components(mcp)
 
     resource_paths, tool_names = collect_resources_and_tools(mcp)
@@ -157,11 +181,25 @@ def test_expected_resources_exist():
     """Test that all expected resources are registered."""
     mcp = FastMCP("test")
 
-    # Register all components
-    documentation.register_components(mcp)
-    codebase.register_components(mcp)
-    tutorials.register_components(mcp)
-    execution.register_components(mcp)
+    # Register all components using new class-based API
+    documentation_component = documentation.get_component()
+    documentation_component.register(mcp)
+
+    codebase_component = codebase.get_component()
+    codebase_component.register(mcp)
+
+    tutorials_component = tutorials.get_component()
+    tutorials_component.register(mcp)
+
+    # Create execution component with test context
+    test_session_context = {}
+    test_object_registry = {}
+    execution_component = execution.create_component(
+        session_context=test_session_context, object_registry=test_object_registry
+    )
+    execution_component.register(mcp)
+
+    # Health component still uses legacy registration
     health.register_components(mcp)
 
     resource_paths, _ = collect_resources_and_tools(mcp)
@@ -191,14 +229,34 @@ def test_expected_tools_exist():
     """Test that all expected tools are registered."""
     mcp = FastMCP("test")
 
-    # Register all components
-    documentation.register_components(mcp)
-    codebase.register_components(mcp)
-    tutorials.register_components(mcp)
-    execution.register_components(mcp)
+    # Register all components using new class-based API
+    documentation_component = documentation.get_component()
+    documentation_component.register(mcp)
+
+    codebase_component = codebase.get_component()
+    codebase_component.register(mcp)
+
+    tutorials_component = tutorials.get_component()
+    tutorials_component.register(mcp)
+
+    # Create execution component with test context
+    test_session_context = {}
+    test_object_registry = {}
+    execution_component = execution.create_component(
+        session_context=test_session_context, object_registry=test_object_registry
+    )
+    execution_component.register(mcp)
+
+    # Health component still uses legacy registration
     health.register_components(mcp)
 
     _, tool_names = collect_resources_and_tools(mcp)
+
+    # Debug: Print all registered tools
+    print("\nRegistered tools:")
+    for name in sorted(tool_names):
+        print(f"  {name}")
+    print()
 
     # List of expected tools
     expected_tools = {
@@ -217,3 +275,82 @@ def test_expected_tools_exist():
     # Check that all expected tools exist
     for tool in expected_tools:
         assert tool in tool_names, f"Missing expected tool: {tool}"
+
+
+def test_component_state_health():
+    """Test that component states can provide health information."""
+    # Test documentation component state
+    doc_component = documentation.get_component()
+    doc_state = doc_component.get_state()
+    health_status = doc_state.get_health_status()
+    assert "status" in health_status
+    assert health_status["status"] in [
+        "initializing",
+        "healthy",
+        "inactive",
+        "unavailable",
+    ]
+
+    # Test codebase component state
+    codebase_component = codebase.get_component()
+    codebase_state = codebase_component.get_state()
+    health_status = codebase_state.get_health_status()
+    assert "status" in health_status
+    assert health_status["status"] in [
+        "initializing",
+        "healthy",
+        "inactive",
+        "unavailable",
+    ]
+
+    # Test tutorials component state
+    tutorials_component = tutorials.get_component()
+    tutorials_state = tutorials_component.get_state()
+    health_status = tutorials_state.get_health_status()
+    assert "status" in health_status
+    assert health_status["status"] in [
+        "initializing",
+        "healthy",
+        "inactive",
+        "unavailable",
+    ]
+
+    # Test execution component state
+    test_session_context = {"test": "value"}
+    test_object_registry = {}
+    execution_component = execution.create_component(
+        session_context=test_session_context, object_registry=test_object_registry
+    )
+    execution_state = execution_component.get_state()
+    health_status = execution_state.get_health_status()
+    assert "status" in health_status
+    assert health_status["status"] in [
+        "initializing",
+        "healthy",
+        "inactive",
+        "unavailable",
+    ]
+
+
+def test_execution_object_registration():
+    """Test that execution component can register and track objects."""
+    test_session_context = {}
+    test_object_registry = {}
+    execution_component = execution.create_component(
+        session_context=test_session_context, object_registry=test_object_registry
+    )
+
+    # Register a test object
+    test_object = {"test": "data"}
+    execution_component.register_object("test_obj", test_object)
+
+    # Check that object was registered
+    state = execution_component.get_state()
+    assert "test_obj" in state.session_objects
+    assert state.session_objects["test_obj"] == test_object
+
+    # Check health details include the object
+    health_details = state.get_health_details()
+    assert "registered_objects" in health_details
+    assert health_details["registered_objects"] == 1
+    assert "test_obj" in health_details["object_names"]
