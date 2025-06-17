@@ -86,8 +86,42 @@ def filter_species_by_attribute(
 
 
 def filter_reactions_with_disconnected_cspecies(
-    sbml_dfs, species_data_table, inplace=False
-):
+    sbml_dfs: sbml_dfs_core.SBML_dfs, species_data_table: str, inplace: bool = False
+) -> Optional[sbml_dfs_core.SBML_dfs]:
+    """
+    Remove reactions from the SBML_dfs object whose defining compartmentalized species (cspecies) are disconnected
+    according to a co-occurrence matrix derived from a species data table.
+
+    This function identifies reactions where any pair of defining cspecies do not co-occur (i.e., are disconnected)
+    in the provided species data table, and removes those reactions from the model. The operation can be performed
+    in-place or on a copy of the SBML_dfs object.
+
+    Parameters
+    ----------
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The SBML_dfs object to filter reactions from.
+    species_data_table : str
+        The name of the species data table to use for co-occurrence calculation.
+    inplace : bool, optional
+        If True, modifies the input SBML_dfs object in-place and returns None. If False (default),
+        returns a new SBML_dfs object with the filtered reactions.
+
+    Returns
+    -------
+    Optional[sbml_dfs_core.SBML_dfs]
+        If inplace=True, returns None. If inplace=False, returns a new SBML_dfs object with filtered reactions.
+
+    Warns
+    -----
+    UserWarning
+        If no reactions are pruned based on non-cooccurrence.
+
+    Examples
+    --------
+    >>> filtered_sbml_dfs = filter_reactions_with_disconnected_cspecies(sbml_dfs, "test_data", inplace=False)
+    >>> # To modify in-place:
+    >>> filter_reactions_with_disconnected_cspecies(sbml_dfs, "test_data", inplace=True)
+    """
 
     if inplace:
         sbml_dfs = copy.deepcopy(sbml_dfs)
@@ -189,7 +223,6 @@ def _find_reactions_with_disconnected_cspecies(
     cooccurence_threshold : int
         The threshold for cooccurrence. Values equal to or below this threshold are considered disconnected.
 
-
     Returns
     -------
     set
@@ -259,7 +292,30 @@ def _find_reactions_with_disconnected_cspecies(
 def _create_cooccurence_edgelist(
     sbml_dfs: sbml_dfs_core.SBML_dfs, species_data_table: str
 ):
+    """
+    Create a co-occurrence edgelist for species based on a binary species data table.
 
+    This function computes a co-occurrence matrix for all pairs of species in the given data table,
+    where each entry represents the number of conditions in which both species are present (i.e., have value 1).
+    The result is returned as an edgelist DataFrame with columns 's_id_1', 's_id_2', and 'cooccurence'.
+
+    Parameters
+    ----------
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The SBML_dfs object containing the species data table.
+    species_data_table : str
+        The name of the species data table to use for co-occurrence calculation. The table must contain only binary or boolean columns.
+
+    Returns
+    -------
+    pd.DataFrame
+        Edgelist DataFrame with columns ['s_id_1', 's_id_2', 'cooccurence'], where each row gives the number of conditions in which the two species co-occur.
+
+    Raises
+    ------
+    ValueError
+        If no binary or boolean columns are found in the species data table.
+    """
     species_data = sbml_dfs.select_species_data(species_data_table)
 
     # select all binary columns (results in {0, 1})
@@ -281,7 +337,32 @@ def _create_cooccurence_edgelist(
 
 
 def _binarize_species_data(species_data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Convert all boolean or binary columns in a species data table to a DataFrame of binary (0/1) values.
 
+    This function selects columns of dtype 'bool' or integer columns containing only 0 and 1, and converts them to a DataFrame of binary values (0/1).
+    Columns that are not boolean or binary are ignored. If no such columns are found, a ValueError is raised.
+
+    Parameters
+    ----------
+    species_data : pd.DataFrame
+        The species data table to binarize.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing only the binarized columns (0/1 values) from the input.
+
+    Raises
+    ------
+    ValueError
+        If no binary or boolean columns are found in the input DataFrame.
+
+    Warns
+    -----
+    UserWarning
+        If some columns in the input were not binarized and left out of the output.
+    """
     binary_series = []
     for c in species_data.columns:
         if species_data[c].dtype == "bool":
