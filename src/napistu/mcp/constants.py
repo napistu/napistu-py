@@ -38,7 +38,20 @@ READMES = {
     "napistu/tutorials": "https://raw.githubusercontent.com/napistu/napistu/main/tutorials/README.md",
 }
 
-WIKI_ROOT = "https://raw.githubusercontent.com/napistu/napistu/main/docs/wiki"
+WIKI_PAGES = {
+    "Consensus",
+    "Data-Sources",
+    "Napistu-Graphs",
+    "Dev-Zone",
+    "Environment-Setup",
+    "Exploring-Molecular-Relationships-as-Networks",
+    "GitHub-Actions-napistu‐py",
+    "History",
+    "Model-Context-Protocol-(MCP)-server",
+    "Precomputed-distances",
+    "SBML",
+    "SBML-DFs",
+}
 
 NAPISTU_PY_READTHEDOCS = "https://napistu.readthedocs.io/en/latest"
 NAPISTU_PY_READTHEDOCS_API = NAPISTU_PY_READTHEDOCS + "/api.html"

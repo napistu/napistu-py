@@ -6,7 +6,7 @@ from fastmcp import FastMCP
 
 from napistu.mcp import documentation_utils
 from napistu.mcp import utils as mcp_utils
-from napistu.mcp.constants import DOCUMENTATION, READMES, REPOS_WITH_ISSUES
+from napistu.mcp.constants import DOCUMENTATION, READMES, REPOS_WITH_ISSUES, WIKI_PAGES
 
 # Global cache for documentation content
 _docs_cache = {
@@ -34,6 +34,13 @@ async def initialize_components() -> bool:
         _docs_cache[DOCUMENTATION.README][name] = (
             await documentation_utils.load_readme_content(url)
         )
+
+    # Load wiki pages
+    for page in WIKI_PAGES:
+        _docs_cache[DOCUMENTATION.WIKI][page] = (
+            await documentation_utils.fetch_wiki_page(page)
+        )
+
     # Load issue and PR summaries with the GitHub API
     for repo in REPOS_WITH_ISSUES:
         _docs_cache[DOCUMENTATION.ISSUES][repo] = await documentation_utils.list_issues(
