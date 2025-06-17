@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y curl && \
     apt-get clean
 
 # MCP server specific environment variables
-ENV MCP_PROFILE=remote
+ENV MCP_PROFILE=docs
 ENV MCP_SERVER_NAME=napistu-cloud-docs
 ENV PORT=8080
 ENV HOST=0.0.0.0

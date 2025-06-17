@@ -31,6 +31,36 @@ TOOL_VARS = SimpleNamespace(
     SNIPPET="snippet",
 )
 
+# MCP Server Configuration Constants
+MCP_DEFAULTS = SimpleNamespace(
+    # Local development defaults
+    LOCAL_HOST="127.0.0.1",
+    LOCAL_PORT=8765,
+    # Production defaults
+    PRODUCTION_HOST="0.0.0.0",
+    PRODUCTION_PORT=8080,
+    # Server names
+    LOCAL_SERVER_NAME="napistu-local",
+    PRODUCTION_SERVER_NAME="napistu-production",
+    FULL_SERVER_NAME="napistu-full",
+    # Transport configuration
+    TRANSPORT="streamable-http",
+    MCP_PATH="/mcp",
+    # Standard protocol ports
+    HTTP_PORT=80,
+    HTTPS_PORT=443,
+)
+
+# Production server URL
+MCP_PRODUCTION_URL = "https://napistu-mcp-server-844820030839.us-west1.run.app"
+
+# Profile names (component configurations)
+MCP_PROFILES = SimpleNamespace(
+    EXECUTION="execution",  # execution only
+    DOCS="docs",  # docs + codebase + tutorials
+    FULL="full",  # all components
+)
+
 READMES = {
     "napistu": "https://raw.githubusercontent.com/napistu/napistu/main/README.md",
     "napistu-py": "https://raw.githubusercontent.com/napistu/napistu-py/main/README.md",

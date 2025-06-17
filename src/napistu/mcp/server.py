@@ -1,11 +1,9 @@
-# src/napistu/mcp/server.py
 """
 Core MCP server implementation for Napistu.
 """
 
 import asyncio
 import logging
-import os
 
 from mcp.server import FastMCP
 
@@ -16,20 +14,60 @@ from napistu.mcp import tutorials
 from napistu.mcp import health
 
 from napistu.mcp.profiles import ServerProfile, get_profile
+from napistu.mcp.constants import MCP_DEFAULTS
+from napistu.mcp.config import MCPServerConfig
 
 logger = logging.getLogger(__name__)
 
 
-def create_server(profile: ServerProfile, **kwargs) -> FastMCP:
+def _register_component(
+    name: str, module, config_key: str, config: dict, mcp: FastMCP, **kwargs
+) -> None:
     """
-    Create an MCP server based on a profile configuration.
+    Register a single component with the MCP server.
+
+    Parameters
+    ----------
+    name : str
+        Component name for logging
+    module : module
+        Component module with get_component() function or create_component() for execution
+    config_key : str
+        Configuration key to check if component is enabled
+    config : dict
+        Server configuration
+    mcp : FastMCP
+        FastMCP server instance
+    **kwargs : dict
+        Additional arguments for component creation (used by execution component)
+    """
+    if not config.get(config_key, False):
+        return  # Skip disabled components
+
+    logger.info(f"Registering {name} components")
+
+    if name == "execution":
+        # Special handling for execution component which needs session context
+        component = module.create_component(
+            session_context=kwargs.get("session_context"),
+            object_registry=kwargs.get("object_registry"),
+        )
+    else:
+        component = module.get_component()
+
+    component.register(mcp)
+
+
+def create_server(profile: ServerProfile, server_config: MCPServerConfig) -> FastMCP:
+    """
+    Create an MCP server based on a profile configuration and server config.
 
     Parameters
     ----------
     profile : ServerProfile
-        Server profile to use. All configuration must be set in the profile.
-    **kwargs
-        Additional arguments to pass to the FastMCP constructor such as host and port.
+        Server profile to use. All configuration must be set in the profile. (Valid profiles: 'execution', 'docs', 'full')
+    server_config : MCPServerConfig
+        Server configuration with validated host, port, and server name.
 
     Returns
     -------
@@ -39,26 +77,30 @@ def create_server(profile: ServerProfile, **kwargs) -> FastMCP:
 
     config = profile.get_config()
 
-    # Create the server with FastMCP-specific parameters
-    # Pass all kwargs directly to the FastMCP constructor
-    mcp = FastMCP(config["server_name"], **kwargs)
+    # Create the server with validated configuration
+    mcp = FastMCP(
+        server_config.server_name, host=server_config.host, port=server_config.port
+    )
 
-    if config["enable_documentation"]:
-        logger.info("Registering documentation components")
-        documentation.register_components(mcp)
-    if config["enable_codebase"]:
-        logger.info("Registering codebase components")
-        codebase.register_components(mcp)
-    if config["enable_execution"]:
-        logger.info("Registering execution components")
-        execution.register_components(
+    # Define component configurations
+    component_configs = [
+        ("documentation", documentation, "enable_documentation"),
+        ("codebase", codebase, "enable_codebase"),
+        ("tutorials", tutorials, "enable_tutorials"),
+        ("execution", execution, "enable_execution"),
+    ]
+
+    # Register all components
+    for name, module, config_key in component_configs:
+        _register_component(
+            name,
+            module,
+            config_key,
+            config,
             mcp,
-            session_context=config["session_context"],
-            object_registry=config["object_registry"],
+            session_context=config.get("session_context"),
+            object_registry=config.get("object_registry"),
         )
-    if config["enable_tutorials"]:
-        logger.info("Registering tutorials components")
-        tutorials.register_components(mcp)
 
     # Always register health components
     health.register_components(mcp)
@@ -67,9 +109,44 @@ def create_server(profile: ServerProfile, **kwargs) -> FastMCP:
     return mcp
 
 
+async def _initialize_component(
+    name: str, module, config_key: str, config: dict
+) -> bool:
+    """
+    Initialize a single component with error handling.
+
+    Parameters
+    ----------
+    name : str
+        Component name for logging
+    module : module
+        Component module with get_component() function
+    config_key : str
+        Configuration key to check if component is enabled
+    config : dict
+        Server configuration
+
+    Returns
+    -------
+    bool
+        True if initialization successful
+    """
+    if not config.get(config_key, False):
+        return True  # Skip disabled components
+
+    logger.info(f"Initializing {name} components")
+    try:
+        component = module.get_component()
+        result = await component.safe_initialize()
+        return result
+    except Exception as e:
+        logger.error(f"❌ {name.title()} components failed to initialize: {e}")
+        return False
+
+
 async def initialize_components(profile: ServerProfile) -> None:
     """
-    Asynchronously initialize all enabled components for the MCP server, using the provided ServerProfile.
+    Asynchronously initialize all enabled components for the MCP server.
 
     Parameters
     ----------
@@ -82,51 +159,61 @@ async def initialize_components(profile: ServerProfile) -> None:
     """
     config = profile.get_config()
 
-    if config["enable_documentation"]:
-        logger.info("Initializing documentation components")
-        await documentation.initialize_components()
-    if config["enable_codebase"]:
-        logger.info("Initializing codebase components")
-        await codebase.initialize_components()
-    if config["enable_tutorials"]:
-        logger.info("Initializing tutorials components")
-        await tutorials.initialize_components()
-    if config["enable_execution"]:
-        logger.info("Initializing execution components")
-        await execution.initialize_components()
+    # Define component configurations
+    component_configs = [
+        ("documentation", documentation, "enable_documentation"),
+        ("codebase", codebase, "enable_codebase"),
+        ("tutorials", tutorials, "enable_tutorials"),
+        ("execution", execution, "enable_execution"),
+    ]
+
+    # Initialize all components
+    initialization_results = {}
+
+    for name, module, config_key in component_configs:
+        result = await _initialize_component(name, module, config_key, config)
+        initialization_results[name] = result
 
     # Initialize health components last since they monitor the other components
     logger.info("Initializing health components")
-    await health.initialize_components()
+    try:
+        result = await health.initialize_components()
+        initialization_results["health"] = result
+        if result:
+            logger.info("✅ Health components initialized successfully")
+        else:
+            logger.warning("⚠️ Health components initialized with issues")
+    except Exception as e:
+        logger.error(f"❌ Health components failed to initialize: {e}")
+        initialization_results["health"] = False
+
+    # Summary of initialization
+    successful = sum(1 for success in initialization_results.values() if success)
+    total = len(initialization_results)
+    logger.info(
+        f"Component initialization complete: {successful}/{total} components successful"
+    )
+
+    if successful == 0:
+        logger.error(
+            "❌ All components failed to initialize - server may not function correctly"
+        )
+    elif successful < total:
+        logger.warning(
+            "⚠️ Some components failed to initialize - server running in degraded mode"
+        )
 
 
-def start_mcp_server(
-    profile_name: str = "remote",
-    host: str = "0.0.0.0",
-    port: int = 8080,
-    server_name: str | None = None,
-) -> None:
+def start_mcp_server(profile_name: str, server_config: MCPServerConfig) -> None:
     """
     Start MCP server - main entry point for server startup.
 
-    The server will be started with HTTP transport on the specified host and port.
-    Environment variables can override the default configuration:
-    - MCP_PROFILE: Server profile to use
-    - HOST: Host to bind to
-    - PORT: Port to bind to
-    - MCP_SERVER_NAME: Name of the MCP server
-
     Parameters
     ----------
-    profile_name : str, optional
-        Server profile to use ('local', 'remote', 'full'). Defaults to 'remote'.
-    host : str, optional
-        Host address to bind the server to. Defaults to '0.0.0.0'.
-    port : int, optional
-        Port number to listen on. Defaults to 8080.
-    server_name : str | None, optional
-        Custom name for the MCP server. If None, will be generated from profile name.
-        Defaults to None.
+    profile_name : str
+        Server profile to use ('local', 'remote', 'full').
+    server_config : MCPServerConfig
+        Validated server configuration.
 
     Returns
     -------
@@ -143,20 +230,12 @@ def start_mcp_server(
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("napistu")
 
-    # Get configuration from environment variables (for Cloud Run)
-    env_profile = os.getenv("MCP_PROFILE", profile_name)
-    env_host = os.getenv("HOST", host)
-    env_port = int(os.getenv("PORT", port))
-    env_server_name = os.getenv(
-        "MCP_SERVER_NAME", server_name or f"napistu-{env_profile}"
-    )
-
     logger.info("Starting Napistu MCP Server")
-    logger.info(f"  Profile: {env_profile}")
-    logger.info(f"  Host: {env_host}")
-    logger.info(f"  Port: {env_port}")
-    logger.info(f"  Server Name: {env_server_name}")
-    logger.info("  Transport: streamable-http")
+    logger.info(f"  Profile: {profile_name}")
+    logger.info(f"  Host: {server_config.host}")
+    logger.info(f"  Port: {server_config.port}")
+    logger.info(f"  Server Name: {server_config.server_name}")
+    logger.info(f"  Transport: {MCP_DEFAULTS.TRANSPORT}")
 
     # Create session context for execution components
     session_context = {}
@@ -164,14 +243,14 @@ def start_mcp_server(
 
     # Get profile with configuration
     profile: ServerProfile = get_profile(
-        env_profile,
+        profile_name,
         session_context=session_context,
         object_registry=object_registry,
-        server_name=env_server_name,
+        server_name=server_config.server_name,
     )
 
-    # Create server with Cloud Run proxy settings
-    mcp = create_server(profile, host=env_host, port=env_port)
+    # Create server with validated configuration
+    mcp = create_server(profile, server_config)
 
     # Initialize components first (separate async call)
     async def init_components():
@@ -186,6 +265,8 @@ def start_mcp_server(
     logger.info(f"Server settings: {mcp.settings}")
 
     logger.info("🚀 Starting MCP server...")
-    logger.info(f"Using HTTP transport on http://{env_host}:{env_port}")
+    logger.info(
+        f"Using {MCP_DEFAULTS.TRANSPORT} transport on http://{server_config.host}:{server_config.port}"
+    )
 
-    mcp.run(transport="streamable-http")
+    mcp.run(transport=MCP_DEFAULTS.TRANSPORT)

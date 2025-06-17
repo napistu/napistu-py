@@ -1,5 +1,7 @@
 from typing import Dict, Any
 
+from napistu.mcp.constants import MCP_PROFILES
+
 
 class ServerProfile:
     """Base profile for MCP server configuration."""
@@ -31,9 +33,11 @@ class ServerProfile:
 
 
 # Pre-defined profiles
-LOCAL_PROFILE = ServerProfile(server_name="napistu-local", enable_execution=True)
+EXECUTION_PROFILE = ServerProfile(
+    server_name="napistu-execution", enable_execution=True
+)
 
-REMOTE_PROFILE = ServerProfile(
+DOCS_PROFILE = ServerProfile(
     server_name="napistu-docs",
     enable_documentation=True,
     enable_codebase=True,
@@ -54,16 +58,16 @@ def get_profile(profile_name: str, **overrides) -> ServerProfile:
     Get a predefined profile with optional overrides.
 
     Args:
-        profile_name: Name of the profile ('local', 'remote', or 'full')
+        profile_name: Name of the profile ('execution', 'docs', or 'full')
         **overrides: Configuration overrides
 
     Returns:
         ServerProfile instance
     """
     profiles = {
-        "local": LOCAL_PROFILE,
-        "remote": REMOTE_PROFILE,
-        "full": FULL_PROFILE,
+        MCP_PROFILES.EXECUTION: EXECUTION_PROFILE,
+        MCP_PROFILES.DOCS: DOCS_PROFILE,
+        MCP_PROFILES.FULL: FULL_PROFILE,
     }
 
     if profile_name not in profiles:
