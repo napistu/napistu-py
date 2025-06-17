@@ -65,7 +65,7 @@ def create_server(profile: ServerProfile, server_config: MCPServerConfig) -> Fas
     Parameters
     ----------
     profile : ServerProfile
-        Server profile to use. All configuration must be set in the profile.
+        Server profile to use. All configuration must be set in the profile. (Valid profiles: 'execution', 'docs', 'full')
     server_config : MCPServerConfig
         Server configuration with validated host, port, and server name.
 

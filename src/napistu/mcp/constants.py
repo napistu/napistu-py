@@ -56,8 +56,8 @@ MCP_PRODUCTION_URL = "https://napistu-mcp-server-844820030839.us-west1.run.app"
 
 # Profile names (component configurations)
 MCP_PROFILES = SimpleNamespace(
-    LOCAL="local",  # execution only
-    REMOTE="remote",  # docs + codebase + tutorials
+    EXECUTION="execution",  # execution only
+    DOCS="docs",  # docs + codebase + tutorials
     FULL="full",  # all components
 )
 

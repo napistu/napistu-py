@@ -43,7 +43,7 @@ def server():
 
 @server.command(name="start")
 @click.option(
-    "--profile", type=click.Choice(["local", "remote", "full"]), default="remote"
+    "--profile", type=click.Choice(["execution", "docs", "full"]), default="docs"
 )
 @server_config_options
 @click_logging.simple_verbosity_option(logger)
@@ -76,7 +76,7 @@ def start_local():
     click.echo(f"  Port: {config.port}")
     click.echo(f"  Server Name: {config.server_name}")
 
-    start_mcp_server("local", config)
+    start_mcp_server("execution", config)
 
 
 @server.command(name="full")

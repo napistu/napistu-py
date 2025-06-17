@@ -18,15 +18,16 @@ except ImportError:
     is_available = False
 
 if is_available:
-    from .server import create_server
-    from .profiles import get_profile
+    from napistu.mcp.server import create_server
+    from napistu.mcp.profiles import get_profile
+    from napistu.mcp.constants import MCP_PROFILES
 
-    def start_server(profile_name: str = "local", **kwargs) -> Dict[str, Any]:
+    def start_server(profile_name: str = MCP_PROFILES.EXECUTION, **kwargs) -> Dict[str, Any]:
         """
         Start an MCP server with a specific profile.
 
         Args:
-            profile_name: Name of the profile ('local', 'remote', or 'full')
+            profile_name: Name of the profile ('execution', 'docs', or 'full')
             **kwargs: Additional configuration options
 
         Returns:
