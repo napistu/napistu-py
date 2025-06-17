@@ -3,9 +3,12 @@ from __future__ import annotations
 import logging
 
 import pandas as pd
-from napistu.rpy2 import callr
-from napistu.rpy2 import report_r_exceptions
-from napistu.rpy2 import warn_if_no_rpy2
+from napistu.rpy2 import (
+    require_rpy2,
+    report_r_exceptions,
+)
+
+from napistu.rpy2.callr import bioconductor_org_r_function, r_dataframe_to_pandas
 
 from napistu.constants import ONTOLOGIES
 from napistu.rpy2.constants import BIOC_VALID_EXPANDED_SPECIES_ONTOLOGIES
@@ -15,7 +18,7 @@ from napistu.rpy2.constants import BIOC_NOMENCLATURE
 logger = logging.getLogger(__name__)
 
 
-@warn_if_no_rpy2
+@require_rpy2
 @report_r_exceptions
 def create_bioconductor_mapping_tables(
     mappings: set[str], species: str, r_paths: str | None = None
@@ -89,8 +92,8 @@ def _create_single_mapping(
 
     table_name, column_name = BIOC_ONTOLOGY_MAPPING[ontology]
 
-    df = callr.r_dataframe_to_pandas(
-        callr.bioconductor_org_r_function(table_name, species, r_paths=r_paths)
+    df = r_dataframe_to_pandas(
+        bioconductor_org_r_function(table_name, species, r_paths=r_paths)
     )
 
     # Drop chromosome column if this is the chromosome table
