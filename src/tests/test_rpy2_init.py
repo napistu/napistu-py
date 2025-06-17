@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import sys
 from unittest.mock import Mock, patch
-import pandas as pd
 import pytest
 
 
@@ -10,7 +9,6 @@ import pytest
 # if the R env is not properly set up during testing
 sys.modules["rpy2_arrow.arrow"] = Mock()
 import napistu.rpy2  # noqa: E402
-import napistu.rpy2.callr  # noqa: E402
 
 
 def test_rpy2_availability_detection():
@@ -122,35 +120,6 @@ def test_decorators():
             mock_rsession.assert_called_once()
 
 
-def test_callr_functions_without_rpy2():
-    """Test that all callr functions fail appropriately when rpy2 unavailable."""
-    with patch("napistu.rpy2.get_rpy2_availability", return_value=False):
-        # Test get_napistu_r
-        with pytest.raises(ImportError, match="requires `rpy2`"):
-            napistu.rpy2.callr.get_napistu_r()
-
-        # Test bioconductor function
-        with pytest.raises(ImportError):
-            napistu.rpy2.callr.bioconductor_org_r_function("test", "Homo sapiens")
-
-        # Test get_rbase
-        with pytest.raises(ImportError):
-            napistu.rpy2.callr.get_rbase()
-
-        # Test pandas conversion functions
-        df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-        with pytest.raises(ImportError):
-            napistu.rpy2.callr.pandas_to_r_dataframe(df)
-
-        mock_rdf = Mock()
-        with pytest.raises(ImportError):
-            napistu.rpy2.callr.r_dataframe_to_pandas(mock_rdf)
-
-        # Test internal converter function
-        with pytest.raises(ImportError):
-            napistu.rpy2.callr._get_py2rpy_pandas_conv()
-
-
 def test_module_import_safety():
     """Test that modules can be imported safely without triggering R initialization."""
     import importlib
@@ -159,26 +128,3 @@ def test_module_import_safety():
     with patch.dict("sys.modules", {"rpy2": None}):
         # These should not raise ImportError during import
         importlib.reload(napistu.rpy2)
-        importlib.reload(napistu.rpy2.callr)
-
-    # Test that function calls fail appropriately but imports don't
-    with patch("napistu.rpy2.get_rpy2_availability", return_value=False):
-        # Functions should fail with ImportError, not other errors
-        with pytest.raises(ImportError):
-            napistu.rpy2.callr.get_napistu_r()
-
-        with pytest.raises(ImportError):
-            napistu.rpy2.callr.get_rbase()
-
-
-################################################
-# __main__
-################################################
-
-if __name__ == "__main__":
-    test_rpy2_availability_detection()
-    test_caching_behavior()
-    test_lazy_import_functions_without_rpy2()
-    test_decorators()
-    test_callr_functions_without_rpy2()
-    test_module_import_safety()
