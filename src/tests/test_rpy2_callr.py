@@ -6,9 +6,18 @@ import pandas as pd
 import pytest
 
 
-# Patch rpy2_arrow.arrow to avoid ImportError
-# if the R env is not properly set up during testing
+# Mock all rpy2 dependencies before any imports to prevent ImportErrors
+sys.modules["rpy2"] = Mock()
+sys.modules["rpy2.robjects"] = Mock()
+sys.modules["rpy2.robjects.conversion"] = Mock()
+sys.modules["rpy2.robjects.default_converter"] = Mock()
+sys.modules["rpy2.robjects.packages"] = Mock()
+sys.modules["rpy2.robjects.pandas2ri"] = Mock()
+sys.modules["rpy2.rinterface"] = Mock()
+sys.modules["rpy2_arrow"] = Mock()
 sys.modules["rpy2_arrow.arrow"] = Mock()
+sys.modules["pyarrow"] = Mock()
+
 import napistu.rpy2.callr  # noqa: E402
 
 
