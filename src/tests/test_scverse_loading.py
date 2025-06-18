@@ -7,7 +7,7 @@ import pandas as pd
 from scipy import sparse
 
 from napistu.scverse import loading
-from napistu.scverse.constants import ADATA
+from napistu.scverse.constants import ADATA, SCVERSE_DEFS
 
 
 @pytest.fixture
@@ -651,4 +651,128 @@ def test_prepare_mudata_results_df_errors(minimal_mudata):
             table_type=ADATA.VARM,
             table_name="scores",
             results_attrs=["score1", "score2"],  # Missing table_colnames
+        )
+
+
+def test_prepare_mudata_results_df_adata_level(minimal_mudata):
+    """Test prepare_mudata_results_df with level='adata' to extract adata-specific attributes."""
+    # Arrange - Add some adata-specific var attributes that don't exist at MuData level
+    minimal_mudata.mod["rna"].var["rna_specific"] = [
+        f"rna_val_{i}" for i in range(minimal_mudata.mod["rna"].n_vars)
+    ]
+    minimal_mudata.mod["protein"].var["protein_specific"] = [
+        f"prot_val_{i}" for i in range(minimal_mudata.mod["protein"].n_vars)
+    ]
+
+    config = {
+        "rna": {
+            "ontologies": None,  # Auto-detect
+            "index_which_ontology": None,
+        },
+        "protein": {
+            "ontologies": {"uniprot"},
+            "index_which_ontology": None,
+        },
+    }
+
+    # Act - Test var table extraction at adata level
+    var_results = loading.prepare_mudata_results_df(
+        minimal_mudata,
+        mudata_ontologies=config,
+        table_type=ADATA.VAR,
+        level=SCVERSE_DEFS.ADATA,
+    )
+
+    # Assert - Check that adata-specific attributes are included
+    rna_results = var_results["rna"]
+    protein_results = var_results["protein"]
+
+    # RNA should have its specific attribute
+    assert "rna_specific" in rna_results.columns
+    assert "gene_name" in rna_results.columns  # From original RNA var
+    assert "ensembl_transcript" in rna_results.columns  # From original RNA var
+
+    # Protein should have its specific attribute
+    assert "protein_specific" in protein_results.columns
+    assert "uniprot" in protein_results.columns  # From original protein var
+
+    # Check values are correct
+    pd.testing.assert_series_equal(
+        rna_results["rna_specific"],
+        minimal_mudata.mod["rna"].var["rna_specific"],
+        check_names=False,
+    )
+    pd.testing.assert_series_equal(
+        protein_results["protein_specific"],
+        minimal_mudata.mod["protein"].var["protein_specific"],
+        check_names=False,
+    )
+
+
+def test_prepare_mudata_results_df_mdata_vs_adata_level(minimal_mudata):
+    """Test that level='mdata' vs level='adata' produce different results when appropriate."""
+    # Arrange - Add adata-specific varm tables
+    rna_varm = np.random.randn(minimal_mudata.mod["rna"].n_vars, 2)
+    protein_varm = np.random.randn(minimal_mudata.mod["protein"].n_vars, 2)
+
+    minimal_mudata.mod["rna"].varm["modality_scores"] = rna_varm
+    minimal_mudata.mod["protein"].varm["modality_scores"] = protein_varm
+
+    config = {
+        "rna": {"ontologies": None},
+        "protein": {"ontologies": {"uniprot"}},
+    }
+
+    # Act - Extract using both levels
+    mdata_results = loading.prepare_mudata_results_df(
+        minimal_mudata,
+        mudata_ontologies=config,
+        table_type=ADATA.VARM,
+        table_name="gene_scores",  # This exists at MuData level
+        results_attrs=["score1"],
+        table_colnames=["score1", "score2", "score3"],
+        level=SCVERSE_DEFS.MDATA,
+    )
+
+    adata_results = loading.prepare_mudata_results_df(
+        minimal_mudata,
+        mudata_ontologies=config,
+        table_type=ADATA.VARM,
+        table_name="modality_scores",  # This exists at modality level
+        results_attrs=[
+            "0"
+        ],  # Using column index as string since we don't have explicit names
+        table_colnames=["0", "1"],
+        level=SCVERSE_DEFS.ADATA,
+    )
+
+    # Assert - Both should succeed but access different data
+    assert "score1" in mdata_results["rna"].columns
+    assert "score1" in mdata_results["protein"].columns
+
+    assert "0" in adata_results["rna"].columns
+    assert "0" in adata_results["protein"].columns
+
+    # The values should be different since they come from different varm tables
+    # (We can't easily check exact values due to random generation, but structure should be correct)
+    assert mdata_results["rna"].shape[0] == minimal_mudata.mod["rna"].n_vars
+    assert adata_results["rna"].shape[0] == minimal_mudata.mod["rna"].n_vars
+
+
+def test_prepare_mudata_results_df_level_validation(minimal_mudata):
+    """Test that invalid level parameter raises appropriate error."""
+    config = {
+        "rna": {"ontologies": None},
+        "protein": {"ontologies": {"uniprot"}},
+    }
+
+    with pytest.raises(
+        ValueError,
+        match=r"level must be one of \['adata', 'mdata'\], got invalid_level",
+    ):
+        loading.prepare_mudata_results_df(
+            minimal_mudata,
+            mudata_ontologies=config,
+            table_type=ADATA.VAR,
+            level="invalid_level",
         )
