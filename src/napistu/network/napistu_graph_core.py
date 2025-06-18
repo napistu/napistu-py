@@ -21,7 +21,73 @@ class NapistuGraph(ig.Graph):
     A subclass of igraph.Graph with additional functionality for molecular network analysis.
 
     This class extends igraph.Graph with domain-specific methods and metadata tracking
-    for biological pathway and molecular interaction networks.
+    for biological pathway and molecular interaction networks. All standard igraph
+    methods are available, plus additional functionality for edge reversal and
+    metadata management.
+
+    Parameters
+    ----------
+    *args : tuple
+        Positional arguments passed to igraph.Graph constructor
+    **kwargs : dict
+        Keyword arguments passed to igraph.Graph constructor
+
+    Attributes
+    ----------
+    is_reversed : bool
+        Whether the graph edges have been reversed from their original direction
+    graph_type : str or None
+        Type of graph (e.g., 'bipartite', 'regulatory', 'surrogate')
+    weighting_strategy : str or None
+        Strategy used for edge weighting (e.g., 'topology', 'mixed', 'calibrated')
+
+    Methods
+    -------
+    from_igraph(graph, **metadata)
+        Create a NapistuGraph from an existing igraph.Graph
+    reverse_edges()
+        Reverse all edges in the graph in-place
+    set_metadata(**kwargs)
+        Set metadata for the graph in-place
+    get_metadata(key=None)
+        Get metadata from the graph
+    copy()
+        Create a deep copy of the NapistuGraph
+
+    Examples
+    --------
+    Create a NapistuGraph from scratch:
+
+    >>> ng = NapistuGraph(directed=True)
+    >>> ng.add_vertices(3)
+    >>> ng.add_edges([(0, 1), (1, 2)])
+
+    Convert from existing igraph:
+
+    >>> import igraph as ig
+    >>> g = ig.Graph.Erdos_Renyi(10, 0.3)
+    >>> ng = NapistuGraph.from_igraph(g, graph_type='random')
+
+    Reverse edges and check state:
+
+    >>> ng.reverse_edges()
+    >>> print(ng.is_reversed)
+    True
+
+    Set and retrieve metadata:
+
+    >>> ng.set_metadata(experiment_id='exp_001', date='2024-01-01')
+    >>> print(ng.get_metadata('experiment_id'))
+    'exp_001'
+
+    Notes
+    -----
+    NapistuGraph inherits from igraph.Graph, so all standard igraph methods
+    (degree, shortest_paths, betweenness, etc.) are available. The additional
+    functionality is designed specifically for molecular network analysis.
+
+    Edge reversal swaps 'from'/'to' attributes, negates stoichiometry values,
+    and updates direction metadata according to predefined mapping rules.
     """
 
     def __init__(self, *args, **kwargs):
@@ -81,17 +147,16 @@ class NapistuGraph(ig.Graph):
 
         return new_graph
 
-    def reverse_edges(self) -> "NapistuGraph":
+    def reverse_edges(self) -> None:
         """
         Reverse all edges in the graph.
 
         This swaps edge directions and updates all associated attributes
-        according to the edge reversal mapping utilities.
+        according to the edge reversal mapping utilities. Modifies the graph in-place.
 
         Returns
         -------
-        NapistuGraph
-            Returns self for method chaining
+        None
         """
         # Get current edge dataframe
         edges_df = self.get_edge_dataframe()
@@ -114,7 +179,7 @@ class NapistuGraph(ig.Graph):
             f"Reversed graph edges. Current state: reversed={self._metadata['is_reversed']}"
         )
 
-        return self
+        return None
 
     @property
     def is_reversed(self) -> bool:
@@ -131,22 +196,20 @@ class NapistuGraph(ig.Graph):
         """Get the weighting strategy used."""
         return self._metadata["weighting_strategy"]
 
-    def set_metadata(self, **kwargs) -> "NapistuGraph":
+    def set_metadata(self, **kwargs) -> None:
         """
         Set metadata for the graph.
+
+        Modifies the graph's metadata in-place.
 
         Parameters
         ----------
         **kwargs : dict
             Metadata key-value pairs to set
-
-        Returns
-        -------
-        NapistuGraph
-            Returns self for method chaining
         """
         self._metadata.update(kwargs)
-        return self
+
+        return None
 
     def get_metadata(self, key: Optional[str] = None) -> Any:
         """
