@@ -18,6 +18,12 @@ VALID_NAPISTU_GRAPH_TYPES = [
     NAPISTU_GRAPH_TYPES.SURROGATE,
 ]
 
+NAPISTU_GRAPH = SimpleNamespace(VERTICES="vertices", EDGES="edges", METADATA="metadata")
+
+NAPISTU_GRAPH_DIRECTEDNESS = SimpleNamespace(
+    DIRECTED="directed", UNDIRECTED="undirected"
+)
+
 NAPISTU_GRAPH_NODES = SimpleNamespace(NAME="name")
 
 NAPISTU_GRAPH_EDGES = SimpleNamespace(
@@ -85,6 +91,31 @@ EDGE_DIRECTION_MAPPING = {
     NAPISTU_GRAPH_EDGE_DIRECTIONS.UNDIRECTED: NAPISTU_GRAPH_EDGE_DIRECTIONS.UNDIRECTED,  # unchanged
 }
 
+# Net edge direction
+NET_POLARITY = SimpleNamespace(
+    LINK_POLARITY="link_polarity",
+    NET_POLARITY="net_polarity",
+    ACTIVATION="activation",
+    INHIBITION="inhibition",
+    AMBIGUOUS="ambiguous",
+    AMBIGUOUS_ACTIVATION="ambiguous activation",
+    AMBIGUOUS_INHIBITION="ambiguous inhibition",
+)
+
+VALID_LINK_POLARITIES = [
+    NET_POLARITY.ACTIVATION,
+    NET_POLARITY.INHIBITION,
+    NET_POLARITY.AMBIGUOUS,
+]
+
+VALID_NET_POLARITIES = [
+    NET_POLARITY.ACTIVATION,
+    NET_POLARITY.INHIBITION,
+    NET_POLARITY.AMBIGUOUS,
+    NET_POLARITY.AMBIGUOUS_ACTIVATION,
+    NET_POLARITY.AMBIGUOUS_INHIBITION,
+]
+
 # the regulatory graph defines a hierarchy of upstream and downstream
 # entities in a reaction
 # modifier/stimulator/inhibitor -> catalyst -> reactant -> reaction -> product
@@ -128,3 +159,26 @@ VALID_NEIGHBORHOOD_NETWORK_TYPES = [
     NEIGHBORHOOD_NETWORK_TYPES.HOURGLASS,
     NEIGHBORHOOD_NETWORK_TYPES.UPSTREAM,
 ]
+
+# weighting networks and transforming attributes
+
+WEIGHTING_SPEC = SimpleNamespace(
+    TABLE="table",
+    VARIABLE="variable",
+    TRANSFORMATION="trans",
+)
+
+DEFAULT_WT_TRANS = "identity"
+
+DEFINED_WEIGHT_TRANSFORMATION = {
+    DEFAULT_WT_TRANS: "_wt_transformation_identity",
+    "string": "_wt_transformation_string",
+    "string_inv": "_wt_transformation_string_inv",
+}
+
+SCORE_CALIBRATION_POINTS_DICT = {
+    "weights": {"strong": 3, "good": 7, "okay": 20, "weak": 40},
+    "string_wt": {"strong": 950, "good": 400, "okay": 230, "weak": 150},
+}
+
+SOURCE_VARS_DICT = {"string_wt": 10}

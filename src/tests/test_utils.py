@@ -9,13 +9,13 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 import pytest
-from napistu import utils
 from fs.tarfs import TarFS
 from fs.zipfs import ZipFS
 from google.cloud import storage
 from pytest import fixture
 from testcontainers.core.container import DockerContainer
 
+from napistu import utils
 from napistu.utils import drop_extra_cols
 
 
@@ -678,3 +678,11 @@ def test_matrix_to_edgelist():
     )
     result_single = utils.matrix_to_edgelist(single_matrix)
     pd.testing.assert_frame_equal(result_single, expected_single)
+
+
+def test_safe_fill():
+    safe_fill_test = ["a_very_long stringggg", ""]
+    assert [utils.safe_fill(x) for x in safe_fill_test] == [
+        "a_very_long\nstringggg",
+        "",
+    ]

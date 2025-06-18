@@ -3,17 +3,17 @@ from __future__ import annotations
 import logging
 import math
 
-import igraph as ig
 import numpy as np
 import pandas as pd
 
-from napistu.network import net_utils
+from napistu.network.napistu_graph_core import NapistuGraph
+from napistu.network.ig_utils import validate_edge_attributes
 
 logger = logging.getLogger(__name__)
 
 
 def precompute_distances(
-    napistu_graph: ig.Graph,
+    napistu_graph: NapistuGraph,
     max_steps: int = -1,
     max_score_q: float = float(1),
     partition_size: int = int(5000),
@@ -24,8 +24,8 @@ def precompute_distances(
 
     Parameters
     ----------
-    napistu_graph: ig.Graph
-        An igraph network model
+    napistu_graph: NapistuGraph
+        An NapistuGraph network model (subclass of igraph.Graph)
     max_steps: int
         The maximum number of steps between pairs of species to save a distance
     max_score_q: float
@@ -60,7 +60,7 @@ def precompute_distances(
         raise ValueError(f"max_score_q must be between 0 and 1 but was {max_score_q}")
 
     # make sure weight vars exist
-    net_utils._validate_edge_attributes(napistu_graph, weights_vars)
+    validate_edge_attributes(napistu_graph, weights_vars)
 
     # assign molecular species to partitions
     vs_to_partition = pd.DataFrame(
@@ -103,7 +103,7 @@ def precompute_distances(
 
 
 def _calculate_distances_subset(
-    napistu_graph: ig.Graph,
+    napistu_graph: NapistuGraph,
     vs_to_partition: pd.DataFrame,
     one_partition: pd.DataFrame,
     weights_vars: list[str] = ["weights", "upstream_weights"],

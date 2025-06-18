@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 from napistu import sbml_dfs_core
 from napistu import utils
-from napistu.network import net_utils
+from napistu.network import ng_utils
 from napistu.network import paths
 
 from napistu.constants import SBML_DFS
@@ -260,7 +260,7 @@ def create_neighborhoods(
     neighborhoods_list = list()
     neighborhoods_dict = dict()
     for s_id in s_ids:
-        query_sc_species = net_utils.compartmentalize_species(sbml_dfs, s_id)
+        query_sc_species = ng_utils.compartmentalize_species(sbml_dfs, s_id)
 
         compartmentalized_species = query_sc_species[SBML_DFS.SC_ID].tolist()
 
@@ -376,7 +376,7 @@ def load_neighborhoods_by_partition(
     refined_model.validate()
 
     # load the graph
-    napistu_graph = net_utils.read_network_pkl(
+    napistu_graph = ng_utils.read_network_pkl(
         model_prefix="curated",
         network_dir=consensus_outdir,
         directed=True,
@@ -644,7 +644,7 @@ def create_neighborhood_dict_entry(
         )
 
     try:
-        edge_sources = net_utils.get_minimal_sources_edges(
+        edge_sources = ng_utils.get_minimal_sources_edges(
             vertices.rename(columns={"name": "node"}), sbml_dfs
         )
     except Exception:
@@ -732,7 +732,7 @@ def create_neighborhood_dict_entry(
         raise ValueError(
             f"vertex_neighborhood_attrs did not contain the expected columns: {EXPECTED_VERTEX_ATTRS}."
             "This is likely because of inconsistencies between the precomputed distances, graph and/or sbml_dfs."
-            "Please try net_utils.validate_assets() to check for consistency."
+            "Please try ng_utils.validate_assets() to check for consistency."
         )
 
     # add net_polarity to edges in addition to nodes

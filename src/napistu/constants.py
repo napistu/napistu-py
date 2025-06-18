@@ -320,10 +320,6 @@ VALID_SBO_ROLES = (
     SBO_ROLES_DEFS.OPTIONAL,
 )
 
-# specifying weighting schemes schema
-
-DEFAULT_WT_TRANS = "identity"
-
 # required variables for the edgelist formats used by the matching subpackage
 # also used in some network modules
 CPR_EDGELIST = SimpleNamespace(
@@ -361,24 +357,8 @@ RESOLVE_MATCHES_AGGREGATORS = SimpleNamespace(
 
 RESOLVE_MATCHES_TMP_WEIGHT_COL = "__tmp_weight_for_aggregation__"
 
-# specifying weighting schemes schema
+# source information
 
-DEFAULT_WT_TRANS = "identity"
-
-DEFINED_WEIGHT_TRANSFORMATION = {
-    DEFAULT_WT_TRANS: "_wt_transformation_identity",
-    "string": "_wt_transformation_string",
-    "string_inv": "_wt_transformation_string_inv",
-}
-
-SCORE_CALIBRATION_POINTS_DICT = {
-    "weights": {"strong": 3, "good": 7, "okay": 20, "weak": 40},
-    "string_wt": {"strong": 950, "good": 400, "okay": 230, "weak": 150},
-}
-
-SOURCE_VARS_DICT = {"string_wt": 10}
-
-# source
 SOURCE_SPEC = SimpleNamespace(
     PATHWAY_ID="pathway_id",
     MODEL="model",

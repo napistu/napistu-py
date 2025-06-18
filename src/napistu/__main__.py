@@ -30,7 +30,8 @@ from napistu.modify import gaps
 from napistu.modify import pathwayannot
 from napistu.modify import uncompartmentalize
 from napistu.network import net_create
-from napistu.network import net_utils
+from napistu.network.ig_utils import get_graph_summary
+from napistu.network.ng_utils import read_graph_attrs_spec
 from napistu.network import precompute
 from napistu.ontologies.genodexito import Genodexito
 from napistu.ontologies import dogma
@@ -655,7 +656,7 @@ def export_igraph(
     if graph_attrs_spec_uri is None:
         graph_attrs_spec = None
     else:
-        graph_attrs_spec = net_utils.read_graph_attrs_spec(graph_attrs_spec_uri)
+        graph_attrs_spec = read_graph_attrs_spec(graph_attrs_spec_uri)
 
     napistu_graph = net_create.process_napistu_graph(
         model,
@@ -879,7 +880,7 @@ def calculate_sbml_dfs_stats(input_uri, output_uri):
 def calculate_igraph_stats(input_uri, output_uri):
     """Calculate statistics for an igraph object"""
     graph: ig.Graph = utils.load_pickle(input_uri)  # type: ignore
-    stats = net_utils.get_graph_summary(graph)
+    stats = get_graph_summary(graph)
     utils.save_json(output_uri, stats)
 
 
