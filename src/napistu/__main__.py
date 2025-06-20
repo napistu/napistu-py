@@ -753,7 +753,7 @@ def export_precomputed_distances(
         weights_vars=weights_vars_list,
     )
 
-    utils.save_json(output_uri, precomputed_distances.to_json())
+    precompute.save_precomputed_distances(precomputed_distances, output_uri)
 
 
 @exporter.command(name="export_smbl_dfs_tables")
