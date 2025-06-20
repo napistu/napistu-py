@@ -131,99 +131,81 @@ async def initialize_components() -> bool:
         return False
 
 
-def _check_component_health(
-    component_name: str, module_name: str, cache_attr: str
-) -> Dict[str, str]:
+def _check_component_health(component_name: str, module_path: str) -> Dict[str, Any]:
     """
-    Check the health of a single MCP component by verifying its cache is initialized and contains data.
+    Check the health of a single MCP component using the component class pattern.
 
     Parameters
     ----------
     component_name : str
-        Name of the component (for importing)
-    module_name : str
-        Full module path for importing
-    cache_attr : str
-        Name of the cache/context attribute to check
+        Name of the component (for logging)
+    module_path : str
+        Full module path for importing the component
 
     Returns
     -------
-    Dict[str, str]
-        Dictionary containing component health status:
-            - status : str
-                One of: 'healthy', 'inactive', or 'unavailable'
-            - error : str, optional
-                Error message if status is 'unavailable'
+    Dict[str, Any]
+        Dictionary containing component health status from the component's state
     """
     try:
-        module = __import__(module_name, fromlist=[component_name])
-        cache = getattr(module, cache_attr, None)
-        logger.info(
-            f"Checking {component_name} health - Cache exists: {cache is not None}"
-        )
+        # Import the component module
+        module = __import__(module_path, fromlist=[component_name])
 
-        # Component specific checks for actual data
-        if cache:
-            if component_name == "documentation":
-                # Check if any documentation section has content
-                has_data = any(bool(section) for section in cache.values())
-                logger.info(f"Documentation sections: {list(cache.keys())}")
-            elif component_name == "codebase":
-                # Check if any codebase section has content
-                has_data = any(bool(section) for section in cache.values())
-                logger.info(f"Codebase sections: {list(cache.keys())}")
-            elif component_name == "tutorials":
-                # Check if tutorials section has content
-                has_data = bool(cache.get("tutorials", {}))
-                logger.info(f"Tutorials cache: {bool(cache.get('tutorials', {}))}")
-            elif component_name == "execution":
-                # Check if session context has more than just napistu module
-                has_data = len(cache) > 0
-                logger.info(f"Execution context: {list(cache.keys())}")
-            else:
-                has_data = bool(cache)
+        # Use the new component class pattern
+        if hasattr(module, "get_component"):
+            try:
+                component = module.get_component()
+                state = component.get_state()
+                health_status = state.get_health_status()
+                logger.info(f"{component_name} health: {health_status}")
+                return health_status
+            except RuntimeError as e:
+                # Handle execution component that might not be created yet
+                if "not created" in str(e):
+                    logger.warning(f"{component_name} not initialized yet")
+                    return {
+                        "status": "initializing",
+                        "message": "Component not created",
+                    }
+                else:
+                    raise
+        else:
+            # Component doesn't follow the new pattern
+            logger.warning(f"{component_name} doesn't use component class pattern")
+            return {"status": "unknown", "message": "Component using legacy pattern"}
 
-            if has_data:
-                logger.info(f"{component_name} is healthy")
-                return {"status": "healthy"}
-
-        logger.info(f"{component_name} is inactive")
-        return {"status": "inactive"}
+    except ImportError as e:
+        logger.error(f"Could not import {component_name}: {str(e)}")
+        return {"status": "unavailable", "error": f"Import failed: {str(e)}"}
     except Exception as e:
-        logger.error(f"{component_name} check failed: {str(e)}")
+        logger.error(f"{component_name} health check failed: {str(e)}")
         return {"status": "unavailable", "error": str(e)}
 
 
 async def _check_components() -> Dict[str, Dict[str, Any]]:
     """
-    Check the health of individual MCP components by verifying their caches.
+    Check the health of individual MCP components using their component classes.
 
     Returns
     -------
     Dict[str, Dict[str, Any]]
-        Dictionary mapping component names to their health status:
-            - {component_name} : Dict[str, str]
-                Health status for each component, containing:
-                    - status : str
-                        One of: 'healthy', 'inactive', or 'unavailable'
-                    - error : str, optional
-                        Error message if status is 'unavailable'
+        Dictionary mapping component names to their health status
     """
-    # Define component configurations - cache vars that indicate initialization
+    # Define component configurations
     component_configs = {
-        "documentation": ("napistu.mcp.documentation", "_docs_cache"),
-        "codebase": ("napistu.mcp.codebase", "_codebase_cache"),
-        "tutorials": ("napistu.mcp.tutorials", "_tutorial_cache"),
-        "execution": ("napistu.mcp.execution", "_session_context"),
+        "documentation": "napistu.mcp.documentation",
+        "codebase": "napistu.mcp.codebase",
+        "tutorials": "napistu.mcp.tutorials",
+        "execution": "napistu.mcp.execution",
     }
 
     logger.info("Starting component health checks...")
     logger.info(f"Checking components: {list(component_configs.keys())}")
 
-    # Check each component's cache
+    # Check each component using their state objects
     results = {
-        name: _check_component_health(name, module_path, cache_attr)
-        for name, (module_path, cache_attr) in component_configs.items()
+        name: _check_component_health(name, module_path)
+        for name, module_path in component_configs.items()
     }
 
     logger.info(f"Health check results: {results}")
