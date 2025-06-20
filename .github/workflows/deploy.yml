@@ -12,6 +12,8 @@ on:
         required: false
         default: 'latest'
         type: string
+  schedule:
+    - cron: '0 10 * * *'  # Daily at 2 AM PST (10 AM UTC)
 
 env:
   PROJECT_ID: shackett
@@ -52,7 +54,7 @@ jobs:
           --cpu=1 \
           --memory=2Gi \
           --min-instances=1 \
-          --max-instances=3 \
+          --max-instances=1 \
           --concurrency=10 \
           --timeout=600 \
           --cpu-boost \

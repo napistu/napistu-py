@@ -21,16 +21,6 @@ PACKAGE_DEFS = SimpleNamespace(
     CACHE_DIR="napistu_data",
 )
 
-PROTEINATLAS_SUBCELL_LOC_URL = (
-    "https://www.proteinatlas.org/download/tsv/subcellular_location.tsv.zip"
-)
-
-# GTEx
-GTEX_RNASEQ_EXPRESSION_URL = "https://storage.googleapis.com/adult-gtex/bulk-gex/v8/rna-seq/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_median_tpm.gct.gz"
-
-# Gencode
-GENCODE_URL = "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_26/gencode.v26.transcripts.fa.gz"
-
 FILE_EXT_ZIP = "zip"
 FILE_EXT_GZ = "gz"
 
@@ -131,6 +121,11 @@ SBML_DFS_SCHEMA = SimpleNamespace(
 
 ENTITIES_W_DATA = {SBML_DFS.SPECIES, SBML_DFS.REACTIONS}
 
+ENTITIES_TO_ENTITY_DATA = {
+    SBML_DFS.SPECIES: SBML_DFS.SPECIES_DATA,
+    SBML_DFS.REACTIONS: SBML_DFS.REACTIONS_DATA,
+}
+
 REQUIRED_REACTION_FROMEDGELIST_COLUMNS = [
     "sc_id_up",
     "sc_id_down",
@@ -211,11 +206,14 @@ IDENTIFIERS = SimpleNamespace(
     ONTOLOGY="ontology", IDENTIFIER="identifier", BQB="bqb", URL="url"
 )
 
-SPECIES_IDENTIFIERS_REQUIRED_VARS = {
-    SBML_DFS.S_ID,
+IDENTIFIERS_REQUIRED_VARS = {
     IDENTIFIERS.ONTOLOGY,
     IDENTIFIERS.IDENTIFIER,
     IDENTIFIERS.BQB,
+}
+
+SPECIES_IDENTIFIERS_REQUIRED_VARS = IDENTIFIERS_REQUIRED_VARS | {
+    SBML_DFS.S_ID,
     SBML_DFS.S_NAME,
 }
 
@@ -296,31 +294,31 @@ MINI_SBO_NAME_TO_POLARITY = {
 # affect whether a reaction can occur
 # for example, if I remove any substrate a reaction won't occur
 # but I would have to remove all catalysts for it to not occur
+SBO_ROLES_DEFS = SimpleNamespace(
+    DEFINING="DEFINING", REQUIRED="REQUIRED", OPTIONAL="OPTIONAL", SBO_ROLE="sbo_role"
+)
+
 SBO_NAME_TO_ROLE = {
-    SBOTERM_NAMES.REACTANT: "DEFINING",
-    SBOTERM_NAMES.PRODUCT: "DEFINING",
-    SBOTERM_NAMES.INTERACTOR: "DEFINING",
-    SBOTERM_NAMES.CATALYST: "REQUIRED",
-    SBOTERM_NAMES.INHIBITOR: "OPTIONAL",
-    SBOTERM_NAMES.STIMULATOR: "OPTIONAL",
-    SBOTERM_NAMES.MODIFIER: "OPTIONAL",
+    SBOTERM_NAMES.REACTANT: SBO_ROLES_DEFS.DEFINING,
+    SBOTERM_NAMES.PRODUCT: SBO_ROLES_DEFS.DEFINING,
+    SBOTERM_NAMES.INTERACTOR: SBO_ROLES_DEFS.DEFINING,
+    SBOTERM_NAMES.CATALYST: SBO_ROLES_DEFS.REQUIRED,
+    SBOTERM_NAMES.INHIBITOR: SBO_ROLES_DEFS.OPTIONAL,
+    SBOTERM_NAMES.STIMULATOR: SBO_ROLES_DEFS.OPTIONAL,
+    SBOTERM_NAMES.MODIFIER: SBO_ROLES_DEFS.OPTIONAL,
 }
 
 # see also https://github.com/calico/netcontextr/blob/main/R/reactionTrimmingFunctions.R
 VALID_SBO_ROLES = (
     # there is a direct correspondence between the set of defining entries and the identity of a reaction
     # e.g., the stoichiometery of a metabolic reaction or the members of a protein-protein interaction
-    "DEFINING",
+    SBO_ROLES_DEFS.DEFINING,
     # 1+ entries are needed if entries were initially defined. i.e., reactions which require a catalyst
     # would no longer exist if the catalyst was removed, but many reactions do not require a catalyst.
-    "REQUIRED",
+    SBO_ROLES_DEFS.REQUIRED,
     # 0+ entries. optional species can be added or removed to a reaction without changing its identity
-    "OPTIONAL",
+    SBO_ROLES_DEFS.OPTIONAL,
 )
-
-# specifying weighting schemes schema
-
-DEFAULT_WT_TRANS = "identity"
 
 # required variables for the edgelist formats used by the matching subpackage
 # also used in some network modules
@@ -359,24 +357,8 @@ RESOLVE_MATCHES_AGGREGATORS = SimpleNamespace(
 
 RESOLVE_MATCHES_TMP_WEIGHT_COL = "__tmp_weight_for_aggregation__"
 
-# specifying weighting schemes schema
+# source information
 
-DEFAULT_WT_TRANS = "identity"
-
-DEFINED_WEIGHT_TRANSFORMATION = {
-    DEFAULT_WT_TRANS: "_wt_transformation_identity",
-    "string": "_wt_transformation_string",
-    "string_inv": "_wt_transformation_string_inv",
-}
-
-SCORE_CALIBRATION_POINTS_DICT = {
-    "weights": {"strong": 3, "good": 7, "okay": 20, "weak": 40},
-    "string_wt": {"strong": 950, "good": 400, "okay": 230, "weak": 150},
-}
-
-SOURCE_VARS_DICT = {"string_wt": 10}
-
-# source
 SOURCE_SPEC = SimpleNamespace(
     PATHWAY_ID="pathway_id",
     MODEL="model",
@@ -404,8 +386,11 @@ EXPECTED_PW_INDEX_COLUMNS = {
 ONTOLOGIES = SimpleNamespace(
     CHEBI="chebi",
     ENSEMBL_GENE="ensembl_gene",
+    ENSEMBL_GENE_VERSION="ensembl_gene_version",
     ENSEMBL_TRANSCRIPT="ensembl_transcript",
+    ENSEMBL_TRANSCRIPT_VERSION="ensembl_transcript_version",
     ENSEMBL_PROTEIN="ensembl_protein",
+    ENSEMBL_PROTEIN_VERSION="ensembl_protein_version",
     GENE_NAME="gene_name",
     GO="go",
     MIRBASE="mirbase",
@@ -424,7 +409,11 @@ CHARACTERISTIC_COMPLEX_ONTOLOGIES = [
     ONTOLOGIES.MIRBASE,
 ]
 
-ONTOLOGY_ALIASES = SimpleNamespace(NCBI_ENTREZ_GENE={"ncbigene", "ncbi_gene"})
+ONTOLOGY_SPECIES_ALIASES = {
+    ONTOLOGIES.NCBI_ENTREZ_GENE: {"ncbigene", "ncbi_gene"},
+    ONTOLOGIES.ENSEMBL_GENE: {"ensembl_gene_id"},
+    ONTOLOGIES.UNIPROT: {"Uniprot"},
+}
 
 ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY = {
     "G": ONTOLOGIES.ENSEMBL_GENE,

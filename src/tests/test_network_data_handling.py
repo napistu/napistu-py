@@ -224,8 +224,8 @@ def test_create_graph_attrs_config():
 
 def test_add_results_table_to_graph(sbml_dfs_glucose_metabolism):
     """Test adding results table to graph."""
-    # Create a test graph using create_cpr_graph
-    graph = net_create.create_cpr_graph(
+    # Create a test graph using create_napistu_graph
+    graph = net_create.create_napistu_graph(
         sbml_dfs_glucose_metabolism, directed=True, graph_type="regulatory"
     )
 
@@ -298,8 +298,8 @@ def test_add_results_table_to_graph(sbml_dfs_glucose_metabolism):
 
 def test_add_graph_species_attribute(sbml_dfs_glucose_metabolism):
     """Test adding species attributes to graph."""
-    # Create a test graph using create_cpr_graph
-    graph = net_create.create_cpr_graph(
+    # Create a test graph using create_napistu_graph
+    graph = net_create.create_napistu_graph(
         sbml_dfs_glucose_metabolism, directed=True, graph_type="regulatory"
     )
 

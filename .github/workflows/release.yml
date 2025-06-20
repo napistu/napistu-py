@@ -94,7 +94,7 @@ jobs:
     - name: Install and test
       run: |
         uv pip install --system pytest pytest-cov
-        uv pip install --system -e ".[dev,mcp]"
+        uv pip install --system -e ".[dev]"
         pytest -x -v  # Stop on first failure for speed
 
   # Build and publish to PyPI

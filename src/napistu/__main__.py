@@ -1,4 +1,4 @@
-"""The CLI for cpr"""
+"""The CLI for Napistu"""
 
 from __future__ import annotations
 
@@ -13,11 +13,14 @@ import napistu
 import igraph as ig
 import pandas as pd
 from napistu import consensus as cpr_consensus
-from napistu import constants
 from napistu import indices
 from napistu import sbml_dfs_core
 from napistu import utils
+from napistu.context import filtering
+from napistu.matching import mount
 from napistu.ingestion import bigg
+from napistu.ingestion import gtex
+from napistu.ingestion import hpa
 from napistu.ingestion import reactome
 from napistu.ingestion import sbml
 from napistu.ingestion import string
@@ -27,14 +30,16 @@ from napistu.modify import gaps
 from napistu.modify import pathwayannot
 from napistu.modify import uncompartmentalize
 from napistu.network import net_create
-from napistu.network import net_utils
+from napistu.network.ig_utils import get_graph_summary
+from napistu.network.ng_utils import read_graph_attrs_spec
 from napistu.network import precompute
-from napistu.rpy2 import has_rpy2
+from napistu.ontologies.genodexito import Genodexito
+from napistu.ontologies import dogma
+from napistu.constants import ONTOLOGIES
+from napistu.constants import RESOLVE_MATCHES_AGGREGATORS
+from napistu.ingestion.constants import PROTEINATLAS_SUBCELL_LOC_URL
+from napistu.ingestion.constants import GTEX_RNASEQ_EXPRESSION_URL
 from fs import open_fs
-
-if has_rpy2:
-    from napistu.rpy2 import rids
-    from napistu.rpy2 import netcontextr, callr
 
 logger = logging.getLogger(napistu.__name__)
 click_logging.basic_config(logger)
@@ -89,15 +94,12 @@ def load_ttrust(target_uri: str):
 @click.option(
     "--url",
     type=str,
-    default=constants.PROTEINATLAS_SUBCELL_LOC_URL,
+    default=PROTEINATLAS_SUBCELL_LOC_URL,
     help="URL to download the zipped protein atlas subcellular localization tsv from.",
 )
 @click_logging.simple_verbosity_option(logger)
 def load_proteinatlas_subcell(target_uri: str, url: str):
-    file_ext = constants.PROTEINATLAS_SUBCELL_LOC_URL.split(".")[-1]
-    target_filename = url.split("/")[-1].split(f".{file_ext}")[0]
-    logger.info("Start downloading proteinatlas %s to %s", url, target_uri)
-    utils.download_wget(url, target_uri, target_filename=target_filename)
+    hpa.download_hpa_data(target_uri, url)
 
 
 @load.command(name="gtex-rnaseq-expression")
@@ -105,13 +107,12 @@ def load_proteinatlas_subcell(target_uri: str, url: str):
 @click.option(
     "--url",
     type=str,
-    default=constants.GTEX_RNASEQ_EXPRESSION_URL,
+    default=GTEX_RNASEQ_EXPRESSION_URL,
     help="URL to download the gtex file from.",
 )
 @click_logging.simple_verbosity_option(logger)
 def load_gtex_rnaseq(target_uri: str, url: str):
-    logger.info("Start downloading gtex %s to %s", url, target_uri)
-    utils.download_wget(url, target_uri)
+    gtex.download_gtex_rnaseq(target_uri, url)
 
 
 @load.command(name="string-db")
@@ -411,7 +412,7 @@ def apply_manual_curations(model_uri: str, curation_dir: str, output_model_uri: 
     """Apply manual curations to a consensus model
 
     The curation dir is a directory containing the manual curations
-    Check cpr.curation.curate_sbml_dfs for more information.
+    Check napistu.modify.curation.curate_sbml_dfs for more information.
     """
     model = utils.load_pickle(model_uri)
     model = curation.curate_sbml_dfs(curation_dir=curation_dir, sbml_dfs=model)
@@ -419,52 +420,80 @@ def apply_manual_curations(model_uri: str, curation_dir: str, output_model_uri: 
 
 
 @refine.command(name="expand_identifiers")
-@click.argument("model_uri", type=str)
+@click.argument("sbml_dfs_uri", type=str)
 @click.argument("output_model_uri", type=str)
-@click.option(
-    "--id-type",
-    "-u",
-    type=click.Choice(["species", "compartments", "reactions"]),
-    default="species",
-)
 @click.option("--species", "-s", default="Homo sapiens", type=str)
 @click.option(
     "--ontologies", "-o", multiple=True, type=str, help="Ontologies to add or complete"
 )
+@click.option(
+    "--preferred_method",
+    "-p",
+    default="bioconductor",
+    type=str,
+    help="Preferred method to use for identifier expansion",
+)
+@click.option(
+    "--allow_fallback",
+    "-a",
+    default=True,
+    type=bool,
+    help="Allow fallback to other methods if preferred method fails",
+)
 def expand_identifiers(
-    model_uri: str,
+    sbml_dfs_uri: str,
     output_model_uri: str,
-    id_type: str,
     species: str,
-    ontologies: list[str],
+    ontologies: set[str],
+    preferred_method: str,
+    allow_fallback: bool,
 ):
     """Expand identifiers of a model
 
     Args:
-        model_uri (str): uri of model in sbml dfs format
+        sbml_dfs_uri (str): uri of model in sbml dfs format
         output_model_uri (str): output uri of model in sbml dfs format
-        id_type (str): identifier type, one of: species, compartments, reactions
         species (str): Species to use
-        ontologies (list[str]): ontologies to add or update
+        ontologies (set[str]): ontologies to add or update
 
     Example call:
     > cpr refine expand_identifiers gs://<uri> ./test.pickle -o ensembl_gene
     """
-
-    model: sbml.SBML_dfs = utils.load_pickle(model_uri)  # type: ignore
+    sbml_dfs: sbml.SBML_dfs = utils.load_pickle(sbml_dfs_uri)  # type: ignore
     if len(ontologies) == 0:
         raise ValueError("No ontologies to expand specified.")
-    expanded_ids = rids.expand_identifiers(model, id_type, species, ontologies)
-    rids.update_expanded_identifiers(model, id_type, expanded_ids)
-    utils.save_pickle(output_model_uri, model)
+
+    Genodexito(
+        species=species,
+        preferred_method=preferred_method,
+        allow_fallback=allow_fallback,
+    ).expand_sbml_dfs_ids(sbml_dfs, ontologies=ontologies)
+
+    utils.save_pickle(output_model_uri, sbml_dfs)
 
 
 @integrate.command(name="dogmatic_scaffold")
 @click.argument("output_model_uri", type=str)
 @click.option("--species", "-s", default="Homo sapiens", type=str)
+@click.option(
+    "--preferred_method",
+    "-p",
+    default="bioconductor",
+    type=str,
+    help="Preferred method to use for identifier expansion",
+)
+@click.option(
+    "--allow_fallback",
+    "-a",
+    default=True,
+    type=bool,
+    help="Allow fallback to other methods if preferred method fails",
+)
 def dogmatic_scaffold(
     output_model_uri: str,
     species: str,
+    preferred_method: str,
+    allow_fallback: bool,
 ):
     """Dogmatic Scaffold
 
@@ -476,25 +505,23 @@ def dogmatic_scaffold(
     > cpr integrate dogmatic_scaffold ./test.pickle
     """
 
-    dogmatic_sbml_dfs = rids.create_dogmatic_sbml_dfs(species)
+    dogmatic_sbml_dfs = dogma.create_dogmatic_sbml_dfs(
+        species=species,
+        preferred_method=preferred_method,
+        allow_fallback=allow_fallback,
+    )
+
     utils.save_pickle(output_model_uri, dogmatic_sbml_dfs)
 
 
 @refine.command(name="filter_gtex_tissue")
-@click.argument("model_uri", type=str)
+@click.argument("sbml_dfs_uri", type=str)
 @click.argument("gtex_file_uri", type=str)
 @click.argument("output_model_uri", type=str)
 @click.argument("tissue", type=str)
-@click.option(
-    "--filter-non-genic-reactions",
-    "-f",
-    default=False,
-    type=bool,
-    help="Filter reactions not involving genes?",
-)
 @click_logging.simple_verbosity_option(logger)
 def filter_gtex_tissue(
-    model_uri: str,
+    sbml_dfs_uri: str,
     gtex_file_uri: str,
     output_model_uri: str,
     tissue: str,
@@ -504,70 +531,73 @@ def filter_gtex_tissue(
 
     This uses zfpkm values derived from gtex to filter the model.
     """
-    logger.info("Get rcpr from R")
-    rcpr = callr.get_rcpr()
-    logger.info("Load sbml_dfs model")
-    model: sbml.SBML_dfs = utils.load_pickle(model_uri)  # type: ignore
-    logger.info("Load and clean gtex tissue expression")
-    dat_gtex = netcontextr.load_and_clean_gtex_data(
-        rcpr, gtex_file_uri, by_tissue_zfpkm=True
-    )
-    logger.info("Convert sbml_dfs to rcpr reaction graph")
-    model_r = netcontextr.sbml_dfs_to_rcpr_reactions(model)
-    logger.info("Annotate genes with gtex tissue expression")
-    model_r_annot = netcontextr.annotate_genes(rcpr, model_r, dat_gtex, "tissue")
-    logger.info("Trim network by gene attribute")
-    model_r_trim = netcontextr.trim_reactions_by_gene_attribute(
-        rcpr, model_r_annot, "tissue", tissue
-    )
-    logger.info("Apply trimmed network")
 
-    if filter_non_genic_reactions:
-        logger.info("Filter non genic reactions")
-        considered_reactions = None
-    else:
-        logger.info("Keep genic reactions")
-        considered_reactions = rcpr._get_rids_from_rcpr_reactions(model_r)
-    netcontextr.apply_reactions_context_to_sbml_dfs(
-        model, model_r_trim, considered_reactions=considered_reactions
+    logger.info("Load sbml_dfs model")
+    sbml_dfs: sbml.SBML_dfs = utils.load_pickle(sbml_dfs_uri)  # type: ignore
+    logger.info("Load and clean gtex tissue expression")
+    dat_gtex = gtex.load_and_clean_gtex_data(gtex_file_uri)
+    logger.info("Annotate genes with gtex tissue expression")
+    mount.bind_wide_results(
+        sbml_dfs=sbml_dfs,
+        results_df=dat_gtex.reset_index(drop=False),
+        results_name="gtex",
+        ontologies={ONTOLOGIES.ENSEMBL_GENE},
+        numeric_agg=RESOLVE_MATCHES_AGGREGATORS.MAX,
     )
-    logger.info("Save model to %s", output_model_uri)
-    utils.save_pickle(output_model_uri, model)
+    logger.info("Trim network by gene attribute")
+    filtering.filter_species_by_attribute(
+        sbml_dfs,
+        "gtex",
+        attribute_name=tissue,
+        # remove entries which are NOT in the liver
+        attribute_value=0,
+        inplace=True,
+    )
+    # remove the gtex species data from the sbml_dfs
+    sbml_dfs.remove_species_data("gtex")
+
+    logger.info("Save sbml_dfs to %s", output_model_uri)
+    utils.save_pickle(output_model_uri, sbml_dfs)
 
 
 @refine.command(name="filter_hpa_compartments")
-@click.argument("model_uri", type=str)
+@click.argument("sbml_dfs_uri", type=str)
 @click.argument("hpa_file_uri", type=str)
 @click.argument("output_model_uri", type=str)
 @click_logging.simple_verbosity_option(logger)
 def filter_hpa_gene_compartments(
-    model_uri: str, hpa_file_uri: str, output_model_uri: str
+    sbml_dfs_uri: str, hpa_file_uri: str, output_model_uri: str
 ):
     """Filter an interaction network using the human protein atlas
 
-    This uses R `rcpr` to filter an interaction network based on the
-    compartment information from the human protein atlas.
+    This uses loads the human proteome atlas and removes reactions (including interactions)
+    containing genes which are not colocalized.
 
     Only interactions between genes in the same compartment are kept.
     """
-    logger.info("Get rcpr from R")
-    rcpr = callr.get_rcpr()
+
     logger.info("Load sbml_dfs model")
-    model: sbml.SBML_dfs = utils.load_pickle(model_uri)  # type: ignore
+    sbml_dfs: sbml.SBML_dfs = utils.load_pickle(sbml_dfs_uri)  # type: ignore
     logger.info("Load and clean hpa data")
-    dat_hpa = netcontextr.load_and_clean_hpa_data(rcpr, hpa_file_uri)
-    logger.info("Convert sbml_dfs to rcpr string graph")
-    model_r = netcontextr.sbml_dfs_to_rcpr_string_graph(model)
+    dat_hpa = hpa.load_and_clean_hpa_data(hpa_file_uri)
     logger.info("Annotate genes with HPA compartments")
-    model_r_annot = netcontextr.annotate_genes(rcpr, model_r, dat_hpa, "compartment")
-    logger.info("Trim network by gene attribute")
-    model_r_trim = netcontextr.trim_network_by_gene_attribute(
-        rcpr, model_r_annot, "compartment"
+    mount.bind_wide_results(
+        sbml_dfs=sbml_dfs,
+        results_df=dat_hpa.reset_index(drop=False),
+        results_name="hpa",
+        ontologies={ONTOLOGIES.ENSEMBL_GENE},
+        numeric_agg=RESOLVE_MATCHES_AGGREGATORS.MAX,
     )
-    logger.info("Apply trimmed network")
-    netcontextr.apply_context_to_sbml_dfs(model, model_r_trim)
-    logger.info("Save model to %s", output_model_uri)
-    utils.save_pickle(output_model_uri, model)
+    logger.info(
+        "Trim network removing reactions with species in different compartments"
+    )
+    filtering.filter_reactions_with_disconnected_cspecies(
+        sbml_dfs, "hpa", inplace=False
+    )
+    sbml_dfs.remove_species_data("hpa")
+
+    logger.info("Save sbml_dfs to %s", output_model_uri)
+    utils.save_pickle(output_model_uri, sbml_dfs)
 
 
 @click.group()
@@ -626,9 +656,9 @@ def export_igraph(
     if graph_attrs_spec_uri is None:
         graph_attrs_spec = None
     else:
-        graph_attrs_spec = net_utils.read_graph_attrs_spec(graph_attrs_spec_uri)
+        graph_attrs_spec = read_graph_attrs_spec(graph_attrs_spec_uri)
 
-    cpr_graph = net_create.process_cpr_graph(
+    napistu_graph = net_create.process_napistu_graph(
         model,
         reaction_graph_attrs=graph_attrs_spec,
         directed=directed,
@@ -642,11 +672,11 @@ def export_igraph(
     with open_fs(base, create=True, writeable=True) as fs:
         with fs.openbin(path, "wb") as f:
             if format == "gml":
-                cpr_graph.write_gml(f)
+                napistu_graph.write_gml(f)
             elif format == "edgelist":
-                cpr_graph.write_edgelist(f)
+                napistu_graph.write_edgelist(f)
             elif format == "pickle":
-                pickle.dump(cpr_graph, f)
+                pickle.dump(napistu_graph, f)
             else:
                 raise ValueError("Unknown format: %s" % format)
 
@@ -704,11 +734,11 @@ def export_precomputed_distances(
     with open_fs(base) as fs:
         with fs.openbin(path) as f:
             if format == "gml":
-                cpr_graph = ig.Graph.Read_GML(f)
+                napistu_graph = ig.Graph.Read_GML(f)
             elif format == "edgelist":
-                cpr_graph = ig.Graph.Read_Edgelist(f)
+                napistu_graph = ig.Graph.Read_Edgelist(f)
             elif format == "pickle":
-                cpr_graph = ig.Graph.Read_Pickle(f)
+                napistu_graph = ig.Graph.Read_Pickle(f)
             else:
                 raise ValueError("Unknown format: %s" % format)
 
@@ -716,7 +746,7 @@ def export_precomputed_distances(
     weights_vars_list = utils.click_str_to_list(weights_vars)
 
     precomputed_distances = precompute.precompute_distances(
-        cpr_graph,
+        napistu_graph,
         max_steps=max_steps,
         max_score_q=max_score_q,
         partition_size=partition_size,
@@ -850,7 +880,7 @@ def calculate_sbml_dfs_stats(input_uri, output_uri):
 def calculate_igraph_stats(input_uri, output_uri):
     """Calculate statistics for an igraph object"""
     graph: ig.Graph = utils.load_pickle(input_uri)  # type: ignore
-    stats = net_utils.get_graph_summary(graph)
+    stats = get_graph_summary(graph)
     utils.save_json(output_uri, stats)
 
 

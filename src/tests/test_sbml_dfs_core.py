@@ -10,7 +10,7 @@ from napistu.ingestion import sbml
 from napistu.modify import pathwayannot
 
 from napistu import identifiers as napistu_identifiers
-from napistu.constants import SBML_DFS
+from napistu.constants import SBML_DFS, SBOTERM_NAMES
 from napistu.sbml_dfs_core import SBML_dfs
 
 
@@ -196,17 +196,13 @@ def test_sbml_dfs_remove_reactions_check_species(sbml_dfs):
     # find all r_ids for a species and check if
     # removing all these reactions also removes the species
     s_id = sbml_dfs.species.index[0]
-    dat = (
-        sbml_dfs.compartmentalized_species.query("s_id == @s_id").merge(
-            sbml_dfs.reaction_species, on="sc_id"
-        )
-    )[["r_id", "sc_id"]]
-    r_ids = dat["r_id"]
-    sc_ids = dat["sc_id"]
+    dat = sbml_dfs.compartmentalized_species.query("s_id == @s_id").merge(
+        sbml_dfs.reaction_species, left_index=True, right_on="sc_id"
+    )
+    r_ids = dat["r_id"].unique()
     sbml_dfs.remove_reactions(r_ids, remove_species=True)
-    for sc_id in sc_ids:
-        assert sc_id not in sbml_dfs.compartmentalized_species.index
     assert s_id not in sbml_dfs.species.index
+    sbml_dfs.validate()
 
 
 def test_formula(sbml_dfs):
@@ -369,3 +365,131 @@ def test_get_identifiers_handles_missing_values():
     assert result.shape[0] == 0 or all(
         result[SBML_DFS.S_ID] == "s1"
     ), "Only Identifiers objects should be returned."
+
+
+def test_find_underspecified_reactions():
+
+    reaction_w_regulators = pd.DataFrame(
+        {
+            SBML_DFS.SC_ID: ["A", "B", "C", "D", "E", "F", "G"],
+            SBML_DFS.STOICHIOMETRY: [-1, -1, 1, 1, 0, 0, 0],
+            SBML_DFS.SBO_TERM: [
+                SBOTERM_NAMES.REACTANT,
+                SBOTERM_NAMES.REACTANT,
+                SBOTERM_NAMES.PRODUCT,
+                SBOTERM_NAMES.PRODUCT,
+                SBOTERM_NAMES.CATALYST,
+                SBOTERM_NAMES.CATALYST,
+                SBOTERM_NAMES.STIMULATOR,
+            ],
+        }
+    ).assign(r_id="bar")
+    reaction_w_regulators[SBML_DFS.RSC_ID] = [
+        f"rsc_{i}" for i in range(len(reaction_w_regulators))
+    ]
+    reaction_w_regulators.set_index(SBML_DFS.RSC_ID, inplace=True)
+    reaction_w_regulators = sbml_dfs_core.add_sbo_role(reaction_w_regulators)
+
+    reaction_w_interactors = pd.DataFrame(
+        {
+            SBML_DFS.SC_ID: ["A", "B"],
+            SBML_DFS.STOICHIOMETRY: [-1, 1],
+            SBML_DFS.SBO_TERM: [SBOTERM_NAMES.REACTANT, SBOTERM_NAMES.REACTANT],
+        }
+    ).assign(r_id="baz")
+    reaction_w_interactors[SBML_DFS.RSC_ID] = [
+        f"rsc_{i}" for i in range(len(reaction_w_interactors))
+    ]
+    reaction_w_interactors.set_index(SBML_DFS.RSC_ID, inplace=True)
+    reaction_w_interactors = sbml_dfs_core.add_sbo_role(reaction_w_interactors)
+
+    working_reactions = reaction_w_regulators.copy()
+    working_reactions["new"] = True
+    working_reactions.loc["rsc_0", "new"] = False
+    working_reactions
+    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
+    assert result == {"bar"}
+
+    # missing one enzyme -> operable
+    working_reactions = reaction_w_regulators.copy()
+    working_reactions["new"] = True
+    working_reactions.loc["rsc_4", "new"] = False
+    working_reactions
+    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
+    assert result == set()
+
+    # missing one product -> inoperable
+    working_reactions = reaction_w_regulators.copy()
+    working_reactions["new"] = True
+    working_reactions.loc["rsc_2", "new"] = False
+    working_reactions
+    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
+    assert result == {"bar"}
+
+    # missing all enzymes -> inoperable
+    working_reactions = reaction_w_regulators.copy()
+    working_reactions["new"] = True
+    working_reactions.loc["rsc_4", "new"] = False
+    working_reactions.loc["rsc_5", "new"] = False
+    working_reactions
+    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
+    assert result == {"bar"}
+
+    # missing regulators -> operable
+    working_reactions = reaction_w_regulators.copy()
+    working_reactions["new"] = True
+    working_reactions.loc["rsc_6", "new"] = False
+    working_reactions
+    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
+    assert result == set()
+
+    # remove an interactor
+    working_reactions = reaction_w_interactors.copy()
+    working_reactions["new"] = True
+    working_reactions.loc["rsc_0", "new"] = False
+    working_reactions
+    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
+    assert result == {"baz"}
+
+
+def test_remove_entity_data_success(sbml_dfs_w_data):
+    """Test successful removal of entity data."""
+    # Get initial data
+    initial_species_data_keys = set(sbml_dfs_w_data.species_data.keys())
+    initial_reactions_data_keys = set(sbml_dfs_w_data.reactions_data.keys())
+
+    # Remove species data
+    sbml_dfs_w_data._remove_entity_data(SBML_DFS.SPECIES, "test_species")
+    assert "test_species" not in sbml_dfs_w_data.species_data
+    assert set(sbml_dfs_w_data.species_data.keys()) == initial_species_data_keys - {
+        "test_species"
+    }
+
+    # Remove reactions data
+    sbml_dfs_w_data._remove_entity_data(SBML_DFS.REACTIONS, "test_reactions")
+    assert "test_reactions" not in sbml_dfs_w_data.reactions_data
+    assert set(sbml_dfs_w_data.reactions_data.keys()) == initial_reactions_data_keys - {
+        "test_reactions"
+    }
+
+    # Validate the model is still valid after removals
+    sbml_dfs_w_data.validate()
+
+
+def test_remove_entity_data_nonexistent(sbml_dfs_w_data, caplog):
+    """Test warning when trying to remove nonexistent entity data."""
+    # Try to remove nonexistent species data
+    sbml_dfs_w_data._remove_entity_data(SBML_DFS.SPECIES, "nonexistent_label")
+    assert "Label 'nonexistent_label' not found in species_data" in caplog.text
+    assert set(sbml_dfs_w_data.species_data.keys()) == {"test_species"}
+
+    # Clear the log
+    caplog.clear()
+
+    # Try to remove nonexistent reactions data
+    sbml_dfs_w_data._remove_entity_data(SBML_DFS.REACTIONS, "nonexistent_label")
+    assert "Label 'nonexistent_label' not found in reactions_data" in caplog.text
+    assert set(sbml_dfs_w_data.reactions_data.keys()) == {"test_reactions"}
+
+    # Validate the model is still valid
+    sbml_dfs_w_data.validate()

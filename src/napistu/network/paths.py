@@ -5,20 +5,25 @@ import math
 import warnings
 from typing import Any
 
-import igraph as ig
 import pandas as pd
+
 from napistu import sbml_dfs_core
 from napistu import utils
+from napistu.network.napistu_graph_core import NapistuGraph
+from napistu.network.ng_utils import get_minimal_sources_edges
 from napistu.constants import CPR_PATH_REQ_VARS
 from napistu.constants import MINI_SBO_NAME_TO_POLARITY
 from napistu.constants import MINI_SBO_TO_NAME
-from napistu.network import net_utils
+from napistu.constants import SBML_DFS
+from napistu.network.constants import NET_POLARITY
+from napistu.network.constants import NAPISTU_GRAPH_EDGES
+from napistu.network.constants import VALID_LINK_POLARITIES
 
 logger = logging.getLogger(__name__)
 
 
 def find_shortest_reaction_paths(
-    cpr_graph: ig.Graph,
+    napistu_graph: NapistuGraph,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     origin: str,
     dest: str | list,
@@ -31,8 +36,8 @@ def find_shortest_reaction_paths(
 
     Parameters
     ----------
-    cpr_graph : igraph.Graph
-        A bipartite network connecting molecular species and reactions
+    napistu_graph : NapistuGraph
+        A network of molecular species and reactions (subclass of igraph.Graph)
     sbml_dfs : sbml_dfs_core.SBML_dfs
         A model formed by aggregating pathways
     origin : str
@@ -63,7 +68,7 @@ def find_shortest_reaction_paths(
         # igraph throws warnings for each pair of unconnected species
         warnings.simplefilter("ignore")
 
-        shortest_paths = cpr_graph.get_all_shortest_paths(
+        shortest_paths = napistu_graph.get_all_shortest_paths(
             origin, to=dest, weights=weight_var
         )
 
@@ -75,24 +80,34 @@ def find_shortest_reaction_paths(
         # igraph throws warnings for each pair of unconnected species
         warnings.simplefilter("ignore")
 
-        shortest_paths = cpr_graph.get_all_shortest_paths(
+        shortest_paths = napistu_graph.get_all_shortest_paths(
             origin, to=dest, weights=weight_var
         )
 
     # summarize the graph which is being evaluated
-    cpr_graph_names = [v.attributes()["name"] for v in cpr_graph.vs]
+    napistu_graph_names = [v.attributes()["name"] for v in napistu_graph.vs]
 
-    cpr_graph_edges = pd.DataFrame(
+    napistu_graph_edges = pd.DataFrame(
         {
-            "from": cpr_graph.es.get_attribute_values("from"),
-            "to": cpr_graph.es.get_attribute_values("to"),
-            "weights": cpr_graph.es.get_attribute_values(weight_var),
-            "sbo_term": cpr_graph.es.get_attribute_values("sbo_term"),
-            "direction": cpr_graph.es.get_attribute_values("direction"),
+            NAPISTU_GRAPH_EDGES.FROM: napistu_graph.es.get_attribute_values(
+                NAPISTU_GRAPH_EDGES.FROM
+            ),
+            NAPISTU_GRAPH_EDGES.TO: napistu_graph.es.get_attribute_values(
+                NAPISTU_GRAPH_EDGES.TO
+            ),
+            NAPISTU_GRAPH_EDGES.WEIGHTS: napistu_graph.es.get_attribute_values(
+                weight_var
+            ),
+            NAPISTU_GRAPH_EDGES.SBO_TERM: napistu_graph.es.get_attribute_values(
+                NAPISTU_GRAPH_EDGES.SBO_TERM
+            ),
+            NAPISTU_GRAPH_EDGES.DIRECTION: napistu_graph.es.get_attribute_values(
+                NAPISTU_GRAPH_EDGES.DIRECTION
+            ),
         }
     )
 
-    directed = cpr_graph.is_directed()
+    directed = napistu_graph.is_directed()
 
     # format shortest paths
     # summaries of nodes
@@ -103,7 +118,7 @@ def find_shortest_reaction_paths(
     entry = 0
     for path in shortest_paths:
         path_df = (
-            pd.DataFrame({"node": [cpr_graph_names[x] for x in path]})
+            pd.DataFrame({"node": [napistu_graph_names[x] for x in path]})
             .reset_index()
             .rename(columns={"index": "step"})
             .assign(path=entry)
@@ -119,19 +134,19 @@ def find_shortest_reaction_paths(
 
         if directed:
             path_edges = path_edges.merge(
-                cpr_graph_edges,
+                napistu_graph_edges,
                 left_on=["from", "to"],
                 right_on=["from", "to"],
             )
 
-            path_edges["link_polarity"] = (
+            path_edges[NET_POLARITY.LINK_POLARITY] = (
                 path_edges["sbo_term"]
                 .map(MINI_SBO_TO_NAME)
                 .map(MINI_SBO_NAME_TO_POLARITY)
             )
             # is the edge predicted to be activating, inhibiting or ambiguous?
-            path_edges["net_polarity"] = _calculate_net_polarity(
-                path_edges["link_polarity"]
+            path_edges[NET_POLARITY.NET_POLARITY] = _calculate_net_polarity(
+                path_edges[NET_POLARITY.LINK_POLARITY]
             )
 
         else:
@@ -148,7 +163,7 @@ def find_shortest_reaction_paths(
                     ]
                 )
                 .merge(
-                    cpr_graph_edges,
+                    napistu_graph_edges,
                     left_on=["from", "to"],
                     right_on=["from", "to"],
                     # keep at most 1 entry per step
@@ -221,10 +236,10 @@ def find_shortest_reaction_paths(
 
 
 def find_all_shortest_reaction_paths(
-    cpr_graph: ig.Graph,
+    napistu_graph: NapistuGraph,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     target_species_paths: pd.DataFrame,
-    weight_var: str = "weights",
+    weight_var: str = NAPISTU_GRAPH_EDGES.WEIGHTS,
     precomputed_distances: pd.DataFrame | None = None,
 ):
     """
@@ -234,8 +249,8 @@ def find_all_shortest_reaction_paths(
 
     Parameters
     ----------
-    cpr_graph : igraph.Graph
-        A bipartite network connecting molecular species and reactions
+    napistu_graph : NapistuGraph
+        A network interconnecting molecular species and reactions (subclass of igraph.Graph)
     sbml_dfs : SBML_dfs
         A model formed by aggregating pathways
     target_species_paths : pd.DataFrame
@@ -273,7 +288,7 @@ def find_all_shortest_reaction_paths(
         one_search = target_species_paths.iloc[i]
 
         paths = find_shortest_reaction_paths(
-            cpr_graph,
+            napistu_graph,
             sbml_dfs,
             origin=one_search["sc_id_origin"],
             dest=one_search["sc_id_dest"],
@@ -310,9 +325,7 @@ def find_all_shortest_reaction_paths(
     ).reset_index()
 
     # at a minimal set of pathway sources to organize reactions
-    edge_sources = net_utils.get_minimal_sources_edges(
-        all_shortest_reaction_paths_df, sbml_dfs
-    )
+    edge_sources = get_minimal_sources_edges(all_shortest_reaction_paths_df, sbml_dfs)
 
     # create a new small network of shortest paths
     unique_path_nodes = (
@@ -322,8 +335,8 @@ def find_all_shortest_reaction_paths(
         .drop(columns=["index", "step", "path", "origin", "dest"])
     )
 
-    directed = cpr_graph.is_directed()
-    paths_graph = ig.Graph.DictList(
+    directed = napistu_graph.is_directed()
+    paths_graph = NapistuGraph.DictList(
         vertices=unique_path_nodes.to_dict("records"),
         edges=all_shortest_reaction_path_edges_df.to_dict("records"),
         directed=directed,
@@ -339,16 +352,16 @@ def find_all_shortest_reaction_paths(
     )
 
 
-def plot_shortest_paths(paths_graph: ig.Graph) -> ig.plot:
+def plot_shortest_paths(napistu_graph: NapistuGraph) -> NapistuGraph.plot:
     """Plot a shortest paths graph."""
 
-    if "label" not in paths_graph.vs.attributes():
+    if "label" not in napistu_graph.vs.attributes():
         logger.warning(
             "label was not defined as a vertex attribute so paths will not be colored"
         )
-        paths_graph.vs.set_attribute_values("label", "")
+        napistu_graph.vs.set_attribute_values("label", "")
 
-    paths_graph_layout = paths_graph.layout("kk")
+    paths_graph_layout = napistu_graph.layout("kk")
 
     color_dict = {"reaction": "dodgerblue", "species": "firebrick"}
 
@@ -356,19 +369,21 @@ def plot_shortest_paths(paths_graph: ig.Graph) -> ig.plot:
     visual_style["background"] = "black"
     visual_style["vertex_size"] = 10
     visual_style["vertex_label"] = [
-        net_utils.safe_fill(x) for x in paths_graph.vs["label"]
+        utils.safe_fill(x) for x in napistu_graph.vs["label"]
     ]
     visual_style["vertex_label_color"] = "white"
     visual_style["vertex_label_size"] = 8
     visual_style["vertex_label_angle"] = 90
-    visual_style["vertex_color"] = [color_dict[x] for x in paths_graph.vs["node_type"]]
-    visual_style["edge_width"] = [math.sqrt(x) for x in paths_graph.es["weights"]]
+    visual_style["vertex_color"] = [
+        color_dict[x] for x in napistu_graph.vs["node_type"]
+    ]
+    visual_style["edge_width"] = [math.sqrt(x) for x in napistu_graph.es["weights"]]
     visual_style["edge_color"] = "dimgray"
     visual_style["layout"] = paths_graph_layout
     visual_style["bbox"] = (2000, 2000)
     visual_style["margin"] = 50
 
-    return ig.plot(paths_graph, **visual_style)
+    return napistu_graph.plot(**visual_style)
 
 
 def _filter_paths_by_precomputed_distances(
@@ -401,27 +416,26 @@ def _calculate_net_polarity(link_polarity_series: pd.Series) -> str:
     """Determine whether a path implies activation, inhbition, or an ambiguous regulatory relationship."""
 
     assert isinstance(link_polarity_series, pd.Series)
-    assert link_polarity_series.name == "link_polarity"
+    assert link_polarity_series.name == NET_POLARITY.LINK_POLARITY
 
     # loop through loop polarity and
     # determine the cumulative polarity account for inhibition steps which flip polarity
     # and ambiguous steps which will add an ambiguous label to the net result
 
     observed_polarities = set(link_polarity_series.tolist())  # type: set[str]
-    valid_polarities = {"activation", "inhibition", "ambiguous"}  # type: set[str]
     invalid_polarities = observed_polarities.difference(
-        valid_polarities
+        VALID_LINK_POLARITIES
     )  # type: set[str]
     if len(invalid_polarities) > 0:
         raise ValueError(
             f"Some edge polarities were invalid: {', '.join(invalid_polarities)}. "
-            f"Valid polarities are {', '.join(valid_polarities)}."
+            f"Valid polarities are {', '.join(VALID_LINK_POLARITIES)}."
         )
 
     # catch fully ambiguous case
     if link_polarity_series.eq("ambiguous").all():
         running_polarity = [
-            "ambiguous" for i in range(link_polarity_series.shape[0])
+            NET_POLARITY.AMBIGUOUS for i in range(link_polarity_series.shape[0])
         ]  # type : list[str]
         return running_polarity
 
@@ -430,16 +444,16 @@ def _calculate_net_polarity(link_polarity_series: pd.Series) -> str:
     ambig_prefix = ""
 
     for polarity in link_polarity_series:
-        if polarity == "ambiguous":
+        if polarity == NET_POLARITY.AMBIGUOUS:
             # once a polarity becomes ambiguous it is stuck
             ambig_prefix = "ambiguous "
-        if polarity == "inhibition":
+        if polarity == NET_POLARITY.INHIBITION:
             current_polarity = current_polarity * -1
 
         if current_polarity == 1:
-            running_polarity.append(ambig_prefix + "activation")
+            running_polarity.append(ambig_prefix + NET_POLARITY.ACTIVATION)
         else:
-            running_polarity.append(ambig_prefix + "inhibition")
+            running_polarity.append(ambig_prefix + NET_POLARITY.INHIBITION)
 
     return running_polarity
 
@@ -480,18 +494,20 @@ def _label_path_reactions(sbml_dfs: sbml_dfs_core.SBML_dfs, paths_df: pd.DataFra
                 ]
             )
             .to_frame()
-            .join(sbml_dfs.reactions["r_name"])
+            .join(sbml_dfs.reactions[SBML_DFS.R_NAME])
         )
 
         labelled_reactions = (
             reaction_paths.merge(reaction_info, left_on="node", right_index=True)
-            .rename(columns={"r_name": "label"})
+            .rename(columns={SBML_DFS.R_NAME: "label"})
             .assign(node_type="reaction")
         )
 
         # add uri urls
         labelled_reactions = labelled_reactions.merge(
-            sbml_dfs.get_uri_urls("reactions", labelled_reactions["node"].tolist()),
+            sbml_dfs.get_uri_urls(
+                SBML_DFS.REACTIONS, labelled_reactions["node"].tolist()
+            ),
             left_on="node",
             right_index=True,
             how="left",

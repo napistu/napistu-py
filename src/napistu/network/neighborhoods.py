@@ -15,14 +15,14 @@ import numpy as np
 import pandas as pd
 from napistu import sbml_dfs_core
 from napistu import utils
-from napistu.network import net_utils
+from napistu.network import ng_utils
 from napistu.network import paths
 
 from napistu.constants import SBML_DFS
 from napistu.constants import MINI_SBO_NAME_TO_POLARITY
 from napistu.constants import MINI_SBO_TO_NAME
 
-from napistu.network.constants import CPR_GRAPH_TYPES
+from napistu.network.constants import NAPISTU_GRAPH_TYPES
 from napistu.network.constants import NEIGHBORHOOD_NETWORK_TYPES
 from napistu.network.constants import VALID_NEIGHBORHOOD_NETWORK_TYPES
 
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 def find_and_prune_neighborhoods(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    cpr_graph: ig.Graph,
+    napistu_graph: ig.Graph,
     compartmentalized_species: str | list[str],
     precomputed_distances: pd.DataFrame | None = None,
     network_type: str = NEIGHBORHOOD_NETWORK_TYPES.DOWNSTREAM,
@@ -48,7 +48,7 @@ def find_and_prune_neighborhoods(
     ----------
     sbml_dfs: sbml_dfs_core.SBML_dfs
         A mechanistic molecular model
-    cpr_graph : igraph.Graph
+    napistu_graph : igraph.Graph
         A bipartite network connecting molecular species and reactions
     compartmentalized_species : [str] or str
         Compartmentalized species IDs for neighborhood centers
@@ -103,7 +103,7 @@ def find_and_prune_neighborhoods(
 
     neighborhoods = find_neighborhoods(
         sbml_dfs=sbml_dfs,
-        cpr_graph=cpr_graph,
+        napistu_graph=napistu_graph,
         compartmentalized_species=compartmentalized_species,
         network_type=network_type,
         order=order,
@@ -119,7 +119,7 @@ def find_and_prune_neighborhoods(
 def load_neighborhoods(
     s_ids: list[str],
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    cpr_graph: ig.Graph,
+    napistu_graph: ig.Graph,
     output_dir: str,
     network_type: str,
     order: int,
@@ -140,7 +140,7 @@ def load_neighborhoods(
         create a neighborhood around each species
     sbml_dfs: sbml_dfs_core.SBML_dfs
         network model
-    cpr_graph: igraph.Graph
+    napistu_graph: igraph.Graph
         network associated with sbml_dfs
     output_dir: str
         path to existing output directory
@@ -185,7 +185,7 @@ def load_neighborhoods(
         all_neighborhoods_df, neighborhoods_dict = create_neighborhoods(
             s_ids=s_ids,
             sbml_dfs=sbml_dfs,
-            cpr_graph=cpr_graph,
+            napistu_graph=napistu_graph,
             network_type=network_type,
             order=order,
             top_n=top_n,
@@ -205,7 +205,7 @@ def load_neighborhoods(
 def create_neighborhoods(
     s_ids: list[str],
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    cpr_graph: ig.Graph,
+    napistu_graph: ig.Graph,
     network_type: str,
     order: int,
     top_n: int,
@@ -222,7 +222,7 @@ def create_neighborhoods(
         create a neighborhood around each species
     sbml_dfs: sbml_dfs_core.SBML_dfs
         network model
-    cpr_graph: igraph.Graph
+    napistu_graph: igraph.Graph
         network associated with sbml_dfs
     network_type: str
         downstream, upstream or hourglass (i.e., downstream and upstream)
@@ -260,13 +260,13 @@ def create_neighborhoods(
     neighborhoods_list = list()
     neighborhoods_dict = dict()
     for s_id in s_ids:
-        query_sc_species = net_utils.compartmentalize_species(sbml_dfs, s_id)
+        query_sc_species = ng_utils.compartmentalize_species(sbml_dfs, s_id)
 
         compartmentalized_species = query_sc_species[SBML_DFS.SC_ID].tolist()
 
         neighborhoods = find_and_prune_neighborhoods(
             sbml_dfs,
-            cpr_graph,
+            napistu_graph,
             compartmentalized_species=compartmentalized_species,
             network_type=network_type,
             order=order,
@@ -316,7 +316,7 @@ def create_neighborhood_prefix(network_type: str, order: int, top_n: int) -> str
 def load_neighborhoods_by_partition(
     selected_partition: int,
     neighborhood_outdir: str,
-    graph_type: str = CPR_GRAPH_TYPES.REGULATORY,
+    graph_type: str = NAPISTU_GRAPH_TYPES.REGULATORY,
 ) -> None:
     """
     Load Neighborhoods By Partition
@@ -376,7 +376,7 @@ def load_neighborhoods_by_partition(
     refined_model.validate()
 
     # load the graph
-    cpr_graph = net_utils.read_network_pkl(
+    napistu_graph = ng_utils.read_network_pkl(
         model_prefix="curated",
         network_dir=consensus_outdir,
         directed=True,
@@ -386,7 +386,7 @@ def load_neighborhoods_by_partition(
     all_neighborhoods_df, neighborhoods_dict = load_neighborhoods(
         s_ids=parition_sids,
         sbml_dfs=refined_model,
-        cpr_graph=cpr_graph,
+        napistu_graph=napistu_graph,
         output_dir=partition_output,
         network_type="hourglass",
         order=12,
@@ -400,7 +400,7 @@ def load_neighborhoods_by_partition(
 
 def read_paritioned_neighborhoods(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    cpr_graph: ig.Graph,
+    napistu_graph: ig.Graph,
     partitions_path: str,
     n_partitions: int = 200,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
@@ -413,7 +413,7 @@ def read_paritioned_neighborhoods(
     ------
     sbml_dfs: sbml_dfs_core.SBML_dfs
         network model
-    cpr_graph: igraph.Graph
+    napistu_graph: igraph.Graph
         network associated with sbml_dfs
     partitions_path: str
         Path to a directory containing folders for each partition's results
@@ -473,7 +473,7 @@ def read_paritioned_neighborhoods(
         partition_paths, partition_dict = load_neighborhoods(
             s_ids=["stub"],
             sbml_dfs=sbml_dfs,
-            cpr_graph=cpr_graph,
+            napistu_graph=napistu_graph,
             output_dir=os.path.join(partitions_path, p),
             # these settings define the neighborhood string so they must
             # match the settings at the time of network generation
@@ -503,7 +503,7 @@ def read_paritioned_neighborhoods(
 
 def find_neighborhoods(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    cpr_graph: ig.Graph,
+    napistu_graph: ig.Graph,
     compartmentalized_species: list[str],
     network_type: str = "downstream",
     order: int = 3,
@@ -520,7 +520,7 @@ def find_neighborhoods(
     ----------
     sbml_dfs: sbml_dfs_core.SBML_dfs
         A mechanistic molecular model
-    cpr_graph : igraph.Graph
+    napistu_graph : igraph.Graph
         A network connecting molecular species and reactions
     compartmentalized_species : [str]
         Compartmentalized species IDs for neighborhood centers
@@ -557,7 +557,7 @@ def find_neighborhoods(
     # create a table which includes cspecies and reaction nearby each of the
     # focal compartmentalized_speecies
     neighborhood_df = _build_raw_neighborhood_df(
-        cpr_graph=cpr_graph,
+        napistu_graph=napistu_graph,
         compartmentalized_species=compartmentalized_species,
         network_type=network_type,
         order=order,
@@ -567,7 +567,7 @@ def find_neighborhoods(
     # format the vertices and edges in each compartmentalized species' network
     neighborhood_dict = {
         sc_id: create_neighborhood_dict_entry(
-            sc_id, neighborhood_df, sbml_dfs, cpr_graph, verbose=verbose
+            sc_id, neighborhood_df, sbml_dfs, napistu_graph, verbose=verbose
         )
         for sc_id in compartmentalized_species
     }
@@ -579,7 +579,7 @@ def create_neighborhood_dict_entry(
     sc_id: str,
     neighborhood_df: pd.DataFrame,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    cpr_graph: ig.Graph,
+    napistu_graph: ig.Graph,
     verbose: bool = False,
 ) -> dict[str, Any]:
     """
@@ -595,7 +595,7 @@ def create_neighborhood_dict_entry(
         A table of upstream and/or downstream neighbors of all compartmentalized species
     sbml_dfs: sbml_dfs_core.SBML_dfs
         A mechanistic molecular model
-    cpr_graph: igraph.Graph
+    napistu_graph: igraph.Graph
         A network connecting molecular species and reactions
     verbose: bool
         Extra reporting?
@@ -630,8 +630,8 @@ def create_neighborhood_dict_entry(
         )
 
     # create the subgraph formed by filtering to neighborhoods
-    neighborhood_graph = cpr_graph.subgraph(
-        cpr_graph.vs[one_neighborhood_df["neighbor"]], implementation="auto"
+    neighborhood_graph = napistu_graph.subgraph(
+        napistu_graph.vs[one_neighborhood_df["neighbor"]], implementation="auto"
     )
 
     vertices = pd.DataFrame([v.attributes() for v in neighborhood_graph.vs])
@@ -644,7 +644,7 @@ def create_neighborhood_dict_entry(
         )
 
     try:
-        edge_sources = net_utils.get_minimal_sources_edges(
+        edge_sources = ng_utils.get_minimal_sources_edges(
             vertices.rename(columns={"name": "node"}), sbml_dfs
         )
     except Exception:
@@ -732,7 +732,7 @@ def create_neighborhood_dict_entry(
         raise ValueError(
             f"vertex_neighborhood_attrs did not contain the expected columns: {EXPECTED_VERTEX_ATTRS}."
             "This is likely because of inconsistencies between the precomputed distances, graph and/or sbml_dfs."
-            "Please try net_utils.validate_assets() to check for consistency."
+            "Please try ng_utils.validate_assets() to check for consistency."
         )
 
     # add net_polarity to edges in addition to nodes
@@ -766,16 +766,16 @@ def create_neighborhood_dict_entry(
     }
 
     # update graph with additional vertex and edge attributes
-    updated_cpr_graph = ig.Graph.DictList(
+    updated_napistu_graph = ig.Graph.DictList(
         vertices=vertices.to_dict("records"),
         edges=edges.to_dict("records"),
-        directed=cpr_graph.is_directed(),
+        directed=napistu_graph.is_directed(),
         vertex_name_attr="name",
         edge_foreign_keys=("from", "to"),
     )
 
     outdict = {
-        "graph": updated_cpr_graph,
+        "graph": updated_napistu_graph,
         "vertices": vertices,
         "edges": edges,
         "edge_sources": edge_sources,
@@ -1138,7 +1138,7 @@ def _precompute_neighbors(
             ]
             # sort by path_upstream_weights so we can retain the lowest weight neighbors
             # we allow for upstream weights to differ from downstream weights
-            # when creating a network in process_cpr_graph.
+            # when creating a network in process_napistu_graph.
             #
             # the default network weighting penalizing an edge from a node
             # based on the number of children it has. this captures the idea
@@ -1219,7 +1219,7 @@ def _precompute_neighbors(
 
 
 def _build_raw_neighborhood_df(
-    cpr_graph: ig.Graph,
+    napistu_graph: ig.Graph,
     compartmentalized_species: list[str],
     network_type: str,
     order: int,
@@ -1227,7 +1227,7 @@ def _build_raw_neighborhood_df(
 ) -> pd.DataFrame:
     # report if network_type is not the default and will be ignored due to the network
     #   being undirected
-    is_directed = cpr_graph.is_directed()
+    is_directed = napistu_graph.is_directed()
     if not is_directed and network_type != NEIGHBORHOOD_NETWORK_TYPES.DOWNSTREAM:
         logger.warning(
             "Network is undirected; network_type will be treated as 'downstream'"
@@ -1240,7 +1240,7 @@ def _build_raw_neighborhood_df(
         NEIGHBORHOOD_NETWORK_TYPES.HOURGLASS,
     ]:
         descendants_df = _find_neighbors(
-            cpr_graph=cpr_graph,
+            napistu_graph=napistu_graph,
             compartmentalized_species=compartmentalized_species,
             relationship="descendants",
             order=order,
@@ -1253,7 +1253,7 @@ def _build_raw_neighborhood_df(
         NEIGHBORHOOD_NETWORK_TYPES.HOURGLASS,
     ]:
         ancestors_df = _find_neighbors(
-            cpr_graph=cpr_graph,
+            napistu_graph=napistu_graph,
             compartmentalized_species=compartmentalized_species,
             relationship="ancestors",
             order=order,
@@ -1272,14 +1272,14 @@ def _build_raw_neighborhood_df(
 
     # add name since this is an easy way to lookup igraph vertices
     neighborhood_df["name"] = [
-        x["name"] for x in cpr_graph.vs[neighborhood_df["neighbor"]]
+        x["name"] for x in napistu_graph.vs[neighborhood_df["neighbor"]]
     ]
 
     return neighborhood_df
 
 
 def _find_neighbors(
-    cpr_graph: ig.Graph,
+    napistu_graph: ig.Graph,
     compartmentalized_species: list[str],
     relationship: str,
     order: int = 3,
@@ -1298,7 +1298,7 @@ def _find_neighbors(
     if isinstance(precomputed_neighbors, pd.DataFrame):
         # add graph indices to neighbors
         nodes_to_names = (
-            pd.DataFrame({"name": cpr_graph.vs["name"]})
+            pd.DataFrame({"name": napistu_graph.vs["name"]})
             .reset_index()
             .rename({"index": "neighbor"}, axis=1)
         )
@@ -1333,7 +1333,7 @@ def _find_neighbors(
                 f"relationship must be 'descendants' or 'ancestors' but was {relationship}"
             )
 
-        neighbors = cpr_graph.neighborhood(
+        neighbors = napistu_graph.neighborhood(
             # mode = out queries outgoing edges and is ignored if the network is undirected
             vertices=compartmentalized_species,
             order=order,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import os
 import re
+import datetime
 from os import PathLike
 from typing import Iterable
 
@@ -12,6 +13,73 @@ import pandas as pd
 from napistu.utils import path_exists
 from napistu.constants import EXPECTED_PW_INDEX_COLUMNS
 from napistu.constants import SOURCE_SPEC
+
+
+def create_pathway_index_df(
+    model_keys: dict[str, str],
+    model_urls: dict[str, str],
+    model_species: dict[str, str],
+    base_path: str,
+    source_name: str,
+    file_extension: str = ".sbml",
+) -> pd.DataFrame:
+    """Create a pathway index DataFrame from model definitions.
+
+    Parameters
+    ----------
+    model_keys : dict[str, str]
+        Mapping of species to model keys/IDs
+    model_urls : dict[str, str]
+        Mapping of species to model URLs
+    model_species : dict[str, str]
+        Mapping of species to their full names
+    base_path : str
+        Base path where models will be stored
+    source_name : str
+        Name of the source (e.g. "BiGG")
+    file_extension : str, optional
+        File extension for model files, by default ".sbml"
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing pathway index information with columns:
+        - url: URL to download the model from
+        - species: Species name
+        - sbml_path: Full path where model will be stored
+        - file: Basename of the model file
+        - date: Current date in YYYYMMDD format
+        - pathway_id: Unique identifier for the pathway
+        - name: Display name for the pathway
+        - source: Source database name
+
+    Notes
+    -----
+    The function creates a standardized pathway index DataFrame that can be used
+    across different model sources. It handles file paths and metadata consistently.
+    """
+    models = {
+        model_keys[species]: {
+            "url": model_urls[species],
+            "species": model_species[species],
+        }
+        for species in model_keys.keys()
+    }
+
+    models_df = pd.DataFrame(models).T
+    models_df["sbml_path"] = [
+        os.path.join(base_path, k) + file_extension for k in models_df.index.tolist()
+    ]
+    models_df["file"] = [os.path.basename(x) for x in models_df["sbml_path"]]
+
+    # add other attributes which will be used in the pw_index
+    models_df["date"] = datetime.date.today().strftime("%Y%m%d")
+    models_df.index = models_df.index.rename("pathway_id")
+    models_df = models_df.reset_index()
+    models_df["name"] = models_df["pathway_id"]
+    models_df = models_df.assign(source=source_name)
+
+    return models_df
 
 
 class PWIndex:

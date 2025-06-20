@@ -7,9 +7,26 @@ from types import SimpleNamespace
 from napistu.constants import SBML_DFS
 from napistu.constants import SBOTERM_NAMES
 
-CPR_GRAPH_NODES = SimpleNamespace(NAME="name")
+# Graph types
+NAPISTU_GRAPH_TYPES = SimpleNamespace(
+    BIPARTITE="bipartite", REGULATORY="regulatory", SURROGATE="surrogate"
+)
 
-CPR_GRAPH_EDGES = SimpleNamespace(
+VALID_NAPISTU_GRAPH_TYPES = [
+    NAPISTU_GRAPH_TYPES.BIPARTITE,
+    NAPISTU_GRAPH_TYPES.REGULATORY,
+    NAPISTU_GRAPH_TYPES.SURROGATE,
+]
+
+NAPISTU_GRAPH = SimpleNamespace(VERTICES="vertices", EDGES="edges", METADATA="metadata")
+
+NAPISTU_GRAPH_DIRECTEDNESS = SimpleNamespace(
+    DIRECTED="directed", UNDIRECTED="undirected"
+)
+
+NAPISTU_GRAPH_NODES = SimpleNamespace(NAME="name")
+
+NAPISTU_GRAPH_EDGES = SimpleNamespace(
     DIRECTED="directed",
     DIRECTION="direction",
     FROM="from",
@@ -27,50 +44,76 @@ CPR_GRAPH_EDGES = SimpleNamespace(
     WEIGHTS="weights",
 )
 
-# variables which should be in cpr graph's edges
-CPR_GRAPH_REQUIRED_EDGE_VARS = {
-    CPR_GRAPH_EDGES.FROM,
-    CPR_GRAPH_EDGES.TO,
-    CPR_GRAPH_EDGES.SBO_TERM,
-    CPR_GRAPH_EDGES.STOICHIOMETRY,
-    CPR_GRAPH_EDGES.SC_PARENTS,
-    CPR_GRAPH_EDGES.SC_CHILDREN,
+NAPISTU_GRAPH_REQUIRED_EDGE_VARS = {
+    NAPISTU_GRAPH_EDGES.FROM,
+    NAPISTU_GRAPH_EDGES.TO,
+    NAPISTU_GRAPH_EDGES.DIRECTION,
 }
 
-# nomenclature for individual fields
+NAPISTU_GRAPH_NODE_TYPES = SimpleNamespace(SPECIES="species", REACTION="reaction")
 
-CPR_GRAPH_NODE_TYPES = SimpleNamespace(REACTION="reaction", SPECIES="species")
-
-VALID_CPR_GRAPH_NODE_TYPES = [
-    CPR_GRAPH_NODE_TYPES.REACTION,
-    CPR_GRAPH_NODE_TYPES.SPECIES,
+VALID_NAPISTU_GRAPH_NODE_TYPES = [
+    NAPISTU_GRAPH_NODE_TYPES.REACTION,
+    NAPISTU_GRAPH_NODE_TYPES.SPECIES,
 ]
 
-CPR_GRAPH_EDGE_DIRECTIONS = SimpleNamespace(
-    FORWARD="forward", REVERSE="reverse", UNDIRECTED="undirected"
-)
-
-# network-level nomenclature
-
-CPR_GRAPH_TYPES = SimpleNamespace(
-    BIPARTITE="bipartite", REGULATORY="regulatory", SURROGATE="surrogate"
-)
-
-VALID_CPR_GRAPH_TYPES = [
-    CPR_GRAPH_TYPES.BIPARTITE,
-    CPR_GRAPH_TYPES.REGULATORY,
-    CPR_GRAPH_TYPES.SURROGATE,
-]
-
-CPR_WEIGHTING_STRATEGIES = SimpleNamespace(
+NAPISTU_WEIGHTING_STRATEGIES = SimpleNamespace(
     CALIBRATED="calibrated", MIXED="mixed", TOPOLOGY="topology", UNWEIGHTED="unweighted"
 )
 
 VALID_WEIGHTING_STRATEGIES = [
-    CPR_WEIGHTING_STRATEGIES.UNWEIGHTED,
-    CPR_WEIGHTING_STRATEGIES.TOPOLOGY,
-    CPR_WEIGHTING_STRATEGIES.MIXED,
-    CPR_WEIGHTING_STRATEGIES.CALIBRATED,
+    NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
+    NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY,
+    NAPISTU_WEIGHTING_STRATEGIES.MIXED,
+    NAPISTU_WEIGHTING_STRATEGIES.CALIBRATED,
+]
+
+# edge reversal
+
+NAPISTU_GRAPH_EDGE_DIRECTIONS = SimpleNamespace(
+    FORWARD="forward", REVERSE="reverse", UNDIRECTED="undirected"
+)
+
+EDGE_REVERSAL_ATTRIBUTE_MAPPING = {
+    NAPISTU_GRAPH_EDGES.FROM: NAPISTU_GRAPH_EDGES.TO,
+    NAPISTU_GRAPH_EDGES.TO: NAPISTU_GRAPH_EDGES.FROM,
+    NAPISTU_GRAPH_EDGES.SC_PARENTS: NAPISTU_GRAPH_EDGES.SC_CHILDREN,
+    NAPISTU_GRAPH_EDGES.SC_CHILDREN: NAPISTU_GRAPH_EDGES.SC_PARENTS,
+    NAPISTU_GRAPH_EDGES.WEIGHTS: NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS,
+    NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS: NAPISTU_GRAPH_EDGES.WEIGHTS,
+    # Note: stoichiometry requires special handling (* -1)
+}
+
+# Direction enum values
+EDGE_DIRECTION_MAPPING = {
+    NAPISTU_GRAPH_EDGE_DIRECTIONS.FORWARD: NAPISTU_GRAPH_EDGE_DIRECTIONS.REVERSE,
+    NAPISTU_GRAPH_EDGE_DIRECTIONS.REVERSE: NAPISTU_GRAPH_EDGE_DIRECTIONS.FORWARD,
+    NAPISTU_GRAPH_EDGE_DIRECTIONS.UNDIRECTED: NAPISTU_GRAPH_EDGE_DIRECTIONS.UNDIRECTED,  # unchanged
+}
+
+# Net edge direction
+NET_POLARITY = SimpleNamespace(
+    LINK_POLARITY="link_polarity",
+    NET_POLARITY="net_polarity",
+    ACTIVATION="activation",
+    INHIBITION="inhibition",
+    AMBIGUOUS="ambiguous",
+    AMBIGUOUS_ACTIVATION="ambiguous activation",
+    AMBIGUOUS_INHIBITION="ambiguous inhibition",
+)
+
+VALID_LINK_POLARITIES = [
+    NET_POLARITY.ACTIVATION,
+    NET_POLARITY.INHIBITION,
+    NET_POLARITY.AMBIGUOUS,
+]
+
+VALID_NET_POLARITIES = [
+    NET_POLARITY.ACTIVATION,
+    NET_POLARITY.INHIBITION,
+    NET_POLARITY.AMBIGUOUS,
+    NET_POLARITY.AMBIGUOUS_ACTIVATION,
+    NET_POLARITY.AMBIGUOUS_INHIBITION,
 ]
 
 # the regulatory graph defines a hierarchy of upstream and downstream
@@ -81,7 +124,7 @@ REGULATORY_GRAPH_HIERARCHY = [
     [SBOTERM_NAMES.MODIFIER, SBOTERM_NAMES.STIMULATOR, SBOTERM_NAMES.INHIBITOR],
     [SBOTERM_NAMES.CATALYST],
     [SBOTERM_NAMES.REACTANT],
-    [CPR_GRAPH_NODE_TYPES.REACTION],
+    [NAPISTU_GRAPH_NODE_TYPES.REACTION],
     # normally we don't expect interactors to be defined because they are handled by
     # net_create._format_interactors_for_regulatory_graph() but include them here
     # until Issue #102 is solved
@@ -99,7 +142,7 @@ SURROGATE_GRAPH_HIERARCHY = [
     [SBOTERM_NAMES.MODIFIER, SBOTERM_NAMES.STIMULATOR, SBOTERM_NAMES.INHIBITOR],
     [SBOTERM_NAMES.REACTANT],
     [SBOTERM_NAMES.CATALYST],
-    [CPR_GRAPH_NODE_TYPES.REACTION],
+    [NAPISTU_GRAPH_NODE_TYPES.REACTION],
     # normally we don't expect interactors to be defined because they are handled by
     # net_create._format_interactors_for_regulatory_graph() but include them here
     # until Issue #102 is solved
@@ -116,3 +159,26 @@ VALID_NEIGHBORHOOD_NETWORK_TYPES = [
     NEIGHBORHOOD_NETWORK_TYPES.HOURGLASS,
     NEIGHBORHOOD_NETWORK_TYPES.UPSTREAM,
 ]
+
+# weighting networks and transforming attributes
+
+WEIGHTING_SPEC = SimpleNamespace(
+    TABLE="table",
+    VARIABLE="variable",
+    TRANSFORMATION="trans",
+)
+
+DEFAULT_WT_TRANS = "identity"
+
+DEFINED_WEIGHT_TRANSFORMATION = {
+    DEFAULT_WT_TRANS: "_wt_transformation_identity",
+    "string": "_wt_transformation_string",
+    "string_inv": "_wt_transformation_string_inv",
+}
+
+SCORE_CALIBRATION_POINTS_DICT = {
+    "weights": {"strong": 3, "good": 7, "okay": 20, "weak": 40},
+    "string_wt": {"strong": 950, "good": 400, "okay": 230, "weak": 150},
+}
+
+SOURCE_VARS_DICT = {"string_wt": 10}

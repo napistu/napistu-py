@@ -13,81 +13,78 @@ from pydantic import BaseModel
 
 from napistu import sbml_dfs_core
 from napistu import utils
+from napistu.network.napistu_graph_core import NapistuGraph
 
-from napistu.constants import DEFAULT_WT_TRANS
-from napistu.constants import DEFINED_WEIGHT_TRANSFORMATION
 from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import MINI_SBO_TO_NAME
 from napistu.constants import SBML_DFS
 from napistu.constants import SBO_MODIFIER_NAMES
-from napistu.constants import SCORE_CALIBRATION_POINTS_DICT
 from napistu.constants import ENTITIES_W_DATA
-from napistu.constants import SOURCE_VARS_DICT
 
-from napistu.network.constants import CPR_GRAPH_NODES
-from napistu.network.constants import CPR_GRAPH_EDGES
-from napistu.network.constants import CPR_GRAPH_EDGE_DIRECTIONS
-from napistu.network.constants import CPR_GRAPH_REQUIRED_EDGE_VARS
-from napistu.network.constants import CPR_GRAPH_NODE_TYPES
-from napistu.network.constants import CPR_GRAPH_TYPES
-from napistu.network.constants import CPR_WEIGHTING_STRATEGIES
+from napistu.network.constants import NAPISTU_GRAPH_NODES
+from napistu.network.constants import NAPISTU_GRAPH_EDGES
+from napistu.network.constants import NAPISTU_GRAPH_EDGE_DIRECTIONS
+from napistu.network.constants import NAPISTU_GRAPH_NODE_TYPES
+from napistu.network.constants import NAPISTU_GRAPH_TYPES
+from napistu.network.constants import NAPISTU_WEIGHTING_STRATEGIES
 from napistu.network.constants import SBOTERM_NAMES
 from napistu.network.constants import REGULATORY_GRAPH_HIERARCHY
 from napistu.network.constants import SURROGATE_GRAPH_HIERARCHY
-from napistu.network.constants import VALID_CPR_GRAPH_TYPES
+from napistu.network.constants import VALID_NAPISTU_GRAPH_TYPES
 from napistu.network.constants import VALID_WEIGHTING_STRATEGIES
+from napistu.network.constants import DEFAULT_WT_TRANS
+from napistu.network.constants import DEFINED_WEIGHT_TRANSFORMATION
+from napistu.network.constants import SCORE_CALIBRATION_POINTS_DICT
+from napistu.network.constants import SOURCE_VARS_DICT
+
 
 logger = logging.getLogger(__name__)
 
 
-def create_cpr_graph(
+def create_napistu_graph(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     reaction_graph_attrs: Optional[dict] = None,
     directed: bool = True,
     edge_reversed: bool = False,
-    graph_type: str = CPR_GRAPH_TYPES.BIPARTITE,
+    graph_type: str = NAPISTU_GRAPH_TYPES.REGULATORY,
     verbose: bool = False,
     custom_transformations: Optional[dict] = None,
-) -> ig.Graph:
+) -> NapistuGraph:
     """
-    Create CPR Graph
-
-    Create an igraph network from a mechanistic network using one of a set of graph_types.
+    Create a NapistuGraph network from a mechanistic network using one of a set of graph_types.
 
     Parameters
     ----------
-    sbml_dfs : SBML_dfs
-        A model formed by aggregating pathways
-    reaction_graph_attrs: dict
-        Dictionary containing attributes to pull out of reaction_data and
-        a weighting scheme for the graph
-    directed : bool
-        Should a directed (True) or undirected graph be made (False)
-    edge_reversed : bool
-        Should the directions of edges be reversed or not (False)
-    graph_type : str
-        Type of graph to create, valid values are:
-            - bipartite: substrates and modifiers point to the reaction they drive, this reaction points to products
-            - reguatory: non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
-            - surrogate: non-enzymatic modifiers -> substrates -> enzymes -> reaction -> products.
-              In this representation enzymes are effective standing in for their reaction (eventhough the enzyme is
-              not modified by a substrate per-se).
-    verbose : bool
-        Extra reporting
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        A model formed by aggregating pathways.
+    reaction_graph_attrs : dict, optional
+        Dictionary containing attributes to pull out of reaction_data and a weighting scheme for the graph.
+    directed : bool, optional
+        Should a directed (True) or undirected graph be made (False). Default is True.
+    edge_reversed : bool, optional
+        Should the directions of edges be reversed or not (False). Default is False.
+    graph_type : str, optional
+        Type of graph to create. Valid values are:
+            - 'bipartite': substrates and modifiers point to the reaction they drive, this reaction points to products
+            - 'regulatory': non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
+            - 'surrogate': non-enzymatic modifiers -> substrates -> enzymes -> reaction -> products
+    verbose : bool, optional
+        Extra reporting. Default is False.
     custom_transformations : dict, optional
         Dictionary of custom transformation functions to use for attribute transformation.
 
-    Returns:
-    ----------
-    An Igraph network
+    Returns
+    -------
+    NapistuGraph
+        A NapistuGraph network (subclass of igraph.Graph).
     """
 
     if reaction_graph_attrs is None:
         reaction_graph_attrs = {}
 
-    if graph_type not in VALID_CPR_GRAPH_TYPES:
+    if graph_type not in VALID_NAPISTU_GRAPH_TYPES:
         raise ValueError(
-            f"graph_type is not a valid value ({graph_type}), valid values are {','.join(VALID_CPR_GRAPH_TYPES)}"
+            f"graph_type is not a valid value ({graph_type}), valid values are {','.join(VALID_NAPISTU_GRAPH_TYPES)}"
         )
 
     # fail fast if reaction_graph_attrs is not properly formatted
@@ -129,26 +126,26 @@ def create_cpr_graph(
             [SBML_DFS.SC_ID, SBML_DFS.SC_NAME]
         ]
         .rename(columns={SBML_DFS.SC_ID: "node_id", SBML_DFS.SC_NAME: "node_name"})
-        .assign(node_type=CPR_GRAPH_NODE_TYPES.SPECIES)
+        .assign(node_type=NAPISTU_GRAPH_NODE_TYPES.SPECIES)
     )
     network_nodes.append(
         working_sbml_dfs.reactions.reset_index()[[SBML_DFS.R_ID, SBML_DFS.R_NAME]]
         .rename(columns={SBML_DFS.R_ID: "node_id", SBML_DFS.R_NAME: "node_name"})
-        .assign(node_type=CPR_GRAPH_NODE_TYPES.REACTION)
+        .assign(node_type=NAPISTU_GRAPH_NODE_TYPES.REACTION)
     )
 
     # rename nodes to name since it is treated specially
     network_nodes_df = pd.concat(network_nodes).rename(
-        columns={"node_id": CPR_GRAPH_NODES.NAME}
+        columns={"node_id": NAPISTU_GRAPH_NODES.NAME}
     )
 
     logger.info(f"Formatting edges as a {graph_type} graph")
 
-    if graph_type == CPR_GRAPH_TYPES.BIPARTITE:
-        network_edges = _create_cpr_graph_bipartite(working_sbml_dfs)
-    elif graph_type in [CPR_GRAPH_TYPES.REGULATORY, CPR_GRAPH_TYPES.SURROGATE]:
+    if graph_type == NAPISTU_GRAPH_TYPES.BIPARTITE:
+        network_edges = _create_napistu_graph_bipartite(working_sbml_dfs)
+    elif graph_type in [NAPISTU_GRAPH_TYPES.REGULATORY, NAPISTU_GRAPH_TYPES.SURROGATE]:
         # pass graph_type so that an appropriate tiered schema can be used.
-        network_edges = _create_cpr_graph_tiered(working_sbml_dfs, graph_type)
+        network_edges = _create_napistu_graph_tiered(working_sbml_dfs, graph_type)
     else:
         raise NotImplementedError("Invalid graph_type")
 
@@ -168,20 +165,24 @@ def create_cpr_graph(
             [
                 # assign forward edges
                 augmented_network_edges.assign(
-                    **{CPR_GRAPH_EDGES.DIRECTION: CPR_GRAPH_EDGE_DIRECTIONS.FORWARD}
+                    **{
+                        NAPISTU_GRAPH_EDGES.DIRECTION: NAPISTU_GRAPH_EDGE_DIRECTIONS.FORWARD
+                    }
                 ),
-                # create reverse edges for reversibile reactions
+                # create reverse edges for reversible reactions
                 _reverse_network_edges(augmented_network_edges),
             ]
         )
     else:
         directed_network_edges = augmented_network_edges.assign(
-            **{CPR_GRAPH_EDGES.DIRECTION: CPR_GRAPH_EDGE_DIRECTIONS.UNDIRECTED}
+            **{NAPISTU_GRAPH_EDGES.DIRECTION: NAPISTU_GRAPH_EDGE_DIRECTIONS.UNDIRECTED}
         )
 
     # de-duplicate edges
     unique_edges = (
-        directed_network_edges.groupby([CPR_GRAPH_EDGES.FROM, CPR_GRAPH_EDGES.TO])
+        directed_network_edges.groupby(
+            [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+        )
         .first()
         .reset_index()
     )
@@ -196,7 +197,7 @@ def create_cpr_graph(
         if verbose:
             # report duplicated edges
             grouped_edges = directed_network_edges.groupby(
-                [CPR_GRAPH_EDGES.FROM, CPR_GRAPH_EDGES.TO]
+                [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
             )
             duplicated_edges = [
                 grouped_edges.get_group(x)
@@ -209,93 +210,80 @@ def create_cpr_graph(
 
             logger.warning(utils.style_df(example_duplicates, headers="keys"))
 
-    # reverse edge directions if edge_reversed is True:
-
-    if edge_reversed:
-        rev_unique_edges_df = unique_edges.copy()
-        rev_unique_edges_df[CPR_GRAPH_EDGES.FROM] = unique_edges[CPR_GRAPH_EDGES.TO]
-        rev_unique_edges_df[CPR_GRAPH_EDGES.TO] = unique_edges[CPR_GRAPH_EDGES.FROM]
-        rev_unique_edges_df[CPR_GRAPH_EDGES.SC_PARENTS] = unique_edges[
-            CPR_GRAPH_EDGES.SC_CHILDREN
-        ]
-        rev_unique_edges_df[CPR_GRAPH_EDGES.SC_CHILDREN] = unique_edges[
-            CPR_GRAPH_EDGES.SC_PARENTS
-        ]
-        rev_unique_edges_df[CPR_GRAPH_EDGES.STOICHIOMETRY] = unique_edges[
-            CPR_GRAPH_EDGES.STOICHIOMETRY
-        ] * (-1)
-
-        rev_unique_edges_df[CPR_GRAPH_EDGES.DIRECTION] = unique_edges[
-            CPR_GRAPH_EDGES.DIRECTION
-        ].replace(
-            {
-                CPR_GRAPH_EDGE_DIRECTIONS.REVERSE: CPR_GRAPH_EDGE_DIRECTIONS.FORWARD,
-                CPR_GRAPH_EDGE_DIRECTIONS.FORWARD: CPR_GRAPH_EDGE_DIRECTIONS.REVERSE,
-            }
-        )
-    else:
-        # unchanged if edge_reversed is False:
-        rev_unique_edges_df = unique_edges
-
     # convert nodes and edgelist into an igraph network
-
     logger.info("Formatting cpr_graph output")
-    cpr_graph = ig.Graph.DictList(
+    napistu_ig_graph = ig.Graph.DictList(
         vertices=network_nodes_df.to_dict("records"),
-        edges=rev_unique_edges_df.to_dict("records"),
+        edges=unique_edges.to_dict("records"),
         directed=directed,
-        vertex_name_attr=CPR_GRAPH_NODES.NAME,
-        edge_foreign_keys=(CPR_GRAPH_EDGES.FROM, CPR_GRAPH_EDGES.TO),
+        vertex_name_attr=NAPISTU_GRAPH_NODES.NAME,
+        edge_foreign_keys=(NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO),
     )
 
-    return cpr_graph
+    # Always return NapistuGraph
+    napistu_graph = NapistuGraph.from_igraph(
+        napistu_ig_graph, graph_type=graph_type, is_reversed=edge_reversed
+    )
+
+    if edge_reversed:
+        logger.info("Applying edge reversal using reversal utilities")
+        napistu_graph.reverse_edges()
+
+    return napistu_graph
 
 
-def process_cpr_graph(
+def process_napistu_graph(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     reaction_graph_attrs: Optional[dict] = None,
     directed: bool = True,
     edge_reversed: bool = False,
-    graph_type: str = CPR_GRAPH_TYPES.BIPARTITE,
-    weighting_strategy: str = CPR_WEIGHTING_STRATEGIES.UNWEIGHTED,
+    graph_type: str = NAPISTU_GRAPH_TYPES.BIPARTITE,
+    weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
     verbose: bool = False,
     custom_transformations: dict = None,
-) -> ig.Graph:
+) -> NapistuGraph:
     """
     Process Consensus Graph
 
-    Setup an igraph network and then add weights and other maleable attributes.
+    Setup a NapistuGraph network and then add weights and other malleable attributes.
 
-    Args:
-        sbml_dfs (SBML_dfs): A model formed by aggregating pathways
-        reaction_graph_attrs (dict): Dictionary containing attributes to pull out of reaction_data and
-            a weighting scheme for the graph
-        directed (bool): Should a directed (True) or undirected graph be made (False)
-        edge_reversed (bool): Should directions of edges be reversed (False)
-        graph_type (str): Type of graph to create, valid values are:
-            - bipartite: substrates and modifiers point to the reaction they drive, this reaction points to products
-            - reguatory: non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
-        weighting_strategy (str) : a network weighting strategy with options:
-            - unweighted: all weights (and upstream_weights for directed graphs) are set to 1.
-            - topology: weight edges by the degree of the source nodes favoring nodes emerging from nodes
-                with few connections.
-            - mixed: transform edges with a quantitative score based on reaction_attrs; and set edges
-                without quantitative score as a source-specific weight.
-            - calibrated: transforme edges with a quantitative score based on reaction_attrs and combine them
-                with topology scores to generate a consensus.
-        verbose (bool): Extra reporting
-        custom_transformations (dict, optional):
-            Dictionary of custom transformation functions to use for attribute transformation.
+    Parameters
+    ----------
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        A model formed by aggregating pathways.
+    reaction_graph_attrs : dict, optional
+        Dictionary containing attributes to pull out of reaction_data and a weighting scheme for the graph.
+    directed : bool, optional
+        Should a directed (True) or undirected graph be made (False). Default is True.
+    edge_reversed : bool, optional
+        Should directions of edges be reversed (False). Default is False.
+    graph_type : str, optional
+        Type of graph to create. Valid values are:
+            - 'bipartite': substrates and modifiers point to the reaction they drive, this reaction points to products
+            - 'regulatory': non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
+            - 'surrogate': non-enzymatic modifiers -> substrates -> enzymes -> reaction -> products
+    weighting_strategy : str, optional
+        A network weighting strategy with options:
+            - 'unweighted': all weights (and upstream_weights for directed graphs) are set to 1.
+            - 'topology': weight edges by the degree of the source nodes favoring nodes with few connections.
+            - 'mixed': transform edges with a quantitative score based on reaction_attrs; and set edges without quantitative score as a source-specific weight.
+            - 'calibrated': transform edges with a quantitative score based on reaction_attrs and combine them with topology scores to generate a consensus.
+    verbose : bool, optional
+        Extra reporting. Default is False.
+    custom_transformations : dict, optional
+        Dictionary of custom transformation functions to use for attribute transformation.
 
-    Returns:
-        weighted_graph (ig.Graph): An Igraph network
+    Returns
+    -------
+    NapistuGraph
+        A weighted NapistuGraph network (subclass of igraph.Graph).
     """
 
     if reaction_graph_attrs is None:
         reaction_graph_attrs = {}
 
     logging.info("Constructing network")
-    cpr_graph = create_cpr_graph(
+    napistu_graph = create_napistu_graph(
         sbml_dfs,
         reaction_graph_attrs,
         directed=directed,
@@ -312,13 +300,13 @@ def process_cpr_graph(
 
     logging.info(f"Adding edge weights with an {weighting_strategy} strategy")
 
-    weighted_cpr_graph = add_graph_weights(
-        cpr_graph=cpr_graph,
+    weighted_napistu_graph = add_graph_weights(
+        napistu_graph=napistu_graph,
         reaction_attrs=reaction_attrs,
         weighting_strategy=weighting_strategy,
     )
 
-    return weighted_cpr_graph
+    return weighted_napistu_graph
 
 
 def pluck_entity_data(
@@ -464,7 +452,9 @@ def apply_weight_transformations(
     return transformed_edges_df
 
 
-def summarize_weight_calibration(cpr_graph: ig.Graph, reaction_attrs: dict) -> None:
+def summarize_weight_calibration(
+    napistu_graph: NapistuGraph, reaction_attrs: dict
+) -> None:
     """
     Summarize Weight Calibration
 
@@ -473,7 +463,7 @@ def summarize_weight_calibration(cpr_graph: ig.Graph, reaction_attrs: dict) -> N
     "dubious" weights.
 
     Args:
-        cpr_graph (ig.Graph): A graph where edge weights have already been calibrated.
+        napistu_graph (ig.Graph): A graph where edge weights have already been calibrated.
         reaction_attrs (dict): a dictionary summarizing the types of weights that
             exist and how they are transformed for calibration.
 
@@ -487,7 +477,7 @@ def summarize_weight_calibration(cpr_graph: ig.Graph, reaction_attrs: dict) -> N
         score_calibration_df, reaction_attrs
     )
 
-    calibrated_edges = cpr_graph.get_edge_dataframe()
+    calibrated_edges = napistu_graph.get_edge_dataframe()
 
     _summarize_weight_calibration_table(
         calibrated_edges, score_calibration_df, score_calibration_df_calibrated
@@ -501,31 +491,36 @@ def summarize_weight_calibration(cpr_graph: ig.Graph, reaction_attrs: dict) -> N
 
 
 def add_graph_weights(
-    cpr_graph: ig.Graph,
+    napistu_graph: NapistuGraph,
     reaction_attrs: dict,
-    weighting_strategy: str = CPR_WEIGHTING_STRATEGIES.UNWEIGHTED,
-) -> ig.Graph:
+    weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
+) -> NapistuGraph:
     """
     Add Graph Weights
 
-    Apply a weighting strategy to generate edge weights on a graph. For directed graphs "upstream_weights" will
-    be generated as well which should be used when searching for a node's ancestors.
+    Apply a weighting strategy to generate edge weights on a NapistuGraph. For directed graphs, "upstream_weights" will
+    be generated as well, which should be used when searching for a node's ancestors.
 
-    Args:
-        cpr_graph (ig.Graph): a graphical network of molecules/reactions (nodes) and edges linking them.
-        reaction_attrs (dict): an optional dict
-        weighting_strategy: a network weighting strategy with options:
-            - unweighted: all weights (and upstream_weights for directed graphs) are set to 1.
-            - topology: weight edges by the degree of the source nodes favoring nodes emerging from nodes
-                with few connections.
-            - mixed: transform edges with a quantitative score based on reaction_attrs; and set edges
-                without quantitative score as a source-specific weight.
-            - calibrated: transforme edges with a quantitative score based on reaction_attrs and combine them
-                with topology scores to generate a consensus.
+    Parameters
+    ----------
+    napistu_graph : NapistuGraph
+        A graphical network of molecules/reactions (nodes) and edges linking them (subclass of igraph.Graph).
+    reaction_attrs : dict
+        An optional dict of reaction attributes.
+    weighting_strategy : str, optional
+        A network weighting strategy with options:
+            - 'unweighted': all weights (and upstream_weights for directed graphs) are set to 1.
+            - 'topology': weight edges by the degree of the source nodes favoring nodes emerging from nodes with few connections.
+            - 'mixed': transform edges with a quantitative score based on reaction_attrs; and set edges without quantitative score as a source-specific weight.
+            - 'calibrated': transform edges with a quantitative score based on reaction_attrs and combine them with topology scores to generate a consensus.
 
+    Returns
+    -------
+    NapistuGraph
+        The weighted NapistuGraph.
     """
 
-    cpr_graph_updated = copy.deepcopy(cpr_graph)
+    napistu_graph_updated = copy.deepcopy(napistu_graph)
 
     _validate_entity_attrs(reaction_attrs)
 
@@ -536,36 +531,36 @@ def add_graph_weights(
         )
 
     # count parents and children and create weights based on them
-    topology_weighted_graph = _create_topology_weights(cpr_graph_updated)
+    topology_weighted_graph = _create_topology_weights(napistu_graph_updated)
 
-    if weighting_strategy == CPR_WEIGHTING_STRATEGIES.TOPOLOGY:
-        topology_weighted_graph.es[CPR_GRAPH_EDGES.WEIGHTS] = (
+    if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY:
+        topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.WEIGHTS] = (
             topology_weighted_graph.es["topo_weights"]
         )
-        if cpr_graph_updated.is_directed():
-            topology_weighted_graph.es[CPR_GRAPH_EDGES.UPSTREAM_WEIGHTS] = (
+        if napistu_graph_updated.is_directed():
+            topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS] = (
                 topology_weighted_graph.es["upstream_topo_weights"]
             )
 
         return topology_weighted_graph
 
-    if weighting_strategy == CPR_WEIGHTING_STRATEGIES.UNWEIGHTED:
+    if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED:
         # set weights as a constant
-        topology_weighted_graph.es[CPR_GRAPH_EDGES.WEIGHTS] = 1
-        if cpr_graph_updated.is_directed():
-            topology_weighted_graph.es[CPR_GRAPH_EDGES.UPSTREAM_WEIGHTS] = 1
+        topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.WEIGHTS] = 1
+        if napistu_graph_updated.is_directed():
+            topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS] = 1
         return topology_weighted_graph
 
-    if weighting_strategy == CPR_WEIGHTING_STRATEGIES.MIXED:
+    if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.MIXED:
         return _add_graph_weights_mixed(topology_weighted_graph, reaction_attrs)
 
-    if weighting_strategy == CPR_WEIGHTING_STRATEGIES.CALIBRATED:
+    if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.CALIBRATED:
         return _add_graph_weights_calibration(topology_weighted_graph, reaction_attrs)
 
     raise ValueError(f"No logic implemented for {weighting_strategy}")
 
 
-def _create_cpr_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.DataFrame:
+def _create_napistu_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.DataFrame:
     """Turn an sbml_dfs model into a bipartite graph linking molecules to reactions."""
 
     # setup edges
@@ -576,18 +571,20 @@ def _create_cpr_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.DataFram
         # rename species and reactions to reflect from -> to edges
         .rename(
             columns={
-                SBML_DFS.SC_ID: CPR_GRAPH_NODE_TYPES.SPECIES,
-                SBML_DFS.R_ID: CPR_GRAPH_NODE_TYPES.REACTION,
+                SBML_DFS.SC_ID: NAPISTU_GRAPH_NODE_TYPES.SPECIES,
+                SBML_DFS.R_ID: NAPISTU_GRAPH_NODE_TYPES.REACTION,
             }
         )
     )
     # add back an r_id variable so that each edge is annotated by a reaction
-    network_edges[CPR_GRAPH_EDGES.R_ID] = network_edges[CPR_GRAPH_NODE_TYPES.REACTION]
+    network_edges[NAPISTU_GRAPH_EDGES.R_ID] = network_edges[
+        NAPISTU_GRAPH_NODE_TYPES.REACTION
+    ]
 
     # add edge weights
     cspecies_features = sbml_dfs.get_cspecies_features()
     network_edges = network_edges.merge(
-        cspecies_features, left_on=CPR_GRAPH_NODE_TYPES.SPECIES, right_index=True
+        cspecies_features, left_on=NAPISTU_GRAPH_NODE_TYPES.SPECIES, right_index=True
     )
 
     # if directed then flip substrates and modifiers to the origin edge
@@ -596,16 +593,16 @@ def _create_cpr_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.DataFram
     origins = network_edges[network_edges[SBML_DFS.STOICHIOMETRY] <= 0]
     origin_edges = origins.loc[:, [edge_vars[1], edge_vars[0]] + edge_vars[2:]].rename(
         columns={
-            CPR_GRAPH_NODE_TYPES.SPECIES: CPR_GRAPH_EDGES.FROM,
-            CPR_GRAPH_NODE_TYPES.REACTION: CPR_GRAPH_EDGES.TO,
+            NAPISTU_GRAPH_NODE_TYPES.SPECIES: NAPISTU_GRAPH_EDGES.FROM,
+            NAPISTU_GRAPH_NODE_TYPES.REACTION: NAPISTU_GRAPH_EDGES.TO,
         }
     )
 
     dests = network_edges[network_edges[SBML_DFS.STOICHIOMETRY] > 0]
     dest_edges = dests.rename(
         columns={
-            CPR_GRAPH_NODE_TYPES.REACTION: CPR_GRAPH_EDGES.FROM,
-            CPR_GRAPH_NODE_TYPES.SPECIES: CPR_GRAPH_EDGES.TO,
+            NAPISTU_GRAPH_NODE_TYPES.REACTION: NAPISTU_GRAPH_EDGES.FROM,
+            NAPISTU_GRAPH_NODE_TYPES.SPECIES: NAPISTU_GRAPH_EDGES.TO,
         }
     )
 
@@ -614,7 +611,7 @@ def _create_cpr_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.DataFram
     return network_edges
 
 
-def _create_cpr_graph_tiered(
+def _create_napistu_graph_tiered(
     sbml_dfs: sbml_dfs_core.SBML_dfs, graph_type: str
 ) -> pd.DataFrame:
     """Turn an sbml_dfs model into a tiered graph which links upstream entities to downstream ones."""
@@ -678,21 +675,23 @@ def _create_cpr_graph_tiered(
     # not the bipartite network which can be trivially obtained from the pathway
     # specification
     unique_edges = (
-        all_reaction_edges_df.groupby([CPR_GRAPH_EDGES.FROM, CPR_GRAPH_EDGES.TO])
+        all_reaction_edges_df.groupby(
+            [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+        )
         .first()
         .reset_index()
     )
 
     # children
     n_children = (
-        unique_edges[CPR_GRAPH_EDGES.FROM]
+        unique_edges[NAPISTU_GRAPH_EDGES.FROM]
         .value_counts()
         # rename values to the child name
-        .to_frame(name=CPR_GRAPH_EDGES.SC_CHILDREN)
+        .to_frame(name=NAPISTU_GRAPH_EDGES.SC_CHILDREN)
         .reset_index()
         .rename(
             {
-                CPR_GRAPH_EDGES.FROM: SBML_DFS.SC_ID,
+                NAPISTU_GRAPH_EDGES.FROM: SBML_DFS.SC_ID,
             },
             axis=1,
         )
@@ -700,14 +699,14 @@ def _create_cpr_graph_tiered(
 
     # parents
     n_parents = (
-        unique_edges[CPR_GRAPH_EDGES.TO]
+        unique_edges[NAPISTU_GRAPH_EDGES.TO]
         .value_counts()
         # rename values to the parent name
-        .to_frame(name=CPR_GRAPH_EDGES.SC_PARENTS)
+        .to_frame(name=NAPISTU_GRAPH_EDGES.SC_PARENTS)
         .reset_index()
         .rename(
             {
-                CPR_GRAPH_EDGES.TO: SBML_DFS.SC_ID,
+                NAPISTU_GRAPH_EDGES.TO: SBML_DFS.SC_ID,
             },
             axis=1,
         )
@@ -715,9 +714,9 @@ def _create_cpr_graph_tiered(
 
     graph_degree_by_edgelist = n_children.merge(n_parents, how="outer").fillna(int(0))
 
-    graph_degree_by_edgelist[CPR_GRAPH_EDGES.SC_DEGREE] = (
-        graph_degree_by_edgelist[CPR_GRAPH_EDGES.SC_CHILDREN]
-        + graph_degree_by_edgelist[CPR_GRAPH_EDGES.SC_PARENTS]
+    graph_degree_by_edgelist[NAPISTU_GRAPH_EDGES.SC_DEGREE] = (
+        graph_degree_by_edgelist[NAPISTU_GRAPH_EDGES.SC_CHILDREN]
+        + graph_degree_by_edgelist[NAPISTU_GRAPH_EDGES.SC_PARENTS]
     )
     graph_degree_by_edgelist = (
         graph_degree_by_edgelist[
@@ -730,9 +729,9 @@ def _create_cpr_graph_tiered(
     cspecies_features = (
         cspecies_features.drop(
             [
-                CPR_GRAPH_EDGES.SC_DEGREE,
-                CPR_GRAPH_EDGES.SC_CHILDREN,
-                CPR_GRAPH_EDGES.SC_PARENTS,
+                NAPISTU_GRAPH_EDGES.SC_DEGREE,
+                NAPISTU_GRAPH_EDGES.SC_CHILDREN,
+                NAPISTU_GRAPH_EDGES.SC_PARENTS,
             ],
             axis=1,
         )
@@ -740,10 +739,10 @@ def _create_cpr_graph_tiered(
         .fillna(int(0))
     )
 
-    is_from_reaction = all_reaction_edges_df[CPR_GRAPH_EDGES.FROM].isin(
+    is_from_reaction = all_reaction_edges_df[NAPISTU_GRAPH_EDGES.FROM].isin(
         sbml_dfs.reactions.index.tolist()
     )
-    is_from_reaction = all_reaction_edges_df[CPR_GRAPH_EDGES.FROM].isin(
+    is_from_reaction = all_reaction_edges_df[NAPISTU_GRAPH_EDGES.FROM].isin(
         sbml_dfs.reactions.index
     )
     # add substrate weight whenever "from" edge is a molecule
@@ -751,10 +750,10 @@ def _create_cpr_graph_tiered(
     decorated_all_reaction_edges_df = pd.concat(
         [
             all_reaction_edges_df[~is_from_reaction].merge(
-                cspecies_features, left_on=CPR_GRAPH_EDGES.FROM, right_index=True
+                cspecies_features, left_on=NAPISTU_GRAPH_EDGES.FROM, right_index=True
             ),
             all_reaction_edges_df[is_from_reaction].merge(
-                cspecies_features, left_on=CPR_GRAPH_EDGES.TO, right_index=True
+                cspecies_features, left_on=NAPISTU_GRAPH_EDGES.TO, right_index=True
             ),
         ]
     ).sort_index()
@@ -821,8 +820,8 @@ def _format_tiered_reaction_species(
                     .merge(graph_hierarchy_df)
                 ),
                 graph_hierarchy_df[
-                    graph_hierarchy_df[CPR_GRAPH_EDGES.SBO_NAME]
-                    == CPR_GRAPH_NODE_TYPES.REACTION
+                    graph_hierarchy_df[NAPISTU_GRAPH_EDGES.SBO_NAME]
+                    == NAPISTU_GRAPH_NODE_TYPES.REACTION
                 ].assign(entity_id=r_id, r_id=r_id),
             ]
         )
@@ -836,7 +835,8 @@ def _format_tiered_reaction_species(
 
     # which tier is the reaction?
     reaction_tier = graph_hierarchy_df["tier"][
-        graph_hierarchy_df[CPR_GRAPH_EDGES.SBO_NAME] == CPR_GRAPH_NODE_TYPES.REACTION
+        graph_hierarchy_df[NAPISTU_GRAPH_EDGES.SBO_NAME]
+        == NAPISTU_GRAPH_NODE_TYPES.REACTION
     ].tolist()[0]
 
     rxn_edges = list()
@@ -856,10 +856,10 @@ def _format_tiered_reaction_species(
     rxn_edges_df = (
         pd.concat(rxn_edges)[
             [
-                CPR_GRAPH_EDGES.FROM,
-                CPR_GRAPH_EDGES.TO,
-                CPR_GRAPH_EDGES.STOICHIOMETRY,
-                CPR_GRAPH_EDGES.SBO_TERM,
+                NAPISTU_GRAPH_EDGES.FROM,
+                NAPISTU_GRAPH_EDGES.TO,
+                NAPISTU_GRAPH_EDGES.STOICHIOMETRY,
+                NAPISTU_GRAPH_EDGES.SBO_TERM,
             ]
         ]
         .reset_index(drop=True)
@@ -907,12 +907,12 @@ def _format_tier_combo(
 
     formatted_tier_combo = (
         upstream_tier[upstream_fields]
-        .rename({"entity_id": CPR_GRAPH_EDGES.FROM}, axis=1)
+        .rename({"entity_id": NAPISTU_GRAPH_EDGES.FROM}, axis=1)
         .assign(_joiner=1)
     ).merge(
         (
             downstream_tier[downstream_fields]
-            .rename({"entity_id": CPR_GRAPH_EDGES.TO}, axis=1)
+            .rename({"entity_id": NAPISTU_GRAPH_EDGES.TO}, axis=1)
             .assign(_joiner=1)
         ),
         left_on="_joiner",
@@ -937,9 +937,9 @@ def _create_graph_hierarchy_df(graph_type: str) -> pd.DataFrame:
 
     """
 
-    if graph_type == CPR_GRAPH_TYPES.REGULATORY:
+    if graph_type == NAPISTU_GRAPH_TYPES.REGULATORY:
         sbo_names_hierarchy = REGULATORY_GRAPH_HIERARCHY
-    elif graph_type == CPR_GRAPH_TYPES.SURROGATE:
+    elif graph_type == NAPISTU_GRAPH_TYPES.SURROGATE:
         sbo_names_hierarchy = SURROGATE_GRAPH_HIERARCHY
     else:
         raise NotImplementedError(f"{graph_type} is not a valid graph_type")
@@ -952,23 +952,41 @@ def _create_graph_hierarchy_df(graph_type: str) -> pd.DataFrame:
         ]
     ).reset_index(drop=True)
     graph_hierarchy_df[SBML_DFS.SBO_TERM] = graph_hierarchy_df["sbo_name"].apply(
-        lambda x: MINI_SBO_FROM_NAME[x] if x != CPR_GRAPH_NODE_TYPES.REACTION else ""
+        lambda x: (
+            MINI_SBO_FROM_NAME[x] if x != NAPISTU_GRAPH_NODE_TYPES.REACTION else ""
+        )
     )
 
     # ensure that the output is expected
     utils.match_pd_vars(
         graph_hierarchy_df,
-        req_vars={CPR_GRAPH_EDGES.SBO_NAME, "tier", SBML_DFS.SBO_TERM},
+        req_vars={NAPISTU_GRAPH_EDGES.SBO_NAME, "tier", SBML_DFS.SBO_TERM},
         allow_series=False,
     ).assert_present()
 
     return graph_hierarchy_df
 
 
-def _add_graph_weights_mixed(cpr_graph: ig.Graph, reaction_attrs: dict) -> ig.Graph:
-    """Weight a graph using a mixed approach combining source-specific weights and existing edge weights."""
+def _add_graph_weights_mixed(
+    napistu_graph: NapistuGraph, reaction_attrs: dict
+) -> NapistuGraph:
+    """
+    Weight a NapistuGraph using a mixed approach combining source-specific weights and existing edge weights.
 
-    edges_df = cpr_graph.get_edge_dataframe()
+    Parameters
+    ----------
+    napistu_graph : NapistuGraph
+        The network to weight (subclass of igraph.Graph).
+    reaction_attrs : dict
+        Dictionary of reaction attributes to use for weighting.
+
+    Returns
+    -------
+    NapistuGraph
+        The weighted NapistuGraph.
+    """
+
+    edges_df = napistu_graph.get_edge_dataframe()
 
     calibrated_edges = apply_weight_transformations(edges_df, reaction_attrs)
     calibrated_edges = _create_source_weights(calibrated_edges, "source_wt")
@@ -980,26 +998,42 @@ def _add_graph_weights_mixed(cpr_graph: ig.Graph, reaction_attrs: dict) -> ig.Gr
 
     calibrated_edges["weights"] = calibrated_edges[score_vars].min(axis=1)
 
-    cpr_graph.es[CPR_GRAPH_EDGES.WEIGHTS] = calibrated_edges[CPR_GRAPH_EDGES.WEIGHTS]
-    if cpr_graph.is_directed():
-        cpr_graph.es[CPR_GRAPH_EDGES.UPSTREAM_WEIGHTS] = calibrated_edges[
-            CPR_GRAPH_EDGES.WEIGHTS
+    napistu_graph.es[NAPISTU_GRAPH_EDGES.WEIGHTS] = calibrated_edges[
+        NAPISTU_GRAPH_EDGES.WEIGHTS
+    ]
+    if napistu_graph.is_directed():
+        napistu_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS] = calibrated_edges[
+            NAPISTU_GRAPH_EDGES.WEIGHTS
         ]
 
     # add other attributes and update transformed attributes
-    cpr_graph.es["source_wt"] = calibrated_edges["source_wt"]
+    napistu_graph.es["source_wt"] = calibrated_edges["source_wt"]
     for k in reaction_attrs.keys():
-        cpr_graph.es[k] = calibrated_edges[k]
+        napistu_graph.es[k] = calibrated_edges[k]
 
-    return cpr_graph
+    return napistu_graph
 
 
 def _add_graph_weights_calibration(
-    cpr_graph: ig.Graph, reaction_attrs: dict
-) -> ig.Graph:
-    """Weight a graph using a calibrated strategy which aims to roughly align qualiatively similar weights from different sources."""
+    napistu_graph: NapistuGraph, reaction_attrs: dict
+) -> NapistuGraph:
+    """
+    Weight a NapistuGraph using a calibrated strategy which aims to roughly align qualitatively similar weights from different sources.
 
-    edges_df = cpr_graph.get_edge_dataframe()
+    Parameters
+    ----------
+    napistu_graph : NapistuGraph
+        The network to weight (subclass of igraph.Graph).
+    reaction_attrs : dict
+        Dictionary of reaction attributes to use for weighting.
+
+    Returns
+    -------
+    NapistuGraph
+        The weighted NapistuGraph.
+    """
+
+    edges_df = napistu_graph.get_edge_dataframe()
 
     calibrated_edges = apply_weight_transformations(edges_df, reaction_attrs)
 
@@ -1007,57 +1041,58 @@ def _add_graph_weights_calibration(
     score_vars.append("topo_weights")
 
     logger.info(f"Creating calibrated scores based on {', '.join(score_vars)}")
-    cpr_graph.es["weights"] = calibrated_edges[score_vars].min(axis=1)
+    napistu_graph.es["weights"] = calibrated_edges[score_vars].min(axis=1)
 
-    if cpr_graph.is_directed():
+    if napistu_graph.is_directed():
         score_vars = list(reaction_attrs.keys())
         score_vars.append("upstream_topo_weights")
-        cpr_graph.es["upstream_weights"] = calibrated_edges[score_vars].min(axis=1)
+        napistu_graph.es["upstream_weights"] = calibrated_edges[score_vars].min(axis=1)
 
     # add other attributes and update transformed attributes
     for k in reaction_attrs.keys():
-        cpr_graph.es[k] = calibrated_edges[k]
+        napistu_graph.es[k] = calibrated_edges[k]
 
-    return cpr_graph
+    return napistu_graph
 
 
 def _add_edge_attr_to_vertex_graph(
-    cpr_graph: ig.Graph,
+    napistu_graph: NapistuGraph,
     edge_attr_list: list,
     shared_node_key: str = "r_id",
-) -> ig.Graph:
+) -> NapistuGraph:
     """
-    Merge edge attribute(s) from edge_attr_list to vetices of an igraph
+    Merge edge attribute(s) from edge_attr_list to vertices of a NapistuGraph.
 
     Parameters
     ----------
-    cpr_graph : iGraph
-        A graph generated by create_cpr_graph()
-    edge_attr_list: list
-        A list containing attributes to pull out of edges, then to add to vertices
-    shared_node_key : str
-        key in edge that is shared with vertex, to map edge ids to corresponding vertex ids
+    napistu_graph : NapistuGraph
+        A graph generated by create_napistu_graph() (subclass of igraph.Graph).
+    edge_attr_list : list
+        A list containing attributes to pull out of edges, then to add to vertices.
+    shared_node_key : str, optional
+        Key in edge that is shared with vertex, to map edge ids to corresponding vertex ids. Default is "r_id".
 
-    Returns:
-    ----------
-    An Igraph network
+    Returns
+    -------
+    NapistuGraph
+        The input NapistuGraph with additional vertex attributes added from edge attributes.
     """
 
     if len(edge_attr_list) == 0:
         logger.warning(
             "No edge attributes were passed, " "thus return the input graph."
         )
-        return cpr_graph
+        return napistu_graph
 
-    graph_vertex_df = cpr_graph.get_vertex_dataframe()
-    graph_edge_df = cpr_graph.get_edge_dataframe()
+    graph_vertex_df = napistu_graph.get_vertex_dataframe()
+    graph_edge_df = napistu_graph.get_edge_dataframe()
 
     if shared_node_key not in graph_edge_df.columns.to_list():
         logger.warning(
             f"{shared_node_key} is not in the current edge attributes. "
             "shared_node_key must be an existing edge attribute"
         )
-        return cpr_graph
+        return napistu_graph
 
     graph_edge_df_sub = graph_edge_df.loc[:, [shared_node_key] + edge_attr_list].copy()
 
@@ -1092,7 +1127,7 @@ def _add_edge_attr_to_vertex_graph(
     )
 
     # rename shared_node_key to vertex key 'name'
-    # as in net_create.create_cpr_graph(), vertex_name_attr is set to 'name'
+    # as in net_create.create_napistu_graph(), vertex_name_attr is set to 'name'
     graph_edge_df_sub_no_duplicate = graph_edge_df_sub_no_duplicate.rename(
         columns={shared_node_key: "name"},
     )
@@ -1114,12 +1149,12 @@ def _add_edge_attr_to_vertex_graph(
             "Please assign proper values to those vertex attributes."
         )
 
-    # assign the edge_attrs from edge_attr_list to cpr_graph's vertices:
+    # assign the edge_attrs from edge_attr_list to napistu_graph's vertices:
     # keep the same edge attribute names:
     for col_name in edge_attr_list:
-        cpr_graph.vs[col_name] = graph_vertex_df_w_edge_attr[col_name]
+        napistu_graph.vs[col_name] = graph_vertex_df_w_edge_attr[col_name]
 
-    return cpr_graph
+    return napistu_graph
 
 
 def _summarize_weight_calibration_table(
@@ -1323,23 +1358,23 @@ def _format_interactors_for_tiered_graph(
 
 
 def _add_graph_species_attribute(
-    cpr_graph: ig.Graph,
+    napistu_graph: NapistuGraph,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     species_graph_attrs: dict,
     custom_transformations: Optional[dict] = None,
-) -> ig.Graph:
+) -> NapistuGraph:
     """
-    Add meta-data from species_data to existing igraph's vertices.
+    Add meta-data from species_data to existing NapistuGraph's vertices.
 
-    This function augments the vertices of an igraph network with additional attributes
+    This function augments the vertices of a NapistuGraph network with additional attributes
     derived from the species-level data in the provided SBML_dfs object. The attributes
     to add are specified in the species_graph_attrs dictionary, and can be transformed
     using either built-in or user-supplied transformation functions.
 
     Parameters
     ----------
-    cpr_graph : ig.Graph
-        The igraph network to augment.
+    napistu_graph : NapistuGraph
+        The NapistuGraph network to augment (subclass of igraph.Graph).
     sbml_dfs : sbml_dfs_core.SBML_dfs
         The SBML_dfs object containing species data.
     species_graph_attrs : dict
@@ -1351,8 +1386,8 @@ def _add_graph_species_attribute(
 
     Returns
     -------
-    ig.Graph
-        The input igraph network with additional vertex attributes added from species_data.
+    NapistuGraph
+        The input NapistuGraph with additional vertex attributes added from species_data.
     """
     if not isinstance(species_graph_attrs, dict):
         raise TypeError(
@@ -1376,7 +1411,7 @@ def _add_graph_species_attribute(
 
     logger.info("Adding meta-data from species_data")
 
-    curr_network_nodes_df = cpr_graph.get_vertex_dataframe()
+    curr_network_nodes_df = napistu_graph.get_vertex_dataframe()
 
     # add species-level attributes to nodes dataframe
     augmented_network_nodes_df = _augment_network_nodes(
@@ -1389,9 +1424,9 @@ def _add_graph_species_attribute(
     for vs_attr in flat_sp_node_attr_list:
         # in case more than one vs_attr in the flat_sp_node_attr_list
         logger.info(f"Adding new attribute {vs_attr} to vertices")
-        cpr_graph.vs[vs_attr] = augmented_network_nodes_df[vs_attr].values
+        napistu_graph.vs[vs_attr] = augmented_network_nodes_df[vs_attr].values
 
-    return cpr_graph
+    return napistu_graph
 
 
 def _augment_network_nodes(
@@ -1551,7 +1586,8 @@ def _reverse_network_edges(augmented_network_edges: pd.DataFrame) -> pd.DataFram
     """Flip reversible reactions to derive the reverse reaction."""
 
     # validate inputs
-    missing_required_vars = CPR_GRAPH_REQUIRED_EDGE_VARS.difference(
+    required_vars = {NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO}
+    missing_required_vars = required_vars.difference(
         set(augmented_network_edges.columns.tolist())
     )
 
@@ -1561,16 +1597,23 @@ def _reverse_network_edges(augmented_network_edges: pd.DataFrame) -> pd.DataFram
             f"{', '.join(missing_required_vars)}"
         )
 
+    # Check if direction already exists
+    if NAPISTU_GRAPH_EDGES.DIRECTION in augmented_network_edges.columns:
+        logger.warning(
+            f"{NAPISTU_GRAPH_EDGES.DIRECTION} field already exists in augmented_network_edges. "
+            "This is unexpected and may indicate an issue in the graph creation process."
+        )
+
     # select all edges derived from reversible reactions
     reversible_reaction_edges = augmented_network_edges[
-        augmented_network_edges[CPR_GRAPH_EDGES.R_ISREVERSIBLE]
+        augmented_network_edges[NAPISTU_GRAPH_EDGES.R_ISREVERSIBLE]
     ]
 
     r_reaction_edges = (
         # ignore edges which start in a regulator or catalyst; even for a reversible reaction it
         # doesn't make sense for a regulator to be impacted by a target
         reversible_reaction_edges[
-            ~reversible_reaction_edges[CPR_GRAPH_EDGES.SBO_TERM].isin(
+            ~reversible_reaction_edges[NAPISTU_GRAPH_EDGES.SBO_TERM].isin(
                 [
                     MINI_SBO_FROM_NAME[x]
                     for x in SBO_MODIFIER_NAMES.union({SBOTERM_NAMES.CATALYST})
@@ -1580,18 +1623,18 @@ def _reverse_network_edges(augmented_network_edges: pd.DataFrame) -> pd.DataFram
         # flip parent and child attributes
         .rename(
             {
-                CPR_GRAPH_EDGES.FROM: CPR_GRAPH_EDGES.TO,
-                CPR_GRAPH_EDGES.TO: CPR_GRAPH_EDGES.FROM,
-                CPR_GRAPH_EDGES.SC_CHILDREN: CPR_GRAPH_EDGES.SC_PARENTS,
-                CPR_GRAPH_EDGES.SC_PARENTS: CPR_GRAPH_EDGES.SC_CHILDREN,
+                NAPISTU_GRAPH_EDGES.FROM: NAPISTU_GRAPH_EDGES.TO,
+                NAPISTU_GRAPH_EDGES.TO: NAPISTU_GRAPH_EDGES.FROM,
+                NAPISTU_GRAPH_EDGES.SC_CHILDREN: NAPISTU_GRAPH_EDGES.SC_PARENTS,
+                NAPISTU_GRAPH_EDGES.SC_PARENTS: NAPISTU_GRAPH_EDGES.SC_CHILDREN,
             },
             axis=1,
         )
     )
 
     # switch substrates and products
-    r_reaction_edges[CPR_GRAPH_EDGES.STOICHIOMETRY] = r_reaction_edges[
-        CPR_GRAPH_EDGES.STOICHIOMETRY
+    r_reaction_edges[NAPISTU_GRAPH_EDGES.STOICHIOMETRY] = r_reaction_edges[
+        NAPISTU_GRAPH_EDGES.STOICHIOMETRY
     ].apply(
         # the ifelse statement prevents 0 being converted to -0 ...
         lambda x: -1 * x if x != 0 else 0
@@ -1601,18 +1644,18 @@ def _reverse_network_edges(augmented_network_edges: pd.DataFrame) -> pd.DataFram
         [
             (
                 r_reaction_edges[
-                    r_reaction_edges[CPR_GRAPH_EDGES.SBO_TERM]
+                    r_reaction_edges[NAPISTU_GRAPH_EDGES.SBO_TERM]
                     == MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT]
                 ].assign(sbo_term=MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT])
             ),
             (
                 r_reaction_edges[
-                    r_reaction_edges[CPR_GRAPH_EDGES.SBO_TERM]
+                    r_reaction_edges[NAPISTU_GRAPH_EDGES.SBO_TERM]
                     == MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT]
                 ].assign(sbo_term=MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT])
             ),
             r_reaction_edges[
-                ~r_reaction_edges[CPR_GRAPH_EDGES.SBO_TERM].isin(
+                ~r_reaction_edges[NAPISTU_GRAPH_EDGES.SBO_TERM].isin(
                     [
                         MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT],
                         MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
@@ -1628,12 +1671,12 @@ def _reverse_network_edges(augmented_network_edges: pd.DataFrame) -> pd.DataFram
         )
 
     return transformed_r_reaction_edges.assign(
-        **{CPR_GRAPH_EDGES.DIRECTION: CPR_GRAPH_EDGE_DIRECTIONS.REVERSE}
+        **{NAPISTU_GRAPH_EDGES.DIRECTION: NAPISTU_GRAPH_EDGE_DIRECTIONS.REVERSE}
     )
 
 
 def _create_topology_weights(
-    cpr_graph: ig.Graph,
+    napistu_graph: ig.Graph,
     base_score: float = 2,
     protein_multiplier: int = 1,
     metabolite_multiplier: int = 3,
@@ -1650,7 +1693,7 @@ def _create_topology_weights(
     schemes.
 
     Args:
-        cpr_graph (ig.Graph): a graph containing connections between molecules, proteins, and reactions.
+        napistu_graph (ig.Graph): a graph containing connections between molecules, proteins, and reactions.
         base_score (float): offset which will be added to all weights.
         protein_multiplier (int): multiplier for non-metabolite species (lower weight paths will tend to be selected).
         metabolite_multiplier (int): multiplier for metabolites [defined a species with a ChEBI ID).
@@ -1660,20 +1703,22 @@ def _create_topology_weights(
             size and sparsity.
 
     Returns:
-        cpr_graph (ig.Graph): graph with added topology weights
+        napistu_graph (ig.Graph): graph with added topology weights
 
     """
 
     # check for required attribute before proceeding
 
     required_attrs = {
-        CPR_GRAPH_EDGES.SC_DEGREE,
-        CPR_GRAPH_EDGES.SC_CHILDREN,
-        CPR_GRAPH_EDGES.SC_PARENTS,
-        CPR_GRAPH_EDGES.SPECIES_TYPE,
+        NAPISTU_GRAPH_EDGES.SC_DEGREE,
+        NAPISTU_GRAPH_EDGES.SC_CHILDREN,
+        NAPISTU_GRAPH_EDGES.SC_PARENTS,
+        NAPISTU_GRAPH_EDGES.SPECIES_TYPE,
     }
 
-    missing_required_attrs = required_attrs.difference(set(cpr_graph.es.attributes()))
+    missing_required_attrs = required_attrs.difference(
+        set(napistu_graph.es.attributes())
+    )
     if len(missing_required_attrs) != 0:
         raise ValueError(
             f"model is missing {len(missing_required_attrs)} required attributes: {', '.join(missing_required_attrs)}"
@@ -1698,10 +1743,18 @@ def _create_topology_weights(
 
     weight_table = pd.DataFrame(
         {
-            CPR_GRAPH_EDGES.SC_DEGREE: cpr_graph.es[CPR_GRAPH_EDGES.SC_DEGREE],
-            CPR_GRAPH_EDGES.SC_CHILDREN: cpr_graph.es[CPR_GRAPH_EDGES.SC_CHILDREN],
-            CPR_GRAPH_EDGES.SC_PARENTS: cpr_graph.es[CPR_GRAPH_EDGES.SC_PARENTS],
-            CPR_GRAPH_EDGES.SPECIES_TYPE: cpr_graph.es[CPR_GRAPH_EDGES.SPECIES_TYPE],
+            NAPISTU_GRAPH_EDGES.SC_DEGREE: napistu_graph.es[
+                NAPISTU_GRAPH_EDGES.SC_DEGREE
+            ],
+            NAPISTU_GRAPH_EDGES.SC_CHILDREN: napistu_graph.es[
+                NAPISTU_GRAPH_EDGES.SC_CHILDREN
+            ],
+            NAPISTU_GRAPH_EDGES.SC_PARENTS: napistu_graph.es[
+                NAPISTU_GRAPH_EDGES.SC_PARENTS
+            ],
+            NAPISTU_GRAPH_EDGES.SPECIES_TYPE: napistu_graph.es[
+                NAPISTU_GRAPH_EDGES.SPECIES_TYPE
+            ],
         }
     )
 
@@ -1720,18 +1773,20 @@ def _create_topology_weights(
     # for interpretability and filtering, we can rescale topology weights by the
     # average degree of nodes
     if scale_multiplier_by_meandegree:
-        mean_degree = len(cpr_graph.es) / len(cpr_graph.vs)
-        if not cpr_graph.is_directed():
+        mean_degree = len(napistu_graph.es) / len(napistu_graph.vs)
+        if not napistu_graph.is_directed():
             # for a directed network in- and out-degree are separately treated while
             # an undirected network's degree will be the sum of these two measures.
             mean_degree = mean_degree * 2
 
         weight_table["multiplier"] = weight_table["multiplier"] / mean_degree
 
-    if cpr_graph.is_directed():
-        weight_table["connection_weight"] = weight_table[CPR_GRAPH_EDGES.SC_CHILDREN]
+    if napistu_graph.is_directed():
+        weight_table["connection_weight"] = weight_table[
+            NAPISTU_GRAPH_EDGES.SC_CHILDREN
+        ]
     else:
-        weight_table["connection_weight"] = weight_table[CPR_GRAPH_EDGES.SC_DEGREE]
+        weight_table["connection_weight"] = weight_table[NAPISTU_GRAPH_EDGES.SC_DEGREE]
 
     # weight traveling through a species based on
     # - a constant
@@ -1741,17 +1796,19 @@ def _create_topology_weights(
         base_score + (x * y)
         for x, y in zip(weight_table["multiplier"], weight_table["connection_weight"])
     ]
-    cpr_graph.es["topo_weights"] = weight_table["topo_weights"]
+    napistu_graph.es["topo_weights"] = weight_table["topo_weights"]
 
     # if directed and we want to use travel upstream define a corresponding weighting scheme
-    if cpr_graph.is_directed():
+    if napistu_graph.is_directed():
         weight_table["upstream_topo_weights"] = [
             base_score + (x * y)
             for x, y in zip(weight_table["multiplier"], weight_table["sc_parents"])
         ]
-        cpr_graph.es["upstream_topo_weights"] = weight_table["upstream_topo_weights"]
+        napistu_graph.es["upstream_topo_weights"] = weight_table[
+            "upstream_topo_weights"
+        ]
 
-    return cpr_graph
+    return napistu_graph
 
 
 def _validate_entity_attrs(

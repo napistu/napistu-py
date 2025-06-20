@@ -3,12 +3,30 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+
 SPECIES_FULL_NAME_HUMAN = "Homo sapiens"
 SPECIES_FULL_NAME_MOUSE = "Mus musculus"
 SPECIES_FULL_NAME_YEAST = "Saccharomyces cerevisiae"
 SPECIES_FULL_NAME_RAT = "Rattus norvegicus"
 SPECIES_FULL_NAME_WORM = "Caenorhabditis elegans"
 
+PROTEINATLAS_SUBCELL_LOC_URL = (
+    "https://www.proteinatlas.org/download/tsv/subcellular_location.tsv.zip"
+)
+
+PROTEINATLAS_DEFS = SimpleNamespace(
+    GO_ID="GO id",
+    GENE="Gene",
+)
+
+
+# GTEx
+GTEX_RNASEQ_EXPRESSION_URL = "https://storage.googleapis.com/adult-gtex/bulk-gex/v8/rna-seq/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_median_tpm.gct.gz"
+
+GTEX_DEFS = SimpleNamespace(
+    NAME="Name",
+    DESCRIPTION="Description",
+)
 
 # BIGG
 BIGG_MODEL_URLS = {
@@ -28,134 +46,6 @@ BIGG_MODEL_KEYS = {
 BIGG_RECON3D_FIELD_ID = "id"
 BIGG_RECON3D_FIELD_TYPE = "type"
 BIGG_RECON3D_FIELD_URI = "uri"
-
-BIGG_RECON3D_ID_C = "c"
-BIGG_RECON3D_ID_L = "l"
-BIGG_RECON3D_ID_E = "e"
-BIGG_RECON3D_ID_M = "m"
-BIGG_RECON3D_ID_R = "r"
-BIGG_RECON3D_ID_X = "x"
-BIGG_RECON3D_ID_N = "n"
-BIGG_RECON3D_ID_I = "i"
-
-BIGG_RECON3D_TYPE_COMPARTMENT = "compartment"
-
-BIGG_RECON3D_FIELD_ANNOTATION = [
-    {
-        # cytosol
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_C,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005829",
-    },
-    {
-        # cytoplasm
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_C,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005737",
-    },
-    {
-        # plasma membrane
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_C,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005886",
-    },
-    {
-        # lysosome lumen
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_L,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0043202",
-    },
-    {
-        # lysosomal membrane
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_L,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005765",
-    },
-    {
-        # mitochondrial intermembrane space
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_M,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005758",
-    },
-    {
-        # mitochondrial outer membrane
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_M,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005741",
-    },
-    {
-        # ER membrane
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_R,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005789",
-    },
-    {
-        # ER lumen
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_R,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005788",
-    },
-    {
-        # extracellular region
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_E,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005576",
-    },
-    {
-        # peroxosomal membrane
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_X,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005778",
-    },
-    {
-        # peroxosomal matrix
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_X,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005782",
-    },
-    {
-        # nucleolus
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_N,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005730",
-    },
-    {
-        # nuclear envelope
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_N,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005635",
-    },
-    {
-        # nucleoplasm
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_N,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005654",
-    },
-    {
-        # golgi membrane
-        BIGG_RECON3D_FIELD_ID: "g",
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0000139",
-    },
-    {
-        # golgi lumen
-        BIGG_RECON3D_FIELD_ID: "g",
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005796",
-    },
-    {
-        # mitochondrial matrix
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_I,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005759",
-    },
-    {
-        # mitochondrial inner membrane
-        BIGG_RECON3D_FIELD_ID: BIGG_RECON3D_ID_I,
-        BIGG_RECON3D_FIELD_TYPE: BIGG_RECON3D_TYPE_COMPARTMENT,
-        BIGG_RECON3D_FIELD_URI: "https://www.ebi.ac.uk/QuickGO/term/GO:0005743",
-    },
-]
 
 # IDENTIFIERS ETL
 IDENTIFIERS_ETL_YEAST_URL = "https://www.uniprot.org/docs/yeast.txt"
@@ -238,11 +128,6 @@ SBML_COMPARTMENTALIZED_SPECIES_DICT_NAME = "sc_name"
 SBML_COMPARTMENTALIZED_SPECIES_DICT_SOURCE = "sc_Source"
 
 SBML_REACTION_ATTR_GET_GENE_PRODUCT = "getGeneProduct"
-
-SBML_ANNOTATION_METHOD_GET_SPECIES = "getSpecies"
-SBML_ANNOTATION_METHOD_GET_COMPARTMENT = "getCompartment"
-SBML_ANNOTATION_METHOD_GET_REACTION = "getReaction"
-
 
 # STRING
 STRING_URL_EXPRESSIONS = {

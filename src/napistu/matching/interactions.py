@@ -16,7 +16,7 @@ from napistu.constants import (
     SBML_DFS,
     IDENTIFIERS,
 )
-from napistu.network.constants import CPR_GRAPH_EDGES
+from napistu.network.constants import NAPISTU_GRAPH_EDGES
 from napistu.matching.constants import FEATURE_ID_VAR_DEFAULT
 from napistu.network import paths
 
@@ -322,7 +322,7 @@ def filter_to_indirect_mechanistic_interactions(
     formatted_edgelist: pd.DataFrame,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     species_identifiers: pd.DataFrame,
-    cpr_graph: ig.Graph,
+    napistu_graph: ig.Graph,
     ontologies: set,
     precomputed_distances=None,
     max_path_length=10,
@@ -343,7 +343,7 @@ def filter_to_indirect_mechanistic_interactions(
     species_identifiers: pandas.DataFrame
         A table of molecular species identifiers produced from
         sbml_dfs.get_identifiers("species") generally using sbml_dfs_core.export_sbml_dfs()
-    cpr_graph: igraph.Graph
+    napistu_graph: igraph.Graph
         A network representation of the sbml_dfs model
     ontologies: set
         A set of ontologies used to match features to pathway species
@@ -406,12 +406,12 @@ def filter_to_indirect_mechanistic_interactions(
 
         # find all paths from indexed_origin to desired destination
         shortest_paths = paths.find_shortest_reaction_paths(
-            cpr_graph,
+            napistu_graph,
             sbml_dfs,
             origin=an_origin_index,
             # find all unique destinations (as a list for compatibility with igraph dest)
             dest=origin_targets[CPR_EDGELIST.SC_ID_DOWNSTREAM].unique().tolist(),
-            weight_var=CPR_GRAPH_EDGES.WEIGHTS,
+            weight_var=NAPISTU_GRAPH_EDGES.WEIGHTS,
         )
 
         if shortest_paths is None:
@@ -442,13 +442,13 @@ def filter_to_indirect_mechanistic_interactions(
                 penultimate_edge = one_path.iloc[one_path.shape[0] - 2]
                 ancestor_species = ancestor_species.union(
                     {
-                        penultimate_edge[CPR_GRAPH_EDGES.FROM],
-                        penultimate_edge[CPR_GRAPH_EDGES.TO],
+                        penultimate_edge[NAPISTU_GRAPH_EDGES.FROM],
+                        penultimate_edge[NAPISTU_GRAPH_EDGES.TO],
                     }
                 )
 
             terminal_edge = one_path.iloc[one_path.shape[0] - 1]
-            ending_cspecies = {terminal_edge[CPR_GRAPH_EDGES.FROM], terminal_edge[CPR_GRAPH_EDGES.TO]}.difference(ancestor_species)  # type: ignore
+            ending_cspecies = {terminal_edge[NAPISTU_GRAPH_EDGES.FROM], terminal_edge[NAPISTU_GRAPH_EDGES.TO]}.difference(ancestor_species)  # type: ignore
 
             if len(ending_cspecies) != 1:
                 raise ValueError(
@@ -458,9 +458,9 @@ def filter_to_indirect_mechanistic_interactions(
 
             path_series = pd.Series(
                 {
-                    CPR_GRAPH_EDGES.FROM: an_origin_index,
-                    CPR_GRAPH_EDGES.TO: ending_cspecies,
-                    "weight": sum(one_path[CPR_GRAPH_EDGES.WEIGHTS]),
+                    NAPISTU_GRAPH_EDGES.FROM: an_origin_index,
+                    NAPISTU_GRAPH_EDGES.TO: ending_cspecies,
+                    "weight": sum(one_path[NAPISTU_GRAPH_EDGES.WEIGHTS]),
                     "path_length": one_path.shape[0],
                     "vpath": indexed_vertices.loc[ind],
                     "epath": one_path,
@@ -484,7 +484,7 @@ def filter_to_indirect_mechanistic_interactions(
     indirect_shortest_paths = edgelist_w_scids.merge(
         all_shortest_paths,
         left_on=[CPR_EDGELIST.SC_ID_UPSTREAM, CPR_EDGELIST.SC_ID_DOWNSTREAM],
-        right_on=[CPR_GRAPH_EDGES.FROM, CPR_GRAPH_EDGES.TO],
+        right_on=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO],
     )
 
     return indirect_shortest_paths

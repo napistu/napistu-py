@@ -12,17 +12,19 @@ import urllib.request as request
 import zipfile
 from contextlib import closing
 from itertools import starmap
+from textwrap import fill
 from typing import Any
 from typing import Union
 from typing import Optional
 from typing import List
 from urllib.parse import urlparse
+import requests
+from requests.adapters import HTTPAdapter
+from requests.adapters import Retry
 
 import igraph as ig
+import numpy as np
 import pandas as pd
-import requests
-from napistu.constants import FILE_EXT_GZ
-from napistu.constants import FILE_EXT_ZIP
 from fs import open_fs
 from fs.copy import copy_dir
 from fs.copy import copy_file
@@ -32,8 +34,9 @@ from fs.errors import ResourceNotFound
 from fs.tarfs import TarFS
 from fs.tempfs import TempFS
 from fs.zipfs import ZipFS
-from requests.adapters import HTTPAdapter
-from requests.adapters import Retry
+
+from napistu.constants import FILE_EXT_GZ
+from napistu.constants import FILE_EXT_ZIP
 
 logger = logging.getLogger(__name__)
 
@@ -261,22 +264,42 @@ def write_file_contents_to_path(path: str, contents) -> None:
 
 
 def download_wget(
-    url: str, path, target_filename: str = None, verify: bool = True
+    url: str,
+    path,
+    target_filename: str = None,
+    verify: bool = True,
+    timeout: int = 30,
+    max_retries: int = 3,
 ) -> None:
-    """Downloades file / archive with wget
+    """Downloads file / archive with wget
 
     Args:
         url (str): url
         path (FilePath | WriteBuffer): file path or buffer
         target_filename (str): specific file to extract from ZIP if URL is a ZIP file
         verify (bool): verify argument to pass to requests.get
+        timeout (int): timeout in seconds for the request
+        max_retries (int): number of times to retry the download if it fails
 
     Returns:
         None
     """
-    r = requests.get(url, allow_redirects=True, verify=verify)
-    # throw an exception if one was generated
-    r.raise_for_status()
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=max_retries,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+
+    try:
+        r = session.get(url, allow_redirects=True, verify=verify, timeout=timeout)
+        r.raise_for_status()
+    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+        logger.error(f"Failed to download {url} after {max_retries} retries: {str(e)}")
+        raise
 
     # check if the content is a ZIP file
     if (
@@ -887,6 +910,20 @@ def format_identifiers_as_edgelist(
     return df
 
 
+def matrix_to_edgelist(matrix, row_labels=None, col_labels=None):
+    rows, cols = np.where(~np.isnan(matrix))
+
+    edgelist = pd.DataFrame(
+        {
+            "row": rows if row_labels is None else [row_labels[i] for i in rows],
+            "column": cols if col_labels is None else [col_labels[i] for i in cols],
+            "value": matrix[rows, cols],
+        }
+    )
+
+    return edgelist
+
+
 def find_weakly_connected_subgraphs(edgelist: pd.DataFrame) -> pd.DataFrame:
     """Find all cliques of loosly connected components."""
 
@@ -1027,6 +1064,31 @@ def click_str_to_list(string: str) -> list[str]:
         raise ValueError(
             f"The provided string, {string}, could not be reformatted as a list. An example string which can be formatted is: \"['weights', 'upstream_weights']\""
         )
+
+
+def safe_fill(x: str, fill_width: int = 15) -> str:
+    """
+    Safely wrap a string to a specified width.
+
+    Parameters
+    ----------
+    x : str
+        The string to wrap.
+    fill_width : int, optional
+        The width to wrap the string to. Default is 15.
+
+    Returns
+    -------
+    str
+        The wrapped string.
+    """
+
+    # TODO - move to non-network utils
+
+    if x == "":
+        return ""
+    else:
+        return fill(x, fill_width)
 
 
 def _add_nameness_score_wrapper(df, name_var, table_schema):

@@ -8,6 +8,7 @@ from napistu import consensus
 from napistu import indices
 from napistu import sbml_dfs_core
 from napistu.ingestion import sbml
+from napistu.network import net_create
 from pytest import fixture
 from pytest import skip
 
@@ -56,6 +57,26 @@ def sbml_dfs_glucose_metabolism():
     sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
 
     return sbml_dfs
+
+
+@fixture
+def napistu_graph(sbml_dfs):
+    """
+    Pytest fixture to create a NapistuGraph from sbml_dfs with directed=True and topology weighting.
+    """
+    return net_create.process_napistu_graph(
+        sbml_dfs, directed=True, weighting_strategy="topology"
+    )
+
+
+@fixture
+def napistu_graph_undirected(sbml_dfs):
+    """
+    Pytest fixture to create a NapistuGraph from sbml_dfs with directed=False and topology weighting.
+    """
+    return net_create.process_napistu_graph(
+        sbml_dfs, directed=False, weighting_strategy="topology"
+    )
 
 
 # Define custom markers for platforms
