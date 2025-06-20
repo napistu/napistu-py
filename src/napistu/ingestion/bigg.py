@@ -4,16 +4,13 @@ import logging
 import os
 from typing import Iterable
 
-import pandas as pd
 from napistu import indices
 from napistu import sbml_dfs_core
 from napistu import utils
 from napistu.consensus import construct_sbml_dfs_dict
-from napistu.ingestion import sbml
 from napistu.ontologies.renaming import rename_species_ontologies
 from napistu.ingestion.constants import BIGG_MODEL_KEYS
 from napistu.ingestion.constants import BIGG_MODEL_URLS
-from napistu.ingestion.constants import BIGG_RECON3D_FIELD_ANNOTATION
 from napistu.ingestion.constants import SPECIES_FULL_NAME_HUMAN
 from napistu.ingestion.constants import SPECIES_FULL_NAME_MOUSE
 from napistu.ingestion.constants import SPECIES_FULL_NAME_YEAST
@@ -62,24 +59,6 @@ def bigg_sbml_download(bg_pathway_root: str, overwrite: bool = False) -> None:
         # save index to sbml dir
         with bg_fs.open("pw_index.tsv", "wb") as f:
             pw_index.to_csv(f, sep="\t", index=False)
-
-    return None
-
-
-def annotate_recon(raw_model_path: str, annotated_model_path: str) -> None:
-    """Annotate Recon3D
-    Add compartment annotations to Recon3D so it can be merged with other pathways
-    """
-    logger.warning(
-        "add_sbml_annotations is deprecated and maybe removed in a future version of rcpr; "
-        "we are now adding these annotation during ingestion by sbml.sbml_df_from_sbml() rather "
-        "than directly appending them to the raw .sbml"
-    )
-    recon_3d_annotations = pd.DataFrame(BIGG_RECON3D_FIELD_ANNOTATION)
-    sbml_model = sbml.SBML(raw_model_path)
-    sbml.add_sbml_annotations(
-        sbml_model, recon_3d_annotations, save_path=annotated_model_path
-    )
 
     return None
 
