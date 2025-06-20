@@ -257,11 +257,6 @@ SBML_COMPARTMENTALIZED_SPECIES_DICT_SOURCE = "sc_Source"
 
 SBML_REACTION_ATTR_GET_GENE_PRODUCT = "getGeneProduct"
 
-SBML_ANNOTATION_METHOD_GET_SPECIES = "getSpecies"
-SBML_ANNOTATION_METHOD_GET_COMPARTMENT = "getCompartment"
-SBML_ANNOTATION_METHOD_GET_REACTION = "getReaction"
-
-
 # STRING
 STRING_URL_EXPRESSIONS = {
     "interactions": "https://stringdb-static.org/download/protein.links.full.v{version}/{taxid}.protein.links.full.v{version}.txt.gz",

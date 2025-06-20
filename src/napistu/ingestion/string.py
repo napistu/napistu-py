@@ -10,7 +10,7 @@ from napistu import utils
 from napistu.constants import BQB
 from napistu.constants import COMPARTMENTS
 from napistu.constants import MINI_SBO_FROM_NAME
-from napistu.ingestion import cpr_edgelist
+from napistu.ingestion import napistu_edgelist
 from napistu.ingestion.constants import SBML_SPECIES_DICT_IDENTIFIERS
 from napistu.ingestion.constants import SBML_SPECIES_DICT_NAME
 from napistu.ingestion.constants import SMBL_REACTION_DICT_IDENTIFIERS
@@ -127,7 +127,7 @@ def convert_string_to_sbml_dfs(
     # remove one edge since reciprocal edges are present; i.e., A-B and B-A
     # and attributes (e.g., combined_score are the same across both reciprocal
     # interactions
-    uq_string_edgelist = cpr_edgelist.remove_reciprocal_interactions(
+    uq_string_edgelist = napistu_edgelist.remove_reciprocal_interactions(
         string_edgelist, extra_defining_vars=["combined_score"]
     )
 

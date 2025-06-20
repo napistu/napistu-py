@@ -570,8 +570,8 @@ def filter_hpa_gene_compartments(
 ):
     """Filter an interaction network using the human protein atlas
 
-    This uses R `rcpr` to filter an interaction network based on the
-    compartment information from the human protein atlas.
+    This uses loads the human proteome atlas and removes reactions (including interactions)
+    containing genes which are not colocalized.
 
     Only interactions between genes in the same compartment are kept.
     """
