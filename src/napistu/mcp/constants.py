@@ -104,7 +104,7 @@ REPOS_WITH_WIKI = [PACKAGE_DEFS.GITHUB_PROJECT_REPO]
 TUTORIAL_URLS = {
     "adding_data_to_graphs": "https://raw.githubusercontent.com/napistu/napistu/refs/heads/main/tutorials/adding_data_to_graphs.ipynb",
     "downloading_pathway_data": "https://raw.githubusercontent.com/napistu/napistu/refs/heads/main/tutorials/downloading_pathway_data.ipynb",
-    "formatting_sbml_dfs_as_napistu_graphs": "https://raw.githubusercontent.com/napistu/napistu/refs/heads/main/tutorials/formatting_sbml_dfs_as_napistu_graphs.ipynb",
+    "creating_a_napistu_graph": "https://raw.githubusercontent.com/napistu/napistu/refs/heads/main/tutorials/creating_a_napistu_graph.ipynb",
     "merging_models_into_a_consensus": "https://raw.githubusercontent.com/napistu/napistu/refs/heads/main/tutorials/merging_models_into_a_consensus.ipynb",
     "r_based_network_visualization": "https://raw.githubusercontent.com/napistu/napistu/refs/heads/main/tutorials/r_based_network_visualization.ipynb",
     "suggesting_mechanisms_with_networks": "https://raw.githubusercontent.com/napistu/napistu/refs/heads/main/tutorials/suggesting_mechanisms_with_networks.ipynb",
