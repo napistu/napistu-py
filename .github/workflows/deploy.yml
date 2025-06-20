@@ -58,7 +58,7 @@ jobs:
           --concurrency=10 \
           --timeout=600 \
           --cpu-boost \
-          --set-env-vars="MCP_PROFILE=docs,MCP_SERVER_NAME=napistu-docs,HOST=0.0.0.0,FORWARDED_ALLOW_IPS=*,STARTUP_TIMEOUT=300"
+          --set-env-vars="MCP_PROFILE=docs,MCP_SERVER_NAME=napistu-docs,HOST=0.0.0.0,FORWARDED_ALLOW_IPS=*,STARTUP_TIMEOUT=300" \
           --execution-environment=gen2 \
           --project=${{ env.PROJECT_ID }} \
           --quiet
