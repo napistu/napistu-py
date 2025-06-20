@@ -1,25 +1,26 @@
-import copy
 import logging
 import re
 from typing import Union, List, Optional, Callable, Dict
 
-import igraph as ig
 import pandas as pd
 
 from napistu import sbml_dfs_core
-from napistu.constants import SBML_DFS, ENTITIES_W_DATA, DEFAULT_WT_TRANS
 from napistu.network import net_create
+from napistu.network.napistu_graph_core import NapistuGraph
+
+from napistu.constants import SBML_DFS, ENTITIES_W_DATA
+from napistu.network.constants import NAPISTU_GRAPH, DEFAULT_WT_TRANS, WEIGHTING_SPEC
 
 logger = logging.getLogger(__name__)
 
 
 def add_results_table_to_graph(
-    napistu_graph: ig.Graph,
+    napistu_graph: NapistuGraph,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     attribute_names: Optional[Union[str, List[str]]] = None,
     table_name: str = None,
-    table_type: str = "species",
-    graph_attr_modified: str = "vertices",
+    table_type: str = SBML_DFS.SPECIES,
+    graph_attr_modified: str = NAPISTU_GRAPH.VERTICES,
     transformation: Optional[Callable] = None,
     custom_transformations: Optional[Dict[str, Callable]] = None,
     inplace: bool = True,
@@ -31,7 +32,7 @@ def add_results_table_to_graph(
 
     Parameters
     ----------
-    napistu_graph: igraph.Graph
+    napistu_graph: NapistuGraph
         The Napistu graph to which attributes will be added.
     sbml_dfs: sbml_dfs_core.SBML_dfs
         The sbml_dfs object containing the species_data table.
@@ -59,12 +60,12 @@ def add_results_table_to_graph(
 
     Returns
     -------
-    napistu_graph: igraph.Graph
+    napistu_graph: NapistuGraph
         If inplace is False, the Napistu graph with attributes added.
     """
 
     if not inplace:
-        napistu_graph = copy.deepcopy(napistu_graph)
+        napistu_graph = napistu_graph.copy()
 
     if table_type not in ENTITIES_W_DATA:
         raise ValueError(
@@ -72,6 +73,11 @@ def add_results_table_to_graph(
         )
     if table_type == SBML_DFS.REACTIONS:
         raise NotImplementedError("Reactions are not yet supported")
+
+    if graph_attr_modified != NAPISTU_GRAPH.VERTICES:
+        raise NotImplementedError(
+            f"graph_attr_modified must be {NAPISTU_GRAPH.VERTICES}"
+        )
 
     # load the to-be-added table
     logger.debug(f"Loading table {table_name} from {table_type}_data")
@@ -106,11 +112,11 @@ def add_results_table_to_graph(
 
 
 def _add_graph_species_attribute(
-    napistu_graph: ig.Graph,
+    napistu_graph: NapistuGraph,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     species_graph_attrs: dict,
     custom_transformations: Optional[dict] = None,
-) -> ig.Graph:
+) -> NapistuGraph:
     """
     Add meta-data from species_data to existing igraph's vertices.
 
@@ -121,7 +127,7 @@ def _add_graph_species_attribute(
 
     Parameters
     ----------
-    napistu_graph : ig.Graph
+    napistu_graph : NapistuGraph
         The igraph network to augment.
     sbml_dfs : sbml_dfs_core.SBML_dfs
         The SBML_dfs object containing species data.
@@ -134,7 +140,7 @@ def _add_graph_species_attribute(
 
     Returns
     -------
-    ig.Graph
+    NapistuGraph
         The input igraph network with additional vertex attributes added from species_data.
     """
     if not isinstance(species_graph_attrs, dict):
@@ -186,7 +192,7 @@ def _add_graph_species_attribute(
 def _select_sbml_dfs_data_table(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     table_name: Optional[str] = None,
-    table_type: str = "species",
+    table_type: str = SBML_DFS.SPECIES,
 ) -> pd.DataFrame:
     """
     Select an SBML_dfs data table by name and type.
@@ -241,7 +247,7 @@ def _select_sbml_dfs_data_table(
 def _create_data_table_column_mapping(
     entity_data: pd.DataFrame,
     attribute_names: Union[str, List[str], Dict[str, str]],
-    table_type: Optional[str] = "species",
+    table_type: Optional[str] = SBML_DFS.SPECIES,
 ) -> Dict[str, str]:
     """
     Select attributes from an sbml_dfs data table.
@@ -339,7 +345,7 @@ def _create_graph_attrs_config(
     column_mapping: Dict[str, str],
     data_type: str,
     table_name: str,
-    transformation: str = "identity",
+    transformation: str = DEFAULT_WT_TRANS,
 ) -> Dict[str, Dict[str, Dict[str, str]]]:
     """
     Create a configuration dictionary for graph attributes.
@@ -374,9 +380,9 @@ def _create_graph_attrs_config(
 
     for original_col, new_col in column_mapping.items():
         graph_attrs[data_type][new_col] = {
-            "table": table_name,
-            "variable": original_col,
-            "trans": transformation,
+            WEIGHTING_SPEC.TABLE: table_name,
+            WEIGHTING_SPEC.VARIABLE: original_col,
+            WEIGHTING_SPEC.TRANSFORMATION: transformation,
         }
 
     return graph_attrs

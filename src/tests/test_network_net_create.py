@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import os
 import pytest
-import numpy as np
 
+import numpy as np
 import pandas as pd
+
 from napistu import sbml_dfs_core
-from napistu.constants import DEFAULT_WT_TRANS
-from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.ingestion import sbml
-from napistu.network import neighborhoods
 from napistu.network import net_create
-from napistu.network import net_utils
-from napistu.network import paths
+from napistu.network import ng_utils
+from napistu.constants import MINI_SBO_FROM_NAME
+from napistu.constants import SBML_DFS
+from napistu.network.constants import DEFAULT_WT_TRANS
+from napistu.network.constants import WEIGHTING_SPEC
+
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")
@@ -21,88 +23,85 @@ sbml_path = os.path.join(test_data, "R-HSA-1237044.sbml")
 sbml_model = sbml.SBML(sbml_path).model
 sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
 
-# create a dict containing reaction species for a few example reactions
-reaction_species_examples_dict = dict()
 
-# stub with a random reaction
-r_id = sbml_dfs.reactions.index[0]
+@pytest.fixture
+def reaction_species_examples(sbml_dfs):
+    """
+    Pytest fixture providing a dictionary of example reaction species DataFrames for various test cases.
+    """
+    r_id = sbml_dfs.reactions.index[0]
+    d = dict()
+    d["valid_interactor"] = pd.DataFrame(
+        {
+            "r_id": [r_id, r_id],
+            "sbo_term": [
+                MINI_SBO_FROM_NAME["interactor"],
+                MINI_SBO_FROM_NAME["interactor"],
+            ],
+            "sc_id": ["sc1", "sc2"],
+            "stoichiometry": [0, 0],
+        }
+    ).set_index(["r_id", "sbo_term"])
+    d["invalid_interactor"] = pd.DataFrame(
+        {
+            "r_id": [r_id, r_id],
+            "sbo_term": [
+                MINI_SBO_FROM_NAME["interactor"],
+                MINI_SBO_FROM_NAME["product"],
+            ],
+            "sc_id": ["sc1", "sc2"],
+            "stoichiometry": [0, 0],
+        }
+    ).set_index(["r_id", "sbo_term"])
+    d["sub_and_prod"] = pd.DataFrame(
+        {
+            "r_id": [r_id, r_id],
+            "sbo_term": [MINI_SBO_FROM_NAME["reactant"], MINI_SBO_FROM_NAME["product"]],
+            "sc_id": ["sub", "prod"],
+            "stoichiometry": [-1, 1],
+        }
+    ).set_index(["r_id", "sbo_term"])
+    d["stimulator"] = pd.DataFrame(
+        {
+            "r_id": [r_id, r_id, r_id],
+            "sbo_term": [
+                MINI_SBO_FROM_NAME["reactant"],
+                MINI_SBO_FROM_NAME["product"],
+                MINI_SBO_FROM_NAME["stimulator"],
+            ],
+            "sc_id": ["sub", "prod", "stim"],
+            "stoichiometry": [-1, 1, 0],
+        }
+    ).set_index(["r_id", "sbo_term"])
+    d["all_entities"] = pd.DataFrame(
+        {
+            "r_id": [r_id, r_id, r_id, r_id],
+            "sbo_term": [
+                MINI_SBO_FROM_NAME["reactant"],
+                MINI_SBO_FROM_NAME["product"],
+                MINI_SBO_FROM_NAME["stimulator"],
+                MINI_SBO_FROM_NAME["catalyst"],
+            ],
+            "sc_id": ["sub", "prod", "stim", "cat"],
+            "stoichiometry": [-1, 1, 0, 0],
+        }
+    ).set_index(["r_id", "sbo_term"])
+    d["no_substrate"] = pd.DataFrame(
+        {
+            "r_id": [r_id, r_id, r_id, r_id, r_id],
+            "sbo_term": [
+                MINI_SBO_FROM_NAME["product"],
+                MINI_SBO_FROM_NAME["stimulator"],
+                MINI_SBO_FROM_NAME["stimulator"],
+                MINI_SBO_FROM_NAME["inhibitor"],
+                MINI_SBO_FROM_NAME["catalyst"],
+            ],
+            "sc_id": ["prod", "stim1", "stim2", "inh", "cat"],
+            "stoichiometry": [1, 0, 0, 0, 0],
+        }
+    ).set_index(["r_id", "sbo_term"])
 
-reaction_species_examples_dict["valid_interactor"] = pd.DataFrame(
-    {
-        "r_id": [r_id, r_id],
-        "sbo_term": [
-            MINI_SBO_FROM_NAME["interactor"],
-            MINI_SBO_FROM_NAME["interactor"],
-        ],
-        "sc_id": ["sc1", "sc2"],
-        "stoichiometry": [0, 0],
-    }
-).set_index(["r_id", "sbo_term"])
-
-reaction_species_examples_dict["invalid_interactor"] = pd.DataFrame(
-    {
-        "r_id": [r_id, r_id],
-        "sbo_term": [
-            MINI_SBO_FROM_NAME["interactor"],
-            MINI_SBO_FROM_NAME["product"],
-        ],
-        "sc_id": ["sc1", "sc2"],
-        "stoichiometry": [0, 0],
-    }
-).set_index(["r_id", "sbo_term"])
-
-
-# simple reaction with just substrates and products
-reaction_species_examples_dict["sub_and_prod"] = pd.DataFrame(
-    {
-        "r_id": [r_id, r_id],
-        "sbo_term": [MINI_SBO_FROM_NAME["reactant"], MINI_SBO_FROM_NAME["product"]],
-        "sc_id": ["sub", "prod"],
-        "stoichiometry": [-1, 1],
-    }
-).set_index(["r_id", "sbo_term"])
-
-reaction_species_examples_dict["stimulator"] = pd.DataFrame(
-    {
-        "r_id": [r_id, r_id, r_id],
-        "sbo_term": [
-            MINI_SBO_FROM_NAME["reactant"],
-            MINI_SBO_FROM_NAME["product"],
-            MINI_SBO_FROM_NAME["stimulator"],
-        ],
-        "sc_id": ["sub", "prod", "stim"],
-        "stoichiometry": [-1, 1, 0],
-    }
-).set_index(["r_id", "sbo_term"])
-
-reaction_species_examples_dict["all_entities"] = pd.DataFrame(
-    {
-        "r_id": [r_id, r_id, r_id, r_id],
-        "sbo_term": [
-            MINI_SBO_FROM_NAME["reactant"],
-            MINI_SBO_FROM_NAME["product"],
-            MINI_SBO_FROM_NAME["stimulator"],
-            MINI_SBO_FROM_NAME["catalyst"],
-        ],
-        "sc_id": ["sub", "prod", "stim", "cat"],
-        "stoichiometry": [-1, 1, 0, 0],
-    }
-).set_index(["r_id", "sbo_term"])
-
-reaction_species_examples_dict["no_substrate"] = pd.DataFrame(
-    {
-        "r_id": [r_id, r_id, r_id, r_id, r_id],
-        "sbo_term": [
-            MINI_SBO_FROM_NAME["product"],
-            MINI_SBO_FROM_NAME["stimulator"],
-            MINI_SBO_FROM_NAME["stimulator"],
-            MINI_SBO_FROM_NAME["inhibitor"],
-            MINI_SBO_FROM_NAME["catalyst"],
-        ],
-        "sc_id": ["prod", "stim1", "stim2", "inh", "cat"],
-        "stoichiometry": [1, 0, 0, 0, 0],
-    }
-).set_index(["r_id", "sbo_term"])
+    return r_id, d
 
 
 def test_create_napistu_graph():
@@ -178,10 +177,6 @@ def test_create_napistu_graph_none_attrs():
     )
 
 
-def test_igraph_construction():
-    _ = net_create.process_napistu_graph(sbml_dfs)
-
-
 def test_process_napistu_graph_none_attrs():
     # Should not raise when reaction_graph_attrs is None
     _ = net_create.process_napistu_graph(sbml_dfs, reaction_graph_attrs=None)
@@ -193,7 +188,7 @@ def test_igraph_loading():
     directeds = [True, False]
     graph_types = ["bipartite", "regulatory"]
 
-    net_utils.export_networks(
+    ng_utils.export_networks(
         sbml_dfs,
         model_prefix="tmp",
         outdir="/tmp",
@@ -203,13 +198,13 @@ def test_igraph_loading():
 
     for graph_type in graph_types:
         for directed in directeds:
-            import_pkl_path = net_utils._create_network_save_string(
+            import_pkl_path = ng_utils._create_network_save_string(
                 model_prefix="tmp",
                 outdir="/tmp",
                 directed=directed,
                 graph_type=graph_type,
             )
-            network_graph = net_utils.read_network_pkl(
+            network_graph = ng_utils.read_network_pkl(
                 model_prefix="tmp",
                 network_dir="/tmp",
                 directed=directed,
@@ -221,65 +216,8 @@ def test_igraph_loading():
             os.unlink(import_pkl_path)
 
 
-def test_shortest_paths():
-    species = sbml_dfs.species
-    source_species = species[species["s_name"] == "NADH"]
-    dest_species = species[species["s_name"] == "NAD+"]
-    target_species_paths = net_utils.compartmentalize_species_pairs(
-        sbml_dfs, source_species.index.tolist(), dest_species.index.tolist()
-    )
-
-    # directed graph
-    napistu_graph = net_create.process_napistu_graph(
-        sbml_dfs, directed=True, weighting_strategy="topology"
-    )
-    (
-        all_shortest_reaction_paths_df,
-        all_shortest_reaction_path_edges_df,
-        edge_sources,
-        paths_graph,
-    ) = paths.find_all_shortest_reaction_paths(
-        napistu_graph, sbml_dfs, target_species_paths, weight_var="weights"
-    )
-
-    # undirected graph
-    napistu_graph = net_create.process_napistu_graph(
-        sbml_dfs, directed=False, weighting_strategy="topology"
-    )
-    (
-        all_shortest_reaction_paths_df,
-        all_shortest_reaction_path_edges_df,
-        edge_sources,
-        paths_graph,
-    ) = paths.find_all_shortest_reaction_paths(
-        napistu_graph, sbml_dfs, target_species_paths, weight_var="weights"
-    )
-
-    assert all_shortest_reaction_paths_df.shape[0] == 3
-
-
-def test_neighborhood():
-    species = sbml_dfs.species
-    source_species = species[species["s_name"] == "NADH"].index.tolist()
-
-    query_sc_species = net_utils.compartmentalize_species(sbml_dfs, source_species)
-    compartmentalized_species = query_sc_species["sc_id"].tolist()
-
-    napistu_graph = net_create.process_napistu_graph(
-        sbml_dfs, directed=True, weighting_strategy="topology"
-    )
-
-    neighborhood = neighborhoods.find_neighborhoods(
-        sbml_dfs,
-        napistu_graph,
-        compartmentalized_species=compartmentalized_species,
-        order=3,
-    )
-
-    assert neighborhood["species_73473"]["vertices"].shape[0] == 6
-
-
-def test_format_interactors():
+def test_format_interactors(reaction_species_examples):
+    r_id, reaction_species_examples_dict = reaction_species_examples
     # interactions are formatted
 
     graph_hierarchy_df = net_create._create_graph_hierarchy_df("regulatory")
@@ -364,7 +302,9 @@ def test_format_interactors():
     assert rxn_edges.iloc[1][["from", "to"]].tolist() == ["sub", "cat"]
 
 
-def test_reverse_network_edges():
+def test_reverse_network_edges(reaction_species_examples):
+    r_id, reaction_species_examples_dict = reaction_species_examples
+
     graph_hierarchy_df = net_create._create_graph_hierarchy_df("regulatory")
 
     rxn_edges = net_create._format_tiered_reaction_species(
@@ -380,28 +320,6 @@ def test_reverse_network_edges():
     )
 
     assert net_create._reverse_network_edges(augmented_network_edges).shape[0] == 2
-
-
-def test_net_polarity():
-    polarity_series = pd.Series(
-        ["ambiguous", "ambiguous"], index=[0, 1], name="link_polarity"
-    )
-    assert all(
-        [x == "ambiguous" for x in paths._calculate_net_polarity(polarity_series)]
-    )
-
-    polarity_series = pd.Series(
-        ["activation", "inhibition", "inhibition", "ambiguous"],
-        index=range(0, 4),
-        name="link_polarity",
-    )
-    assert paths._calculate_net_polarity(polarity_series) == [
-        "activation",
-        "inhibition",
-        "activation",
-        "ambiguous activation",
-    ]
-    assert paths._terminal_net_polarity(polarity_series) == "ambiguous activation"
 
 
 def test_entity_validation():
@@ -420,8 +338,16 @@ def test_entity_validation():
 
     # Test valid custom transformation
     entity_attrs_custom = {
-        "attr1": {"table": "reactions", "variable": "foo", "trans": "nlog10"},
-        "attr2": {"table": "species", "variable": "bar", "trans": "square"},
+        "attr1": {
+            WEIGHTING_SPEC.TABLE: "reactions",
+            WEIGHTING_SPEC.VARIABLE: "foo",
+            WEIGHTING_SPEC.TRANSFORMATION: "nlog10",
+        },
+        "attr2": {
+            WEIGHTING_SPEC.TABLE: "species",
+            WEIGHTING_SPEC.VARIABLE: "bar",
+            WEIGHTING_SPEC.TRANSFORMATION: "square",
+        },
     }
     # Should not raise any errors
     net_create._validate_entity_attrs(
@@ -430,7 +356,11 @@ def test_entity_validation():
 
     # Test invalid transformation
     entity_attrs_invalid = {
-        "attr1": {"table": "reactions", "variable": "foo", "trans": "invalid_trans"}
+        "attr1": {
+            WEIGHTING_SPEC.TABLE: "reactions",
+            WEIGHTING_SPEC.VARIABLE: "foo",
+            WEIGHTING_SPEC.TRANSFORMATION: "invalid_trans",
+        }
     }
     with pytest.raises(ValueError) as excinfo:
         net_create._validate_entity_attrs(
@@ -450,16 +380,80 @@ def test_entity_validation():
     assert "entity_attrs must be a dictionary" in str(excinfo.value)
 
 
-################################################
-# __main__
-################################################
+def test_pluck_entity_data_species_identity(sbml_dfs):
+    # Take first 10 species IDs
+    species_ids = sbml_dfs.species.index[:10]
+    # Create mock data with explicit dtype to ensure cross-platform consistency
+    # Fix for issue-42: Use explicit dtypes to avoid platform-specific dtype differences
+    # between Windows (int32) and macOS/Linux (int64)
+    mock_df = pd.DataFrame(
+        {
+            "string_col": [f"str_{i}" for i in range(10)],
+            "mixed_col": np.arange(-5, 5, dtype=np.int64),  # Explicitly use int64
+            "ones_col": np.ones(10, dtype=np.float64),  # Explicitly use float64
+            "squared_col": np.arange(10, dtype=np.int64),  # Explicitly use int64
+        },
+        index=species_ids,
+    )
+    # Assign to species_data
+    sbml_dfs.species_data["mock_table"] = mock_df
 
-if __name__ == "__main__":
-    test_create_napistu_graph()
-    test_igraph_loading()
-    test_igraph_construction()
-    test_shortest_paths()
-    test_neighborhood()
-    test_format_interactors()
-    test_reverse_network_edges()
-    test_entity_validation()
+    # Custom transformation: square
+    def square(x):
+        return x**2
+
+    custom_transformations = {"square": square}
+    # Create graph_attrs for species
+    graph_attrs = {
+        "species": {
+            "string_col": {
+                WEIGHTING_SPEC.TABLE: "mock_table",
+                WEIGHTING_SPEC.VARIABLE: "string_col",
+                WEIGHTING_SPEC.TRANSFORMATION: "identity",
+            },
+            "mixed_col": {
+                WEIGHTING_SPEC.TABLE: "mock_table",
+                WEIGHTING_SPEC.VARIABLE: "mixed_col",
+                WEIGHTING_SPEC.TRANSFORMATION: "identity",
+            },
+            "ones_col": {
+                WEIGHTING_SPEC.TABLE: "mock_table",
+                WEIGHTING_SPEC.VARIABLE: "ones_col",
+                WEIGHTING_SPEC.TRANSFORMATION: "identity",
+            },
+            "squared_col": {
+                WEIGHTING_SPEC.TABLE: "mock_table",
+                WEIGHTING_SPEC.VARIABLE: "squared_col",
+                WEIGHTING_SPEC.TRANSFORMATION: "square",
+            },
+        }
+    }
+    # Call pluck_entity_data with custom transformation
+    result = net_create.pluck_entity_data(
+        sbml_dfs, graph_attrs, "species", custom_transformations=custom_transformations
+    )
+    # Check output
+    assert isinstance(result, pd.DataFrame)
+    assert set(result.columns) == {"string_col", "mixed_col", "ones_col", "squared_col"}
+    assert list(result.index) == list(species_ids)
+    # Check values
+    pd.testing.assert_series_equal(result["string_col"], mock_df["string_col"])
+    pd.testing.assert_series_equal(result["mixed_col"], mock_df["mixed_col"])
+    pd.testing.assert_series_equal(result["ones_col"], mock_df["ones_col"])
+    pd.testing.assert_series_equal(
+        result["squared_col"], mock_df["squared_col"].apply(square)
+    )
+
+
+def test_pluck_entity_data_missing_species_key(sbml_dfs):
+    # graph_attrs does not contain 'species' key
+    graph_attrs = {}
+    result = net_create.pluck_entity_data(sbml_dfs, graph_attrs, SBML_DFS.SPECIES)
+    assert result is None
+
+
+def test_pluck_entity_data_empty_species_dict(sbml_dfs):
+    # graph_attrs contains 'species' key but value is empty dict
+    graph_attrs = {SBML_DFS.SPECIES: {}}
+    result = net_create.pluck_entity_data(sbml_dfs, graph_attrs, SBML_DFS.SPECIES)
+    assert result is None

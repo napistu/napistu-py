@@ -12,18 +12,19 @@ import urllib.request as request
 import zipfile
 from contextlib import closing
 from itertools import starmap
+from textwrap import fill
 from typing import Any
 from typing import Union
 from typing import Optional
 from typing import List
 from urllib.parse import urlparse
+import requests
+from requests.adapters import HTTPAdapter
+from requests.adapters import Retry
 
 import igraph as ig
 import numpy as np
 import pandas as pd
-import requests
-from napistu.constants import FILE_EXT_GZ
-from napistu.constants import FILE_EXT_ZIP
 from fs import open_fs
 from fs.copy import copy_dir
 from fs.copy import copy_file
@@ -33,8 +34,9 @@ from fs.errors import ResourceNotFound
 from fs.tarfs import TarFS
 from fs.tempfs import TempFS
 from fs.zipfs import ZipFS
-from requests.adapters import HTTPAdapter
-from requests.adapters import Retry
+
+from napistu.constants import FILE_EXT_GZ
+from napistu.constants import FILE_EXT_ZIP
 
 logger = logging.getLogger(__name__)
 
@@ -1062,6 +1064,31 @@ def click_str_to_list(string: str) -> list[str]:
         raise ValueError(
             f"The provided string, {string}, could not be reformatted as a list. An example string which can be formatted is: \"['weights', 'upstream_weights']\""
         )
+
+
+def safe_fill(x: str, fill_width: int = 15) -> str:
+    """
+    Safely wrap a string to a specified width.
+
+    Parameters
+    ----------
+    x : str
+        The string to wrap.
+    fill_width : int, optional
+        The width to wrap the string to. Default is 15.
+
+    Returns
+    -------
+    str
+        The wrapped string.
+    """
+
+    # TODO - move to non-network utils
+
+    if x == "":
+        return ""
+    else:
+        return fill(x, fill_width)
 
 
 def _add_nameness_score_wrapper(df, name_var, table_schema):

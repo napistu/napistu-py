@@ -8,7 +8,21 @@ from napistu.constants import SBML_DFS
 from napistu.constants import SBOTERM_NAMES
 
 # Graph types
-VALID_NAPISTU_GRAPH_TYPES = {"bipartite", "regulatory", "surrogate"}
+NAPISTU_GRAPH_TYPES = SimpleNamespace(
+    BIPARTITE="bipartite", REGULATORY="regulatory", SURROGATE="surrogate"
+)
+
+VALID_NAPISTU_GRAPH_TYPES = [
+    NAPISTU_GRAPH_TYPES.BIPARTITE,
+    NAPISTU_GRAPH_TYPES.REGULATORY,
+    NAPISTU_GRAPH_TYPES.SURROGATE,
+]
+
+NAPISTU_GRAPH = SimpleNamespace(VERTICES="vertices", EDGES="edges", METADATA="metadata")
+
+NAPISTU_GRAPH_DIRECTEDNESS = SimpleNamespace(
+    DIRECTED="directed", UNDIRECTED="undirected"
+)
 
 NAPISTU_GRAPH_NODES = SimpleNamespace(NAME="name")
 
@@ -30,10 +44,6 @@ NAPISTU_GRAPH_EDGES = SimpleNamespace(
     WEIGHTS="weights",
 )
 
-NAPISTU_GRAPH_EDGE_DIRECTIONS = SimpleNamespace(
-    FORWARD="forward", REVERSE="reverse", UNDIRECTED="undirected"
-)
-
 NAPISTU_GRAPH_REQUIRED_EDGE_VARS = {
     NAPISTU_GRAPH_EDGES.FROM,
     NAPISTU_GRAPH_EDGES.TO,
@@ -47,10 +57,6 @@ VALID_NAPISTU_GRAPH_NODE_TYPES = [
     NAPISTU_GRAPH_NODE_TYPES.SPECIES,
 ]
 
-NAPISTU_GRAPH_TYPES = SimpleNamespace(
-    BIPARTITE="bipartite", REGULATORY="regulatory", SURROGATE="surrogate"
-)
-
 NAPISTU_WEIGHTING_STRATEGIES = SimpleNamespace(
     CALIBRATED="calibrated", MIXED="mixed", TOPOLOGY="topology", UNWEIGHTED="unweighted"
 )
@@ -60,6 +66,54 @@ VALID_WEIGHTING_STRATEGIES = [
     NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY,
     NAPISTU_WEIGHTING_STRATEGIES.MIXED,
     NAPISTU_WEIGHTING_STRATEGIES.CALIBRATED,
+]
+
+# edge reversal
+
+NAPISTU_GRAPH_EDGE_DIRECTIONS = SimpleNamespace(
+    FORWARD="forward", REVERSE="reverse", UNDIRECTED="undirected"
+)
+
+EDGE_REVERSAL_ATTRIBUTE_MAPPING = {
+    NAPISTU_GRAPH_EDGES.FROM: NAPISTU_GRAPH_EDGES.TO,
+    NAPISTU_GRAPH_EDGES.TO: NAPISTU_GRAPH_EDGES.FROM,
+    NAPISTU_GRAPH_EDGES.SC_PARENTS: NAPISTU_GRAPH_EDGES.SC_CHILDREN,
+    NAPISTU_GRAPH_EDGES.SC_CHILDREN: NAPISTU_GRAPH_EDGES.SC_PARENTS,
+    NAPISTU_GRAPH_EDGES.WEIGHTS: NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS,
+    NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS: NAPISTU_GRAPH_EDGES.WEIGHTS,
+    # Note: stoichiometry requires special handling (* -1)
+}
+
+# Direction enum values
+EDGE_DIRECTION_MAPPING = {
+    NAPISTU_GRAPH_EDGE_DIRECTIONS.FORWARD: NAPISTU_GRAPH_EDGE_DIRECTIONS.REVERSE,
+    NAPISTU_GRAPH_EDGE_DIRECTIONS.REVERSE: NAPISTU_GRAPH_EDGE_DIRECTIONS.FORWARD,
+    NAPISTU_GRAPH_EDGE_DIRECTIONS.UNDIRECTED: NAPISTU_GRAPH_EDGE_DIRECTIONS.UNDIRECTED,  # unchanged
+}
+
+# Net edge direction
+NET_POLARITY = SimpleNamespace(
+    LINK_POLARITY="link_polarity",
+    NET_POLARITY="net_polarity",
+    ACTIVATION="activation",
+    INHIBITION="inhibition",
+    AMBIGUOUS="ambiguous",
+    AMBIGUOUS_ACTIVATION="ambiguous activation",
+    AMBIGUOUS_INHIBITION="ambiguous inhibition",
+)
+
+VALID_LINK_POLARITIES = [
+    NET_POLARITY.ACTIVATION,
+    NET_POLARITY.INHIBITION,
+    NET_POLARITY.AMBIGUOUS,
+]
+
+VALID_NET_POLARITIES = [
+    NET_POLARITY.ACTIVATION,
+    NET_POLARITY.INHIBITION,
+    NET_POLARITY.AMBIGUOUS,
+    NET_POLARITY.AMBIGUOUS_ACTIVATION,
+    NET_POLARITY.AMBIGUOUS_INHIBITION,
 ]
 
 # the regulatory graph defines a hierarchy of upstream and downstream
@@ -105,3 +159,26 @@ VALID_NEIGHBORHOOD_NETWORK_TYPES = [
     NEIGHBORHOOD_NETWORK_TYPES.HOURGLASS,
     NEIGHBORHOOD_NETWORK_TYPES.UPSTREAM,
 ]
+
+# weighting networks and transforming attributes
+
+WEIGHTING_SPEC = SimpleNamespace(
+    TABLE="table",
+    VARIABLE="variable",
+    TRANSFORMATION="trans",
+)
+
+DEFAULT_WT_TRANS = "identity"
+
+DEFINED_WEIGHT_TRANSFORMATION = {
+    DEFAULT_WT_TRANS: "_wt_transformation_identity",
+    "string": "_wt_transformation_string",
+    "string_inv": "_wt_transformation_string_inv",
+}
+
+SCORE_CALIBRATION_POINTS_DICT = {
+    "weights": {"strong": 3, "good": 7, "okay": 20, "weak": 40},
+    "string_wt": {"strong": 950, "good": 400, "okay": 230, "weak": 150},
+}
+
+SOURCE_VARS_DICT = {"string_wt": 10}
