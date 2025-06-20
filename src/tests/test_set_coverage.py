@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from napistu import source
-from napistu.network import net_utils
+from napistu.network import ng_utils
 
 
 def test_get_minimal_source_edges(sbml_dfs_metabolism):
@@ -9,7 +9,7 @@ def test_get_minimal_source_edges(sbml_dfs_metabolism):
         columns={"r_id": "node"}
     )
 
-    minimal_source_edges = net_utils.get_minimal_sources_edges(
+    minimal_source_edges = ng_utils.get_minimal_sources_edges(
         vertices, sbml_dfs_metabolism
     )
     # print(minimal_source_edges.shape)
