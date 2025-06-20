@@ -84,6 +84,8 @@ jobs:
     needs: check-version
     runs-on: ubuntu-latest
     if: needs.check-version.outputs.version-changed != 'true'
+    permissions:
+      actions: write  # Only this job can cancel workflow runs
     steps:
       - name: Cancel workflow - no version change
         run: |
@@ -96,7 +98,7 @@ jobs:
           
           # Wait longer for cancellation to process, then exit with error
           # This ensures we don't complete successfully even if cancellation is slow
-          sleep 10
+          sleep 30
           exit 1  # Force failure if cancellation didn't work
         
   validate-version:
