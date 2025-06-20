@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import pandas as pd
-from napistu.ingestion import cpr_edgelist
+from napistu.ingestion import napistu_edgelist
 
 
 def test_edgelist_remove_reciprocal_reactions():
     edgelist = pd.DataFrame({"from": ["A", "B", "C", "D"], "to": ["B", "A", "D", "C"]})
 
-    nondegenerate_edgelist = cpr_edgelist.remove_reciprocal_interactions(edgelist)
+    nondegenerate_edgelist = napistu_edgelist.remove_reciprocal_interactions(edgelist)
 
     assert nondegenerate_edgelist.shape == (2, 2)
 

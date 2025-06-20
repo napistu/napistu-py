@@ -17,6 +17,8 @@ from napistu.scverse.constants import (
     ADATA_IDENTITY_ATTRS,
     ADATA_FEATURELEVEL_ATTRS,
     ADATA_ARRAY_ATTRS,
+    SCVERSE_DEFS,
+    VALID_MUDATA_LEVELS,
 )
 
 logger = logging.getLogger(__name__)
@@ -112,20 +114,21 @@ def prepare_mudata_results_df(
     table_name: Optional[str] = None,
     results_attrs: Optional[List[str]] = None,
     table_colnames: Optional[List[str]] = None,
+    level: str = "mdata",
 ) -> Dict[str, pd.DataFrame]:
     """
-    Prepare results tables from a MuData object for use in Napistu, with modality-specific ontology handling.
+    Prepare results tables from a MuData object for use in Napistu, with adata-specific ontology handling.
 
-    This function extracts tables from each modality in a MuData object and formats them for use in Napistu.
-    Each modality's table will include systematic identifiers from its var table along with the requested results data.
-    Ontology handling is configured per-modality using MultiModalityOntologyConfig.
+    This function extracts tables from each adata in a MuData object and formats them for use in Napistu.
+    Each adata's table will include systematic identifiers from its var table along with the requested results data.
+    Ontology handling is configured per-adata using MultiModalityOntologyConfig.
 
     Parameters
     ----------
     mdata : mudata.MuData
         The MuData object containing the results to be formatted.
     mudata_ontologies : MultiModalityOntologyConfig or dict
-        Configuration for ontology handling per modality. Must include an entry for each modality. Can be either:
+        Configuration for ontology handling modality (each with a separate AnnData object). Must include an entry for each modality. Can be either:
         - A MultiModalityOntologyConfig object
         - A dictionary that can be converted to MultiModalityOntologyConfig using from_dict()
         Each modality's 'ontologies' field can be:
@@ -141,6 +144,9 @@ def prepare_mudata_results_df(
         The attributes to extract from the table.
     table_colnames : list of str, optional
         Column names for varm tables. Required when table_type is "varm". Ignored otherwise.
+    level : str, optional
+        Whether to extract data from "mdata" (MuData-level) or "adata" (individual AnnData-level) tables.
+        Default is "mdata".
 
     Returns
     -------
@@ -156,10 +162,16 @@ def prepare_mudata_results_df(
         If mudata_ontologies contains invalid configuration
         If modality-specific ontology extraction fails
         If any modality is missing from mudata_ontologies
+        If level is not "global" or "modality"
     """
     if table_type not in ADATA_FEATURELEVEL_ATTRS:
         raise ValueError(
             f"table_type must be one of {ADATA_FEATURELEVEL_ATTRS}, got {table_type}"
+        )
+
+    if level not in VALID_MUDATA_LEVELS:
+        raise ValueError(
+            f"level must be one of {sorted(VALID_MUDATA_LEVELS)}, got {level}"
         )
 
     # Convert dict config to MultiModalityOntologyConfig if needed
@@ -174,19 +186,40 @@ def prepare_mudata_results_df(
             "Each modality must have at least the 'ontologies' field specified."
         )
 
-    # Pull out the table containing results
-    raw_results_table = _load_raw_table(mdata, table_type, table_name)
+    if level == SCVERSE_DEFS.MDATA:
+        # Use MuData-level tables
+        # Pull out the table containing results
+        raw_results_table = _load_raw_table(mdata, table_type, table_name)
 
-    # Convert the raw results to a pd.DataFrame with rows corresponding to vars and columns
-    # being attributes of interest
-    results_data_table = _select_results_attrs(
-        mdata, raw_results_table, table_type, results_attrs, table_colnames
-    )
+        # Convert the raw results to a pd.DataFrame with rows corresponding to vars and columns
+        # being attributes of interest
+        results_data_table = _select_results_attrs(
+            mdata, raw_results_table, table_type, results_attrs, table_colnames
+        )
 
-    # Split results by modality
-    split_results_data_tables = _split_mdata_results_by_modality(
-        mdata, results_data_table
-    )
+        # Split results by modality
+        split_results_data_tables = _split_mdata_results_by_modality(
+            mdata, results_data_table
+        )
+    else:
+        # Use modality-level tables
+        split_results_data_tables = {}
+        for modality in mdata.mod.keys():
+            # Load raw table from this modality
+            raw_results_table = _load_raw_table(
+                mdata.mod[modality], table_type, table_name
+            )
+
+            # Convert to DataFrame
+            results_data_table = _select_results_attrs(
+                mdata.mod[modality],
+                raw_results_table,
+                table_type,
+                results_attrs,
+                table_colnames,
+            )
+
+            split_results_data_tables[modality] = results_data_table
 
     # Extract each modality's ontology table and then merge it with
     # the modality's data table

@@ -13,16 +13,13 @@ from pydantic import BaseModel
 
 from napistu import sbml_dfs_core
 from napistu import utils
+from napistu.network.napistu_graph_core import NapistuGraph
 
-from napistu.constants import DEFAULT_WT_TRANS
-from napistu.constants import DEFINED_WEIGHT_TRANSFORMATION
 from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import MINI_SBO_TO_NAME
 from napistu.constants import SBML_DFS
 from napistu.constants import SBO_MODIFIER_NAMES
-from napistu.constants import SCORE_CALIBRATION_POINTS_DICT
 from napistu.constants import ENTITIES_W_DATA
-from napistu.constants import SOURCE_VARS_DICT
 
 from napistu.network.constants import NAPISTU_GRAPH_NODES
 from napistu.network.constants import NAPISTU_GRAPH_EDGES
@@ -35,6 +32,11 @@ from napistu.network.constants import REGULATORY_GRAPH_HIERARCHY
 from napistu.network.constants import SURROGATE_GRAPH_HIERARCHY
 from napistu.network.constants import VALID_NAPISTU_GRAPH_TYPES
 from napistu.network.constants import VALID_WEIGHTING_STRATEGIES
+from napistu.network.constants import DEFAULT_WT_TRANS
+from napistu.network.constants import DEFINED_WEIGHT_TRANSFORMATION
+from napistu.network.constants import SCORE_CALIBRATION_POINTS_DICT
+from napistu.network.constants import SOURCE_VARS_DICT
+
 
 logger = logging.getLogger(__name__)
 
@@ -44,41 +46,37 @@ def create_napistu_graph(
     reaction_graph_attrs: Optional[dict] = None,
     directed: bool = True,
     edge_reversed: bool = False,
-    graph_type: str = NAPISTU_GRAPH_TYPES.BIPARTITE,
+    graph_type: str = NAPISTU_GRAPH_TYPES.REGULATORY,
     verbose: bool = False,
     custom_transformations: Optional[dict] = None,
-) -> ig.Graph:
+) -> NapistuGraph:
     """
-    Create CPR Graph
-
-    Create an igraph network from a mechanistic network using one of a set of graph_types.
+    Create a NapistuGraph network from a mechanistic network using one of a set of graph_types.
 
     Parameters
     ----------
-    sbml_dfs : SBML_dfs
-        A model formed by aggregating pathways
-    reaction_graph_attrs: dict
-        Dictionary containing attributes to pull out of reaction_data and
-        a weighting scheme for the graph
-    directed : bool
-        Should a directed (True) or undirected graph be made (False)
-    edge_reversed : bool
-        Should the directions of edges be reversed or not (False)
-    graph_type : str
-        Type of graph to create, valid values are:
-            - bipartite: substrates and modifiers point to the reaction they drive, this reaction points to products
-            - reguatory: non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
-            - surrogate: non-enzymatic modifiers -> substrates -> enzymes -> reaction -> products.
-              In this representation enzymes are effective standing in for their reaction (eventhough the enzyme is
-              not modified by a substrate per-se).
-    verbose : bool
-        Extra reporting
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        A model formed by aggregating pathways.
+    reaction_graph_attrs : dict, optional
+        Dictionary containing attributes to pull out of reaction_data and a weighting scheme for the graph.
+    directed : bool, optional
+        Should a directed (True) or undirected graph be made (False). Default is True.
+    edge_reversed : bool, optional
+        Should the directions of edges be reversed or not (False). Default is False.
+    graph_type : str, optional
+        Type of graph to create. Valid values are:
+            - 'bipartite': substrates and modifiers point to the reaction they drive, this reaction points to products
+            - 'regulatory': non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
+            - 'surrogate': non-enzymatic modifiers -> substrates -> enzymes -> reaction -> products
+    verbose : bool, optional
+        Extra reporting. Default is False.
     custom_transformations : dict, optional
         Dictionary of custom transformation functions to use for attribute transformation.
 
-    Returns:
-    ----------
-    An Igraph network
+    Returns
+    -------
+    NapistuGraph
+        A NapistuGraph network (subclass of igraph.Graph).
     """
 
     if reaction_graph_attrs is None:
@@ -163,7 +161,6 @@ def create_napistu_graph(
         "Creating reverse reactions for reversible reactions on a directed graph"
     )
     if directed:
-
         directed_network_edges = pd.concat(
             [
                 # assign forward edges
@@ -172,7 +169,7 @@ def create_napistu_graph(
                         NAPISTU_GRAPH_EDGES.DIRECTION: NAPISTU_GRAPH_EDGE_DIRECTIONS.FORWARD
                     }
                 ),
-                # create reverse edges for reversibile reactions
+                # create reverse edges for reversible reactions
                 _reverse_network_edges(augmented_network_edges),
             ]
         )
@@ -213,48 +210,24 @@ def create_napistu_graph(
 
             logger.warning(utils.style_df(example_duplicates, headers="keys"))
 
-    # reverse edge directions if edge_reversed is True:
-
-    if edge_reversed:
-        rev_unique_edges_df = unique_edges.copy()
-        rev_unique_edges_df[NAPISTU_GRAPH_EDGES.FROM] = unique_edges[
-            NAPISTU_GRAPH_EDGES.TO
-        ]
-        rev_unique_edges_df[NAPISTU_GRAPH_EDGES.TO] = unique_edges[
-            NAPISTU_GRAPH_EDGES.FROM
-        ]
-        rev_unique_edges_df[NAPISTU_GRAPH_EDGES.SC_PARENTS] = unique_edges[
-            NAPISTU_GRAPH_EDGES.SC_CHILDREN
-        ]
-        rev_unique_edges_df[NAPISTU_GRAPH_EDGES.SC_CHILDREN] = unique_edges[
-            NAPISTU_GRAPH_EDGES.SC_PARENTS
-        ]
-        rev_unique_edges_df[NAPISTU_GRAPH_EDGES.STOICHIOMETRY] = unique_edges[
-            NAPISTU_GRAPH_EDGES.STOICHIOMETRY
-        ] * (-1)
-
-        rev_unique_edges_df[NAPISTU_GRAPH_EDGES.DIRECTION] = unique_edges[
-            NAPISTU_GRAPH_EDGES.DIRECTION
-        ].replace(
-            {
-                NAPISTU_GRAPH_EDGE_DIRECTIONS.REVERSE: NAPISTU_GRAPH_EDGE_DIRECTIONS.FORWARD,
-                NAPISTU_GRAPH_EDGE_DIRECTIONS.FORWARD: NAPISTU_GRAPH_EDGE_DIRECTIONS.REVERSE,
-            }
-        )
-    else:
-        # unchanged if edge_reversed is False:
-        rev_unique_edges_df = unique_edges
-
     # convert nodes and edgelist into an igraph network
-
-    logger.info("Formatting napistu_graph output")
-    napistu_graph = ig.Graph.DictList(
+    logger.info("Formatting cpr_graph output")
+    napistu_ig_graph = ig.Graph.DictList(
         vertices=network_nodes_df.to_dict("records"),
-        edges=rev_unique_edges_df.to_dict("records"),
+        edges=unique_edges.to_dict("records"),
         directed=directed,
         vertex_name_attr=NAPISTU_GRAPH_NODES.NAME,
         edge_foreign_keys=(NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO),
     )
+
+    # Always return NapistuGraph
+    napistu_graph = NapistuGraph.from_igraph(
+        napistu_ig_graph, graph_type=graph_type, is_reversed=edge_reversed
+    )
+
+    if edge_reversed:
+        logger.info("Applying edge reversal using reversal utilities")
+        napistu_graph.reverse_edges()
 
     return napistu_graph
 
@@ -268,35 +241,42 @@ def process_napistu_graph(
     weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
     verbose: bool = False,
     custom_transformations: dict = None,
-) -> ig.Graph:
+) -> NapistuGraph:
     """
     Process Consensus Graph
 
-    Setup an igraph network and then add weights and other maleable attributes.
+    Setup a NapistuGraph network and then add weights and other malleable attributes.
 
-    Args:
-        sbml_dfs (SBML_dfs): A model formed by aggregating pathways
-        reaction_graph_attrs (dict): Dictionary containing attributes to pull out of reaction_data and
-            a weighting scheme for the graph
-        directed (bool): Should a directed (True) or undirected graph be made (False)
-        edge_reversed (bool): Should directions of edges be reversed (False)
-        graph_type (str): Type of graph to create, valid values are:
-            - bipartite: substrates and modifiers point to the reaction they drive, this reaction points to products
-            - reguatory: non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
-        weighting_strategy (str) : a network weighting strategy with options:
-            - unweighted: all weights (and upstream_weights for directed graphs) are set to 1.
-            - topology: weight edges by the degree of the source nodes favoring nodes emerging from nodes
-                with few connections.
-            - mixed: transform edges with a quantitative score based on reaction_attrs; and set edges
-                without quantitative score as a source-specific weight.
-            - calibrated: transforme edges with a quantitative score based on reaction_attrs and combine them
-                with topology scores to generate a consensus.
-        verbose (bool): Extra reporting
-        custom_transformations (dict, optional):
-            Dictionary of custom transformation functions to use for attribute transformation.
+    Parameters
+    ----------
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        A model formed by aggregating pathways.
+    reaction_graph_attrs : dict, optional
+        Dictionary containing attributes to pull out of reaction_data and a weighting scheme for the graph.
+    directed : bool, optional
+        Should a directed (True) or undirected graph be made (False). Default is True.
+    edge_reversed : bool, optional
+        Should directions of edges be reversed (False). Default is False.
+    graph_type : str, optional
+        Type of graph to create. Valid values are:
+            - 'bipartite': substrates and modifiers point to the reaction they drive, this reaction points to products
+            - 'regulatory': non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
+            - 'surrogate': non-enzymatic modifiers -> substrates -> enzymes -> reaction -> products
+    weighting_strategy : str, optional
+        A network weighting strategy with options:
+            - 'unweighted': all weights (and upstream_weights for directed graphs) are set to 1.
+            - 'topology': weight edges by the degree of the source nodes favoring nodes with few connections.
+            - 'mixed': transform edges with a quantitative score based on reaction_attrs; and set edges without quantitative score as a source-specific weight.
+            - 'calibrated': transform edges with a quantitative score based on reaction_attrs and combine them with topology scores to generate a consensus.
+    verbose : bool, optional
+        Extra reporting. Default is False.
+    custom_transformations : dict, optional
+        Dictionary of custom transformation functions to use for attribute transformation.
 
-    Returns:
-        weighted_graph (ig.Graph): An Igraph network
+    Returns
+    -------
+    NapistuGraph
+        A weighted NapistuGraph network (subclass of igraph.Graph).
     """
 
     if reaction_graph_attrs is None:
@@ -472,7 +452,9 @@ def apply_weight_transformations(
     return transformed_edges_df
 
 
-def summarize_weight_calibration(napistu_graph: ig.Graph, reaction_attrs: dict) -> None:
+def summarize_weight_calibration(
+    napistu_graph: NapistuGraph, reaction_attrs: dict
+) -> None:
     """
     Summarize Weight Calibration
 
@@ -509,28 +491,33 @@ def summarize_weight_calibration(napistu_graph: ig.Graph, reaction_attrs: dict) 
 
 
 def add_graph_weights(
-    napistu_graph: ig.Graph,
+    napistu_graph: NapistuGraph,
     reaction_attrs: dict,
     weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
-) -> ig.Graph:
+) -> NapistuGraph:
     """
     Add Graph Weights
 
-    Apply a weighting strategy to generate edge weights on a graph. For directed graphs "upstream_weights" will
-    be generated as well which should be used when searching for a node's ancestors.
+    Apply a weighting strategy to generate edge weights on a NapistuGraph. For directed graphs, "upstream_weights" will
+    be generated as well, which should be used when searching for a node's ancestors.
 
-    Args:
-        napistu_graph (ig.Graph): a graphical network of molecules/reactions (nodes) and edges linking them.
-        reaction_attrs (dict): an optional dict
-        weighting_strategy: a network weighting strategy with options:
-            - unweighted: all weights (and upstream_weights for directed graphs) are set to 1.
-            - topology: weight edges by the degree of the source nodes favoring nodes emerging from nodes
-                with few connections.
-            - mixed: transform edges with a quantitative score based on reaction_attrs; and set edges
-                without quantitative score as a source-specific weight.
-            - calibrated: transforme edges with a quantitative score based on reaction_attrs and combine them
-                with topology scores to generate a consensus.
+    Parameters
+    ----------
+    napistu_graph : NapistuGraph
+        A graphical network of molecules/reactions (nodes) and edges linking them (subclass of igraph.Graph).
+    reaction_attrs : dict
+        An optional dict of reaction attributes.
+    weighting_strategy : str, optional
+        A network weighting strategy with options:
+            - 'unweighted': all weights (and upstream_weights for directed graphs) are set to 1.
+            - 'topology': weight edges by the degree of the source nodes favoring nodes emerging from nodes with few connections.
+            - 'mixed': transform edges with a quantitative score based on reaction_attrs; and set edges without quantitative score as a source-specific weight.
+            - 'calibrated': transform edges with a quantitative score based on reaction_attrs and combine them with topology scores to generate a consensus.
 
+    Returns
+    -------
+    NapistuGraph
+        The weighted NapistuGraph.
     """
 
     napistu_graph_updated = copy.deepcopy(napistu_graph)
@@ -980,8 +967,24 @@ def _create_graph_hierarchy_df(graph_type: str) -> pd.DataFrame:
     return graph_hierarchy_df
 
 
-def _add_graph_weights_mixed(napistu_graph: ig.Graph, reaction_attrs: dict) -> ig.Graph:
-    """Weight a graph using a mixed approach combining source-specific weights and existing edge weights."""
+def _add_graph_weights_mixed(
+    napistu_graph: NapistuGraph, reaction_attrs: dict
+) -> NapistuGraph:
+    """
+    Weight a NapistuGraph using a mixed approach combining source-specific weights and existing edge weights.
+
+    Parameters
+    ----------
+    napistu_graph : NapistuGraph
+        The network to weight (subclass of igraph.Graph).
+    reaction_attrs : dict
+        Dictionary of reaction attributes to use for weighting.
+
+    Returns
+    -------
+    NapistuGraph
+        The weighted NapistuGraph.
+    """
 
     edges_df = napistu_graph.get_edge_dataframe()
 
@@ -1012,9 +1015,23 @@ def _add_graph_weights_mixed(napistu_graph: ig.Graph, reaction_attrs: dict) -> i
 
 
 def _add_graph_weights_calibration(
-    napistu_graph: ig.Graph, reaction_attrs: dict
-) -> ig.Graph:
-    """Weight a graph using a calibrated strategy which aims to roughly align qualiatively similar weights from different sources."""
+    napistu_graph: NapistuGraph, reaction_attrs: dict
+) -> NapistuGraph:
+    """
+    Weight a NapistuGraph using a calibrated strategy which aims to roughly align qualitatively similar weights from different sources.
+
+    Parameters
+    ----------
+    napistu_graph : NapistuGraph
+        The network to weight (subclass of igraph.Graph).
+    reaction_attrs : dict
+        Dictionary of reaction attributes to use for weighting.
+
+    Returns
+    -------
+    NapistuGraph
+        The weighted NapistuGraph.
+    """
 
     edges_df = napistu_graph.get_edge_dataframe()
 
@@ -1039,25 +1056,26 @@ def _add_graph_weights_calibration(
 
 
 def _add_edge_attr_to_vertex_graph(
-    napistu_graph: ig.Graph,
+    napistu_graph: NapistuGraph,
     edge_attr_list: list,
     shared_node_key: str = "r_id",
-) -> ig.Graph:
+) -> NapistuGraph:
     """
-    Merge edge attribute(s) from edge_attr_list to vetices of an igraph
+    Merge edge attribute(s) from edge_attr_list to vertices of a NapistuGraph.
 
     Parameters
     ----------
-    napistu_graph : iGraph
-        A graph generated by create_napistu_graph()
-    edge_attr_list: list
-        A list containing attributes to pull out of edges, then to add to vertices
-    shared_node_key : str
-        key in edge that is shared with vertex, to map edge ids to corresponding vertex ids
+    napistu_graph : NapistuGraph
+        A graph generated by create_napistu_graph() (subclass of igraph.Graph).
+    edge_attr_list : list
+        A list containing attributes to pull out of edges, then to add to vertices.
+    shared_node_key : str, optional
+        Key in edge that is shared with vertex, to map edge ids to corresponding vertex ids. Default is "r_id".
 
-    Returns:
-    ----------
-    An Igraph network
+    Returns
+    -------
+    NapistuGraph
+        The input NapistuGraph with additional vertex attributes added from edge attributes.
     """
 
     if len(edge_attr_list) == 0:
@@ -1340,23 +1358,23 @@ def _format_interactors_for_tiered_graph(
 
 
 def _add_graph_species_attribute(
-    napistu_graph: ig.Graph,
+    napistu_graph: NapistuGraph,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     species_graph_attrs: dict,
     custom_transformations: Optional[dict] = None,
-) -> ig.Graph:
+) -> NapistuGraph:
     """
-    Add meta-data from species_data to existing igraph's vertices.
+    Add meta-data from species_data to existing NapistuGraph's vertices.
 
-    This function augments the vertices of an igraph network with additional attributes
+    This function augments the vertices of a NapistuGraph network with additional attributes
     derived from the species-level data in the provided SBML_dfs object. The attributes
     to add are specified in the species_graph_attrs dictionary, and can be transformed
     using either built-in or user-supplied transformation functions.
 
     Parameters
     ----------
-    napistu_graph : ig.Graph
-        The igraph network to augment.
+    napistu_graph : NapistuGraph
+        The NapistuGraph network to augment (subclass of igraph.Graph).
     sbml_dfs : sbml_dfs_core.SBML_dfs
         The SBML_dfs object containing species data.
     species_graph_attrs : dict
@@ -1368,8 +1386,8 @@ def _add_graph_species_attribute(
 
     Returns
     -------
-    ig.Graph
-        The input igraph network with additional vertex attributes added from species_data.
+    NapistuGraph
+        The input NapistuGraph with additional vertex attributes added from species_data.
     """
     if not isinstance(species_graph_attrs, dict):
         raise TypeError(

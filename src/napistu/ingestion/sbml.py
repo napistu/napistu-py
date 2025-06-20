@@ -15,9 +15,6 @@ from napistu import utils
 
 from napistu.constants import BQB
 
-from napistu.ingestion.constants import SBML_ANNOTATION_METHOD_GET_COMPARTMENT
-from napistu.ingestion.constants import SBML_ANNOTATION_METHOD_GET_REACTION
-from napistu.ingestion.constants import SBML_ANNOTATION_METHOD_GET_SPECIES
 from napistu.ingestion.constants import SBML_COMPARTMENT_DICT_ID
 from napistu.ingestion.constants import SBML_COMPARTMENT_DICT_IDENTIFIERS
 from napistu.ingestion.constants import SBML_COMPARTMENT_DICT_NAME
@@ -515,100 +512,6 @@ def setup_cspecies(sbml_model: SBML) -> pd.DataFrame:
             comp_species.append(gene_dict)
 
     return pd.DataFrame(comp_species).set_index(SMBL_REACTION_SPEC_SC_ID)
-
-
-def add_sbml_annotations(
-    sbml_model: SBML, annotations: pd.DataFrame, save_path: str
-) -> None:
-    """
-    Add SBML Annotations
-
-    Add additional identifiers to an sbml file and save the updated document
-
-    Parameters:
-    sbml_model: SBML
-        A .sbml model
-    annotations: pd.DataFrame
-        A table of annotations to add containing an "id" matching the
-        primary key of an entity, "type" matching the type of entity,
-        and "uri" representing the annotation to add.
-    save_path: str
-        Path to save the model to
-
-    Returns:
-    None
-    """
-
-    logger.warning(
-        "add_sbml_annotations is deprecated and may be removed in a future version of rcpr; "
-        "we are now adding these annotation during ingestion by sbml.sbml_df_from_sbml() rather "
-        "than directly appending them to the raw .sbml"
-    )
-
-    if not isinstance(sbml_model, SBML):
-        raise TypeError("sbml_model must be an SBML object")
-
-    if not isinstance(annotations, pd.DataFrame):
-        raise TypeError("annotations must be a pd.DataFrame")
-
-    for i in range(0, annotations.shape[0]):
-        annot_type = annotations["type"][i]
-
-        if annot_type == "species":
-            entity_fxn = SBML_ANNOTATION_METHOD_GET_SPECIES
-        elif annot_type == "compartment":
-            entity_fxn = SBML_ANNOTATION_METHOD_GET_COMPARTMENT
-        elif annot_type == "reaction":
-            entity_fxn = SBML_ANNOTATION_METHOD_GET_REACTION
-        else:
-            raise ValueError(
-                f"{annot_type} is not a valid annotation type,"
-                " valid types are species, compartment, and reaction"
-            )
-        # access the node to modify
-        entity_fxn_method = getattr(sbml_model.model, entity_fxn)
-        entity_node = entity_fxn_method(annotations["id"][i])
-
-        # TO DO - check for a valid entity_node in case id is not found
-
-        # set meta-id if there isn't one; required to add a node
-        if not entity_node.isSetMetaId():
-            add_metaid_code = entity_node.setMetaId(annotations["id"][i])
-
-            if add_metaid_code != libsbml.LIBSBML_OPERATION_SUCCESS:
-                raise ValueError(
-                    f"adding metaId to {annotations['id'][i]} failed"
-                    f" with return code {add_metaid_code} "
-                    f"({libsbml.OperationReturnValue_toString(add_metaid_code).strip()})"
-                )
-
-        # create a controlled vocabulary term
-        cv = libsbml.CVTerm()
-        cv.setQualifierType(libsbml.BIOLOGICAL_QUALIFIER)
-        cv.setBiologicalQualifierType(libsbml.BQB_IS_VERSION_OF)
-
-        add_resource_code = cv.addResource(annotations["uri"][i])
-        if add_resource_code != libsbml.LIBSBML_OPERATION_SUCCESS:
-            raise ValueError(
-                "adding resource to CV term returned code"
-                f" {add_resource_code} "
-                f"({libsbml.OperationReturnValue_toString(add_resource_code).strip()})"
-                f" rather than {libsbml.LIBSBML_OPERATION_SUCCESS} when "
-                f"adding {annotations['uri'][i]} to {annotations['id'][i]}"
-            )
-
-        add_cv_code = entity_node.addCVTerm(cv)
-        if add_cv_code != libsbml.LIBSBML_OPERATION_SUCCESS:
-            raise ValueError(
-                f"adding CV to entity returned code {add_cv_code} "
-                f"({libsbml.OperationReturnValue_toString(add_cv_code).strip()})"
-                f" rather than {libsbml.LIBSBML_OPERATION_SUCCESS} when adding"
-                f" {annotations['uri'][i]} to {annotations['id'][i]}"
-            )
-
-    libsbml.writeSBML(sbml_model.document, save_path)
-
-    return None
 
 
 def _get_gene_product_dict(gp):
