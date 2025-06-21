@@ -13,6 +13,7 @@ from napistu import identifiers
 from napistu import sbml_dfs_utils
 from napistu import source
 from napistu import utils
+from napistu.ingestion import sbml
 from napistu.constants import SBML_DFS
 from napistu.constants import SBML_DFS_SCHEMA
 from napistu.constants import IDENTIFIERS
@@ -23,9 +24,6 @@ from napistu.constants import BQB_PRIORITIES
 from napistu.constants import ONTOLOGY_PRIORITIES
 from napistu.constants import BQB
 from napistu.constants import BQB_DEFINING_ATTRS
-from napistu.constants import COMPARTMENTS
-from napistu.constants import COMPARTMENT_ALIASES
-from napistu.constants import COMPARTMENTS_GO_TERMS
 from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import MINI_SBO_TO_NAME
 from napistu.constants import ONTOLOGIES
@@ -35,7 +33,9 @@ from napistu.constants import SBO_ROLES_DEFS
 from napistu.constants import ENTITIES_W_DATA
 from napistu.constants import ENTITIES_TO_ENTITY_DATA
 from napistu.constants import CHARACTERISTIC_COMPLEX_ONTOLOGIES
-from napistu.ingestion import sbml
+from napistu.ingestion.constants import GENERIC_COMPARTMENT
+from napistu.ingestion.constants import COMPARTMENT_ALIASES
+from napistu.ingestion.constants import COMPARTMENTS_GO_TERMS
 from fs import open_fs
 
 logger = logging.getLogger(__name__)
@@ -145,7 +145,7 @@ class SBML_dfs:
                 if ent in sbml_model:
                     setattr(self, ent, sbml_model[ent])
         else:
-            self = sbml.sbml_df_from_sbml(self, sbml_model)
+            self = sbml.sbml_dfs_from_sbml(self, sbml_model)
 
         for ent in SBML_DFS_SCHEMA.OPTIONAL_ENTITIES:
             # Initialize optional entities if not set
@@ -1421,8 +1421,8 @@ def filter_to_characteristic_species_ids(
     complexes and non-characteristic annotations such as pubmed references and
     homologues.
 
-    Parameters
-    ----------
+        Parameters
+        ----------
     species_ids: pd.DataFrame
         A table of identifiers produced by sdbml_dfs.get_identifiers("species")
     max_complex_size: int
@@ -1812,8 +1812,8 @@ def export_sbml_dfs(
         If True then treat genes, transcript, and proteins as separate species. If False
         then treat them interchangeably.
 
-    Returns
-    -------
+        Returns
+        -------
     None
 
     """
@@ -2257,7 +2257,7 @@ def _sbml_dfs_from_edgelist_check_cspecies_merge(
 
 
 def _stub_compartments(
-    stubbed_compartment: str = "CELLULAR_COMPONENT",
+    stubbed_compartment: str = GENERIC_COMPARTMENT,
 ) -> pd.DataFrame:
     """Stub Compartments
 
@@ -2281,7 +2281,6 @@ def _stub_compartments(
             f"{stubbed_compartment} is not defined in constants.COMPARTMENTS_GO_TERMS"
         )
 
-    stubbed_compartment_name = COMPARTMENTS[stubbed_compartment]
     stubbed_compartment_id = COMPARTMENTS_GO_TERMS[stubbed_compartment]
 
     formatted_uri = identifiers.format_uri(
@@ -2294,7 +2293,7 @@ def _stub_compartments(
 
     compartments_df = pd.DataFrame(
         {
-            SBML_DFS.C_NAME: [stubbed_compartment_name],
+            SBML_DFS.C_NAME: [stubbed_compartment],
             SBML_DFS.C_IDENTIFIERS: [identifiers.Identifiers([formatted_uri])],
         }
     )
@@ -2507,9 +2506,9 @@ def validate_sbml_dfs_table(table_data: pd.DataFrame, table_name: str) -> None:
     table_name : str
         Name of the table in the SBML_dfs schema
 
-    Raises
-    ------
-    ValueError
+        Raises
+        ------
+        ValueError
         If table_name is not in schema or validation fails
     """
     if table_name not in SBML_DFS_SCHEMA.SCHEMA:
@@ -2533,8 +2532,8 @@ def _perform_sbml_dfs_table_validation(
     This function performs the actual validation checks for any table against its schema,
     regardless of whether it's part of an SBML_dfs object or standalone.
 
-    Parameters
-    ----------
+        Parameters
+        ----------
     table_data : pd.DataFrame
         The table data to validate
     table_schema : dict
@@ -2542,9 +2541,9 @@ def _perform_sbml_dfs_table_validation(
     table_name : str
         Name of the table (for error messages)
 
-    Raises
-    ------
-    ValueError
+        Raises
+        ------
+        ValueError
         If the table does not conform to its schema:
         - Not a DataFrame
         - Wrong index name

@@ -15,18 +15,18 @@ from napistu import utils
 from napistu.network import net_create
 
 from napistu.constants import SBML_DFS
-from napistu.constants import COMPARTMENTS
 from napistu.constants import IDENTIFIERS
 from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import SBOTERM_NAMES
 from napistu.constants import SOURCE_SPEC
+from napistu.ingestion.constants import EXCHANGE_COMPARTMENT
 
 logger = logging.getLogger(__name__)
 
 
 def add_transportation_reactions(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    exchange_compartment: str = COMPARTMENTS["CYTOSOL"],
+    exchange_compartment: str = EXCHANGE_COMPARTMENT,
 ) -> sbml_dfs_core.SBML_dfs:
     """
     Add transportation reactions to connect all forms of a protein across compartments.
@@ -73,7 +73,7 @@ def add_transportation_reactions(
 def update_sbml_df_with_exchange(
     species_needing_transport_rxns: np.ndarray,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    exchange_compartment: str = COMPARTMENTS["CYTOSOL"],
+    exchange_compartment: str = EXCHANGE_COMPARTMENT,
 ) -> sbml_dfs_core.SBML_dfs:
     """
     Add transportation reactions between all locations of a set of molecular species by

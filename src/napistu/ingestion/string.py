@@ -8,7 +8,6 @@ from napistu import sbml_dfs_core
 from napistu import source
 from napistu import utils
 from napistu.constants import BQB
-from napistu.constants import COMPARTMENTS
 from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.ingestion import napistu_edgelist
 from napistu.ingestion.constants import SBML_SPECIES_DICT_IDENTIFIERS
@@ -28,6 +27,7 @@ from napistu.ingestion.constants import STRING_UPSTREAM_COMPARTMENT
 from napistu.ingestion.constants import STRING_UPSTREAM_NAME
 from napistu.ingestion.constants import STRING_URL_EXPRESSIONS
 from napistu.ingestion.constants import STRING_VERSION
+from napistu.ingestion.constants import GENERIC_COMPARTMENT
 from fs import open_fs
 
 logger = logging.getLogger(__name__)
@@ -297,7 +297,7 @@ def _build_interactor_edgelist(
     downstream_col_name: str = STRING_TARGET,
     add_reverse_interactions: bool = False,
     sbo_term: str = "interactor",
-    compartment: str = COMPARTMENTS["CELLULAR_COMPONENT"],
+    compartment: str = GENERIC_COMPARTMENT,
 ) -> pd.DataFrame:
     """Format STRING interactions as reactions."""
 
