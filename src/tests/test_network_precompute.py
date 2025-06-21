@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import pytest
 import os
+import tempfile
 
 import numpy as np
 import pandas as pd
@@ -214,11 +216,59 @@ def test_precomputed_distances_neighborhoods():
     assert upstream_disagreement_w_precompute.shape[0] == 0
 
 
-################################################
-# __main__
-################################################
+@pytest.mark.skip_on_windows
+def test_precomputed_distances_serialization():
+    """
+    Test that validates the serialization -> deserialization approach works correctly.
 
-if __name__ == "__main__":
-    test_precomputed_distances()
-    test_precomputed_distances_shortest_paths()
-    test_precomputed_distances_neighborhoods()
+    Notes
+    -----
+    This function creates a sample DataFrame with the structure of precomputed
+    distances data, saves it to a temporary JSON file, loads it back, and
+    validates that all data is preserved correctly through the serialization
+    round-trip.
+    """
+    # Create a sample DataFrame that mimics the precomputed distances structure
+    sample_data = {
+        "sc_id_origin": {
+            1: "SC00000000",
+            3: "SC00000003",
+            4: "SC00000004",
+            5: "SC00000005",
+            6: "SC00000011",
+        },
+        "sc_id_dest": {
+            1: "SC00000001",
+            3: "SC00000001",
+            4: "SC00000001",
+            5: "SC00000001",
+            6: "SC00000001",
+        },
+        "path_length": {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
+        "path_upstream_weights": {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
+        "path_weights": {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
+    }
+
+    # Create original DataFrame
+    original_df = pd.DataFrame(sample_data)
+
+    # Create a temporary file path
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False
+    ) as tmp_file:
+        temp_path = tmp_file.name
+
+    try:
+        # Test serialization
+        precompute.save_precomputed_distances(original_df, temp_path)
+
+        # Test deserialization
+        loaded_df = precompute.load_precomputed_distances(temp_path)
+
+        # Validate that the loaded DataFrame is identical to the original
+        pd.testing.assert_frame_equal(original_df, loaded_df, check_like=True)
+
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
