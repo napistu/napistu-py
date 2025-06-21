@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 import os
 import tempfile
 
@@ -215,6 +216,7 @@ def test_precomputed_distances_neighborhoods():
     assert upstream_disagreement_w_precompute.shape[0] == 0
 
 
+@pytest.mark.skip_on_windows
 def test_precomputed_distances_serialization():
     """
     Test that validates the serialization -> deserialization approach works correctly.
