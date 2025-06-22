@@ -10,7 +10,14 @@ from napistu.ingestion import sbml
 from napistu.modify import pathwayannot
 
 from napistu import identifiers as napistu_identifiers
-from napistu.constants import SBML_DFS, SBOTERM_NAMES
+from napistu.constants import (
+    SBML_DFS,
+    SBOTERM_NAMES,
+    BQB_DEFINING_ATTRS,
+    BQB_DEFINING_ATTRS_LOOSE,
+    BQB,
+    IDENTIFIERS,
+)
 from napistu.sbml_dfs_core import SBML_dfs
 
 
@@ -493,3 +500,84 @@ def test_remove_entity_data_nonexistent(sbml_dfs_w_data, caplog):
 
     # Validate the model is still valid
     sbml_dfs_w_data.validate()
+
+
+def test_filter_to_characteristic_species_ids():
+
+    species_ids_dict = {
+        SBML_DFS.S_ID: ["large_complex"] * 6
+        + ["small_complex"] * 2
+        + ["proteinA", "proteinB"]
+        + ["proteinC"] * 3
+        + [
+            "promiscuous_complexA",
+            "promiscuous_complexB",
+            "promiscuous_complexC",
+            "promiscuous_complexD",
+            "promiscuous_complexE",
+        ],
+        IDENTIFIERS.ONTOLOGY: ["complexportal"]
+        + ["HGNC"] * 7
+        + ["GO"] * 2
+        + ["ENSG", "ENSP", "pubmed"]
+        + ["HGNC"] * 5,
+        IDENTIFIERS.IDENTIFIER: [
+            "CPX-BIG",
+            "mem1",
+            "mem2",
+            "mem3",
+            "mem4",
+            "mem5",
+            "part1",
+            "part2",
+            "GO:1",
+            "GO:2",
+            "dna_seq",
+            "protein_seq",
+            "my_cool_pub",
+        ]
+        + ["promiscuous_complex"] * 5,
+        IDENTIFIERS.BQB: [BQB.IS]
+        + [BQB.HAS_PART] * 7
+        + [BQB.IS] * 2
+        + [
+            # these are retained if BQB_DEFINING_ATTRS_LOOSE is used
+            BQB.ENCODES,
+            BQB.IS_ENCODED_BY,
+            # this should always be removed
+            BQB.IS_DESCRIBED_BY,
+        ]
+        + [BQB.HAS_PART] * 5,
+    }
+
+    species_ids = pd.DataFrame(species_ids_dict)
+
+    characteristic_ids_narrow = sbml_dfs_core.filter_to_characteristic_species_ids(
+        species_ids,
+        defining_biological_qualifiers=BQB_DEFINING_ATTRS,
+        max_complex_size=4,
+        max_promiscuity=4,
+    )
+
+    EXPECTED_IDS = ["CPX-BIG", "GO:1", "GO:2", "part1", "part2"]
+    assert characteristic_ids_narrow[IDENTIFIERS.IDENTIFIER].tolist() == EXPECTED_IDS
+
+    characteristic_ids_loose = sbml_dfs_core.filter_to_characteristic_species_ids(
+        species_ids,
+        # include encodes and is_encoded_by as equivalent to is
+        defining_biological_qualifiers=BQB_DEFINING_ATTRS_LOOSE,
+        max_complex_size=4,
+        # expand promiscuity to default value
+        max_promiscuity=20,
+    )
+
+    EXPECTED_IDS = [
+        "CPX-BIG",
+        "GO:1",
+        "GO:2",
+        "dna_seq",
+        "protein_seq",
+        "part1",
+        "part2",
+    ] + ["promiscuous_complex"] * 5
+    assert characteristic_ids_loose[IDENTIFIERS.IDENTIFIER].tolist() == EXPECTED_IDS

@@ -179,8 +179,11 @@ def test_precomputed_distances_neighborhoods():
                 right_on=join_key,
                 how="outer",
             )
-            .fillna(False)
         )
+        for col in ["in_precompute", "in_otf"]:
+            neighbor_comparison[col] = (
+                neighbor_comparison[col].astype("boolean").fillna(False)
+            )
         comparison_l.append(neighbor_comparison.assign(focal_sc_id=key))
 
     comparison_df = pd.concat(comparison_l)
