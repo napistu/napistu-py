@@ -4,6 +4,7 @@ import logging
 import math
 from pathlib import Path
 from typing import Union
+import io
 
 import numpy as np
 import pandas as pd
@@ -144,7 +145,7 @@ def load_precomputed_distances(uri: Union[str, Path]) -> pd.DataFrame:
     """
     try:
         json_string = load_json(str(uri))
-        df = pd.read_json(json_string)
+        df = pd.read_json(io.StringIO(json_string))
 
         # Convert integer columns to float
         for col in df.columns:
