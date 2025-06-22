@@ -99,6 +99,41 @@ def filter_to_largest_subgraph(graph: ig.Graph) -> ig.Graph:
     return largest_subgraph
 
 
+def filter_to_largest_subgraphs(graph: ig.Graph, top_k: int) -> list[ig.Graph]:
+    """
+    Filter an igraph to its largest weakly connected components.
+
+    Parameters
+    ----------
+    graph : ig.Graph
+        The input network.
+    top_k : int
+        The number of largest components to return.
+
+    Returns
+    -------
+    list[ig.Graph]
+        A list of the top K largest components as graphs.
+    """
+    if top_k < 1:
+        raise ValueError("top_k must be 1 or greater.")
+
+    component_members = graph.components(mode="weak")
+    if not component_members:
+        return []
+
+    component_sizes = [len(x) for x in component_members]
+
+    # Sort components by size in descending order
+    sorted_components = sorted(
+        zip(component_sizes, component_members), key=lambda x: x[0], reverse=True
+    )
+
+    # Return a list of the top K subgraphs
+    top_k_components = sorted_components[:top_k]
+    return [graph.induced_subgraph(members) for _, members in top_k_components]
+
+
 def graph_to_pandas_dfs(graph: ig.Graph) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Convert an igraph to Pandas DataFrames for vertices and edges.

@@ -223,7 +223,7 @@ def greedy_set_coverge_of_sources(
     Greedy Set Coverage of Sources
 
     Apply the greedy set coverge algorithm to find the minimal set of
-      sources which cover all entries
+    sources which cover all entries
 
     Parameters:
     source_df: pd.DataFrame
