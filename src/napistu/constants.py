@@ -149,10 +149,10 @@ INTERACTION_EDGELIST_EXPECTED_VARS = {
     "downstream_name",
     "upstream_compartment",
     "downstream_compartment",
-    "r_name",
-    "sbo_term",
-    "r_Identifiers",
-    "r_isreversible",
+    SBML_DFS.R_NAME,
+    SBML_DFS.SBO_TERM,
+    SBML_DFS.R_IDENTIFIERS,
+    SBML_DFS.R_ISREVERSIBLE,
 }
 
 BQB_PRIORITIES = pd.DataFrame(
