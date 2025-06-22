@@ -32,7 +32,6 @@ from napistu.constants import SBOTERM_NAMES
 from napistu.constants import SBO_ROLES_DEFS
 from napistu.constants import ENTITIES_W_DATA
 from napistu.constants import ENTITIES_TO_ENTITY_DATA
-from napistu.constants import CHARACTERISTIC_COMPLEX_ONTOLOGIES
 from napistu.ingestion.constants import GENERIC_COMPARTMENT
 from napistu.ingestion.constants import COMPARTMENT_ALIASES
 from napistu.ingestion.constants import COMPARTMENTS_GO_TERMS
@@ -1471,12 +1470,6 @@ def filter_to_characteristic_species_ids(
     # add components within modestly sized protein complexes
     # look at HAS_PART IDs
     bqb_has_parts_species = species_ids[species_ids[IDENTIFIERS.BQB] == BQB.HAS_PART]
-    # filter to genes
-    bqb_has_parts_species = bqb_has_parts_species[
-        bqb_has_parts_species[IDENTIFIERS.ONTOLOGY].isin(
-            CHARACTERISTIC_COMPLEX_ONTOLOGIES
-        )
-    ]
 
     # number of species in a complex
     n_species_components = bqb_has_parts_species.value_counts(
@@ -1488,38 +1481,10 @@ def filter_to_characteristic_species_ids(
         ].index.get_level_values(SBML_DFS.S_ID)
     )
 
-    # number of complexes a species is part of
-    n_complexes_involvedin = bqb_has_parts_species.value_counts(
-        [IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER]
-    )
-    promiscuous_component_identifiers_index = n_complexes_involvedin[
-        n_complexes_involvedin > max_promiscuity
-    ].index
-    promiscuous_component_identifiers = pd.Series(
-        data=[True] * len(promiscuous_component_identifiers_index),
-        index=promiscuous_component_identifiers_index,
-        name="is_shared_component",
-        dtype=bool,
+    filtered_bqb_has_parts = _filter_promiscuous_components(
+        bqb_has_parts_species, max_promiscuity
     )
 
-    if len(promiscuous_component_identifiers) == 0:
-        # no complexes to filter
-        return species_ids
-
-    filtered_bqb_has_parts = bqb_has_parts_species.merge(
-        promiscuous_component_identifiers,
-        left_on=[IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER],
-        right_index=True,
-        how="left",
-    )
-
-    filtered_bqb_has_parts["is_shared_component"] = filtered_bqb_has_parts[
-        "is_shared_component"
-    ].fillna(False)
-    # drop identifiers shared as components across many species
-    filtered_bqb_has_parts = filtered_bqb_has_parts[
-        ~filtered_bqb_has_parts["is_shared_component"]
-    ].drop(["is_shared_component"], axis=1)
     # drop species parts if there are many components
     filtered_bqb_has_parts = filtered_bqb_has_parts[
         ~filtered_bqb_has_parts[SBML_DFS.S_ID].isin(big_complex_sids)
@@ -2595,3 +2560,42 @@ def _perform_sbml_dfs_table_validation(
     # check for empty table
     if table_data.shape[0] == 0:
         raise ValueError(f"{table_name} contained no entries")
+
+
+def _filter_promiscuous_components(
+    bqb_has_parts_species: pd.DataFrame, max_promiscuity: int
+) -> pd.DataFrame:
+
+    # number of complexes a species is part of
+    n_complexes_involvedin = bqb_has_parts_species.value_counts(
+        [IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER]
+    )
+    promiscuous_component_identifiers_index = n_complexes_involvedin[
+        n_complexes_involvedin > max_promiscuity
+    ].index
+    promiscuous_component_identifiers = pd.Series(
+        data=[True] * len(promiscuous_component_identifiers_index),
+        index=promiscuous_component_identifiers_index,
+        name="is_shared_component",
+        dtype=bool,
+    )
+
+    if len(promiscuous_component_identifiers) == 0:
+        return bqb_has_parts_species
+
+    filtered_bqb_has_parts = bqb_has_parts_species.merge(
+        promiscuous_component_identifiers,
+        left_on=[IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER],
+        right_index=True,
+        how="left",
+    )
+
+    filtered_bqb_has_parts["is_shared_component"] = (
+        filtered_bqb_has_parts["is_shared_component"].astype("boolean").fillna(False)
+    )
+    # drop identifiers shared as components across many species
+    filtered_bqb_has_parts = filtered_bqb_has_parts[
+        ~filtered_bqb_has_parts["is_shared_component"]
+    ].drop(["is_shared_component"], axis=1)
+
+    return filtered_bqb_has_parts

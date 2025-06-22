@@ -120,7 +120,7 @@ def save_precomputed_distances(
     OSError
         If the file cannot be written to (permission issues, etc.)
     """
-    save_json(str(uri), precomputed_distances.to_dict(orient="index"))
+    save_json(str(uri), precomputed_distances.to_json())
 
 
 def load_precomputed_distances(uri: Union[str, Path]) -> pd.DataFrame:
@@ -143,11 +143,17 @@ def load_precomputed_distances(uri: Union[str, Path]) -> pd.DataFrame:
         If the specified file does not exist
     """
     try:
-        data_dict = load_json(str(uri))
+        json_string = load_json(str(uri))
+        df = pd.read_json(json_string)
+
+        # Convert integer columns to float
+        for col in df.columns:
+            if df[col].dtype in ["int64", "int32", "int16", "int8"]:
+                df[col] = df[col].astype(float)
+
+        return df
     except ResourceNotFound as e:
         raise FileNotFoundError(f"File not found: {uri}") from e
-
-    return pd.DataFrame.from_dict(data_dict, orient="index").rename(index=int)
 
 
 def _calculate_distances_subset(
