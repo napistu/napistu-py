@@ -135,7 +135,7 @@ REQUIRED_REACTION_FROMEDGELIST_COLUMNS = [
     "r_isreversible",
 ]
 
-CPR_STANDARD_OUTPUTS = SimpleNamespace(
+NAPISTU_STANDARD_OUTPUTS = SimpleNamespace(
     SPECIES_IDENTIFIERS="species_identifiers.tsv",
     SPECIES="species.json",
     REACTIONS="reactions.json",

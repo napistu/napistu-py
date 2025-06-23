@@ -17,9 +17,7 @@ from napistu.ingestion import sbml
 from napistu.constants import SBML_DFS
 from napistu.constants import SBML_DFS_SCHEMA
 from napistu.constants import IDENTIFIERS
-from napistu.constants import REQUIRED_REACTION_FROMEDGELIST_COLUMNS
-from napistu.constants import CPR_STANDARD_OUTPUTS
-from napistu.constants import INTERACTION_EDGELIST_EXPECTED_VARS
+from napistu.constants import NAPISTU_STANDARD_OUTPUTS
 from napistu.constants import BQB_PRIORITIES
 from napistu.constants import ONTOLOGY_PRIORITIES
 from napistu.constants import BQB
@@ -766,60 +764,7 @@ class SBML_dfs:
             self._validate_table(table)
 
         # check whether pks and fks agree
-        pk_df = pd.DataFrame(
-            [{"pk_table": k, "key": v["pk"]} for k, v in self.schema.items()]
-        )
-
-        fk_df = (
-            pd.DataFrame(
-                [
-                    {"fk_table": k, "fk": v["fk"]}
-                    for k, v in self.schema.items()
-                    if "fk" in v.keys()
-                ]
-            )
-            .set_index("fk_table")["fk"]
-            .apply(pd.Series)
-            .reset_index()
-            .melt(id_vars="fk_table")
-            .drop(["variable"], axis=1)
-            .rename(columns={"value": "key"})
-        )
-
-        pk_fk_correspondences = pk_df.merge(fk_df)
-
-        for i in range(0, pk_fk_correspondences.shape[0]):
-            pk_table_keys = set(
-                getattr(self, pk_fk_correspondences["pk_table"][i]).index.tolist()
-            )
-            if None in pk_table_keys:
-                raise ValueError(
-                    f"{pk_fk_correspondences['pk_table'][i]} had "
-                    "missing values in its index"
-                )
-
-            fk_table_keys = set(
-                getattr(self, pk_fk_correspondences["fk_table"][i]).loc[
-                    :, pk_fk_correspondences["key"][i]
-                ]
-            )
-            if None in fk_table_keys:
-                raise ValueError(
-                    f"{pk_fk_correspondences['fk_table'][i]} included "
-                    f"missing {pk_fk_correspondences['key'][i]} values"
-                )
-
-            # all foreign keys need to match a primary key
-            extra_fks = fk_table_keys.difference(pk_table_keys)
-            if len(extra_fks) != 0:
-                raise ValueError(
-                    f"{len(extra_fks)} distinct "
-                    f"{pk_fk_correspondences['key'][i]} values were"
-                    f" found in {pk_fk_correspondences['fk_table'][i]} "
-                    f"but missing from {pk_fk_correspondences['pk_table'][i]}."
-                    " All foreign keys must have a matching primary key.\n\n"
-                    f"Extra key are: {', '.join(extra_fks)}"
-                )
+        self._check_pk_fk_correspondence()
 
         # check optional data tables:
         for k, v in self.species_data.items():
@@ -1085,6 +1030,67 @@ class SBML_dfs:
                 "An error occurred which could not be automatically resolved"
             )
             raise e
+
+    def _check_pk_fk_correspondence(self):
+        """
+        Check whether primary keys and foreign keys agree for all tables in the schema.
+        Raises ValueError if any correspondence fails.
+        """
+
+        pk_df = pd.DataFrame(
+            [{"pk_table": k, "key": v["pk"]} for k, v in self.schema.items()]
+        )
+
+        fk_df = (
+            pd.DataFrame(
+                [
+                    {"fk_table": k, "fk": v["fk"]}
+                    for k, v in self.schema.items()
+                    if "fk" in v.keys()
+                ]
+            )
+            .set_index("fk_table")["fk"]
+            .apply(pd.Series)
+            .reset_index()
+            .melt(id_vars="fk_table")
+            .drop(["variable"], axis=1)
+            .rename(columns={"value": "key"})
+        )
+
+        pk_fk_correspondences = pk_df.merge(fk_df)
+
+        for i in range(0, pk_fk_correspondences.shape[0]):
+            pk_table_keys = set(
+                getattr(self, pk_fk_correspondences["pk_table"][i]).index.tolist()
+            )
+            if None in pk_table_keys:
+                raise ValueError(
+                    f"{pk_fk_correspondences['pk_table'][i]} had "
+                    "missing values in its index"
+                )
+
+            fk_table_keys = set(
+                getattr(self, pk_fk_correspondences["fk_table"][i]).loc[
+                    :, pk_fk_correspondences["key"][i]
+                ]
+            )
+            if None in fk_table_keys:
+                raise ValueError(
+                    f"{pk_fk_correspondences['fk_table'][i]} included "
+                    f"missing {pk_fk_correspondences['key'][i]} values"
+                )
+
+            # all foreign keys need to match a primary key
+            extra_fks = fk_table_keys.difference(pk_table_keys)
+            if len(extra_fks) != 0:
+                raise ValueError(
+                    f"{len(extra_fks)} distinct "
+                    f"{pk_fk_correspondences['key'][i]} values were"
+                    f" found in {pk_fk_correspondences['fk_table'][i]} "
+                    f"but missing from {pk_fk_correspondences['pk_table'][i]}."
+                    " All foreign keys must have a matching primary key.\n\n"
+                    f"Extra key are: {', '.join(extra_fks)}"
+                )
 
 
 def species_status(s_id: str, sbml_dfs: SBML_dfs) -> pd.DataFrame:
@@ -1805,7 +1811,7 @@ def export_sbml_dfs(
         )
     with open_fs(outdir, writeable=True) as fs:
         species_identifiers_path = (
-            model_prefix + CPR_STANDARD_OUTPUTS.SPECIES_IDENTIFIERS
+            model_prefix + NAPISTU_STANDARD_OUTPUTS.SPECIES_IDENTIFIERS
         )
         with fs.openbin(species_identifiers_path, "w") as f:
             species_identifiers.drop([SBML_DFS.S_SOURCE], axis=1).to_csv(
@@ -1813,12 +1819,12 @@ def export_sbml_dfs(
             )
 
         # export jsons
-        species_path = model_prefix + CPR_STANDARD_OUTPUTS.SPECIES
-        reactions_path = model_prefix + CPR_STANDARD_OUTPUTS.REACTIONS
-        reation_species_path = model_prefix + CPR_STANDARD_OUTPUTS.REACTION_SPECIES
-        compartments_path = model_prefix + CPR_STANDARD_OUTPUTS.COMPARTMENTS
+        species_path = model_prefix + NAPISTU_STANDARD_OUTPUTS.SPECIES
+        reactions_path = model_prefix + NAPISTU_STANDARD_OUTPUTS.REACTIONS
+        reation_species_path = model_prefix + NAPISTU_STANDARD_OUTPUTS.REACTION_SPECIES
+        compartments_path = model_prefix + NAPISTU_STANDARD_OUTPUTS.COMPARTMENTS
         compartmentalized_species_path = (
-            model_prefix + CPR_STANDARD_OUTPUTS.COMPARTMENTALIZED_SPECIES
+            model_prefix + NAPISTU_STANDARD_OUTPUTS.COMPARTMENTALIZED_SPECIES
         )
         with fs.openbin(species_path, "w") as f:
             sbml_dfs.species[[SBML_DFS.S_NAME]].to_json(f)
@@ -1899,23 +1905,25 @@ def sbml_dfs_from_edgelist(
         compartmentalized species, reactions, and reaction species tables.
     """
     # 1. Validate inputs
-    _edgelist_validate_inputs(interaction_edgelist, species_df, compartments_df)
+    sbml_dfs_utils._edgelist_validate_inputs(
+        interaction_edgelist, species_df, compartments_df
+    )
 
     # 2. Identify which extra columns to preserve
-    extra_columns = _edgelist_identify_extra_columns(
+    extra_columns = sbml_dfs_utils._edgelist_identify_extra_columns(
         interaction_edgelist, species_df, keep_reactions_data, keep_species_data
     )
 
     # 3. Process compartments and species tables
-    processed_compartments = _edgelist_process_compartments(
+    processed_compartments = sbml_dfs_utils._edgelist_process_compartments(
         compartments_df, interaction_source
     )
-    processed_species, species_data = _edgelist_process_species(
+    processed_species, species_data = sbml_dfs_utils._edgelist_process_species(
         species_df, interaction_source, extra_columns["species"]
     )
 
     # 4. Create compartmentalized species
-    comp_species = _edgelist_create_compartmentalized_species(
+    comp_species = sbml_dfs_utils._edgelist_create_compartmentalized_species(
         interaction_edgelist,
         processed_species,
         processed_compartments,
@@ -1924,7 +1932,7 @@ def sbml_dfs_from_edgelist(
 
     # 5. Create reactions and reaction species
     reactions, reaction_species, reactions_data = (
-        _edgelist_create_reactions_and_species(
+        sbml_dfs_utils._edgelist_create_reactions_and_species(
             interaction_edgelist,
             comp_species,
             processed_species,
@@ -2250,375 +2258,18 @@ def _filter_promiscuous_components(
     return filtered_bqb_has_parts
 
 
-def _edgelist_validate_inputs(
-    interaction_edgelist: pd.DataFrame,
-    species_df: pd.DataFrame,
-    compartments_df: pd.DataFrame,
-) -> None:
-    """
-    Validate input DataFrames have required columns.
-
-    Parameters
-    ----------
-    interaction_edgelist : pd.DataFrame
-        Interaction data to validate
-    species_df : pd.DataFrame
-        Species data to validate
-    compartments_df : pd.DataFrame
-        Compartments data to validate
-    """
-
-    # check compartments
-    compartments_df_expected_vars = {SBML_DFS.C_NAME, SBML_DFS.C_IDENTIFIERS}
-    compartments_df_columns = set(compartments_df.columns.tolist())
-    missing_required_fields = compartments_df_expected_vars.difference(
-        compartments_df_columns
-    )
-    if len(missing_required_fields) > 0:
-        raise ValueError(
-            f"{', '.join(missing_required_fields)} are required variables"
-            ' in "compartments_df" but were not present in the input file.'
-        )
-
-    # check species
-    species_df_expected_vars = {SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS}
-    species_df_columns = set(species_df.columns.tolist())
-    missing_required_fields = species_df_expected_vars.difference(species_df_columns)
-    if len(missing_required_fields) > 0:
-        raise ValueError(
-            f"{', '.join(missing_required_fields)} are required"
-            ' variables in "species_df" but were not present '
-            "in the input file."
-        )
-
-    # check interactions
-    interaction_edgelist_columns = set(interaction_edgelist.columns.tolist())
-    missing_required_fields = INTERACTION_EDGELIST_EXPECTED_VARS.difference(
-        interaction_edgelist_columns
-    )
-    if len(missing_required_fields) > 0:
-        raise ValueError(
-            f"{', '.join(missing_required_fields)} are required "
-            'variables in "interaction_edgelist" but were not '
-            "present in the input file."
-        )
-
-    return None
-
-
-def _edgelist_identify_extra_columns(
-    interaction_edgelist, species_df, keep_reactions_data, keep_species_data
-):
-    """
-    Identify extra columns in input data that should be preserved.
-
-    Parameters
-    ----------
-    interaction_edgelist : pd.DataFrame
-        Interaction data containing potential extra columns
-    species_df : pd.DataFrame
-        Species data containing potential extra columns
-    keep_reactions_data : bool or str
-        Whether to keep extra reaction columns
-    keep_species_data : bool or str
-        Whether to keep extra species columns
-
-    Returns
-    -------
-    dict
-        Dictionary with 'reactions' and 'species' keys containing lists of extra column names
-    """
-    extra_reactions_columns = []
-    extra_species_columns = []
-
-    if keep_reactions_data is not False:
-        extra_reactions_columns = [
-            c
-            for c in interaction_edgelist.columns
-            if c not in INTERACTION_EDGELIST_EXPECTED_VARS
-        ]
-
-    if keep_species_data is not False:
-        extra_species_columns = [
-            c
-            for c in species_df.columns
-            if c not in {SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS}
-        ]
-
-    return {"reactions": extra_reactions_columns, "species": extra_species_columns}
-
-
-def _edgelist_process_compartments(compartments_df, interaction_source):
-    """
-    Format compartments DataFrame with source and ID columns.
-
-    Parameters
-    ----------
-    compartments_df : pd.DataFrame
-        Raw compartments data
-    interaction_source : source.Source
-        Source object to assign to compartments
-
-    Returns
-    -------
-    pd.DataFrame
-        Processed compartments with IDs, indexed by compartment ID
-    """
-    compartments = compartments_df.copy()
-    compartments[SBML_DFS.C_SOURCE] = interaction_source
-    compartments[SBML_DFS.C_ID] = sbml_dfs_utils.id_formatter(
-        range(compartments.shape[0]), SBML_DFS.C_ID
-    )
-    return compartments.set_index(SBML_DFS.C_ID)[
-        [SBML_DFS.C_NAME, SBML_DFS.C_IDENTIFIERS, SBML_DFS.C_SOURCE]
-    ]
-
-
-def _edgelist_process_species(species_df, interaction_source, extra_species_columns):
-    """
-    Format species DataFrame and extract extra data.
-
-    Parameters
-    ----------
-    species_df : pd.DataFrame
-        Raw species data
-    interaction_source : source.Source
-        Source object to assign to species
-    extra_species_columns : list
-        Names of extra columns to preserve separately
-
-    Returns
-    -------
-    tuple of pd.DataFrame
-        Processed species DataFrame and species extra data DataFrame
-    """
-    species = species_df.copy()
-    species[SBML_DFS.S_SOURCE] = interaction_source
-    species[SBML_DFS.S_ID] = sbml_dfs_utils.id_formatter(
-        range(species.shape[0]), SBML_DFS.S_ID
-    )
-
-    required_cols = [SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS, SBML_DFS.S_SOURCE]
-    species_indexed = species.set_index(SBML_DFS.S_ID)[
-        required_cols + extra_species_columns
-    ]
-
-    # Separate extra data from main species table
-    species_data = species_indexed[extra_species_columns]
-    processed_species = species_indexed[required_cols]
-
-    return processed_species, species_data
-
-
-def _edgelist_create_compartmentalized_species(
-    interaction_edgelist, species_df, compartments_df, interaction_source
-):
-    """
-    Create compartmentalized species from interactions.
-
-    Parameters
-    ----------
-    interaction_edgelist : pd.DataFrame
-        Interaction data containing species-compartment combinations
-    species_df : pd.DataFrame
-        Processed species data with IDs
-    compartments_df : pd.DataFrame
-        Processed compartments data with IDs
-    interaction_source : source.Source
-        Source object to assign to compartmentalized species
-
-    Returns
-    -------
-    pd.DataFrame
-        Compartmentalized species with formatted names and IDs
-    """
-    # Get all distinct upstream and downstream compartmentalized species
-    comp_species = pd.concat(
-        [
-            interaction_edgelist[["upstream_name", "upstream_compartment"]].rename(
-                {
-                    "upstream_name": SBML_DFS.S_NAME,
-                    "upstream_compartment": SBML_DFS.C_NAME,
-                },
-                axis=1,
-            ),
-            interaction_edgelist[["downstream_name", "downstream_compartment"]].rename(
-                {
-                    "downstream_name": SBML_DFS.S_NAME,
-                    "downstream_compartment": SBML_DFS.C_NAME,
-                },
-                axis=1,
-            ),
-        ]
-    ).drop_duplicates()
-
-    # Add species and compartment IDs
-    comp_species_w_ids = comp_species.merge(
-        species_df[SBML_DFS.S_NAME].reset_index(), how="left", on=SBML_DFS.S_NAME
-    ).merge(
-        compartments_df[SBML_DFS.C_NAME].reset_index(), how="left", on=SBML_DFS.C_NAME
-    )
-
-    # Validate merge was successful
-    _sbml_dfs_from_edgelist_check_cspecies_merge(comp_species_w_ids, comp_species)
-
-    # Format compartmentalized species with names, source, and IDs
-    comp_species_w_ids[SBML_DFS.SC_NAME] = [
-        f"{s} [{c}]"
-        for s, c in zip(
-            comp_species_w_ids[SBML_DFS.S_NAME], comp_species_w_ids[SBML_DFS.C_NAME]
-        )
-    ]
-    comp_species_w_ids[SBML_DFS.SC_SOURCE] = interaction_source
-    comp_species_w_ids[SBML_DFS.SC_ID] = sbml_dfs_utils.id_formatter(
-        range(comp_species_w_ids.shape[0]), SBML_DFS.SC_ID
-    )
-
-    return comp_species_w_ids.set_index(SBML_DFS.SC_ID)[
-        [SBML_DFS.SC_NAME, SBML_DFS.S_ID, SBML_DFS.C_ID, SBML_DFS.SC_SOURCE]
-    ]
-
-
-def _edgelist_create_reactions_and_species(
-    interaction_edgelist,
-    comp_species,
-    species_df,
-    compartments_df,
-    interaction_source,
-    upstream_stoichiometry,
-    downstream_stoichiometry,
-    downstream_sbo_name,
-    extra_reactions_columns,
-):
-    """
-    Create reactions and reaction species from interactions.
-
-    Parameters
-    ----------
-    interaction_edgelist : pd.DataFrame
-        Original interaction data
-    comp_species : pd.DataFrame
-        Compartmentalized species with IDs
-    species_df : pd.DataFrame
-        Processed species data with IDs
-    compartments_df : pd.DataFrame
-        Processed compartments data with IDs
-    interaction_source : source.Source
-        Source object for reactions
-    upstream_stoichiometry : int
-        Stoichiometry for upstream species
-    downstream_stoichiometry : int
-        Stoichiometry for downstream species
-    downstream_sbo_name : str
-        SBO term name for downstream species
-    extra_reactions_columns : list
-        Names of extra columns to preserve
-
-    Returns
-    -------
-    tuple
-        (reactions_df, reaction_species_df, reactions_data)
-    """
-    # Add compartmentalized species IDs to interactions
-    comp_species_w_names = (
-        comp_species.reset_index()
-        .merge(species_df[SBML_DFS.S_NAME].reset_index())
-        .merge(compartments_df[SBML_DFS.C_NAME].reset_index())
-    )
-
-    interaction_w_cspecies = interaction_edgelist.merge(
-        comp_species_w_names[[SBML_DFS.SC_ID, SBML_DFS.S_NAME, SBML_DFS.C_NAME]].rename(
-            {
-                SBML_DFS.SC_ID: "sc_id_up",
-                SBML_DFS.S_NAME: "upstream_name",
-                SBML_DFS.C_NAME: "upstream_compartment",
-            },
-            axis=1,
-        ),
-        how="left",
-    ).merge(
-        comp_species_w_names[[SBML_DFS.SC_ID, SBML_DFS.S_NAME, SBML_DFS.C_NAME]].rename(
-            {
-                SBML_DFS.SC_ID: "sc_id_down",
-                SBML_DFS.S_NAME: "downstream_name",
-                SBML_DFS.C_NAME: "downstream_compartment",
-            },
-            axis=1,
-        ),
-        how="left",
-    )[
-        REQUIRED_REACTION_FROMEDGELIST_COLUMNS + extra_reactions_columns
-    ]
-
-    # Validate merge didn't create duplicates
-    if interaction_edgelist.shape[0] != interaction_w_cspecies.shape[0]:
-        raise ValueError(
-            f"Merging compartmentalized species resulted in row count change "
-            f"from {interaction_edgelist.shape[0]} to {interaction_w_cspecies.shape[0]}"
-        )
-
-    # Create reaction IDs FIRST - before using them
-    interaction_w_cspecies[SBML_DFS.R_ID] = sbml_dfs_utils.id_formatter(
-        range(interaction_w_cspecies.shape[0]), SBML_DFS.R_ID
-    )
-
-    # Create reactions DataFrame
-    interactions_copy = interaction_w_cspecies.copy()
-    interactions_copy[SBML_DFS.R_SOURCE] = interaction_source
-
-    reactions_columns = [
-        SBML_DFS.R_NAME,
-        SBML_DFS.R_IDENTIFIERS,
-        SBML_DFS.R_SOURCE,
-        SBML_DFS.R_ISREVERSIBLE,
-    ]
-
-    reactions_df = interactions_copy.set_index(SBML_DFS.R_ID)[
-        reactions_columns + extra_reactions_columns
-    ]
-
-    # Separate extra data
-    reactions_data = reactions_df[extra_reactions_columns]
-    reactions_df = reactions_df[reactions_columns]
-
-    # Create reaction species relationships - NOW r_id exists
-    reaction_species_df = pd.concat(
-        [
-            # Upstream species (modifiers/stimulators/inhibitors)
-            interaction_w_cspecies[["sc_id_up", "sbo_term", SBML_DFS.R_ID]]
-            .assign(stoichiometry=upstream_stoichiometry)
-            .rename({"sc_id_up": "sc_id"}, axis=1),
-            # Downstream species (products)
-            interaction_w_cspecies[["sc_id_down", SBML_DFS.R_ID]]
-            .assign(
-                stoichiometry=downstream_stoichiometry,
-                sbo_term=MINI_SBO_FROM_NAME[downstream_sbo_name],
-            )
-            .rename({"sc_id_down": "sc_id"}, axis=1),
-        ]
-    )
-
-    reaction_species_df["rsc_id"] = sbml_dfs_utils.id_formatter(
-        range(reaction_species_df.shape[0]), "rsc_id"
-    )
-
-    reaction_species_df = reaction_species_df.set_index("rsc_id")
-
-    return reactions_df, reaction_species_df, reactions_data
-
-
 def _edgelist_assemble_sbml_model(
-    compartments,
-    species,
-    comp_species,
-    reactions,
-    reaction_species,
+    compartments: pd.DataFrame,
+    species: pd.DataFrame,
+    comp_species: pd.DataFrame,
+    reactions: pd.DataFrame,
+    reaction_species: pd.DataFrame,
     species_data,
     reactions_data,
     keep_species_data,
     keep_reactions_data,
-    extra_columns,
-):
+    extra_columns: dict[str, list[str]],
+) -> SBML_dfs:
     """
     Assemble the final SBML_dfs object.
 
@@ -2675,45 +2326,6 @@ def _edgelist_assemble_sbml_model(
     sbml_model.validate()
 
     return sbml_model
-
-
-def _sbml_dfs_from_edgelist_check_cspecies_merge(
-    merged_species: pd.DataFrame, original_species: pd.DataFrame
-) -> None:
-    """Check for a mismatch between the provided species data and species implied by the edgelist."""
-
-    # check for 1-many merge
-    if merged_species.shape[0] != original_species.shape[0]:
-        raise ValueError(
-            "Merging compartmentalized species to species_df"
-            " and compartments_df by names resulted in an "
-            f"increase in the tables from {original_species.shape[0]}"
-            f" to {merged_species.shape[0]} indicating that names were"
-            " not unique"
-        )
-
-    # check for missing species and compartments
-    missing_compartments = merged_species[merged_species[SBML_DFS.C_ID].isna()][
-        SBML_DFS.C_NAME
-    ].unique()
-    if len(missing_compartments) >= 1:
-        raise ValueError(
-            f"{len(missing_compartments)} compartments were present in"
-            ' "interaction_edgelist" but not "compartments_df":'
-            f" {', '.join(missing_compartments)}"
-        )
-
-    missing_species = merged_species[merged_species[SBML_DFS.S_ID].isna()][
-        SBML_DFS.S_NAME
-    ].unique()
-    if len(missing_species) >= 1:
-        raise ValueError(
-            f"{len(missing_species)} species were present in "
-            '"interaction_edgelist" but not "species_df":'
-            f" {', '.join(missing_species)}"
-        )
-
-    return None
 
 
 def _stub_compartments(
