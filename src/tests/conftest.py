@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import functools
 import os
 import sys
+import threading
+
 import pytest
-import signal
-import functools
 
 from napistu import consensus
 from napistu import indices
@@ -114,22 +115,40 @@ def pytest_runtest_setup(item):
 
 
 def skip_on_timeout(timeout_seconds):
-    """Decorator that skips a test if it takes longer than timeout_seconds"""
+    """Cross-platform decorator that skips a test if it takes longer than timeout_seconds"""
 
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            def timeout_handler(signum, frame):
+            result = [None]
+            exception = [None]
+            finished = [False]
+
+            def target():
+                try:
+                    result[0] = func(*args, **kwargs)
+                    finished[0] = True
+                except Exception as e:
+                    exception[0] = e
+                    finished[0] = True
+
+            thread = threading.Thread(target=target)
+            thread.daemon = True
+            thread.start()
+            thread.join(timeout_seconds)
+
+            if not finished[0]:
+                # Thread is still running, timeout occurred
                 pytest.skip(f"Test skipped due to timeout ({timeout_seconds}s)")
 
-            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(timeout_seconds)
-            try:
-                return func(*args, **kwargs)
-            finally:
-                signal.alarm(0)
-                signal.signal(signal.SIGALRM, old_handler)
+            if exception[0]:
+                raise exception[0]
+
+            return result[0]
 
         return wrapper
 
     return decorator
+
+
+pytest.skip_on_timeout = skip_on_timeout

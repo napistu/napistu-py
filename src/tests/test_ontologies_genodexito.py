@@ -1,5 +1,5 @@
 import pandas as pd
-from .conftest import skip_on_timeout
+import pytest
 
 from napistu.ontologies.genodexito import Genodexito
 from napistu.ontologies.constants import (
@@ -9,7 +9,7 @@ from napistu.ontologies.constants import (
 )
 
 
-@skip_on_timeout(5)
+@pytest.skip_on_timeout(5)
 def test_genodexito_mapping_operations():
     """Test Genodexito mapping table creation and operations."""
     # Initialize with test mode and Python method to avoid R dependencies
