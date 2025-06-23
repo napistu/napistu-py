@@ -12,7 +12,6 @@ import pandas as pd
 from pydantic import BaseModel
 
 from napistu import sbml_dfs_core
-from napistu import sbml_dfs_utils
 from napistu import utils
 
 from napistu.constants import IDENTIFIERS
@@ -883,9 +882,7 @@ def _prepare_species_identifiers(
     """Accepts and validates species_identifiers, or extracts a fresh table if None."""
 
     if species_identifiers is None:
-        species_identifiers = sbml_dfs_utils.get_characteristic_species_ids(
-            sbml_dfs, dogmatic=dogmatic
-        )
+        species_identifiers = sbml_dfs.get_characteristic_species_ids(dogmatic=dogmatic)
     else:
         # check for compatibility
         try:
@@ -898,8 +895,8 @@ def _prepare_species_identifiers(
             logger.warning(
                 f"The provided identifiers are not compatible with your `sbml_dfs` object. Extracting a fresh species identifier table. {e}"
             )
-            species_identifiers = sbml_dfs_utils.get_characteristic_species_ids(
-                sbml_dfs, dogmatic=dogmatic
+            species_identifiers = sbml_dfs.get_characteristic_species_ids(
+                dogmatic=dogmatic
             )
 
     return species_identifiers

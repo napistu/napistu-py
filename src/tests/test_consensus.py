@@ -7,8 +7,10 @@ import pytest
 from napistu import consensus
 from napistu import indices
 from napistu import source
+from napistu import sbml_dfs_core
 from napistu.ingestion import sbml
 from napistu.modify import pathwayannot
+from napistu.constants import SBML_DFS, SBML_DFS_SCHEMA
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")
@@ -246,6 +248,91 @@ def test_consensus_ontology_check():
     assert post_shared_onto_sp_set == {"chebi", "reactome", "uniprot"}
 
 
+def test_report_consensus_merges_reactions(tmp_path):
+    # Create two minimal SBML_dfs objects with a single reaction each, same r_id
+    r_id = "R00000001"
+    reactions = pd.DataFrame(
+        {
+            SBML_DFS.R_NAME: ["rxn1"],
+            SBML_DFS.R_IDENTIFIERS: [None],
+            SBML_DFS.R_SOURCE: [None],
+            SBML_DFS.R_ISREVERSIBLE: [False],
+        },
+        index=[r_id],
+    )
+    reactions.index.name = SBML_DFS.R_ID
+    reaction_species = pd.DataFrame(
+        {
+            SBML_DFS.R_ID: [r_id],
+            SBML_DFS.SC_ID: ["SC0001"],
+            SBML_DFS.STOICHIOMETRY: [1],
+            SBML_DFS.SBO_TERM: ["SBO:0000459"],
+        },
+        index=["RSC0001"],
+    )
+    reaction_species.index.name = SBML_DFS.RSC_ID
+    compartmentalized_species = pd.DataFrame(
+        {
+            SBML_DFS.SC_NAME: ["A [cytosol]"],
+            SBML_DFS.S_ID: ["S0001"],
+            SBML_DFS.C_ID: ["C0001"],
+            SBML_DFS.SC_SOURCE: [None],
+        },
+        index=["SC0001"],
+    )
+    compartmentalized_species.index.name = SBML_DFS.SC_ID
+    species = pd.DataFrame(
+        {
+            SBML_DFS.S_NAME: ["A"],
+            SBML_DFS.S_IDENTIFIERS: [None],
+            SBML_DFS.S_SOURCE: [None],
+        },
+        index=["S0001"],
+    )
+    species.index.name = SBML_DFS.S_ID
+    compartments = pd.DataFrame(
+        {
+            SBML_DFS.C_NAME: ["cytosol"],
+            SBML_DFS.C_IDENTIFIERS: [None],
+            SBML_DFS.C_SOURCE: [None],
+        },
+        index=["C0001"],
+    )
+    compartments.index.name = SBML_DFS.C_ID
+    sbml_dict = {
+        SBML_DFS.COMPARTMENTS: compartments,
+        SBML_DFS.SPECIES: species,
+        SBML_DFS.COMPARTMENTALIZED_SPECIES: compartmentalized_species,
+        SBML_DFS.REACTIONS: reactions,
+        SBML_DFS.REACTION_SPECIES: reaction_species,
+    }
+    sbml1 = sbml_dfs_core.SBML_dfs(sbml_dict, validate=False, resolve=False)
+    sbml2 = sbml_dfs_core.SBML_dfs(sbml_dict, validate=False, resolve=False)
+    sbml_dfs_dict = {"mod1": sbml1, "mod2": sbml2}
+
+    # Create a lookup_table that merges both reactions into a new_id
+    lookup_table = pd.DataFrame(
+        {
+            "model": ["mod1", "mod2"],
+            "r_id": [r_id, r_id],
+            "new_id": ["merged_rid", "merged_rid"],
+        }
+    )
+    # Use the reactions schema
+    table_schema = SBML_DFS_SCHEMA.SCHEMA[SBML_DFS.REACTIONS]
+
+    # Call the function and check that it runs and the merge_labels are as expected
+    consensus.report_consensus_merges(
+        lookup_table.set_index(["model", "r_id"])[
+            "new_id"
+        ],  # this is a Series with name 'new_id'
+        table_schema,
+        sbml_dfs_dict=sbml_dfs_dict,
+        n_example_merges=1,
+    )
+    # No assertion: this is a smoke test to ensure the Series output is handled without error
+
+
 ################################################
 # __main__
 ################################################
@@ -256,3 +343,4 @@ if __name__ == "__main__":
     test_source_tracking()
     test_passing_entity_data()
     test_consensus_ontology_check()
+    test_report_consensus_merges_reactions()

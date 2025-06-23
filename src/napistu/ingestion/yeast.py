@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 from napistu import identifiers
 from napistu import sbml_dfs_core
+from napistu import sbml_dfs_utils
 from napistu import source
 from napistu import utils
 from napistu.constants import BQB
@@ -105,7 +106,7 @@ def convert_idea_kinetics_to_sbml_dfs(
     # Constant fields (for this data source)
 
     # setup compartments (just treat this as uncompartmentalized for now)
-    compartments_df = sbml_dfs_core._stub_compartments()
+    compartments_df = sbml_dfs_utils.stub_compartments()
 
     # Per convention unaggregated models receive an empty source
     interaction_source = source.Source(init=True)

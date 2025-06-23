@@ -54,12 +54,12 @@ def cli():
 
 
 @click.group()
-def load():
+def ingestion():
     """Command line tools to retrieve raw data."""
     pass
 
 
-@load.command(name="reactome")
+@ingestion.command(name="reactome")
 @click.argument("base_folder", type=str)
 @click.option(
     "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
@@ -70,7 +70,7 @@ def load_reactome(base_folder: str, overwrite=True):
     reactome.reactome_sbml_download(f"{base_folder}/sbml", overwrite=overwrite)
 
 
-@load.command(name="bigg")
+@ingestion.command(name="bigg")
 @click.argument("base_folder", type=str)
 @click.option(
     "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
@@ -81,7 +81,7 @@ def load_bigg(base_folder: str, overwrite: bool):
     bigg.bigg_sbml_download(base_folder, overwrite)
 
 
-@load.command(name="trrust")
+@ingestion.command(name="trrust")
 @click.argument("target_uri", type=str)
 @click_logging.simple_verbosity_option(logger)
 def load_ttrust(target_uri: str):
@@ -89,7 +89,7 @@ def load_ttrust(target_uri: str):
     trrust.download_trrust(target_uri)
 
 
-@load.command(name="proteinatlas-subcell")
+@ingestion.command(name="proteinatlas-subcell")
 @click.argument("target_uri", type=str)
 @click.option(
     "--url",
@@ -102,7 +102,7 @@ def load_proteinatlas_subcell(target_uri: str, url: str):
     hpa.download_hpa_data(target_uri, url)
 
 
-@load.command(name="gtex-rnaseq-expression")
+@ingestion.command(name="gtex-rnaseq-expression")
 @click.argument("target_uri", type=str)
 @click.option(
     "--url",
@@ -115,7 +115,7 @@ def load_gtex_rnaseq(target_uri: str, url: str):
     gtex.download_gtex_rnaseq(target_uri, url)
 
 
-@load.command(name="string-db")
+@ingestion.command(name="string-db")
 @click.argument("target_uri", type=str)
 @click.option(
     "--species",
@@ -128,7 +128,7 @@ def load_string_db(target_uri: str, species: str):
     string.download_string(target_uri, species)
 
 
-@load.command(name="string-aliases")
+@ingestion.command(name="string-aliases")
 @click.argument("target_uri", type=str)
 @click.option(
     "--species",
@@ -343,9 +343,9 @@ def infer_uncompartmentalized_species_location(model_uri: str, output_model_uri:
     If the compartment of a subset of compartmentalized species was
     not specified, infer an appropriate compartment from other members of reactions they particpate in
     """
-    model = utils.load_pickle(model_uri)
-    model = sbml_dfs_core.infer_uncompartmentalized_species_location(model)
-    utils.save_pickle(output_model_uri, model)
+    sbml_dfs = utils.load_pickle(model_uri)
+    sbml_dfs.infer_uncompartmentalized_species_location()
+    utils.save_pickle(output_model_uri, sbml_dfs)
 
 
 @refine.command(name="name_compartmentalized_species")
@@ -357,9 +357,9 @@ def name_compartmentalized_species(model_uri: str, output_model_uri: str):
 
     Rename compartmentalized species if they have the same name as their species
     """
-    model = utils.load_pickle(model_uri)
-    model = sbml_dfs_core.name_compartmentalized_species(model)
-    utils.save_pickle(output_model_uri, model)
+    sbml_dfs = utils.load_pickle(model_uri)
+    sbml_dfs.name_compartmentalized_species()
+    utils.save_pickle(output_model_uri, sbml_dfs)
 
 
 @refine.command(name="merge_model_compartments")
@@ -786,9 +786,9 @@ def export_sbml_dfs_tables(
     logger.debug(f"nondogmatic = {nondogmatic}; dogmatic = {dogmatic}")
     logger.info(f"Exporting tables with dogmatic = {dogmatic}")
 
-    model = utils.load_pickle(model_uri)
-    sbml_dfs_core.export_sbml_dfs(
-        model_prefix, model, output_uri, overwrite=overwrite, dogmatic=dogmatic
+    sbml_dfs = utils.load_pickle(model_uri)
+    sbml_dfs.export_sbml_dfs(
+        model_prefix, output_uri, overwrite=overwrite, dogmatic=dogmatic
     )
 
 
@@ -884,7 +884,7 @@ def calculate_igraph_stats(input_uri, output_uri):
     utils.save_json(output_uri, stats)
 
 
-cli.add_command(load)
+cli.add_command(ingestion)
 cli.add_command(integrate)
 cli.add_command(consensus)
 cli.add_command(refine)

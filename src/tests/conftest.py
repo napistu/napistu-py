@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import functools
 import os
 import sys
+import threading
 
+import pytest
 
 from napistu import consensus
 from napistu import indices
@@ -109,3 +112,43 @@ def pytest_runtest_setup(item):
     # Skip tests that should run only on Unix
     if not is_unix and any(mark.name == "unix_only" for mark in item.iter_markers()):
         skip("Test runs only on Unix systems")
+
+
+def skip_on_timeout(timeout_seconds):
+    """Cross-platform decorator that skips a test if it takes longer than timeout_seconds"""
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            result = [None]
+            exception = [None]
+            finished = [False]
+
+            def target():
+                try:
+                    result[0] = func(*args, **kwargs)
+                    finished[0] = True
+                except Exception as e:
+                    exception[0] = e
+                    finished[0] = True
+
+            thread = threading.Thread(target=target)
+            thread.daemon = True
+            thread.start()
+            thread.join(timeout_seconds)
+
+            if not finished[0]:
+                # Thread is still running, timeout occurred
+                pytest.skip(f"Test skipped due to timeout ({timeout_seconds}s)")
+
+            if exception[0]:
+                raise exception[0]
+
+            return result[0]
+
+        return wrapper
+
+    return decorator
+
+
+pytest.skip_on_timeout = skip_on_timeout

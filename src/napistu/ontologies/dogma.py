@@ -4,6 +4,7 @@ import logging
 import pandas as pd
 
 from napistu import sbml_dfs_core
+from napistu import sbml_dfs_utils
 from napistu import source
 from napistu import identifiers
 from napistu import utils
@@ -59,7 +60,7 @@ def create_dogmatic_sbml_dfs(
     )
 
     # stub required but invariant variables
-    compartments_df = sbml_dfs_core._stub_compartments()
+    compartments_df = sbml_dfs_utils.stub_compartments()
     interaction_source = source.Source(init=True)
 
     # interactions table. This is required to create the sbml_dfs but we'll drop the info later

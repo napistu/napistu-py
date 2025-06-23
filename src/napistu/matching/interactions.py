@@ -40,7 +40,7 @@ def edgelist_to_pathway_species(
         pd.Dataframe containing a "identifier_upstream" and "identifier_downstream" variables used to to match entries
     species_identifiers: pd.DataFrame
         A table of molecular species identifiers produced from sbml_dfs.get_identifiers("species") generally using
-        sbml_dfs_core.export_sbml_dfs()
+        sbml_dfs.export_sbml_dfs()
     ontologies: set
         A set of ontologies used to match features to pathway species
     feature_id_var: str, default=FEATURE_ID_VAR_DEFAULT
@@ -138,7 +138,7 @@ def edgelist_to_scids(
         A mechanistic model
     species_identifiers: pd.DataFrame
         A table of molecular species identifiers produced from
-        sbml_dfs.get_identifiers("species") generally using sbml_dfs_core.export_sbml_dfs()
+        sbml_dfs.get_identifiers("species") generally using sbml_dfs.export_sbml_dfs()
     ontologies: set
         A set of ontologies used to match features to pathway species
 
@@ -218,7 +218,7 @@ def filter_to_direct_mechanistic_interactions(
     species_identifiers: pd.DataFrame
         A table of molecular species identifiers
         produced from sbml_dfs.get_identifiers("species") generally
-        using sbml_dfs_core.export_sbml_dfs()
+        using sbml_dfs.export_sbml_dfs()
     ontologies: set
         A set of ontologies used to match features to pathway species
 
@@ -342,7 +342,7 @@ def filter_to_indirect_mechanistic_interactions(
         A mechanistic model
     species_identifiers: pandas.DataFrame
         A table of molecular species identifiers produced from
-        sbml_dfs.get_identifiers("species") generally using sbml_dfs_core.export_sbml_dfs()
+        sbml_dfs.get_identifiers("species") generally using sbml_dfs.export_sbml_dfs()
     napistu_graph: igraph.Graph
         A network representation of the sbml_dfs model
     ontologies: set

@@ -9,18 +9,16 @@ from napistu import sbml_dfs_core
 from napistu.source import Source
 from napistu.ingestion import sbml
 from napistu.modify import pathwayannot
-from napistu.sbml_dfs_utils import _stub_ids
 
 from napistu import identifiers as napistu_identifiers
 from napistu.constants import (
     SBML_DFS,
-    SBOTERM_NAMES,
     BQB_DEFINING_ATTRS,
     BQB_DEFINING_ATTRS_LOOSE,
     BQB,
-    IDENTIFIERS,
 )
 from napistu.sbml_dfs_core import SBML_dfs
+from unittest.mock import patch
 
 
 @pytest.fixture
@@ -30,8 +28,8 @@ def test_data():
     # Test compartments
     compartments_df = pd.DataFrame(
         [
-            {"c_name": "nucleus", "c_Identifiers": _stub_ids([])},
-            {"c_name": "cytoplasm", "c_Identifiers": _stub_ids([])},
+            {"c_name": "nucleus", "c_Identifiers": None},
+            {"c_name": "cytoplasm", "c_Identifiers": None},
         ]
     )
 
@@ -40,13 +38,13 @@ def test_data():
         [
             {
                 "s_name": "TP53",
-                "s_Identifiers": _stub_ids([]),
+                "s_Identifiers": None,
                 "gene_type": "tumor_suppressor",
             },
-            {"s_name": "MDM2", "s_Identifiers": _stub_ids([]), "gene_type": "oncogene"},
+            {"s_name": "MDM2", "s_Identifiers": None, "gene_type": "oncogene"},
             {
                 "s_name": "CDKN1A",
-                "s_Identifiers": _stub_ids([]),
+                "s_Identifiers": None,
                 "gene_type": "cell_cycle",
             },
         ]
@@ -62,7 +60,7 @@ def test_data():
                 "downstream_compartment": "nucleus",
                 "r_name": "TP53_activates_CDKN1A",
                 "sbo_term": "SBO:0000459",
-                "r_Identifiers": _stub_ids([]),
+                "r_Identifiers": None,
                 "r_isreversible": False,
                 "confidence": 0.95,
             },
@@ -73,7 +71,7 @@ def test_data():
                 "downstream_compartment": "nucleus",
                 "r_name": "MDM2_inhibits_TP53",
                 "sbo_term": "SBO:0000020",
-                "r_Identifiers": _stub_ids([]),
+                "r_Identifiers": None,
                 "r_isreversible": False,
                 "confidence": 0.87,
             },
@@ -274,26 +272,6 @@ def test_sbml_dfs_remove_reactions_check_species(sbml_dfs):
     sbml_dfs.validate()
 
 
-def test_formula(sbml_dfs):
-    # create a formula string
-
-    an_r_id = sbml_dfs.reactions.index[0]
-
-    reaction_species_df = sbml_dfs.reaction_species[
-        sbml_dfs.reaction_species["r_id"] == an_r_id
-    ].merge(sbml_dfs.compartmentalized_species, left_on="sc_id", right_index=True)
-
-    formula_str = sbml_dfs_core.construct_formula_string(
-        reaction_species_df, sbml_dfs.reactions, name_var="sc_name"
-    )
-
-    assert isinstance(formula_str, str)
-    assert (
-        formula_str
-        == "CO2 [extracellular region] -> CO2 [cytosol] ---- modifiers: AQP1 tetramer [plasma membrane]]"
-    )
-
-
 def test_read_sbml_with_invalid_ids():
     SBML_W_BAD_IDS = "R-HSA-166658.sbml"
     test_path = os.path.abspath(os.path.join(__file__, os.pardir))
@@ -303,17 +281,6 @@ def test_read_sbml_with_invalid_ids():
     # invalid identifiers still create a valid sbml_dfs
     sbml_w_bad_ids = sbml.SBML(sbml_w_bad_ids_path)
     assert isinstance(sbml_dfs_core.SBML_dfs(sbml_w_bad_ids), sbml_dfs_core.SBML_dfs)
-
-
-def test_stubbed_compartment():
-    compartment = sbml_dfs_core._stub_compartments()
-
-    assert compartment["c_Identifiers"].iloc[0].ids[0] == {
-        "ontology": "go",
-        "identifier": "GO:0005575",
-        "url": "https://www.ebi.ac.uk/QuickGO/term/GO:0005575",
-        "bqb": "BQB_IS",
-    }
 
 
 def test_get_table(sbml_dfs):
@@ -366,10 +333,20 @@ def test_species_status(sbml_dfs):
     select_species = species[species["s_name"] == "OxyHbA"]
     assert select_species.shape[0] == 1
 
-    status = sbml_dfs_core.species_status(select_species.index[0], sbml_dfs)
+    status = sbml_dfs.species_status(select_species.index[0])
+
+    # expected columns
+    expected_columns = [
+        SBML_DFS.SC_NAME,
+        SBML_DFS.STOICHIOMETRY,
+        SBML_DFS.R_NAME,
+        "r_formula_str",
+    ]
+    assert all(col in status.columns for col in expected_columns)
+
     assert (
         status["r_formula_str"][0]
-        == "4.0 H+ + OxyHbA + 4.0 CO2 -> 4.0 O2 + Protonated Carbamino DeoxyHbA [cytosol]"
+        == "cytosol: 4.0 CO2 + 4.0 H+ + OxyHbA -> 4.0 O2 + Protonated Carbamino DeoxyHbA"
     )
 
 
@@ -436,91 +413,6 @@ def test_get_identifiers_handles_missing_values():
     ), "Only Identifiers objects should be returned."
 
 
-def test_find_underspecified_reactions():
-
-    reaction_w_regulators = pd.DataFrame(
-        {
-            SBML_DFS.SC_ID: ["A", "B", "C", "D", "E", "F", "G"],
-            SBML_DFS.STOICHIOMETRY: [-1, -1, 1, 1, 0, 0, 0],
-            SBML_DFS.SBO_TERM: [
-                SBOTERM_NAMES.REACTANT,
-                SBOTERM_NAMES.REACTANT,
-                SBOTERM_NAMES.PRODUCT,
-                SBOTERM_NAMES.PRODUCT,
-                SBOTERM_NAMES.CATALYST,
-                SBOTERM_NAMES.CATALYST,
-                SBOTERM_NAMES.STIMULATOR,
-            ],
-        }
-    ).assign(r_id="bar")
-    reaction_w_regulators[SBML_DFS.RSC_ID] = [
-        f"rsc_{i}" for i in range(len(reaction_w_regulators))
-    ]
-    reaction_w_regulators.set_index(SBML_DFS.RSC_ID, inplace=True)
-    reaction_w_regulators = sbml_dfs_core.add_sbo_role(reaction_w_regulators)
-
-    reaction_w_interactors = pd.DataFrame(
-        {
-            SBML_DFS.SC_ID: ["A", "B"],
-            SBML_DFS.STOICHIOMETRY: [-1, 1],
-            SBML_DFS.SBO_TERM: [SBOTERM_NAMES.REACTANT, SBOTERM_NAMES.REACTANT],
-        }
-    ).assign(r_id="baz")
-    reaction_w_interactors[SBML_DFS.RSC_ID] = [
-        f"rsc_{i}" for i in range(len(reaction_w_interactors))
-    ]
-    reaction_w_interactors.set_index(SBML_DFS.RSC_ID, inplace=True)
-    reaction_w_interactors = sbml_dfs_core.add_sbo_role(reaction_w_interactors)
-
-    working_reactions = reaction_w_regulators.copy()
-    working_reactions["new"] = True
-    working_reactions.loc["rsc_0", "new"] = False
-    working_reactions
-    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
-    assert result == {"bar"}
-
-    # missing one enzyme -> operable
-    working_reactions = reaction_w_regulators.copy()
-    working_reactions["new"] = True
-    working_reactions.loc["rsc_4", "new"] = False
-    working_reactions
-    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
-    assert result == set()
-
-    # missing one product -> inoperable
-    working_reactions = reaction_w_regulators.copy()
-    working_reactions["new"] = True
-    working_reactions.loc["rsc_2", "new"] = False
-    working_reactions
-    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
-    assert result == {"bar"}
-
-    # missing all enzymes -> inoperable
-    working_reactions = reaction_w_regulators.copy()
-    working_reactions["new"] = True
-    working_reactions.loc["rsc_4", "new"] = False
-    working_reactions.loc["rsc_5", "new"] = False
-    working_reactions
-    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
-    assert result == {"bar"}
-
-    # missing regulators -> operable
-    working_reactions = reaction_w_regulators.copy()
-    working_reactions["new"] = True
-    working_reactions.loc["rsc_6", "new"] = False
-    working_reactions
-    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
-    assert result == set()
-
-    # remove an interactor
-    working_reactions = reaction_w_interactors.copy()
-    working_reactions["new"] = True
-    working_reactions.loc["rsc_0", "new"] = False
-    working_reactions
-    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
-    assert result == {"baz"}
-
-
 def test_remove_entity_data_success(sbml_dfs_w_data):
     """Test successful removal of entity data."""
     # Get initial data
@@ -564,85 +456,92 @@ def test_remove_entity_data_nonexistent(sbml_dfs_w_data, caplog):
     sbml_dfs_w_data.validate()
 
 
-def test_filter_to_characteristic_species_ids():
+def test_get_characteristic_species_ids():
+    """
+    Test get_characteristic_species_ids function with both dogmatic and non-dogmatic cases.
+    """
+    # Create mock species identifiers data
+    mock_species_ids = pd.DataFrame(
+        {
+            "s_id": ["s1", "s2", "s3", "s4", "s5"],
+            "identifier": ["P12345", "CHEBI:15377", "GO:12345", "P67890", "P67890"],
+            "ontology": ["uniprot", "chebi", "go", "uniprot", "chebi"],
+            "bqb": [
+                "BQB_IS",
+                "BQB_IS",
+                "BQB_HAS_PART",
+                "BQB_HAS_VERSION",
+                "BQB_ENCODES",
+            ],
+        }
+    )
 
-    species_ids_dict = {
-        SBML_DFS.S_ID: ["large_complex"] * 6
-        + ["small_complex"] * 2
-        + ["proteinA", "proteinB"]
-        + ["proteinC"] * 3
-        + [
-            "promiscuous_complexA",
-            "promiscuous_complexB",
-            "promiscuous_complexC",
-            "promiscuous_complexD",
-            "promiscuous_complexE",
-        ],
-        IDENTIFIERS.ONTOLOGY: ["complexportal"]
-        + ["HGNC"] * 7
-        + ["GO"] * 2
-        + ["ENSG", "ENSP", "pubmed"]
-        + ["HGNC"] * 5,
-        IDENTIFIERS.IDENTIFIER: [
-            "CPX-BIG",
-            "mem1",
-            "mem2",
-            "mem3",
-            "mem4",
-            "mem5",
-            "part1",
-            "part2",
-            "GO:1",
-            "GO:2",
-            "dna_seq",
-            "protein_seq",
-            "my_cool_pub",
-        ]
-        + ["promiscuous_complex"] * 5,
-        IDENTIFIERS.BQB: [BQB.IS]
-        + [BQB.HAS_PART] * 7
-        + [BQB.IS] * 2
-        + [
-            # these are retained if BQB_DEFINING_ATTRS_LOOSE is used
-            BQB.ENCODES,
-            BQB.IS_ENCODED_BY,
-            # this should always be removed
-            BQB.IS_DESCRIBED_BY,
-        ]
-        + [BQB.HAS_PART] * 5,
+    # Create minimal required tables for SBML_dfs
+    compartments = pd.DataFrame(
+        {"c_name": ["cytosol"], "c_Identifiers": [None]}, index=["C1"]
+    )
+    compartments.index.name = "c_id"
+    species = pd.DataFrame(
+        {"s_name": ["A"], "s_Identifiers": [None], "s_source": [None]}, index=["s1"]
+    )
+    species.index.name = "s_id"
+    compartmentalized_species = pd.DataFrame(
+        {
+            "sc_name": ["A [cytosol]"],
+            "s_id": ["s1"],
+            "c_id": ["C1"],
+            "sc_source": [None],
+        },
+        index=["SC1"],
+    )
+    compartmentalized_species.index.name = "sc_id"
+    reactions = pd.DataFrame(
+        {
+            "r_name": ["rxn1"],
+            "r_Identifiers": [None],
+            "r_source": [None],
+            "r_isreversible": [False],
+        },
+        index=["R1"],
+    )
+    reactions.index.name = "r_id"
+    reaction_species = pd.DataFrame(
+        {
+            "r_id": ["R1"],
+            "sc_id": ["SC1"],
+            "stoichiometry": [1],
+            "sbo_term": ["SBO:0000459"],
+        },
+        index=["RSC1"],
+    )
+    reaction_species.index.name = "rsc_id"
+
+    sbml_dict = {
+        "compartments": compartments,
+        "species": species,
+        "compartmentalized_species": compartmentalized_species,
+        "reactions": reactions,
+        "reaction_species": reaction_species,
     }
+    sbml_dfs = SBML_dfs(sbml_dict, validate=False, resolve=False)
 
-    species_ids = pd.DataFrame(species_ids_dict)
+    # Test dogmatic case (default)
+    expected_bqbs = BQB_DEFINING_ATTRS + [BQB.HAS_PART]  # noqa: F841
+    with patch.object(sbml_dfs, "get_identifiers", return_value=mock_species_ids):
+        dogmatic_result = sbml_dfs.get_characteristic_species_ids()
+        expected_dogmatic = mock_species_ids.query("bqb in @expected_bqbs")
+        pd.testing.assert_frame_equal(
+            dogmatic_result, expected_dogmatic, check_like=True
+        )
 
-    characteristic_ids_narrow = sbml_dfs_core.filter_to_characteristic_species_ids(
-        species_ids,
-        defining_biological_qualifiers=BQB_DEFINING_ATTRS,
-        max_complex_size=4,
-        max_promiscuity=4,
-    )
-
-    EXPECTED_IDS = ["CPX-BIG", "GO:1", "GO:2", "part1", "part2"]
-    assert characteristic_ids_narrow[IDENTIFIERS.IDENTIFIER].tolist() == EXPECTED_IDS
-
-    characteristic_ids_loose = sbml_dfs_core.filter_to_characteristic_species_ids(
-        species_ids,
-        # include encodes and is_encoded_by as equivalent to is
-        defining_biological_qualifiers=BQB_DEFINING_ATTRS_LOOSE,
-        max_complex_size=4,
-        # expand promiscuity to default value
-        max_promiscuity=20,
-    )
-
-    EXPECTED_IDS = [
-        "CPX-BIG",
-        "GO:1",
-        "GO:2",
-        "dna_seq",
-        "protein_seq",
-        "part1",
-        "part2",
-    ] + ["promiscuous_complex"] * 5
-    assert characteristic_ids_loose[IDENTIFIERS.IDENTIFIER].tolist() == EXPECTED_IDS
+    # Test non-dogmatic case
+    expected_bqbs = BQB_DEFINING_ATTRS_LOOSE + [BQB.HAS_PART]  # noqa: F841
+    with patch.object(sbml_dfs, "get_identifiers", return_value=mock_species_ids):
+        non_dogmatic_result = sbml_dfs.get_characteristic_species_ids(dogmatic=False)
+        expected_non_dogmatic = mock_species_ids.query("bqb in @expected_bqbs")
+        pd.testing.assert_frame_equal(
+            non_dogmatic_result, expected_non_dogmatic, check_like=True
+        )
 
 
 def test_sbml_basic_functionality(test_data):

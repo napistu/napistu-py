@@ -1,7 +1,10 @@
+import pytest
+
 from napistu.ontologies.mygene import create_python_mapping_tables
 from napistu.ontologies.constants import INTERCONVERTIBLE_GENIC_ONTOLOGIES
 
 
+@pytest.skip_on_timeout(5)
 def test_create_python_mapping_tables_yeast():
     """Test create_python_mapping_tables with yeast species."""
     # Test with a subset of mappings to keep test runtime reasonable

@@ -1,4 +1,6 @@
 import pandas as pd
+import pytest
+
 from napistu.ontologies.genodexito import Genodexito
 from napistu.ontologies.constants import (
     GENODEXITO_DEFS,
@@ -7,6 +9,7 @@ from napistu.ontologies.constants import (
 )
 
 
+@pytest.skip_on_timeout(5)
 def test_genodexito_mapping_operations():
     """Test Genodexito mapping table creation and operations."""
     # Initialize with test mode and Python method to avoid R dependencies

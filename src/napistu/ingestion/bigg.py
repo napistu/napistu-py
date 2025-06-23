@@ -122,10 +122,10 @@ def construct_bigg_consensus(
         raise NotImplementedError("Merging of models not implemented yet for BiGG")
 
     # In Bigg there should be only one model
-    model = list(sbml_dfs_dict.values())[0]
+    sbml_dfs = list(sbml_dfs_dict.values())[0]
     # fix missing compartimentalization
-    model = sbml_dfs_core.infer_uncompartmentalized_species_location(model)
-    model = sbml_dfs_core.name_compartmentalized_species(model)
-    rename_species_ontologies(model)
-    model.validate()
-    return model
+    sbml_dfs.infer_uncompartmentalized_species_location()
+    sbml_dfs.name_compartmentalized_species()
+    rename_species_ontologies(sbml_dfs)
+    sbml_dfs.validate()
+    return sbml_dfs
