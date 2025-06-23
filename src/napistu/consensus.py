@@ -843,8 +843,8 @@ def report_consensus_merges(
         indexed_models = merges_lookup.set_index("model").sort_index()
         merges_dict = dict()
         for mod in indexed_models.index.unique():
-            merges_dict[mod] = sbml_dfs_core.reaction_summaries(
-                sbml_dfs_dict[mod], indexed_models.loc[mod]["r_id"]
+            merges_dict[mod] = sbml_dfs_dict[mod].reaction_summaries(
+                indexed_models.loc[mod]["r_id"]
             )
         merge_labels = pd.concat(merges_dict, names=["model", "r_id"]).rename("label")
 

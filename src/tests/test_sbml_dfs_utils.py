@@ -61,3 +61,23 @@ def test_get_characteristic_species_ids():
     pd.testing.assert_frame_equal(
         non_dogmatic_result, expected_non_dogmatic, check_like=True
     )
+
+
+def test_formula(sbml_dfs):
+    # create a formula string
+
+    an_r_id = sbml_dfs.reactions.index[0]
+
+    reaction_species_df = sbml_dfs.reaction_species[
+        sbml_dfs.reaction_species["r_id"] == an_r_id
+    ].merge(sbml_dfs.compartmentalized_species, left_on="sc_id", right_index=True)
+
+    formula_str = sbml_dfs_utils.construct_formula_string(
+        reaction_species_df, sbml_dfs.reactions, name_var="sc_name"
+    )
+
+    assert isinstance(formula_str, str)
+    assert (
+        formula_str
+        == "CO2 [extracellular region] -> CO2 [cytosol] ---- modifiers: AQP1 tetramer [plasma membrane]]"
+    )

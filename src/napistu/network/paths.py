@@ -489,7 +489,7 @@ def _label_path_reactions(sbml_dfs: sbml_dfs_core.SBML_dfs, paths_df: pd.DataFra
         reaction_info = (
             pd.concat(
                 [
-                    sbml_dfs_core.reaction_summaries(sbml_dfs, r_ids=x)
+                    sbml_dfs.reaction_summaries(r_ids=x)
                     for x in set(reaction_paths["node"])
                 ]
             )

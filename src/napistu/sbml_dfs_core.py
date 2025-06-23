@@ -1092,260 +1092,166 @@ class SBML_dfs:
                     f"Extra key are: {', '.join(extra_fks)}"
                 )
 
+    def species_status(self, s_id: str) -> pd.DataFrame:
+        """
+        Species Status
 
-def species_status(s_id: str, sbml_dfs: SBML_dfs) -> pd.DataFrame:
-    """
-    Species Status
+        Return all of the reactions a species participates in.
 
-    Return all of the reaction's a species particpates in.
+        Parameters:
+        s_id: str
+            A species ID
 
-    Parameters:
-    s_id: str
-      A species ID
-    sbml_dfs: SBML_dfs
+        Returns:
+        pd.DataFrame, one row per reaction the species participates in
+        with columns:
+        - sc_name: str, name of the compartment the species participates in
+        - stoichiometry: float, stoichiometry of the species in the reaction
+        - r_name: str, name of the reaction
+        - r_formula_str: str, human-readable formula of the reaction
+        """
+        matching_species = self.species.loc[s_id]
 
-    Returns:
-    pd.DataFrame, one row reaction
-    """
+        if not isinstance(matching_species, pd.Series):
+            raise ValueError(f"{s_id} did not match a single species")
 
-    matching_species = sbml_dfs.species.loc[s_id]
-
-    if not isinstance(matching_species, pd.Series):
-        raise ValueError(f"{s_id} did not match a single species")
-
-    # find all rxns species particpate in
-
-    matching_compartmentalized_species = sbml_dfs.compartmentalized_species[
-        sbml_dfs.compartmentalized_species.s_id.isin([s_id])
-    ]
-
-    rxns_participating = sbml_dfs.reaction_species[
-        sbml_dfs.reaction_species.sc_id.isin(matching_compartmentalized_species.index)
-    ]
-
-    # find all participants in these rxns
-
-    full_rxns_participating = sbml_dfs.reaction_species[
-        sbml_dfs.reaction_species.r_id.isin(rxns_participating[SBML_DFS.R_ID])
-    ].merge(
-        sbml_dfs.compartmentalized_species, left_on=SBML_DFS.SC_ID, right_index=True
-    )
-
-    participating_rids = full_rxns_participating[SBML_DFS.R_ID].unique()
-    participating_r_names = sbml_dfs.reactions.loc[participating_rids, SBML_DFS.R_NAME]
-    participating_r_formulas = reaction_summaries(sbml_dfs, r_ids=participating_rids)
-    reaction_descriptions = pd.concat(
-        [participating_r_names, participating_r_formulas], axis=1
-    )
-
-    status = (
-        full_rxns_participating.loc[
-            full_rxns_participating[SBML_DFS.SC_ID].isin(
-                matching_compartmentalized_species.index.values.tolist()
-            ),
-            [SBML_DFS.SC_NAME, SBML_DFS.STOICHIOMETRY, SBML_DFS.R_ID],
+        # find all rxns species participate in
+        matching_compartmentalized_species = self.compartmentalized_species[
+            self.compartmentalized_species.s_id.isin([s_id])
         ]
-        .merge(reaction_descriptions, left_on=SBML_DFS.R_ID, right_index=True)
-        .reset_index(drop=True)
-        .drop(SBML_DFS.R_ID, axis=1)
-    )
 
-    return status
+        rxns_participating = self.reaction_species[
+            self.reaction_species.sc_id.isin(matching_compartmentalized_species.index)
+        ]
 
+        # find all participants in these rxns
+        full_rxns_participating = self.reaction_species[
+            self.reaction_species.r_id.isin(rxns_participating[SBML_DFS.R_ID])
+        ].merge(
+            self.compartmentalized_species, left_on=SBML_DFS.SC_ID, right_index=True
+        )
 
-def reaction_summaries(sbml_dfs: SBML_dfs, r_ids=None) -> pd.Series:
-    """
-    Reaction Summary
+        participating_rids = full_rxns_participating[SBML_DFS.R_ID].unique()
+        participating_r_names = self.reactions.loc[participating_rids, SBML_DFS.R_NAME]
+        participating_r_formulas = self.reaction_summaries(r_ids=participating_rids)
+        reaction_descriptions = pd.concat(
+            [participating_r_names, participating_r_formulas], axis=1
+        )
 
-    Return human-readable formulas for reactions.
-
-    Parameters:
-    ----------
-    sbml_dfs: sbml.SBML_dfs
-        A relational mechanistic model
-    r_ids: [str], str or None
-        Reaction IDs or None for all reactions
-
-    Returns:
-    ----------
-    formula_strs: pd.Series
-    """
-
-    if isinstance(r_ids, str):
-        r_ids = [r_ids]
-
-    if r_ids is None:
-        matching_reactions = sbml_dfs.reactions
-    else:
-        matching_reactions = sbml_dfs.reactions.loc[r_ids]
-
-    matching_reaction_species = sbml_dfs.reaction_species[
-        sbml_dfs.reaction_species.r_id.isin(matching_reactions.index)
-    ].merge(
-        sbml_dfs.compartmentalized_species, left_on=SBML_DFS.SC_ID, right_index=True
-    )
-
-    # split into within compartment and cross-compartment reactions
-    r_id_compartment_counts = matching_reaction_species.groupby(SBML_DFS.R_ID)[
-        SBML_DFS.C_ID
-    ].nunique()
-
-    # identify reactions which work across compartments
-    r_id_cross_compartment = r_id_compartment_counts[r_id_compartment_counts > 1]
-    # there species must be labelled with the sc_name to specify where a species exists
-    if r_id_cross_compartment.shape[0] > 0:
-        rxn_eqtn_cross_compartment = (
-            matching_reaction_species[
-                matching_reaction_species[SBML_DFS.R_ID].isin(
-                    r_id_cross_compartment.index
-                )
+        status = (
+            full_rxns_participating.loc[
+                full_rxns_participating[SBML_DFS.SC_ID].isin(
+                    matching_compartmentalized_species.index.values.tolist()
+                ),
+                [SBML_DFS.SC_NAME, SBML_DFS.STOICHIOMETRY, SBML_DFS.R_ID],
             ]
-            .sort_values([SBML_DFS.SC_NAME])
-            .groupby(SBML_DFS.R_ID)
-            .apply(
-                lambda x: construct_formula_string(
-                    x, sbml_dfs.reactions, SBML_DFS.SC_NAME
+            .merge(reaction_descriptions, left_on=SBML_DFS.R_ID, right_index=True)
+            .reset_index(drop=True)
+            .drop(SBML_DFS.R_ID, axis=1)
+        )
+
+        return status
+
+    def reaction_summaries(self, r_ids=None) -> pd.Series:
+        """
+        Reaction Summary
+
+        Return human-readable formulas for reactions.
+
+        Parameters:
+        ----------
+        r_ids: [str], str or None
+            Reaction IDs or None for all reactions
+
+        Returns:
+        ----------
+        formula_strs: pd.Series
+        """
+        if isinstance(r_ids, str):
+            r_ids = [r_ids]
+
+        if r_ids is None:
+            matching_reactions = self.reactions
+        else:
+            matching_reactions = self.reactions.loc[r_ids]
+
+        matching_reaction_species = self.reaction_species[
+            self.reaction_species.r_id.isin(matching_reactions.index)
+        ].merge(
+            self.compartmentalized_species, left_on=SBML_DFS.SC_ID, right_index=True
+        )
+
+        # split into within compartment and cross-compartment reactions
+        r_id_compartment_counts = matching_reaction_species.groupby(SBML_DFS.R_ID)[
+            SBML_DFS.C_ID
+        ].nunique()
+
+        # identify reactions which work across compartments
+        r_id_cross_compartment = r_id_compartment_counts[r_id_compartment_counts > 1]
+        # there species must be labelled with the sc_name to specify where a species exists
+        if r_id_cross_compartment.shape[0] > 0:
+            rxn_eqtn_cross_compartment = (
+                matching_reaction_species[
+                    matching_reaction_species[SBML_DFS.R_ID].isin(
+                        r_id_cross_compartment.index
+                    )
+                ]
+                .sort_values([SBML_DFS.SC_NAME])
+                .groupby(SBML_DFS.R_ID)
+                .apply(
+                    lambda x: sbml_dfs_utils.construct_formula_string(
+                        x, self.reactions, SBML_DFS.SC_NAME
+                    )
+                )
+                .rename("r_formula_str")
+            )
+        else:
+            rxn_eqtn_cross_compartment = None
+
+        # identify reactions which occur within a single compartment; for these the reaction
+        # can be labelled with the compartment and individual species can receive a more readable s_name
+        r_id_within_compartment = r_id_compartment_counts[r_id_compartment_counts == 1]
+        if r_id_within_compartment.shape[0] > 0:
+            # add s_name
+            augmented_matching_reaction_species = (
+                matching_reaction_species[
+                    matching_reaction_species[SBML_DFS.R_ID].isin(
+                        r_id_within_compartment.index
+                    )
+                ]
+                .merge(self.compartments, left_on=SBML_DFS.C_ID, right_index=True)
+                .merge(self.species, left_on=SBML_DFS.S_ID, right_index=True)
+                .sort_values([SBML_DFS.S_NAME])
+            )
+            # create formulas based on s_names of components
+            rxn_eqtn_within_compartment = augmented_matching_reaction_species.groupby(
+                [SBML_DFS.R_ID, SBML_DFS.C_NAME]
+            ).apply(
+                lambda x: sbml_dfs_utils.construct_formula_string(
+                    x, self.reactions, SBML_DFS.S_NAME
                 )
             )
-            .rename("r_formula_str")
-        )
-    else:
-        rxn_eqtn_cross_compartment = None
+            # add compartment for each reaction
+            rxn_eqtn_within_compartment = pd.Series(
+                [
+                    y + ": " + x
+                    for x, y in zip(
+                        rxn_eqtn_within_compartment,
+                        rxn_eqtn_within_compartment.index.get_level_values(
+                            SBML_DFS.C_NAME
+                        ),
+                    )
+                ],
+                index=rxn_eqtn_within_compartment.index.get_level_values(SBML_DFS.R_ID),
+            ).rename("r_formula_str")
+        else:
+            rxn_eqtn_within_compartment = None
 
-    # identify reactions which occur within a single compartment; for these the reaction
-    # can be labelled with the compartment and individual species can receive a more readable s_name
-    r_id_within_compartment = r_id_compartment_counts[r_id_compartment_counts == 1]
-    if r_id_within_compartment.shape[0] > 0:
-        # add s_name
-        augmented_matching_reaction_species = (
-            matching_reaction_species[
-                matching_reaction_species[SBML_DFS.R_ID].isin(
-                    r_id_within_compartment.index
-                )
-            ]
-            .merge(sbml_dfs.compartments, left_on=SBML_DFS.C_ID, right_index=True)
-            .merge(sbml_dfs.species, left_on=SBML_DFS.S_ID, right_index=True)
-            .sort_values([SBML_DFS.S_NAME])
-        )
-        # create formulas based on s_names of components
-        rxn_eqtn_within_compartment = augmented_matching_reaction_species.groupby(
-            [SBML_DFS.R_ID, SBML_DFS.C_NAME]
-        ).apply(
-            lambda x: construct_formula_string(x, sbml_dfs.reactions, SBML_DFS.S_NAME)
-        )
-        # add compartment for each reaction
-        rxn_eqtn_within_compartment = pd.Series(
-            [
-                y + ": " + x
-                for x, y in zip(
-                    rxn_eqtn_within_compartment,
-                    rxn_eqtn_within_compartment.index.get_level_values(SBML_DFS.C_NAME),
-                )
-            ],
-            index=rxn_eqtn_within_compartment.index.get_level_values(SBML_DFS.R_ID),
-        ).rename("r_formula_str")
-    else:
-        rxn_eqtn_within_compartment = None
-
-    formula_strs = pd.concat([rxn_eqtn_cross_compartment, rxn_eqtn_within_compartment])
-
-    return formula_strs
-
-
-def construct_formula_string(
-    reaction_species_df: pd.DataFrame,
-    reactions_df: pd.DataFrame,
-    name_var: str,
-) -> str:
-    """
-    Construct Formula String
-
-    Convert a table of reaction species into a formula string
-
-    Parameters:
-    ----------
-    reaction_species_df: pd.DataFrame
-        Table containing a reactions' species
-    reactions_df: pd.DataFrame
-        smbl.reactions
-    name_var: str
-        Name used to label species
-
-    Returns:
-    ----------
-    formula_str: str
-        String representation of a reactions substrates, products and
-        modifiers
-
-    """
-
-    reaction_species_df["label"] = [
-        add_stoi_to_species_name(x, y)
-        for x, y in zip(
-            reaction_species_df[SBML_DFS.STOICHIOMETRY], reaction_species_df[name_var]
-        )
-    ]
-
-    rxn_reversible = bool(
-        reactions_df.loc[
-            reaction_species_df[SBML_DFS.R_ID].iloc[0], SBML_DFS.R_ISREVERSIBLE
-        ]
-    )  # convert from a np.bool_ to bool if needed
-    if not isinstance(rxn_reversible, bool):
-        raise TypeError(
-            f"rxn_reversible must be a bool, but got {type(rxn_reversible).__name__}"
+        formula_strs = pd.concat(
+            [rxn_eqtn_cross_compartment, rxn_eqtn_within_compartment]
         )
 
-    if rxn_reversible:
-        arrow_type = " <-> "
-    else:
-        arrow_type = " -> "
-
-    substrates = " + ".join(
-        reaction_species_df["label"][
-            reaction_species_df[SBML_DFS.STOICHIOMETRY] < 0
-        ].tolist()
-    )
-    products = " + ".join(
-        reaction_species_df["label"][
-            reaction_species_df[SBML_DFS.STOICHIOMETRY] > 0
-        ].tolist()
-    )
-    modifiers = " + ".join(
-        reaction_species_df["label"][
-            reaction_species_df[SBML_DFS.STOICHIOMETRY] == 0
-        ].tolist()
-    )
-    if modifiers != "":
-        modifiers = f" ---- modifiers: {modifiers}]"
-
-    return f"{substrates}{arrow_type}{products}{modifiers}"
-
-
-def add_stoi_to_species_name(stoi: float | int, name: str) -> str:
-    """
-    Add Stoi To Species Name
-
-    Add # of molecules to a species name
-
-    Parameters:
-    ----------
-    stoi: float or int
-        Number of molecules
-    name: str
-        Name of species
-
-    Returns:
-    ----------
-    name: str
-        Name containing number of species
-
-    """
-
-    if stoi in [-1, 0, 1]:
-        return name
-    else:
-        return str(abs(stoi)) + " " + name
+        return formula_strs
 
 
 def filter_to_characteristic_species_ids(

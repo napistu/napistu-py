@@ -121,6 +121,76 @@ def get_current_max_id(sbml_dfs_table: pd.DataFrame) -> int:
     return current_max_id
 
 
+def construct_formula_string(
+    reaction_species_df: pd.DataFrame,
+    reactions_df: pd.DataFrame,
+    name_var: str,
+) -> str:
+    """
+    Construct Formula String
+
+    Convert a table of reaction species into a formula string
+
+    Parameters:
+    ----------
+    reaction_species_df: pd.DataFrame
+        Table containing a reactions' species
+    reactions_df: pd.DataFrame
+        smbl.reactions
+    name_var: str
+        Name used to label species
+
+    Returns:
+    ----------
+    formula_str: str
+        String representation of a reactions substrates, products and
+        modifiers
+
+    """
+
+    reaction_species_df["label"] = [
+        _add_stoi_to_species_name(x, y)
+        for x, y in zip(
+            reaction_species_df[SBML_DFS.STOICHIOMETRY], reaction_species_df[name_var]
+        )
+    ]
+
+    rxn_reversible = bool(
+        reactions_df.loc[
+            reaction_species_df[SBML_DFS.R_ID].iloc[0], SBML_DFS.R_ISREVERSIBLE
+        ]
+    )  # convert from a np.bool_ to bool if needed
+    if not isinstance(rxn_reversible, bool):
+        raise TypeError(
+            f"rxn_reversible must be a bool, but got {type(rxn_reversible).__name__}"
+        )
+
+    if rxn_reversible:
+        arrow_type = " <-> "
+    else:
+        arrow_type = " -> "
+
+    substrates = " + ".join(
+        reaction_species_df["label"][
+            reaction_species_df[SBML_DFS.STOICHIOMETRY] < 0
+        ].tolist()
+    )
+    products = " + ".join(
+        reaction_species_df["label"][
+            reaction_species_df[SBML_DFS.STOICHIOMETRY] > 0
+        ].tolist()
+    )
+    modifiers = " + ".join(
+        reaction_species_df["label"][
+            reaction_species_df[SBML_DFS.STOICHIOMETRY] == 0
+        ].tolist()
+    )
+    if modifiers != "":
+        modifiers = f" ---- modifiers: {modifiers}]"
+
+    return f"{substrates}{arrow_type}{products}{modifiers}"
+
+
 def adapt_pw_index(
     source: str | indices.PWIndex,
     species: str | Iterable[str] | None,
@@ -735,3 +805,29 @@ def _sbml_dfs_from_edgelist_check_cspecies_merge(
         )
 
     return None
+
+
+def _add_stoi_to_species_name(stoi: float | int, name: str) -> str:
+    """
+    Add Stoi To Species Name
+
+    Add # of molecules to a species name
+
+    Parameters:
+    ----------
+    stoi: float or int
+        Number of molecules
+    name: str
+        Name of species
+
+    Returns:
+    ----------
+    name: str
+        Name containing number of species
+
+    """
+
+    if stoi in [-1, 0, 1]:
+        return name
+    else:
+        return str(abs(stoi)) + " " + name

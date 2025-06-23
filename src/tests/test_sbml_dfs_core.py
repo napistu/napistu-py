@@ -274,26 +274,6 @@ def test_sbml_dfs_remove_reactions_check_species(sbml_dfs):
     sbml_dfs.validate()
 
 
-def test_formula(sbml_dfs):
-    # create a formula string
-
-    an_r_id = sbml_dfs.reactions.index[0]
-
-    reaction_species_df = sbml_dfs.reaction_species[
-        sbml_dfs.reaction_species["r_id"] == an_r_id
-    ].merge(sbml_dfs.compartmentalized_species, left_on="sc_id", right_index=True)
-
-    formula_str = sbml_dfs_core.construct_formula_string(
-        reaction_species_df, sbml_dfs.reactions, name_var="sc_name"
-    )
-
-    assert isinstance(formula_str, str)
-    assert (
-        formula_str
-        == "CO2 [extracellular region] -> CO2 [cytosol] ---- modifiers: AQP1 tetramer [plasma membrane]]"
-    )
-
-
 def test_read_sbml_with_invalid_ids():
     SBML_W_BAD_IDS = "R-HSA-166658.sbml"
     test_path = os.path.abspath(os.path.join(__file__, os.pardir))
@@ -366,7 +346,7 @@ def test_species_status(sbml_dfs):
     select_species = species[species["s_name"] == "OxyHbA"]
     assert select_species.shape[0] == 1
 
-    status = sbml_dfs_core.species_status(select_species.index[0], sbml_dfs)
+    status = sbml_dfs.species_status(select_species.index[0])
 
     # expected columns
     expected_columns = [
