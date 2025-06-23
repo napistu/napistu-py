@@ -7,8 +7,12 @@ from typing import Iterable
 from typing import Mapping
 from typing import MutableMapping
 from typing import TYPE_CHECKING
+from typing import Optional
+from typing import Union
 
+from fs import open_fs
 import pandas as pd
+
 from napistu import identifiers
 from napistu import sbml_dfs_utils
 from napistu import source
@@ -33,7 +37,6 @@ from napistu.constants import ENTITIES_TO_ENTITY_DATA
 from napistu.ingestion.constants import GENERIC_COMPARTMENT
 from napistu.ingestion.constants import COMPARTMENT_ALIASES
 from napistu.ingestion.constants import COMPARTMENTS_GO_TERMS
-from fs import open_fs
 
 logger = logging.getLogger(__name__)
 
@@ -1110,6 +1113,10 @@ class SBML_dfs:
         - r_name: str, name of the reaction
         - r_formula_str: str, human-readable formula of the reaction
         """
+
+        if s_id not in self.species.index:
+            raise ValueError(f"{s_id} not found in species table")
+
         matching_species = self.species.loc[s_id]
 
         if not isinstance(matching_species, pd.Series):
@@ -1132,11 +1139,7 @@ class SBML_dfs:
         )
 
         participating_rids = full_rxns_participating[SBML_DFS.R_ID].unique()
-        participating_r_names = self.reactions.loc[participating_rids, SBML_DFS.R_NAME]
-        participating_r_formulas = self.reaction_summaries(r_ids=participating_rids)
-        reaction_descriptions = pd.concat(
-            [participating_r_names, participating_r_formulas], axis=1
-        )
+        reaction_descriptions = self.reaction_summaries(r_ids=participating_rids)
 
         status = (
             full_rxns_participating.loc[
@@ -1152,7 +1155,40 @@ class SBML_dfs:
 
         return status
 
-    def reaction_summaries(self, r_ids=None) -> pd.Series:
+    def reaction_summaries(
+        self, r_ids: Optional[Union[str, list[str]]] = None
+    ) -> pd.DataFrame:
+        """
+        Reaction Summary
+
+        Return a summary of reactions.
+
+        Parameters:
+        ----------
+        r_ids: [str], str or None
+            Reaction IDs or None for all reactions
+
+        Returns:
+        ----------
+        reaction_summaries_df: pd.DataFrame
+            A table with r_id as an index and columns:
+            - r_name: str, name of the reaction
+            - r_formula_str: str, human-readable formula of the reaction
+        """
+
+        validated_rids = self._validate_r_ids(r_ids)
+
+        participating_r_names = self.reactions.loc[validated_rids, SBML_DFS.R_NAME]
+        participating_r_formulas = self.reaction_formulas(r_ids=validated_rids)
+        reaction_summareis_df = pd.concat(
+            [participating_r_names, participating_r_formulas], axis=1
+        )
+
+        return reaction_summareis_df
+
+    def reaction_formulas(
+        self, r_ids: Optional[Union[str, list[str]]] = None
+    ) -> pd.Series:
         """
         Reaction Summary
 
@@ -1167,16 +1203,11 @@ class SBML_dfs:
         ----------
         formula_strs: pd.Series
         """
-        if isinstance(r_ids, str):
-            r_ids = [r_ids]
 
-        if r_ids is None:
-            matching_reactions = self.reactions
-        else:
-            matching_reactions = self.reactions.loc[r_ids]
+        validated_rids = self._validate_r_ids(r_ids)
 
         matching_reaction_species = self.reaction_species[
-            self.reaction_species.r_id.isin(matching_reactions.index)
+            self.reaction_species.r_id.isin(validated_rids)
         ].merge(
             self.compartmentalized_species, left_on=SBML_DFS.SC_ID, right_index=True
         )
@@ -1252,6 +1283,19 @@ class SBML_dfs:
         )
 
         return formula_strs
+
+    def _validate_r_ids(self, r_ids: Optional[Union[str, list[str]]]) -> list[str]:
+
+        if isinstance(r_ids, str):
+            r_ids = [r_ids]
+
+        if r_ids is None:
+            return self.reactions.index.tolist()
+        else:
+            if not all(r_id in self.reactions.index for r_id in r_ids):
+                raise ValueError(f"Reaction IDs {r_ids} not found in reactions table")
+
+            return r_ids
 
 
 def filter_to_characteristic_species_ids(
