@@ -6,8 +6,10 @@ import numpy as np
 import pandas as pd
 import pytest
 from napistu import sbml_dfs_core
+from napistu.source import Source
 from napistu.ingestion import sbml
 from napistu.modify import pathwayannot
+from napistu.sbml_dfs_utils import _stub_ids
 
 from napistu import identifiers as napistu_identifiers
 from napistu.constants import (
@@ -19,6 +21,66 @@ from napistu.constants import (
     IDENTIFIERS,
 )
 from napistu.sbml_dfs_core import SBML_dfs
+
+
+@pytest.fixture
+def test_data():
+    """Create test data for SBML integration tests."""
+
+    # Test compartments
+    compartments_df = pd.DataFrame(
+        [
+            {"c_name": "nucleus", "c_Identifiers": _stub_ids([])},
+            {"c_name": "cytoplasm", "c_Identifiers": _stub_ids([])},
+        ]
+    )
+
+    # Test species with extra data
+    species_df = pd.DataFrame(
+        [
+            {
+                "s_name": "TP53",
+                "s_Identifiers": _stub_ids([]),
+                "gene_type": "tumor_suppressor",
+            },
+            {"s_name": "MDM2", "s_Identifiers": _stub_ids([]), "gene_type": "oncogene"},
+            {
+                "s_name": "CDKN1A",
+                "s_Identifiers": _stub_ids([]),
+                "gene_type": "cell_cycle",
+            },
+        ]
+    )
+
+    # Test interactions with extra data
+    interaction_edgelist = pd.DataFrame(
+        [
+            {
+                "upstream_name": "TP53",
+                "downstream_name": "CDKN1A",
+                "upstream_compartment": "nucleus",
+                "downstream_compartment": "nucleus",
+                "r_name": "TP53_activates_CDKN1A",
+                "sbo_term": "SBO:0000459",
+                "r_Identifiers": _stub_ids([]),
+                "r_isreversible": False,
+                "confidence": 0.95,
+            },
+            {
+                "upstream_name": "MDM2",
+                "downstream_name": "TP53",
+                "upstream_compartment": "cytoplasm",
+                "downstream_compartment": "nucleus",
+                "r_name": "MDM2_inhibits_TP53",
+                "sbo_term": "SBO:0000020",
+                "r_Identifiers": _stub_ids([]),
+                "r_isreversible": False,
+                "confidence": 0.87,
+            },
+        ]
+    )
+
+    return [interaction_edgelist, species_df, compartments_df, Source(init=True)]
 
 
 def test_drop_cofactors(sbml_dfs):
@@ -581,3 +643,72 @@ def test_filter_to_characteristic_species_ids():
         "part2",
     ] + ["promiscuous_complex"] * 5
     assert characteristic_ids_loose[IDENTIFIERS.IDENTIFIER].tolist() == EXPECTED_IDS
+
+
+def test_sbml_basic_functionality(test_data):
+    """Test basic SBML_dfs creation from edgelist."""
+    interaction_edgelist, species_df, compartments_df, interaction_source = test_data
+
+    result = sbml_dfs_core.sbml_dfs_from_edgelist(
+        interaction_edgelist, species_df, compartments_df, interaction_source
+    )
+
+    assert isinstance(result, SBML_dfs)
+    assert len(result.species) == 3
+    assert len(result.compartments) == 2
+    assert len(result.reactions) == 2
+    assert (
+        len(result.compartmentalized_species) == 3
+    )  # TP53[nucleus], CDKN1A[nucleus], MDM2[cytoplasm]
+    assert len(result.reaction_species) == 4  # 2 reactions * 2 species each
+
+
+def test_sbml_extra_data_preservation(test_data):
+    """Test that extra columns are preserved when requested."""
+    interaction_edgelist, species_df, compartments_df, interaction_source = test_data
+
+    result = sbml_dfs_core.sbml_dfs_from_edgelist(
+        interaction_edgelist,
+        species_df,
+        compartments_df,
+        interaction_source,
+        keep_species_data=True,
+        keep_reactions_data="experiment",
+    )
+
+    assert hasattr(result, "species_data")
+    assert hasattr(result, "reactions_data")
+    assert "gene_type" in result.species_data["source"].columns
+    assert "confidence" in result.reactions_data["experiment"].columns
+
+
+def test_sbml_compartmentalized_naming(test_data):
+    """Test compartmentalized species naming convention."""
+    interaction_edgelist, species_df, compartments_df, interaction_source = test_data
+
+    result = sbml_dfs_core.sbml_dfs_from_edgelist(
+        interaction_edgelist, species_df, compartments_df, interaction_source
+    )
+
+    comp_names = result.compartmentalized_species["sc_name"].tolist()
+    assert "TP53 [nucleus]" in comp_names
+    assert "MDM2 [cytoplasm]" in comp_names
+    assert "CDKN1A [nucleus]" in comp_names
+
+
+def test_sbml_custom_stoichiometry(test_data):
+    """Test custom stoichiometry parameters."""
+    interaction_edgelist, species_df, compartments_df, interaction_source = test_data
+
+    result = sbml_dfs_core.sbml_dfs_from_edgelist(
+        interaction_edgelist,
+        species_df,
+        compartments_df,
+        interaction_source,
+        upstream_stoichiometry=2,
+        downstream_stoichiometry=3,
+    )
+
+    stoichiometries = result.reaction_species["stoichiometry"].unique()
+    assert 2 in stoichiometries  # upstream
+    assert 3 in stoichiometries  # downstream

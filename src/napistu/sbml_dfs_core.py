@@ -1852,459 +1852,108 @@ def sbml_dfs_from_edgelist(
     keep_reactions_data: bool | str = False,
 ) -> SBML_dfs:
     """
-    Create SBML_dfs from Edgelist
+    Create SBML_dfs from interaction edgelist.
 
-    Combine a set of interactions into an sbml.SBML_dfs mechanistic model
+    Combines a set of molecular interactions into a mechanistic SBML_dfs model
+    by processing interaction data, species information, and compartment definitions.
 
-    Parameters:
-    interaction_edgelist (pd.DataFrame): A table containing interactions:
-        - upstream_name (str): matching "s_name" from "species_df"
-        - downstream_name (str): matching "s_name" from "species_df"
-        - upstream_compartment (str): compartment of "upstream_name"
-            with names matching "c_name" from "compartments_df"
-        - downstream_compartment (str): compartment of "downstream_name"
-            with names matching "c_name" from "compartments_df"
-        - r_name (str): a name for the interaction
-        - sbo_term (str): sbo term defining the type of
-            molecular interaction (see MINI_SBO_FROM_NAME)
-        - r_Identifiers (identifiers.Identifiers): identifiers
-            supporting the interaction (e.g., pubmed ids)
-        - r_isreversible (bool): Is this reaction reversible?
-            If True, the reaction is reversible
-            By default, the interactions of TRRUST networks are irreversible, and reversible for STRING networks
-    species_df (pd.DataFrame): A table defining unique molecular
-        species participating in "interaction_edgelist":
-        - s_name (str): name of molecular species
-        - s_Identifiers (identifiers.Identifiers): identifiers
-            defining the species
-    compartments_df (pd.DataFrame): A table defining compartments
-        where interactions are occurring "interaction_edgelist":
-        - c_name (str): name of compartment
-        - c_Identifiers (identifiers.Identifiers):
-            identifiers defining the compartment (see
-            bigg.annotate_recon() for a set of names > go categories)
-    interaction_source (source.Source): A source object
-        which will tie model entities to the interaction source
-    upstream_stoichiometry (int): stoichiometry of
-        upstream species in reaction
-    downstream_stoichiometry (int): stoichiometry of
-        downstream species in reaction
-    downstream_sbo_name (str): sbo term defining the
-        type of molecular interaction for the downstream reactand
-        (see MINI_SBO_FROM_NAME)
-    keep_species_data (bool | str): Should species data
-        be kept in the model? If True, all species data will be kept
-        and saved as "species_data" in the SBML_dfs. The label will be 'source'
-        If False, no species data will be kept.
-        If a string: label for the species data to be kept.
-    keep_reactions_data (bool | str): Should reaction data be kept in the model?
-        If True, all reaction data will be kept and saved
-        as "reactions_data" in the SBML_dfs. The label will be 'source'.
-        If False, no reaction data will be kept.
-        If a string: label for the reaction data to be kept.
+    Parameters
+    ----------
+    interaction_edgelist : pd.DataFrame
+        Table containing molecular interactions with columns:
+        - upstream_name : str, matches "s_name" from species_df
+        - downstream_name : str, matches "s_name" from species_df
+        - upstream_compartment : str, matches "c_name" from compartments_df
+        - downstream_compartment : str, matches "c_name" from compartments_df
+        - r_name : str, name for the interaction
+        - sbo_term : str, SBO term defining interaction type
+        - r_Identifiers : identifiers.Identifiers, supporting identifiers
+        - r_isreversible : bool, whether reaction is reversible
+    species_df : pd.DataFrame
+        Table defining molecular species with columns:
+        - s_name : str, name of molecular species
+        - s_Identifiers : identifiers.Identifiers, species identifiers
+    compartments_df : pd.DataFrame
+        Table defining compartments with columns:
+        - c_name : str, name of compartment
+        - c_Identifiers : identifiers.Identifiers, compartment identifiers
+    interaction_source : source.Source
+        Source object linking model entities to interaction source
+    upstream_stoichiometry : int, default 0
+        Stoichiometry of upstream species in reactions
+    downstream_stoichiometry : int, default 1
+        Stoichiometry of downstream species in reactions
+    downstream_sbo_name : str, default SBOTERM_NAMES.PRODUCT
+        SBO term for downstream reactant type
+    keep_species_data : bool or str, default False
+        Whether to preserve extra species columns. If True, saves as 'source' label.
+        If string, uses as custom label. If False, discards extra data.
+    keep_reactions_data : bool or str, default False
+        Whether to preserve extra reaction columns. If True, saves as 'source' label.
+        If string, uses as custom label. If False, discards extra data.
 
-    Returns:
-    sbml.SBML_dfs
-
+    Returns
+    -------
+    SBML_dfs
+        Validated SBML data structure containing compartments, species,
+        compartmentalized species, reactions, and reaction species tables.
     """
+    # 1. Validate inputs
+    _edgelist_validate_inputs(interaction_edgelist, species_df, compartments_df)
 
-    # check input dfs for required variables
-    _sbml_dfs_from_edgelist_validate_inputs(
-        interaction_edgelist, species_df, compartments_df
+    # 2. Identify which extra columns to preserve
+    extra_columns = _edgelist_identify_extra_columns(
+        interaction_edgelist, species_df, keep_reactions_data, keep_species_data
     )
 
-    # Identify extra columns in the input data.
-    # if keep_reactions_data is True, this will be added
-    # as `reaction_data`
-    interaction_edgelist_required_vars = {
-        "upstream_name",
-        "downstream_name",
-        "upstream_compartment",
-        "downstream_compartment",
-        SBML_DFS.R_NAME,
-        SBML_DFS.SBO_TERM,
-        SBML_DFS.R_IDENTIFIERS,
-        SBML_DFS.R_ISREVERSIBLE,
-    }
-    if keep_reactions_data is not False:
-        extra_reactions_columns = [
-            c
-            for c in interaction_edgelist.columns
-            if c not in interaction_edgelist_required_vars
-        ]
-    else:
-        extra_reactions_columns = []
-    # Extra species columns
-    if keep_species_data is not False:
-        extra_species_columns = [
-            c
-            for c in species_df.columns
-            if c not in {SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS}
-        ]
-    else:
-        extra_species_columns = []
-
-    # format compartments
-    compartments_df[SBML_DFS.C_SOURCE] = interaction_source
-    compartments_df[SBML_DFS.C_ID] = sbml_dfs_utils.id_formatter(
-        range(compartments_df.shape[0]), SBML_DFS.C_ID
+    # 3. Process compartments and species tables
+    processed_compartments = _edgelist_process_compartments(
+        compartments_df, interaction_source
     )
-    compartments_df = compartments_df.set_index(SBML_DFS.C_ID)[
-        [SBML_DFS.C_NAME, SBML_DFS.C_IDENTIFIERS, SBML_DFS.C_SOURCE]
-    ]
-
-    # format species
-    species_df[SBML_DFS.S_SOURCE] = interaction_source
-    species_df[SBML_DFS.S_ID] = sbml_dfs_utils.id_formatter(
-        range(species_df.shape[0]), SBML_DFS.S_ID
+    processed_species, species_data = _edgelist_process_species(
+        species_df, interaction_source, extra_columns["species"]
     )
 
-    required_cols = [SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS, SBML_DFS.S_SOURCE]
-    species_df = species_df.set_index(SBML_DFS.S_ID)[
-        required_cols + extra_species_columns
-    ]
-    # Keep extra columns to save them as extra data
-    species_data = species_df[extra_species_columns]
-    # Remove extra columns
-    species_df = species_df[required_cols]
-
-    # create compartmentalized species
-
-    # define all distinct upstream and downstream compartmentalized species
-    comp_species = pd.concat(
-        [
-            interaction_edgelist[["upstream_name", "upstream_compartment"]].rename(
-                {
-                    "upstream_name": SBML_DFS.S_NAME,
-                    "upstream_compartment": SBML_DFS.C_NAME,
-                },
-                axis=1,
-            ),
-            interaction_edgelist[["downstream_name", "downstream_compartment"]].rename(
-                {
-                    "downstream_name": SBML_DFS.S_NAME,
-                    "downstream_compartment": SBML_DFS.C_NAME,
-                },
-                axis=1,
-            ),
-        ]
-    ).drop_duplicates()
-
-    # merge to add species and compartments primary keys
-    comp_species_w_ids = comp_species.merge(
-        species_df[SBML_DFS.S_NAME].reset_index(),
-        how="left",
-        left_on=SBML_DFS.S_NAME,
-        right_on=SBML_DFS.S_NAME,
-    ).merge(
-        compartments_df[SBML_DFS.C_NAME].reset_index(),
-        how="left",
-        left_on=SBML_DFS.C_NAME,
-        right_on=SBML_DFS.C_NAME,
+    # 4. Create compartmentalized species
+    comp_species = _edgelist_create_compartmentalized_species(
+        interaction_edgelist,
+        processed_species,
+        processed_compartments,
+        interaction_source,
     )
 
-    # check whether all species and compartments exist
-    _sbml_dfs_from_edgelist_check_cspecies_merge(comp_species_w_ids, comp_species)
-
-    # name compounds
-    comp_species_w_ids[SBML_DFS.SC_NAME] = [
-        f"{s} [{c}]"
-        for s, c in zip(
-            comp_species_w_ids[SBML_DFS.S_NAME], comp_species_w_ids[SBML_DFS.C_NAME]
+    # 5. Create reactions and reaction species
+    reactions, reaction_species, reactions_data = (
+        _edgelist_create_reactions_and_species(
+            interaction_edgelist,
+            comp_species,
+            processed_species,
+            processed_compartments,
+            interaction_source,
+            upstream_stoichiometry,
+            downstream_stoichiometry,
+            downstream_sbo_name,
+            extra_columns["reactions"],
         )
-    ]
-    # add source object
-    comp_species_w_ids[SBML_DFS.SC_SOURCE] = interaction_source
-    # name index
-    comp_species_w_ids[SBML_DFS.SC_ID] = sbml_dfs_utils.id_formatter(
-        range(comp_species_w_ids.shape[0]), SBML_DFS.SC_ID
-    )
-    comp_species_w_ids = comp_species_w_ids.set_index(SBML_DFS.SC_ID)[
-        [SBML_DFS.SC_NAME, SBML_DFS.S_ID, SBML_DFS.C_ID, SBML_DFS.SC_SOURCE]
-    ]
-
-    # create reactions
-
-    # create a from cs_species -> to cs_species edgelist
-    # interaction_edgelist
-    comp_species_w_names = (
-        comp_species_w_ids.reset_index()
-        .merge(species_df[SBML_DFS.S_NAME].reset_index())
-        .merge(compartments_df[SBML_DFS.C_NAME].reset_index())
     )
 
-    interaction_edgelist_w_cspecies = interaction_edgelist.merge(
-        comp_species_w_names[[SBML_DFS.SC_ID, SBML_DFS.S_NAME, SBML_DFS.C_NAME]].rename(
-            {
-                SBML_DFS.SC_ID: "sc_id_up",
-                SBML_DFS.S_NAME: "upstream_name",
-                SBML_DFS.C_NAME: "upstream_compartment",
-            },
-            axis=1,
-        ),
-        how="left",
-    ).merge(
-        comp_species_w_names[[SBML_DFS.SC_ID, SBML_DFS.S_NAME, SBML_DFS.C_NAME]].rename(
-            {
-                SBML_DFS.SC_ID: "sc_id_down",
-                SBML_DFS.S_NAME: "downstream_name",
-                SBML_DFS.C_NAME: "downstream_compartment",
-            },
-            axis=1,
-        ),
-        how="left",
-    )[
-        REQUIRED_REACTION_FROMEDGELIST_COLUMNS + extra_reactions_columns
-    ]
-
-    # some extra checks
-    if interaction_edgelist.shape[0] != interaction_edgelist_w_cspecies.shape[0]:
-        raise ValueError(
-            "Merging compartmentalized species to interaction_edgelist"
-            " resulted in an increase in the tables from "
-            f"{interaction_edgelist.shape[0]} to "
-            f"{interaction_edgelist_w_cspecies.shape[0]} indicating"
-            " a 1-many join which should have been 1-1"
-        )
-
-    # create one reaction per interaction
-    interaction_edgelist_w_cspecies[SBML_DFS.R_SOURCE] = interaction_source
-    interaction_edgelist_w_cspecies[SBML_DFS.R_ID] = sbml_dfs_utils.id_formatter(
-        range(interaction_edgelist_w_cspecies.shape[0]), SBML_DFS.R_ID
+    # 6. Assemble final SBML_dfs object
+    sbml_model = _edgelist_assemble_sbml_model(
+        processed_compartments,
+        processed_species,
+        comp_species,
+        reactions,
+        reaction_species,
+        species_data,
+        reactions_data,
+        keep_species_data,
+        keep_reactions_data,
+        extra_columns,
     )
-
-    reactions_df_columns = [
-        SBML_DFS.R_NAME,
-        SBML_DFS.R_IDENTIFIERS,
-        SBML_DFS.R_SOURCE,
-        SBML_DFS.R_ISREVERSIBLE,
-    ]
-    reactions_df = interaction_edgelist_w_cspecies.copy().set_index(SBML_DFS.R_ID)[
-        reactions_df_columns + extra_reactions_columns
-    ]
-    # Keep extra columns to save them as extra data
-    reactions_data = reactions_df[extra_reactions_columns]
-    reactions_df = reactions_df[reactions_df_columns]
-
-    # define upstream and downstream comp species as reaction species
-    reaction_species_df = pd.concat(
-        [
-            # upstream interactions are defined by sbo_term and should generally
-            # be modifiers/stimulator/inhibitor/interactor
-            interaction_edgelist_w_cspecies[["sc_id_up", "sbo_term", "r_id"]]
-            .assign(stoichiometry=upstream_stoichiometry)
-            .rename({"sc_id_up": "sc_id"}, axis=1),
-            # downstream interactions indicate some modification of the state
-            # of the species and hence are defined as product
-            interaction_edgelist_w_cspecies[["sc_id_down", "r_id"]]
-            .assign(
-                stoichiometry=downstream_stoichiometry,
-                sbo_term=MINI_SBO_FROM_NAME[downstream_sbo_name],
-            )
-            .rename({"sc_id_down": "sc_id"}, axis=1),
-        ]
-    )
-    reaction_species_df["rsc_id"] = sbml_dfs_utils.id_formatter(
-        range(reaction_species_df.shape[0]), "rsc_id"
-    )
-    reaction_species_df = reaction_species_df.set_index("rsc_id")
-
-    # form sbml_dfs object
-    sbml_tbl_dict: MutableMapping[str, pd.DataFrame | dict[str, pd.DataFrame]] = {
-        "compartments": compartments_df,
-        "species": species_df,
-        "compartmentalized_species": comp_species_w_ids,
-        "reactions": reactions_df,
-        "reaction_species": reaction_species_df,
-    }
-    if len(extra_reactions_columns) > 0:
-        if isinstance(keep_reactions_data, str):
-            reactions_data_label = keep_reactions_data
-        else:
-            reactions_data_label = "source"
-        sbml_tbl_dict["reactions_data"] = {reactions_data_label: reactions_data}
-
-    if len(extra_species_columns) > 0:
-        if isinstance(keep_species_data, str):
-            species_data_label = keep_species_data
-        else:
-            species_data_label = "source"
-        sbml_tbl_dict["species_data"] = {species_data_label: species_data}
-
-    sbml_model = SBML_dfs(sbml_tbl_dict)
-    sbml_model.validate()
 
     return sbml_model
 
-
-def _sbml_dfs_from_edgelist_validate_inputs(
-    interaction_edgelist: pd.DataFrame,
-    species_df: pd.DataFrame,
-    compartments_df: pd.DataFrame,
-) -> None:
-    """Check that the inputs for creating an SBML_dfs from an edgelist are appropriate."""
-
-    # check compartments
-    compartments_df_expected_vars = {SBML_DFS.C_NAME, SBML_DFS.C_IDENTIFIERS}
-    compartments_df_columns = set(compartments_df.columns.tolist())
-    missing_required_fields = compartments_df_expected_vars.difference(
-        compartments_df_columns
-    )
-    if len(missing_required_fields) > 0:
-        raise ValueError(
-            f"{', '.join(missing_required_fields)} are required variables"
-            ' in "compartments_df" but were not present in the input file.'
-        )
-
-    # check species
-    species_df_expected_vars = {SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS}
-    species_df_columns = set(species_df.columns.tolist())
-    missing_required_fields = species_df_expected_vars.difference(species_df_columns)
-    if len(missing_required_fields) > 0:
-        raise ValueError(
-            f"{', '.join(missing_required_fields)} are required"
-            ' variables in "species_df" but were not present '
-            "in the input file."
-        )
-
-    # check interactions
-    interaction_edgelist_columns = set(interaction_edgelist.columns.tolist())
-    missing_required_fields = INTERACTION_EDGELIST_EXPECTED_VARS.difference(
-        interaction_edgelist_columns
-    )
-    if len(missing_required_fields) > 0:
-        raise ValueError(
-            f"{', '.join(missing_required_fields)} are required "
-            'variables in "interaction_edgelist" but were not '
-            "present in the input file."
-        )
-
-    return None
-
-
-def _sbml_dfs_from_edgelist_check_cspecies_merge(
-    merged_species: pd.DataFrame, original_species: pd.DataFrame
-) -> None:
-    """Check for a mismatch between the provided species data and species implied by the edgelist."""
-
-    # check for 1-many merge
-    if merged_species.shape[0] != original_species.shape[0]:
-        raise ValueError(
-            "Merging compartmentalized species to species_df"
-            " and compartments_df by names resulted in an "
-            f"increase in the tables from {original_species.shape[0]}"
-            f" to {merged_species.shape[0]} indicating that names were"
-            " not unique"
-        )
-
-    # check for missing species and compartments
-    missing_compartments = merged_species[merged_species[SBML_DFS.C_ID].isna()][
-        SBML_DFS.C_NAME
-    ].unique()
-    if len(missing_compartments) >= 1:
-        raise ValueError(
-            f"{len(missing_compartments)} compartments were present in"
-            ' "interaction_edgelist" but not "compartments_df":'
-            f" {', '.join(missing_compartments)}"
-        )
-
-    missing_species = merged_species[merged_species[SBML_DFS.S_ID].isna()][
-        SBML_DFS.S_NAME
-    ].unique()
-    if len(missing_species) >= 1:
-        raise ValueError(
-            f"{len(missing_species)} species were present in "
-            '"interaction_edgelist" but not "species_df":'
-            f" {', '.join(missing_species)}"
-        )
-
-    return None
-
-
-def _stub_compartments(
-    stubbed_compartment: str = GENERIC_COMPARTMENT,
-) -> pd.DataFrame:
-    """Stub Compartments
-
-    Create a compartments table with only a single compartment
-
-    Args:
-    stubbed_compartment (str): the name of a compartment which should match the
-        keys in constants.COMPARTMENTS and constants.COMPARTMENTS_GO_TERMS
-
-    Returns:
-    compartments_df (pd.DataFrame): compartments dataframe
-    """
-
-    if stubbed_compartment not in COMPARTMENT_ALIASES.keys():
-        raise ValueError(
-            f"{stubbed_compartment} is not defined in constants.COMPARTMENTS"
-        )
-
-    if stubbed_compartment not in COMPARTMENTS_GO_TERMS.keys():
-        raise ValueError(
-            f"{stubbed_compartment} is not defined in constants.COMPARTMENTS_GO_TERMS"
-        )
-
-    stubbed_compartment_id = COMPARTMENTS_GO_TERMS[stubbed_compartment]
-
-    formatted_uri = identifiers.format_uri(
-        uri=identifiers.create_uri_url(
-            ontology=ONTOLOGIES.GO,
-            identifier=stubbed_compartment_id,
-        ),
-        biological_qualifier_type=BQB.IS,
-    )
-
-    compartments_df = pd.DataFrame(
-        {
-            SBML_DFS.C_NAME: [stubbed_compartment],
-            SBML_DFS.C_IDENTIFIERS: [identifiers.Identifiers([formatted_uri])],
-        }
-    )
-    compartments_df.index = sbml_dfs_utils.id_formatter([0], SBML_DFS.C_ID)  # type: ignore
-    compartments_df.index.name = SBML_DFS.C_ID
-
-    return compartments_df
-
-
-def _validate_matching_data(data_table: pd.DataFrame, ref_table: pd.DataFrame):
-    """Validates a table against a reference
-
-    This check if the table has the same index, no duplicates in the index
-    and that all values in the index are in the reference table.
-
-    Args:
-        data_table (pd.DataFrame): a table with data that should
-            match the reference
-        ref_table (pd.DataFrame): a reference table
-
-    Raises:
-        ValueError: not same index name
-        ValueError: index contains duplicates
-        ValueError: index not subset of index of reactions table
-    """
-    ref_index_name = ref_table.index.name
-    if data_table.index.name != ref_index_name:
-        raise ValueError(
-            "the index name for reaction data table was not"
-            f" {ref_index_name}: {data_table.index.name}"
-        )
-    ids = data_table.index
-    if any(ids.duplicated()):
-        raise ValueError(
-            "the index for reaction data table " "contained duplicate values"
-        )
-    if not all(ids.isin(ref_table.index)):
-        raise ValueError(
-            "the index for reaction data table contained values"
-            " not found in the reactions table"
-        )
-    if not isinstance(data_table, pd.DataFrame):
-        raise TypeError(
-            f"The data table was type {type(data_table).__name__}"
-            " but must be a pd.DataFrame"
-        )
+    return sbml_model
 
 
 def species_type_types(x):
@@ -2599,3 +2248,555 @@ def _filter_promiscuous_components(
     ].drop(["is_shared_component"], axis=1)
 
     return filtered_bqb_has_parts
+
+
+def _edgelist_validate_inputs(
+    interaction_edgelist: pd.DataFrame,
+    species_df: pd.DataFrame,
+    compartments_df: pd.DataFrame,
+) -> None:
+    """
+    Validate input DataFrames have required columns.
+
+    Parameters
+    ----------
+    interaction_edgelist : pd.DataFrame
+        Interaction data to validate
+    species_df : pd.DataFrame
+        Species data to validate
+    compartments_df : pd.DataFrame
+        Compartments data to validate
+    """
+
+    # check compartments
+    compartments_df_expected_vars = {SBML_DFS.C_NAME, SBML_DFS.C_IDENTIFIERS}
+    compartments_df_columns = set(compartments_df.columns.tolist())
+    missing_required_fields = compartments_df_expected_vars.difference(
+        compartments_df_columns
+    )
+    if len(missing_required_fields) > 0:
+        raise ValueError(
+            f"{', '.join(missing_required_fields)} are required variables"
+            ' in "compartments_df" but were not present in the input file.'
+        )
+
+    # check species
+    species_df_expected_vars = {SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS}
+    species_df_columns = set(species_df.columns.tolist())
+    missing_required_fields = species_df_expected_vars.difference(species_df_columns)
+    if len(missing_required_fields) > 0:
+        raise ValueError(
+            f"{', '.join(missing_required_fields)} are required"
+            ' variables in "species_df" but were not present '
+            "in the input file."
+        )
+
+    # check interactions
+    interaction_edgelist_columns = set(interaction_edgelist.columns.tolist())
+    missing_required_fields = INTERACTION_EDGELIST_EXPECTED_VARS.difference(
+        interaction_edgelist_columns
+    )
+    if len(missing_required_fields) > 0:
+        raise ValueError(
+            f"{', '.join(missing_required_fields)} are required "
+            'variables in "interaction_edgelist" but were not '
+            "present in the input file."
+        )
+
+    return None
+
+
+def _edgelist_identify_extra_columns(
+    interaction_edgelist, species_df, keep_reactions_data, keep_species_data
+):
+    """
+    Identify extra columns in input data that should be preserved.
+
+    Parameters
+    ----------
+    interaction_edgelist : pd.DataFrame
+        Interaction data containing potential extra columns
+    species_df : pd.DataFrame
+        Species data containing potential extra columns
+    keep_reactions_data : bool or str
+        Whether to keep extra reaction columns
+    keep_species_data : bool or str
+        Whether to keep extra species columns
+
+    Returns
+    -------
+    dict
+        Dictionary with 'reactions' and 'species' keys containing lists of extra column names
+    """
+    extra_reactions_columns = []
+    extra_species_columns = []
+
+    if keep_reactions_data is not False:
+        extra_reactions_columns = [
+            c
+            for c in interaction_edgelist.columns
+            if c not in INTERACTION_EDGELIST_EXPECTED_VARS
+        ]
+
+    if keep_species_data is not False:
+        extra_species_columns = [
+            c
+            for c in species_df.columns
+            if c not in {SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS}
+        ]
+
+    return {"reactions": extra_reactions_columns, "species": extra_species_columns}
+
+
+def _edgelist_process_compartments(compartments_df, interaction_source):
+    """
+    Format compartments DataFrame with source and ID columns.
+
+    Parameters
+    ----------
+    compartments_df : pd.DataFrame
+        Raw compartments data
+    interaction_source : source.Source
+        Source object to assign to compartments
+
+    Returns
+    -------
+    pd.DataFrame
+        Processed compartments with IDs, indexed by compartment ID
+    """
+    compartments = compartments_df.copy()
+    compartments[SBML_DFS.C_SOURCE] = interaction_source
+    compartments[SBML_DFS.C_ID] = sbml_dfs_utils.id_formatter(
+        range(compartments.shape[0]), SBML_DFS.C_ID
+    )
+    return compartments.set_index(SBML_DFS.C_ID)[
+        [SBML_DFS.C_NAME, SBML_DFS.C_IDENTIFIERS, SBML_DFS.C_SOURCE]
+    ]
+
+
+def _edgelist_process_species(species_df, interaction_source, extra_species_columns):
+    """
+    Format species DataFrame and extract extra data.
+
+    Parameters
+    ----------
+    species_df : pd.DataFrame
+        Raw species data
+    interaction_source : source.Source
+        Source object to assign to species
+    extra_species_columns : list
+        Names of extra columns to preserve separately
+
+    Returns
+    -------
+    tuple of pd.DataFrame
+        Processed species DataFrame and species extra data DataFrame
+    """
+    species = species_df.copy()
+    species[SBML_DFS.S_SOURCE] = interaction_source
+    species[SBML_DFS.S_ID] = sbml_dfs_utils.id_formatter(
+        range(species.shape[0]), SBML_DFS.S_ID
+    )
+
+    required_cols = [SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS, SBML_DFS.S_SOURCE]
+    species_indexed = species.set_index(SBML_DFS.S_ID)[
+        required_cols + extra_species_columns
+    ]
+
+    # Separate extra data from main species table
+    species_data = species_indexed[extra_species_columns]
+    processed_species = species_indexed[required_cols]
+
+    return processed_species, species_data
+
+
+def _edgelist_create_compartmentalized_species(
+    interaction_edgelist, species_df, compartments_df, interaction_source
+):
+    """
+    Create compartmentalized species from interactions.
+
+    Parameters
+    ----------
+    interaction_edgelist : pd.DataFrame
+        Interaction data containing species-compartment combinations
+    species_df : pd.DataFrame
+        Processed species data with IDs
+    compartments_df : pd.DataFrame
+        Processed compartments data with IDs
+    interaction_source : source.Source
+        Source object to assign to compartmentalized species
+
+    Returns
+    -------
+    pd.DataFrame
+        Compartmentalized species with formatted names and IDs
+    """
+    # Get all distinct upstream and downstream compartmentalized species
+    comp_species = pd.concat(
+        [
+            interaction_edgelist[["upstream_name", "upstream_compartment"]].rename(
+                {
+                    "upstream_name": SBML_DFS.S_NAME,
+                    "upstream_compartment": SBML_DFS.C_NAME,
+                },
+                axis=1,
+            ),
+            interaction_edgelist[["downstream_name", "downstream_compartment"]].rename(
+                {
+                    "downstream_name": SBML_DFS.S_NAME,
+                    "downstream_compartment": SBML_DFS.C_NAME,
+                },
+                axis=1,
+            ),
+        ]
+    ).drop_duplicates()
+
+    # Add species and compartment IDs
+    comp_species_w_ids = comp_species.merge(
+        species_df[SBML_DFS.S_NAME].reset_index(), how="left", on=SBML_DFS.S_NAME
+    ).merge(
+        compartments_df[SBML_DFS.C_NAME].reset_index(), how="left", on=SBML_DFS.C_NAME
+    )
+
+    # Validate merge was successful
+    _sbml_dfs_from_edgelist_check_cspecies_merge(comp_species_w_ids, comp_species)
+
+    # Format compartmentalized species with names, source, and IDs
+    comp_species_w_ids[SBML_DFS.SC_NAME] = [
+        f"{s} [{c}]"
+        for s, c in zip(
+            comp_species_w_ids[SBML_DFS.S_NAME], comp_species_w_ids[SBML_DFS.C_NAME]
+        )
+    ]
+    comp_species_w_ids[SBML_DFS.SC_SOURCE] = interaction_source
+    comp_species_w_ids[SBML_DFS.SC_ID] = sbml_dfs_utils.id_formatter(
+        range(comp_species_w_ids.shape[0]), SBML_DFS.SC_ID
+    )
+
+    return comp_species_w_ids.set_index(SBML_DFS.SC_ID)[
+        [SBML_DFS.SC_NAME, SBML_DFS.S_ID, SBML_DFS.C_ID, SBML_DFS.SC_SOURCE]
+    ]
+
+
+def _edgelist_create_reactions_and_species(
+    interaction_edgelist,
+    comp_species,
+    species_df,
+    compartments_df,
+    interaction_source,
+    upstream_stoichiometry,
+    downstream_stoichiometry,
+    downstream_sbo_name,
+    extra_reactions_columns,
+):
+    """
+    Create reactions and reaction species from interactions.
+
+    Parameters
+    ----------
+    interaction_edgelist : pd.DataFrame
+        Original interaction data
+    comp_species : pd.DataFrame
+        Compartmentalized species with IDs
+    species_df : pd.DataFrame
+        Processed species data with IDs
+    compartments_df : pd.DataFrame
+        Processed compartments data with IDs
+    interaction_source : source.Source
+        Source object for reactions
+    upstream_stoichiometry : int
+        Stoichiometry for upstream species
+    downstream_stoichiometry : int
+        Stoichiometry for downstream species
+    downstream_sbo_name : str
+        SBO term name for downstream species
+    extra_reactions_columns : list
+        Names of extra columns to preserve
+
+    Returns
+    -------
+    tuple
+        (reactions_df, reaction_species_df, reactions_data)
+    """
+    # Add compartmentalized species IDs to interactions
+    comp_species_w_names = (
+        comp_species.reset_index()
+        .merge(species_df[SBML_DFS.S_NAME].reset_index())
+        .merge(compartments_df[SBML_DFS.C_NAME].reset_index())
+    )
+
+    interaction_w_cspecies = interaction_edgelist.merge(
+        comp_species_w_names[[SBML_DFS.SC_ID, SBML_DFS.S_NAME, SBML_DFS.C_NAME]].rename(
+            {
+                SBML_DFS.SC_ID: "sc_id_up",
+                SBML_DFS.S_NAME: "upstream_name",
+                SBML_DFS.C_NAME: "upstream_compartment",
+            },
+            axis=1,
+        ),
+        how="left",
+    ).merge(
+        comp_species_w_names[[SBML_DFS.SC_ID, SBML_DFS.S_NAME, SBML_DFS.C_NAME]].rename(
+            {
+                SBML_DFS.SC_ID: "sc_id_down",
+                SBML_DFS.S_NAME: "downstream_name",
+                SBML_DFS.C_NAME: "downstream_compartment",
+            },
+            axis=1,
+        ),
+        how="left",
+    )[
+        REQUIRED_REACTION_FROMEDGELIST_COLUMNS + extra_reactions_columns
+    ]
+
+    # Validate merge didn't create duplicates
+    if interaction_edgelist.shape[0] != interaction_w_cspecies.shape[0]:
+        raise ValueError(
+            f"Merging compartmentalized species resulted in row count change "
+            f"from {interaction_edgelist.shape[0]} to {interaction_w_cspecies.shape[0]}"
+        )
+
+    # Create reaction IDs FIRST - before using them
+    interaction_w_cspecies[SBML_DFS.R_ID] = sbml_dfs_utils.id_formatter(
+        range(interaction_w_cspecies.shape[0]), SBML_DFS.R_ID
+    )
+
+    # Create reactions DataFrame
+    interactions_copy = interaction_w_cspecies.copy()
+    interactions_copy[SBML_DFS.R_SOURCE] = interaction_source
+
+    reactions_columns = [
+        SBML_DFS.R_NAME,
+        SBML_DFS.R_IDENTIFIERS,
+        SBML_DFS.R_SOURCE,
+        SBML_DFS.R_ISREVERSIBLE,
+    ]
+
+    reactions_df = interactions_copy.set_index(SBML_DFS.R_ID)[
+        reactions_columns + extra_reactions_columns
+    ]
+
+    # Separate extra data
+    reactions_data = reactions_df[extra_reactions_columns]
+    reactions_df = reactions_df[reactions_columns]
+
+    # Create reaction species relationships - NOW r_id exists
+    reaction_species_df = pd.concat(
+        [
+            # Upstream species (modifiers/stimulators/inhibitors)
+            interaction_w_cspecies[["sc_id_up", "sbo_term", SBML_DFS.R_ID]]
+            .assign(stoichiometry=upstream_stoichiometry)
+            .rename({"sc_id_up": "sc_id"}, axis=1),
+            # Downstream species (products)
+            interaction_w_cspecies[["sc_id_down", SBML_DFS.R_ID]]
+            .assign(
+                stoichiometry=downstream_stoichiometry,
+                sbo_term=MINI_SBO_FROM_NAME[downstream_sbo_name],
+            )
+            .rename({"sc_id_down": "sc_id"}, axis=1),
+        ]
+    )
+
+    reaction_species_df["rsc_id"] = sbml_dfs_utils.id_formatter(
+        range(reaction_species_df.shape[0]), "rsc_id"
+    )
+
+    reaction_species_df = reaction_species_df.set_index("rsc_id")
+
+    return reactions_df, reaction_species_df, reactions_data
+
+
+def _edgelist_assemble_sbml_model(
+    compartments,
+    species,
+    comp_species,
+    reactions,
+    reaction_species,
+    species_data,
+    reactions_data,
+    keep_species_data,
+    keep_reactions_data,
+    extra_columns,
+):
+    """
+    Assemble the final SBML_dfs object.
+
+    Parameters
+    ----------
+    compartments : pd.DataFrame
+        Processed compartments data
+    species : pd.DataFrame
+        Processed species data
+    comp_species : pd.DataFrame
+        Compartmentalized species data
+    reactions : pd.DataFrame
+        Reactions data
+    reaction_species : pd.DataFrame
+        Reaction species relationships
+    species_data : pd.DataFrame
+        Extra species data to include
+    reactions_data : pd.DataFrame
+        Extra reactions data to include
+    keep_species_data : bool or str
+        Label for species extra data
+    keep_reactions_data : bool or str
+        Label for reactions extra data
+    extra_columns : dict
+        Dictionary containing lists of extra column names
+
+    Returns
+    -------
+    SBML_dfs
+        Validated SBML data structure
+    """
+    sbml_tbl_dict = {
+        "compartments": compartments,
+        "species": species,
+        "compartmentalized_species": comp_species,
+        "reactions": reactions,
+        "reaction_species": reaction_species,
+    }
+
+    # Add extra data if requested
+    if len(extra_columns["reactions"]) > 0:
+        data_label = (
+            keep_reactions_data if isinstance(keep_reactions_data, str) else "source"
+        )
+        sbml_tbl_dict["reactions_data"] = {data_label: reactions_data}
+
+    if len(extra_columns["species"]) > 0:
+        data_label = (
+            keep_species_data if isinstance(keep_species_data, str) else "source"
+        )
+        sbml_tbl_dict["species_data"] = {data_label: species_data}
+
+    sbml_model = SBML_dfs(sbml_tbl_dict)
+    sbml_model.validate()
+
+    return sbml_model
+
+
+def _sbml_dfs_from_edgelist_check_cspecies_merge(
+    merged_species: pd.DataFrame, original_species: pd.DataFrame
+) -> None:
+    """Check for a mismatch between the provided species data and species implied by the edgelist."""
+
+    # check for 1-many merge
+    if merged_species.shape[0] != original_species.shape[0]:
+        raise ValueError(
+            "Merging compartmentalized species to species_df"
+            " and compartments_df by names resulted in an "
+            f"increase in the tables from {original_species.shape[0]}"
+            f" to {merged_species.shape[0]} indicating that names were"
+            " not unique"
+        )
+
+    # check for missing species and compartments
+    missing_compartments = merged_species[merged_species[SBML_DFS.C_ID].isna()][
+        SBML_DFS.C_NAME
+    ].unique()
+    if len(missing_compartments) >= 1:
+        raise ValueError(
+            f"{len(missing_compartments)} compartments were present in"
+            ' "interaction_edgelist" but not "compartments_df":'
+            f" {', '.join(missing_compartments)}"
+        )
+
+    missing_species = merged_species[merged_species[SBML_DFS.S_ID].isna()][
+        SBML_DFS.S_NAME
+    ].unique()
+    if len(missing_species) >= 1:
+        raise ValueError(
+            f"{len(missing_species)} species were present in "
+            '"interaction_edgelist" but not "species_df":'
+            f" {', '.join(missing_species)}"
+        )
+
+    return None
+
+
+def _stub_compartments(
+    stubbed_compartment: str = GENERIC_COMPARTMENT,
+) -> pd.DataFrame:
+    """Stub Compartments
+
+    Create a compartments table with only a single compartment
+
+    Args:
+    stubbed_compartment (str): the name of a compartment which should match the
+        keys in constants.COMPARTMENTS and constants.COMPARTMENTS_GO_TERMS
+
+    Returns:
+    compartments_df (pd.DataFrame): compartments dataframe
+    """
+
+    if stubbed_compartment not in COMPARTMENT_ALIASES.keys():
+        raise ValueError(
+            f"{stubbed_compartment} is not defined in constants.COMPARTMENTS"
+        )
+
+    if stubbed_compartment not in COMPARTMENTS_GO_TERMS.keys():
+        raise ValueError(
+            f"{stubbed_compartment} is not defined in constants.COMPARTMENTS_GO_TERMS"
+        )
+
+    stubbed_compartment_id = COMPARTMENTS_GO_TERMS[stubbed_compartment]
+
+    formatted_uri = identifiers.format_uri(
+        uri=identifiers.create_uri_url(
+            ontology=ONTOLOGIES.GO,
+            identifier=stubbed_compartment_id,
+        ),
+        biological_qualifier_type=BQB.IS,
+    )
+
+    compartments_df = pd.DataFrame(
+        {
+            SBML_DFS.C_NAME: [stubbed_compartment],
+            SBML_DFS.C_IDENTIFIERS: [identifiers.Identifiers([formatted_uri])],
+        }
+    )
+    compartments_df.index = sbml_dfs_utils.id_formatter([0], SBML_DFS.C_ID)  # type: ignore
+    compartments_df.index.name = SBML_DFS.C_ID
+
+    return compartments_df
+
+
+def _validate_matching_data(data_table: pd.DataFrame, ref_table: pd.DataFrame):
+    """Validates a table against a reference
+
+    This check if the table has the same index, no duplicates in the index
+    and that all values in the index are in the reference table.
+
+    Args:
+        data_table (pd.DataFrame): a table with data that should
+            match the reference
+        ref_table (pd.DataFrame): a reference table
+
+    Raises:
+        ValueError: not same index name
+        ValueError: index contains duplicates
+        ValueError: index not subset of index of reactions table
+    """
+    ref_index_name = ref_table.index.name
+    if data_table.index.name != ref_index_name:
+        raise ValueError(
+            "the index name for reaction data table was not"
+            f" {ref_index_name}: {data_table.index.name}"
+        )
+    ids = data_table.index
+    if any(ids.duplicated()):
+        raise ValueError(
+            "the index for reaction data table " "contained duplicate values"
+        )
+    if not all(ids.isin(ref_table.index)):
+        raise ValueError(
+            "the index for reaction data table contained values"
+            " not found in the reactions table"
+        )
+    if not isinstance(data_table, pd.DataFrame):
+        raise TypeError(
+            f"The data table was type {type(data_table).__name__}"
+            " but must be a pd.DataFrame"
+        )
