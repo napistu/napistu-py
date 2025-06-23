@@ -11,17 +11,25 @@ from fs import open_fs
 import numpy as np
 import pandas as pd
 from napistu import utils
+from napistu import identifiers
 from napistu import indices
 
 from napistu.constants import BQB
 from napistu.constants import SBML_DFS
+from napistu.constants import SBML_DFS_SCHEMA
 from napistu.constants import IDENTIFIERS
 from napistu.constants import BQB_DEFINING_ATTRS
 from napistu.constants import BQB_DEFINING_ATTRS_LOOSE
 from napistu.constants import REQUIRED_REACTION_FROMEDGELIST_COLUMNS
 from napistu.constants import INTERACTION_EDGELIST_EXPECTED_VARS
-from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import SBO_ROLES_DEFS
+from napistu.constants import MINI_SBO_FROM_NAME
+from napistu.constants import MINI_SBO_TO_NAME
+from napistu.constants import SBO_NAME_TO_ROLE
+from napistu.constants import ONTOLOGIES
+from napistu.ingestion.constants import VALID_COMPARTMENTS
+from napistu.ingestion.constants import COMPARTMENTS_GO_TERMS
+from napistu.ingestion.constants import GENERIC_COMPARTMENT
 
 logger = logging.getLogger(__name__)
 
@@ -416,6 +424,128 @@ def check_entity_data_index_matching(sbml_dfs, table):
     return sbml_dfs
 
 
+def validate_sbml_dfs_table(table_data: pd.DataFrame, table_name: str) -> None:
+    """
+    Validate a standalone table against the SBML_dfs schema.
+
+    This function validates a table against the schema defined in SBML_DFS_SCHEMA,
+    without requiring an SBML_dfs object. Useful for validating tables before
+    creating an SBML_dfs object.
+
+    Parameters
+    ----------
+    table_data : pd.DataFrame
+        The table to validate
+    table_name : str
+        Name of the table in the SBML_dfs schema
+
+    Raises
+    ------
+    ValueError
+    If table_name is not in schema or validation fails
+    """
+    if table_name not in SBML_DFS_SCHEMA.SCHEMA:
+        raise ValueError(
+            f"{table_name} is not a valid table name in SBML_DFS_SCHEMA. "
+            f"Valid tables are: {', '.join(SBML_DFS_SCHEMA.SCHEMA.keys())}"
+        )
+
+    table_schema = SBML_DFS_SCHEMA.SCHEMA[table_name]
+    _perform_sbml_dfs_table_validation(table_data, table_schema, table_name)
+
+
+def stub_compartments(
+    stubbed_compartment: str = GENERIC_COMPARTMENT,
+) -> pd.DataFrame:
+    """Stub Compartments
+
+    Create a compartments table with only a single compartment
+
+    Args:
+    stubbed_compartment (str): the name of a compartment which should match the
+        keys in ingestion.constants.VALID_COMPARTMENTS and ingestion.constants.COMPARTMENTS_GO_TERMS
+
+    Returns:
+    compartments_df (pd.DataFrame): compartments dataframe
+    """
+
+    if stubbed_compartment not in VALID_COMPARTMENTS:
+        raise ValueError(
+            f"{stubbed_compartment} is not defined in ingestion.constants.VALID_COMPARTMENTS"
+        )
+
+    if stubbed_compartment not in COMPARTMENTS_GO_TERMS.keys():
+        raise ValueError(
+            f"{stubbed_compartment} is not defined in ingestion.constants.COMPARTMENTS_GO_TERMS"
+        )
+
+    stubbed_compartment_id = COMPARTMENTS_GO_TERMS[stubbed_compartment]
+
+    formatted_uri = identifiers.format_uri(
+        uri=identifiers.create_uri_url(
+            ontology=ONTOLOGIES.GO,
+            identifier=stubbed_compartment_id,
+        ),
+        biological_qualifier_type=BQB.IS,
+    )
+
+    compartments_df = pd.DataFrame(
+        {
+            SBML_DFS.C_NAME: [stubbed_compartment],
+            SBML_DFS.C_IDENTIFIERS: [identifiers.Identifiers([formatted_uri])],
+        }
+    )
+    compartments_df.index = id_formatter([0], SBML_DFS.C_ID)  # type: ignore
+    compartments_df.index.name = SBML_DFS.C_ID
+
+    return compartments_df
+
+
+def species_type_types(x):
+    """Assign a high-level molecule type to a molecular species"""
+
+    if isinstance(x, identifiers.Identifiers):
+        if x.filter(["chebi"]):
+            return "metabolite"
+        elif x.filter(["molodex"]):
+            return "drug"
+        else:
+            return "protein"
+    else:
+        return "unknown"
+
+
+def add_sbo_role(reaction_species: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add an sbo_role column to the reaction_species table.
+
+    The sbo_role column is a string column that contains the SBO role of the reaction species.
+    The values in the sbo_role column are taken from the sbo_term column.
+
+    The sbo_role column is added to the reaction_species table by mapping the sbo_term column to the SBO_NAME_TO_ROLE dictionary.
+    """
+
+    validate_sbml_dfs_table(reaction_species, SBML_DFS.REACTION_SPECIES)
+
+    reaction_species = (
+        reaction_species.assign(sbo_role=reaction_species[SBML_DFS.SBO_TERM])
+        .replace({SBO_ROLES_DEFS.SBO_ROLE: MINI_SBO_TO_NAME})
+        .replace({SBO_ROLES_DEFS.SBO_ROLE: SBO_NAME_TO_ROLE})
+    )
+
+    undefined_roles = set(reaction_species[SBO_ROLES_DEFS.SBO_ROLE].unique()) - set(
+        SBO_NAME_TO_ROLE.values()
+    )
+    if len(undefined_roles) > 0:
+        logger.warning(
+            f"The following SBO roles are not defined: {undefined_roles}. They will be treated as {SBO_ROLES_DEFS.OPTIONAL} when determining reaction operability."
+        )
+        mask = reaction_species[SBO_ROLES_DEFS.SBO_ROLE].isin(undefined_roles)
+        reaction_species.loc[mask, SBO_ROLES_DEFS.SBO_ROLE] = SBO_ROLES_DEFS.OPTIONAL
+
+    return reaction_species
+
+
 def _find_underspecified_reactions(
     reaction_species_w_roles: pd.DataFrame,
 ) -> pd.DataFrame:
@@ -423,7 +553,7 @@ def _find_underspecified_reactions(
     # check that both sbo_role and "new" are present
     if SBO_ROLES_DEFS.SBO_ROLE not in reaction_species_w_roles.columns:
         raise ValueError(
-            "The sbo_role column is not present in the reaction_species_w_roles table. Please call add_sbo_role() first."
+            "The sbo_role column is not present in the reaction_species_w_roles table. Please call sbml_dfs_utils.add_sbo_role() first."
         )
     if "new" not in reaction_species_w_roles.columns:
         raise ValueError(
@@ -492,21 +622,6 @@ def _dogmatic_to_defining_bqbs(dogmatic: bool = False) -> str:
         defining_biological_qualifiers = BQB_DEFINING_ATTRS_LOOSE
 
     return defining_biological_qualifiers
-
-
-def _stub_ids(ids):
-    """Stub with a blank ID if an ids list is blank; otherwise create an Identifiers object from the provided ids"""
-    if len(ids) == 0:
-        return pd.DataFrame(
-            {
-                IDENTIFIERS.ONTOLOGY: [None],
-                IDENTIFIERS.IDENTIFIER: [None],
-                IDENTIFIERS.URL: [None],
-                IDENTIFIERS.BQB: [None],
-            }
-        )
-    else:
-        return pd.DataFrame(ids)
 
 
 def _edgelist_validate_inputs(
@@ -986,3 +1101,132 @@ def _filter_promiscuous_components(
     ].drop(["is_shared_component"], axis=1)
 
     return filtered_bqb_has_parts
+
+
+def _validate_matching_data(data_table: pd.DataFrame, ref_table: pd.DataFrame):
+    """Validates a table against a reference
+
+    This check if the table has the same index, no duplicates in the index
+    and that all values in the index are in the reference table.
+
+    Args:
+        data_table (pd.DataFrame): a table with data that should
+            match the reference
+        ref_table (pd.DataFrame): a reference table
+
+    Raises:
+        ValueError: not same index name
+        ValueError: index contains duplicates
+        ValueError: index not subset of index of reactions table
+    """
+    ref_index_name = ref_table.index.name
+    if data_table.index.name != ref_index_name:
+        raise ValueError(
+            "the index name for reaction data table was not"
+            f" {ref_index_name}: {data_table.index.name}"
+        )
+    ids = data_table.index
+    if any(ids.duplicated()):
+        raise ValueError(
+            "the index for reaction data table " "contained duplicate values"
+        )
+    if not all(ids.isin(ref_table.index)):
+        raise ValueError(
+            "the index for reaction data table contained values"
+            " not found in the reactions table"
+        )
+    if not isinstance(data_table, pd.DataFrame):
+        raise TypeError(
+            f"The data table was type {type(data_table).__name__}"
+            " but must be a pd.DataFrame"
+        )
+
+
+def _perform_sbml_dfs_table_validation(
+    table_data: pd.DataFrame,
+    table_schema: dict,
+    table_name: str,
+) -> None:
+    """
+    Core validation logic for SBML_dfs tables.
+
+    This function performs the actual validation checks for any table against its schema,
+    regardless of whether it's part of an SBML_dfs object or standalone.
+
+        Parameters
+        ----------
+    table_data : pd.DataFrame
+        The table data to validate
+    table_schema : dict
+        Schema definition for the table
+    table_name : str
+        Name of the table (for error messages)
+
+        Raises
+        ------
+        ValueError
+        If the table does not conform to its schema:
+        - Not a DataFrame
+        - Wrong index name
+        - Duplicate primary keys
+        - Missing required variables
+        - Empty table
+    """
+    if not isinstance(table_data, pd.DataFrame):
+        raise ValueError(
+            f"{table_name} must be a pd.DataFrame, but was a {type(table_data)}"
+        )
+
+    # check index
+    expected_index_name = table_schema["pk"]
+    if table_data.index.name != expected_index_name:
+        raise ValueError(
+            f"the index name for {table_name} was not the pk: {expected_index_name}"
+        )
+
+    # check that all entries in the index are unique
+    if len(set(table_data.index.tolist())) != table_data.shape[0]:
+        duplicated_pks = table_data.index.value_counts()
+        duplicated_pks = duplicated_pks[duplicated_pks > 1]
+
+        example_duplicates = duplicated_pks.index[0 : min(duplicated_pks.shape[0], 5)]
+        raise ValueError(
+            f"{duplicated_pks.shape[0]} primary keys were duplicated "
+            f"including {', '.join(example_duplicates)}"
+        )
+
+    # check variables
+    expected_vars = set(table_schema["vars"])
+    table_vars = set(list(table_data.columns))
+
+    extra_vars = table_vars.difference(expected_vars)
+    if len(extra_vars) != 0:
+        logger.debug(
+            f"{len(extra_vars)} extra variables were found for {table_name}: "
+            f"{', '.join(extra_vars)}"
+        )
+
+    missing_vars = expected_vars.difference(table_vars)
+    if len(missing_vars) != 0:
+        raise ValueError(
+            f"Missing {len(missing_vars)} required variables for {table_name}: "
+            f"{', '.join(missing_vars)}"
+        )
+
+    # check for empty table
+    if table_data.shape[0] == 0:
+        raise ValueError(f"{table_name} contained no entries")
+
+
+def _id_dict_to_df(ids):
+    if len(ids) == 0:
+        return pd.DataFrame(
+            {
+                IDENTIFIERS.ONTOLOGY: [None],
+                IDENTIFIERS.IDENTIFIER: [None],
+                IDENTIFIERS.URL: [None],
+                IDENTIFIERS.BQB: [None],
+            }
+        )
+    else:
+        return pd.DataFrame(ids)

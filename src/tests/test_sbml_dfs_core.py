@@ -9,7 +9,6 @@ from napistu import sbml_dfs_core
 from napistu.source import Source
 from napistu.ingestion import sbml
 from napistu.modify import pathwayannot
-from napistu.sbml_dfs_utils import _stub_ids
 
 from napistu import identifiers as napistu_identifiers
 from napistu.constants import (
@@ -29,8 +28,8 @@ def test_data():
     # Test compartments
     compartments_df = pd.DataFrame(
         [
-            {"c_name": "nucleus", "c_Identifiers": _stub_ids([])},
-            {"c_name": "cytoplasm", "c_Identifiers": _stub_ids([])},
+            {"c_name": "nucleus", "c_Identifiers": None},
+            {"c_name": "cytoplasm", "c_Identifiers": None},
         ]
     )
 
@@ -39,13 +38,13 @@ def test_data():
         [
             {
                 "s_name": "TP53",
-                "s_Identifiers": _stub_ids([]),
+                "s_Identifiers": None,
                 "gene_type": "tumor_suppressor",
             },
-            {"s_name": "MDM2", "s_Identifiers": _stub_ids([]), "gene_type": "oncogene"},
+            {"s_name": "MDM2", "s_Identifiers": None, "gene_type": "oncogene"},
             {
                 "s_name": "CDKN1A",
-                "s_Identifiers": _stub_ids([]),
+                "s_Identifiers": None,
                 "gene_type": "cell_cycle",
             },
         ]
@@ -61,7 +60,7 @@ def test_data():
                 "downstream_compartment": "nucleus",
                 "r_name": "TP53_activates_CDKN1A",
                 "sbo_term": "SBO:0000459",
-                "r_Identifiers": _stub_ids([]),
+                "r_Identifiers": None,
                 "r_isreversible": False,
                 "confidence": 0.95,
             },
@@ -72,7 +71,7 @@ def test_data():
                 "downstream_compartment": "nucleus",
                 "r_name": "MDM2_inhibits_TP53",
                 "sbo_term": "SBO:0000020",
-                "r_Identifiers": _stub_ids([]),
+                "r_Identifiers": None,
                 "r_isreversible": False,
                 "confidence": 0.87,
             },
@@ -282,17 +281,6 @@ def test_read_sbml_with_invalid_ids():
     # invalid identifiers still create a valid sbml_dfs
     sbml_w_bad_ids = sbml.SBML(sbml_w_bad_ids_path)
     assert isinstance(sbml_dfs_core.SBML_dfs(sbml_w_bad_ids), sbml_dfs_core.SBML_dfs)
-
-
-def test_stubbed_compartment():
-    compartment = sbml_dfs_core._stub_compartments()
-
-    assert compartment["c_Identifiers"].iloc[0].ids[0] == {
-        "ontology": "go",
-        "identifier": "GO:0005575",
-        "url": "https://www.ebi.ac.uk/QuickGO/term/GO:0005575",
-        "bqb": "BQB_IS",
-    }
 
 
 def test_get_table(sbml_dfs):
@@ -535,12 +523,12 @@ def test_get_characteristic_species_ids():
         "reactions": reactions,
         "reaction_species": reaction_species,
     }
-    sbml = SBML_dfs(sbml_dict, validate=False, resolve=False)
+    sbml_dfs = SBML_dfs(sbml_dict, validate=False, resolve=False)
 
     # Test dogmatic case (default)
     expected_bqbs = BQB_DEFINING_ATTRS + [BQB.HAS_PART]  # noqa: F841
-    with patch.object(sbml, "get_identifiers", return_value=mock_species_ids):
-        dogmatic_result = sbml.get_characteristic_species_ids()
+    with patch.object(sbml_dfs, "get_identifiers", return_value=mock_species_ids):
+        dogmatic_result = sbml_dfs.get_characteristic_species_ids()
         expected_dogmatic = mock_species_ids.query("bqb in @expected_bqbs")
         pd.testing.assert_frame_equal(
             dogmatic_result, expected_dogmatic, check_like=True
@@ -548,8 +536,8 @@ def test_get_characteristic_species_ids():
 
     # Test non-dogmatic case
     expected_bqbs = BQB_DEFINING_ATTRS_LOOSE + [BQB.HAS_PART]  # noqa: F841
-    with patch.object(sbml, "get_identifiers", return_value=mock_species_ids):
-        non_dogmatic_result = sbml.get_characteristic_species_ids(dogmatic=False)
+    with patch.object(sbml_dfs, "get_identifiers", return_value=mock_species_ids):
+        non_dogmatic_result = sbml_dfs.get_characteristic_species_ids(dogmatic=False)
         expected_non_dogmatic = mock_species_ids.query("bqb in @expected_bqbs")
         pd.testing.assert_frame_equal(
             non_dogmatic_result, expected_non_dogmatic, check_like=True

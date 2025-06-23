@@ -5,6 +5,7 @@ import logging
 import pandas as pd
 from napistu import identifiers
 from napistu import sbml_dfs_core
+from napistu import sbml_dfs_utils
 from napistu import source
 from napistu import utils
 from napistu.constants import BQB
@@ -158,7 +159,7 @@ def convert_string_to_sbml_dfs(
     # Define compartments
     # Currently we are mapping everything to the `CELLULAR_COMPONENT`
     # which is a catch-all go: for unknown localisation
-    compartments_df = sbml_dfs_core._stub_compartments()
+    compartments_df = sbml_dfs_utils.stub_compartments()
 
     # define interactions
     interaction_edgelist = _build_interactor_edgelist(uq_string_edgelist)

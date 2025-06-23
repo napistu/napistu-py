@@ -1697,7 +1697,7 @@ def _create_topology_weights(
         base_score (float): offset which will be added to all weights.
         protein_multiplier (int): multiplier for non-metabolite species (lower weight paths will tend to be selected).
         metabolite_multiplier (int): multiplier for metabolites [defined a species with a ChEBI ID).
-        unknown_multiplier (int): multiplier for species without any identifier. See sbml_dfs_core.species_type_types.
+        unknown_multiplier (int): multiplier for species without any identifier. See sbml_dfs_utils.species_type_types.
         scale_multiplier_by_meandegree (bool): if True then multipliers will be rescaled by the average number of
             connections a node has (i.e., its degree) so that weights will be relatively similar regardless of network
             size and sparsity.

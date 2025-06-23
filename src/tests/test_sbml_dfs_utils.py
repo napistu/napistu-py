@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pandas as pd
 
-from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
 from napistu.constants import (
     BQB,
@@ -147,7 +146,7 @@ def test_find_underspecified_reactions():
         f"rsc_{i}" for i in range(len(reaction_w_regulators))
     ]
     reaction_w_regulators.set_index(SBML_DFS.RSC_ID, inplace=True)
-    reaction_w_regulators = sbml_dfs_core.add_sbo_role(reaction_w_regulators)
+    reaction_w_regulators = sbml_dfs_utils.add_sbo_role(reaction_w_regulators)
 
     reaction_w_interactors = pd.DataFrame(
         {
@@ -160,7 +159,7 @@ def test_find_underspecified_reactions():
         f"rsc_{i}" for i in range(len(reaction_w_interactors))
     ]
     reaction_w_interactors.set_index(SBML_DFS.RSC_ID, inplace=True)
-    reaction_w_interactors = sbml_dfs_core.add_sbo_role(reaction_w_interactors)
+    reaction_w_interactors = sbml_dfs_utils.add_sbo_role(reaction_w_interactors)
 
     working_reactions = reaction_w_regulators.copy()
     working_reactions["new"] = True
@@ -209,3 +208,14 @@ def test_find_underspecified_reactions():
     working_reactions
     result = sbml_dfs_utils._find_underspecified_reactions(working_reactions)
     assert result == {"baz"}
+
+
+def test_stubbed_compartment():
+    compartment = sbml_dfs_utils.stub_compartments()
+
+    assert compartment["c_Identifiers"].iloc[0].ids[0] == {
+        "ontology": "go",
+        "identifier": "GO:0005575",
+        "url": "https://www.ebi.ac.uk/QuickGO/term/GO:0005575",
+        "bqb": "BQB_IS",
+    }

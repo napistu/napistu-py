@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import pytest
 import pandas as pd
-from napistu import sbml_dfs_core
+from napistu import sbml_dfs_utils
 from napistu.constants import SBML_DFS
 from napistu.context.filtering import (
     filter_species_by_attribute,
@@ -208,7 +208,7 @@ def test_filter_reactions_with_disconnected_cspecies(sbml_dfs):
     first_reactions = list(sbml_dfs.reactions.index[:5])
 
     # 2. Find defining species in these reactions
-    reaction_species = sbml_dfs_core.add_sbo_role(sbml_dfs.reaction_species)
+    reaction_species = sbml_dfs_utils.add_sbo_role(sbml_dfs.reaction_species)
     defining_species = (
         reaction_species[reaction_species[SBML_DFS.R_ID].isin(first_reactions)]
         .query("sbo_role == 'DEFINING'")

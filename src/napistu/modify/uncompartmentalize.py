@@ -48,7 +48,7 @@ def uncompartmentalize_sbml_dfs(
         )
 
     # 1. update the compartments table to the stubbed default level: GO CELLULAR_COMPONENT
-    stubbed_compartment = sbml_dfs_core._stub_compartments().assign(
+    stubbed_compartment = sbml_dfs_utils.stub_compartments().assign(
         c_Source=_create_stubbed_source()
     )
 

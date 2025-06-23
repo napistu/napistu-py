@@ -343,9 +343,9 @@ def infer_uncompartmentalized_species_location(model_uri: str, output_model_uri:
     If the compartment of a subset of compartmentalized species was
     not specified, infer an appropriate compartment from other members of reactions they particpate in
     """
-    model = utils.load_pickle(model_uri)
-    model = sbml_dfs_core.infer_uncompartmentalized_species_location(model)
-    utils.save_pickle(output_model_uri, model)
+    sbml_dfs = utils.load_pickle(model_uri)
+    sbml_dfs.infer_uncompartmentalized_species_location()
+    utils.save_pickle(output_model_uri, sbml_dfs)
 
 
 @refine.command(name="name_compartmentalized_species")
@@ -357,9 +357,9 @@ def name_compartmentalized_species(model_uri: str, output_model_uri: str):
 
     Rename compartmentalized species if they have the same name as their species
     """
-    model = utils.load_pickle(model_uri)
-    model = sbml_dfs_core.name_compartmentalized_species(model)
-    utils.save_pickle(output_model_uri, model)
+    sbml_dfs = utils.load_pickle(model_uri)
+    sbml_dfs.name_compartmentalized_species()
+    utils.save_pickle(output_model_uri, sbml_dfs)
 
 
 @refine.command(name="merge_model_compartments")
@@ -786,9 +786,9 @@ def export_sbml_dfs_tables(
     logger.debug(f"nondogmatic = {nondogmatic}; dogmatic = {dogmatic}")
     logger.info(f"Exporting tables with dogmatic = {dogmatic}")
 
-    model = utils.load_pickle(model_uri)
-    sbml_dfs_core.export_sbml_dfs(
-        model_prefix, model, output_uri, overwrite=overwrite, dogmatic=dogmatic
+    sbml_dfs = utils.load_pickle(model_uri)
+    sbml_dfs.export_sbml_dfs(
+        model_prefix, output_uri, overwrite=overwrite, dogmatic=dogmatic
     )
 
 

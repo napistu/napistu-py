@@ -5,6 +5,7 @@ from typing import Union, List, Optional
 import pandas as pd
 
 from napistu import sbml_dfs_core
+from napistu import sbml_dfs_utils
 from napistu import utils
 from napistu.constants import SBML_DFS
 
@@ -236,7 +237,7 @@ def _find_reactions_with_disconnected_cspecies(
     sbml_dfs._validate_table(SBML_DFS.REACTION_SPECIES)
     sbml_dfs._validate_table(SBML_DFS.COMPARTMENTALIZED_SPECIES)
 
-    reaction_species = sbml_dfs_core.add_sbo_role(sbml_dfs.reaction_species)
+    reaction_species = sbml_dfs_utils.add_sbo_role(sbml_dfs.reaction_species)
 
     logger.info(
         "Finding disconnected pairs of cspecies based on the zero values in the coccurrence_edgelist"
