@@ -367,9 +367,19 @@ def test_species_status(sbml_dfs):
     assert select_species.shape[0] == 1
 
     status = sbml_dfs_core.species_status(select_species.index[0], sbml_dfs)
+
+    # expected columns
+    expected_columns = [
+        SBML_DFS.SC_NAME,
+        SBML_DFS.STOICHIOMETRY,
+        SBML_DFS.R_NAME,
+        "r_formula_str",
+    ]
+    assert all(col in status.columns for col in expected_columns)
+
     assert (
         status["r_formula_str"][0]
-        == "4.0 H+ + OxyHbA + 4.0 CO2 -> 4.0 O2 + Protonated Carbamino DeoxyHbA [cytosol]"
+        == "cytosol: 4.0 CO2 + 4.0 H+ + OxyHbA -> 4.0 O2 + Protonated Carbamino DeoxyHbA"
     )
 
 

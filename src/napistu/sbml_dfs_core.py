@@ -1131,11 +1131,11 @@ def species_status(s_id: str, sbml_dfs: SBML_dfs) -> pd.DataFrame:
         sbml_dfs.compartmentalized_species, left_on=SBML_DFS.SC_ID, right_index=True
     )
 
+    participating_rids = full_rxns_participating[SBML_DFS.R_ID].unique()
+    participating_r_names = sbml_dfs.reactions.loc[participating_rids, SBML_DFS.R_NAME]
+    participating_r_formulas = reaction_summaries(sbml_dfs, r_ids=participating_rids)
     reaction_descriptions = pd.concat(
-        [
-            reaction_summary(x, sbml_dfs)
-            for x in set(full_rxns_participating[SBML_DFS.R_ID].tolist())
-        ]
+        [participating_r_names, participating_r_formulas], axis=1
     )
 
     status = (
@@ -1151,71 +1151,6 @@ def species_status(s_id: str, sbml_dfs: SBML_dfs) -> pd.DataFrame:
     )
 
     return status
-
-
-def reaction_summary(r_id: str, sbml_dfs: SBML_dfs) -> pd.DataFrame:
-    """
-    Reaction Summary
-
-    Return a reaction's name and a human-readable formula.
-
-    Parameters:
-    r_id: str
-      A reaction ID
-    sbml_dfs: SBML_dfs
-
-    Returns:
-    one row pd.DataFrame
-    """
-
-    logger.warning(
-        "reaction_summary is deprecated and will be removed in a future version of rcpr; "
-        "please use reaction_summaries() instead"
-    )
-
-    matching_reaction = sbml_dfs.reactions.loc[r_id]
-
-    if not isinstance(matching_reaction, pd.Series):
-        raise ValueError(f"{r_id} did not match a single reaction")
-
-    matching_reaction = sbml_dfs.reactions.loc[r_id]
-
-    matching_reaction_species = sbml_dfs.reaction_species[
-        sbml_dfs.reaction_species.r_id.isin([r_id])
-    ].merge(
-        sbml_dfs.compartmentalized_species, left_on=SBML_DFS.SC_ID, right_index=True
-    )
-
-    # collapse all reaction species to a formula string
-
-    if len(matching_reaction_species[SBML_DFS.C_ID].unique()) == 1:
-        augmented_matching_reaction_species = matching_reaction_species.merge(
-            sbml_dfs.compartments, left_on=SBML_DFS.C_ID, right_index=True
-        ).merge(sbml_dfs.species, left_on=SBML_DFS.S_ID, right_index=True)
-        str_formula = (
-            construct_formula_string(
-                augmented_matching_reaction_species, sbml_dfs.reactions, SBML_DFS.S_NAME
-            )
-            + " ["
-            + augmented_matching_reaction_species[SBML_DFS.C_NAME].iloc[0]
-            + "]"
-        )
-    else:
-        str_formula = construct_formula_string(
-            matching_reaction_species, sbml_dfs.reactions, SBML_DFS.SC_NAME
-        )
-
-    output = pd.DataFrame(
-        {
-            SBML_DFS.R_NAME: matching_reaction[SBML_DFS.R_NAME],
-            "r_formula_str": str_formula,
-        },
-        index=[r_id],
-    )
-
-    output.index.name = SBML_DFS.R_ID
-
-    return output
 
 
 def reaction_summaries(sbml_dfs: SBML_dfs, r_ids=None) -> pd.Series:
