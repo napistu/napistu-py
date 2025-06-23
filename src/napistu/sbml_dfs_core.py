@@ -25,7 +25,6 @@ from napistu.constants import NAPISTU_STANDARD_OUTPUTS
 from napistu.constants import BQB_PRIORITIES
 from napistu.constants import ONTOLOGY_PRIORITIES
 from napistu.constants import BQB
-from napistu.constants import BQB_DEFINING_ATTRS
 from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import MINI_SBO_TO_NAME
 from napistu.constants import ONTOLOGIES
@@ -1284,6 +1283,41 @@ class SBML_dfs:
 
         return formula_strs
 
+    def get_characteristic_species_ids(self, dogmatic: bool = True) -> pd.DataFrame:
+        """
+        Get Characteristic Species IDs
+
+        List the systematic identifiers which are characteristic of molecular species, e.g., excluding subcomponents, and optionally, treating proteins, transcripts, and genes equiavlently.
+
+        Parameters
+        ----------
+        sbml_dfs : sbml_dfs_core.SBML_dfs
+            The SBML_dfs object.
+        dogmatic : bool, default=True
+            Whether to use the dogmatic flag to determine which BQB attributes are valid.
+
+        Returns
+        -------
+        pd.DataFrame
+            A DataFrame containing the systematic identifiers which are characteristic of molecular species.
+        """
+
+        # select valid BQB attributes based on dogmatic flag
+        defining_biological_qualifiers = sbml_dfs_utils._dogmatic_to_defining_bqbs(
+            dogmatic
+        )
+
+        # pre-summarize ontologies
+        species_identifiers = self.get_identifiers(SBML_DFS.SPECIES)
+
+        # drop some BQB_HAS_PART annotations
+        species_identifiers = sbml_dfs_utils.filter_to_characteristic_species_ids(
+            species_identifiers,
+            defining_biological_qualifiers=defining_biological_qualifiers,
+        )
+
+        return species_identifiers
+
     def _validate_r_ids(self, r_ids: Optional[Union[str, list[str]]]) -> list[str]:
 
         if isinstance(r_ids, str):
@@ -1296,100 +1330,6 @@ class SBML_dfs:
                 raise ValueError(f"Reaction IDs {r_ids} not found in reactions table")
 
             return r_ids
-
-
-def filter_to_characteristic_species_ids(
-    species_ids: pd.DataFrame,
-    max_complex_size: int = 4,
-    max_promiscuity: int = 20,
-    defining_biological_qualifiers: list[str] = BQB_DEFINING_ATTRS,
-) -> pd.DataFrame:
-    """
-    Filter to Characteristic Species IDs
-
-    Remove identifiers corresponding to one component within a large protein
-    complexes and non-characteristic annotations such as pubmed references and
-    homologues.
-
-        Parameters
-        ----------
-    species_ids: pd.DataFrame
-        A table of identifiers produced by sdbml_dfs.get_identifiers("species")
-    max_complex_size: int
-        The largest size of a complex, where BQB_HAS_PART terms will be retained.
-        In most cases, complexes are handled with specific formation and
-        dissolutation reactions,but these identifiers will be pulled in when
-        searching by identifiers or searching the identifiers associated with a
-        species against an external resource such as Open Targets.
-    max_promiscuity: int
-        Maximum number of species where a single molecule can act as a
-        BQB_HAS_PART component associated with a single identifier (and common ontology).
-    defining_biological_qualifiers (list[str]):
-        BQB codes which define distinct entities. Narrowly this would be BQB_IS, while more
-        permissive settings would include homologs, different forms of the same gene.
-
-    Returns:
-    --------
-    species_id: pd.DataFrame
-        Input species filtered to characteristic identifiers
-
-    """
-
-    if not isinstance(species_ids, pd.DataFrame):
-        raise TypeError(
-            f"species_ids was a {type(species_ids)} but must be a pd.DataFrame"
-        )
-
-    if not isinstance(max_complex_size, int):
-        raise TypeError(
-            f"max_complex_size was a {type(max_complex_size)} but must be an int"
-        )
-
-    if not isinstance(max_promiscuity, int):
-        raise TypeError(
-            f"max_promiscuity was a {type(max_promiscuity)} but must be an int"
-        )
-
-    if not isinstance(defining_biological_qualifiers, list):
-        raise TypeError(
-            f"defining_biological_qualifiers was a {type(defining_biological_qualifiers)} but must be a list"
-        )
-
-    # primary annotations of a species
-    bqb_is_species = species_ids.query("bqb in @defining_biological_qualifiers")
-
-    # add components within modestly sized protein complexes
-    # look at HAS_PART IDs
-    bqb_has_parts_species = species_ids[species_ids[IDENTIFIERS.BQB] == BQB.HAS_PART]
-
-    # number of species in a complex
-    n_species_components = bqb_has_parts_species.value_counts(
-        [IDENTIFIERS.ONTOLOGY, SBML_DFS.S_ID]
-    )
-    big_complex_sids = set(
-        n_species_components[
-            n_species_components > max_complex_size
-        ].index.get_level_values(SBML_DFS.S_ID)
-    )
-
-    filtered_bqb_has_parts = _filter_promiscuous_components(
-        bqb_has_parts_species, max_promiscuity
-    )
-
-    # drop species parts if there are many components
-    filtered_bqb_has_parts = filtered_bqb_has_parts[
-        ~filtered_bqb_has_parts[SBML_DFS.S_ID].isin(big_complex_sids)
-    ]
-
-    # combine primary identifiers and rare components
-    characteristic_species_ids = pd.concat(
-        [
-            bqb_is_species,
-            filtered_bqb_has_parts,
-        ]
-    )
-
-    return characteristic_species_ids
 
 
 def infer_uncompartmentalized_species_location(sbml_dfs: SBML_dfs) -> SBML_dfs:
@@ -1682,10 +1622,7 @@ def export_sbml_dfs(
         )
 
     # filter to identifiers which make sense when mapping from ids -> species
-    species_identifiers = sbml_dfs_utils.get_characteristic_species_ids(
-        sbml_dfs,
-        dogmatic=dogmatic,
-    )
+    species_identifiers = sbml_dfs.get_characteristic_species_ids(dogmatic=dogmatic)
 
     try:
         utils.initialize_dir(outdir, overwrite=overwrite)

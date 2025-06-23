@@ -13,7 +13,7 @@ import pandas as pd
 from napistu import utils
 from napistu import indices
 
-from napistu import sbml_dfs_core
+from napistu.constants import BQB
 from napistu.constants import SBML_DFS
 from napistu.constants import IDENTIFIERS
 from napistu.constants import BQB_DEFINING_ATTRS
@@ -224,24 +224,98 @@ def adapt_pw_index(
     return pw_index
 
 
-def _dogmatic_to_defining_bqbs(dogmatic: bool = False) -> str:
-    if dogmatic:
-        logger.info(
-            "Running in dogmatic mode - differences genes, transcripts, and proteins will "
-            "try to be maintained as separate species."
-        )
-        # preserve differences between genes, transcripts, and proteins
-        defining_biological_qualifiers = BQB_DEFINING_ATTRS
-    else:
-        logger.info(
-            "Running in non-dogmatic mode - genes, transcripts, and proteins will "
-            "be merged if possible."
-        )
-        # merge genes, transcripts, and proteins (if they are defined with
-        # bqb terms which specify their relationships).
-        defining_biological_qualifiers = BQB_DEFINING_ATTRS_LOOSE
+def filter_to_characteristic_species_ids(
+    species_ids: pd.DataFrame,
+    max_complex_size: int = 4,
+    max_promiscuity: int = 20,
+    defining_biological_qualifiers: list[str] = BQB_DEFINING_ATTRS,
+) -> pd.DataFrame:
+    """
+    Filter to Characteristic Species IDs
 
-    return defining_biological_qualifiers
+    Remove identifiers corresponding to one component within a large protein
+    complexes and non-characteristic annotations such as pubmed references and
+    homologues.
+
+        Parameters
+        ----------
+    species_ids: pd.DataFrame
+        A table of identifiers produced by sdbml_dfs.get_identifiers("species")
+    max_complex_size: int
+        The largest size of a complex, where BQB_HAS_PART terms will be retained.
+        In most cases, complexes are handled with specific formation and
+        dissolutation reactions,but these identifiers will be pulled in when
+        searching by identifiers or searching the identifiers associated with a
+        species against an external resource such as Open Targets.
+    max_promiscuity: int
+        Maximum number of species where a single molecule can act as a
+        BQB_HAS_PART component associated with a single identifier (and common ontology).
+    defining_biological_qualifiers (list[str]):
+        BQB codes which define distinct entities. Narrowly this would be BQB_IS, while more
+        permissive settings would include homologs, different forms of the same gene.
+
+    Returns:
+    --------
+    species_id: pd.DataFrame
+        Input species filtered to characteristic identifiers
+
+    """
+
+    if not isinstance(species_ids, pd.DataFrame):
+        raise TypeError(
+            f"species_ids was a {type(species_ids)} but must be a pd.DataFrame"
+        )
+
+    if not isinstance(max_complex_size, int):
+        raise TypeError(
+            f"max_complex_size was a {type(max_complex_size)} but must be an int"
+        )
+
+    if not isinstance(max_promiscuity, int):
+        raise TypeError(
+            f"max_promiscuity was a {type(max_promiscuity)} but must be an int"
+        )
+
+    if not isinstance(defining_biological_qualifiers, list):
+        raise TypeError(
+            f"defining_biological_qualifiers was a {type(defining_biological_qualifiers)} but must be a list"
+        )
+
+    # primary annotations of a species
+    bqb_is_species = species_ids.query("bqb in @defining_biological_qualifiers")
+
+    # add components within modestly sized protein complexes
+    # look at HAS_PART IDs
+    bqb_has_parts_species = species_ids[species_ids[IDENTIFIERS.BQB] == BQB.HAS_PART]
+
+    # number of species in a complex
+    n_species_components = bqb_has_parts_species.value_counts(
+        [IDENTIFIERS.ONTOLOGY, SBML_DFS.S_ID]
+    )
+    big_complex_sids = set(
+        n_species_components[
+            n_species_components > max_complex_size
+        ].index.get_level_values(SBML_DFS.S_ID)
+    )
+
+    filtered_bqb_has_parts = _filter_promiscuous_components(
+        bqb_has_parts_species, max_promiscuity
+    )
+
+    # drop species parts if there are many components
+    filtered_bqb_has_parts = filtered_bqb_has_parts[
+        ~filtered_bqb_has_parts[SBML_DFS.S_ID].isin(big_complex_sids)
+    ]
+
+    # combine primary identifiers and rare components
+    characteristic_species_ids = pd.concat(
+        [
+            bqb_is_species,
+            filtered_bqb_has_parts,
+        ]
+    )
+
+    return characteristic_species_ids
 
 
 def match_entitydata_index_to_entity(
@@ -339,42 +413,6 @@ def check_entity_data_index_matching(sbml_dfs, table):
             sbml_dfs.species_data = entity_data_dict_checked
 
     return sbml_dfs
-
-
-def get_characteristic_species_ids(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, dogmatic: bool = True
-) -> pd.DataFrame:
-    """
-    Get Characteristic Species IDs
-
-    List the systematic identifiers which are characteristic of molecular species, e.g., excluding subcomponents, and optionally, treating proteins, transcripts, and genes equiavlently.
-
-    Parameters
-    ----------
-    sbml_dfs : sbml_dfs_core.SBML_dfs
-        The SBML_dfs object.
-    dogmatic : bool, default=True
-        Whether to use the dogmatic flag to determine which BQB attributes are valid.
-
-    Returns
-    -------
-    pd.DataFrame
-        A DataFrame containing the systematic identifiers which are characteristic of molecular species.
-    """
-
-    # select valid BQB attributes based on dogmatic flag
-    defining_biological_qualifiers = _dogmatic_to_defining_bqbs(dogmatic)
-
-    # pre-summarize ontologies
-    species_identifiers = sbml_dfs.get_identifiers(SBML_DFS.SPECIES)
-
-    # drop some BQB_HAS_PART annotations
-    species_identifiers = sbml_dfs_core.filter_to_characteristic_species_ids(
-        species_identifiers,
-        defining_biological_qualifiers=defining_biological_qualifiers,
-    )
-
-    return species_identifiers
 
 
 def _dogmatic_to_defining_bqbs(dogmatic: bool = False) -> str:
@@ -831,3 +869,62 @@ def _add_stoi_to_species_name(stoi: float | int, name: str) -> str:
         return name
     else:
         return str(abs(stoi)) + " " + name
+
+
+def _dogmatic_to_defining_bqbs(dogmatic: bool = False) -> str:
+    if dogmatic:
+        logger.info(
+            "Running in dogmatic mode - differences genes, transcripts, and proteins will "
+            "try to be maintained as separate species."
+        )
+        # preserve differences between genes, transcripts, and proteins
+        defining_biological_qualifiers = BQB_DEFINING_ATTRS
+    else:
+        logger.info(
+            "Running in non-dogmatic mode - genes, transcripts, and proteins will "
+            "be merged if possible."
+        )
+        # merge genes, transcripts, and proteins (if they are defined with
+        # bqb terms which specify their relationships).
+        defining_biological_qualifiers = BQB_DEFINING_ATTRS_LOOSE
+
+    return defining_biological_qualifiers
+
+
+def _filter_promiscuous_components(
+    bqb_has_parts_species: pd.DataFrame, max_promiscuity: int
+) -> pd.DataFrame:
+
+    # number of complexes a species is part of
+    n_complexes_involvedin = bqb_has_parts_species.value_counts(
+        [IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER]
+    )
+    promiscuous_component_identifiers_index = n_complexes_involvedin[
+        n_complexes_involvedin > max_promiscuity
+    ].index
+    promiscuous_component_identifiers = pd.Series(
+        data=[True] * len(promiscuous_component_identifiers_index),
+        index=promiscuous_component_identifiers_index,
+        name="is_shared_component",
+        dtype=bool,
+    )
+
+    if len(promiscuous_component_identifiers) == 0:
+        return bqb_has_parts_species
+
+    filtered_bqb_has_parts = bqb_has_parts_species.merge(
+        promiscuous_component_identifiers,
+        left_on=[IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER],
+        right_index=True,
+        how="left",
+    )
+
+    filtered_bqb_has_parts["is_shared_component"] = (
+        filtered_bqb_has_parts["is_shared_component"].astype("boolean").fillna(False)
+    )
+    # drop identifiers shared as components across many species
+    filtered_bqb_has_parts = filtered_bqb_has_parts[
+        ~filtered_bqb_has_parts["is_shared_component"]
+    ].drop(["is_shared_component"], axis=1)
+
+    return filtered_bqb_has_parts
