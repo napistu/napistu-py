@@ -21,6 +21,7 @@ from napistu.constants import BQB_DEFINING_ATTRS_LOOSE
 from napistu.constants import REQUIRED_REACTION_FROMEDGELIST_COLUMNS
 from napistu.constants import INTERACTION_EDGELIST_EXPECTED_VARS
 from napistu.constants import MINI_SBO_FROM_NAME
+from napistu.constants import SBO_ROLES_DEFS
 
 logger = logging.getLogger(__name__)
 
@@ -413,6 +414,63 @@ def check_entity_data_index_matching(sbml_dfs, table):
             sbml_dfs.species_data = entity_data_dict_checked
 
     return sbml_dfs
+
+
+def _find_underspecified_reactions(
+    reaction_species_w_roles: pd.DataFrame,
+) -> pd.DataFrame:
+
+    # check that both sbo_role and "new" are present
+    if SBO_ROLES_DEFS.SBO_ROLE not in reaction_species_w_roles.columns:
+        raise ValueError(
+            "The sbo_role column is not present in the reaction_species_w_roles table. Please call add_sbo_role() first."
+        )
+    if "new" not in reaction_species_w_roles.columns:
+        raise ValueError(
+            "The new column is not present in the reaction_species_w_roles table. This should indicate what cspecies would be preserved in the reaction should it be preserved."
+        )
+    # check that new is a boolean column
+    if reaction_species_w_roles["new"].dtype != bool:
+        raise ValueError(
+            "The new column is not a boolean column. Please ensure that the new column is a boolean column. This should indicate what cspecies would be preserved in the reaction should it be preserved."
+        )
+
+    reactions_with_lost_defining_members = set(
+        reaction_species_w_roles.query("~new")
+        .query("sbo_role == 'DEFINING'")[SBML_DFS.R_ID]
+        .tolist()
+    )
+
+    N_reactions_with_lost_defining_members = len(reactions_with_lost_defining_members)
+    if N_reactions_with_lost_defining_members > 0:
+        logger.info(
+            f"Removing {N_reactions_with_lost_defining_members} reactions which have lost at least one defining species"
+        )
+
+    # find the cases where all "new" values for a given (r_id, sbo_term) are False
+    reactions_with_lost_requirements = set(
+        reaction_species_w_roles
+        # drop already filtered reactions
+        .query("r_id not in @reactions_with_lost_defining_members")
+        .query("sbo_role == 'REQUIRED'")
+        # which entries which have some required attribute have all False values for that attribute
+        .groupby([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
+        .agg({"new": "any"})
+        .query("new == False")
+        .index.get_level_values(SBML_DFS.R_ID)
+    )
+
+    N_reactions_with_lost_requirements = len(reactions_with_lost_requirements)
+    if N_reactions_with_lost_requirements > 0:
+        logger.info(
+            f"Removing {N_reactions_with_lost_requirements} reactions which have lost all required members"
+        )
+
+    underspecified_reactions = reactions_with_lost_defining_members.union(
+        reactions_with_lost_requirements
+    )
+
+    return underspecified_reactions
 
 
 def _dogmatic_to_defining_bqbs(dogmatic: bool = False) -> str:

@@ -14,12 +14,12 @@ from napistu.sbml_dfs_utils import _stub_ids
 from napistu import identifiers as napistu_identifiers
 from napistu.constants import (
     SBML_DFS,
-    SBOTERM_NAMES,
     BQB_DEFINING_ATTRS,
     BQB_DEFINING_ATTRS_LOOSE,
     BQB,
 )
 from napistu.sbml_dfs_core import SBML_dfs
+from unittest.mock import patch
 
 
 @pytest.fixture
@@ -425,91 +425,6 @@ def test_get_identifiers_handles_missing_values():
     ), "Only Identifiers objects should be returned."
 
 
-def test_find_underspecified_reactions():
-
-    reaction_w_regulators = pd.DataFrame(
-        {
-            SBML_DFS.SC_ID: ["A", "B", "C", "D", "E", "F", "G"],
-            SBML_DFS.STOICHIOMETRY: [-1, -1, 1, 1, 0, 0, 0],
-            SBML_DFS.SBO_TERM: [
-                SBOTERM_NAMES.REACTANT,
-                SBOTERM_NAMES.REACTANT,
-                SBOTERM_NAMES.PRODUCT,
-                SBOTERM_NAMES.PRODUCT,
-                SBOTERM_NAMES.CATALYST,
-                SBOTERM_NAMES.CATALYST,
-                SBOTERM_NAMES.STIMULATOR,
-            ],
-        }
-    ).assign(r_id="bar")
-    reaction_w_regulators[SBML_DFS.RSC_ID] = [
-        f"rsc_{i}" for i in range(len(reaction_w_regulators))
-    ]
-    reaction_w_regulators.set_index(SBML_DFS.RSC_ID, inplace=True)
-    reaction_w_regulators = sbml_dfs_core.add_sbo_role(reaction_w_regulators)
-
-    reaction_w_interactors = pd.DataFrame(
-        {
-            SBML_DFS.SC_ID: ["A", "B"],
-            SBML_DFS.STOICHIOMETRY: [-1, 1],
-            SBML_DFS.SBO_TERM: [SBOTERM_NAMES.REACTANT, SBOTERM_NAMES.REACTANT],
-        }
-    ).assign(r_id="baz")
-    reaction_w_interactors[SBML_DFS.RSC_ID] = [
-        f"rsc_{i}" for i in range(len(reaction_w_interactors))
-    ]
-    reaction_w_interactors.set_index(SBML_DFS.RSC_ID, inplace=True)
-    reaction_w_interactors = sbml_dfs_core.add_sbo_role(reaction_w_interactors)
-
-    working_reactions = reaction_w_regulators.copy()
-    working_reactions["new"] = True
-    working_reactions.loc["rsc_0", "new"] = False
-    working_reactions
-    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
-    assert result == {"bar"}
-
-    # missing one enzyme -> operable
-    working_reactions = reaction_w_regulators.copy()
-    working_reactions["new"] = True
-    working_reactions.loc["rsc_4", "new"] = False
-    working_reactions
-    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
-    assert result == set()
-
-    # missing one product -> inoperable
-    working_reactions = reaction_w_regulators.copy()
-    working_reactions["new"] = True
-    working_reactions.loc["rsc_2", "new"] = False
-    working_reactions
-    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
-    assert result == {"bar"}
-
-    # missing all enzymes -> inoperable
-    working_reactions = reaction_w_regulators.copy()
-    working_reactions["new"] = True
-    working_reactions.loc["rsc_4", "new"] = False
-    working_reactions.loc["rsc_5", "new"] = False
-    working_reactions
-    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
-    assert result == {"bar"}
-
-    # missing regulators -> operable
-    working_reactions = reaction_w_regulators.copy()
-    working_reactions["new"] = True
-    working_reactions.loc["rsc_6", "new"] = False
-    working_reactions
-    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
-    assert result == set()
-
-    # remove an interactor
-    working_reactions = reaction_w_interactors.copy()
-    working_reactions["new"] = True
-    working_reactions.loc["rsc_0", "new"] = False
-    working_reactions
-    result = sbml_dfs_core.find_underspecified_reactions(working_reactions)
-    assert result == {"baz"}
-
-
 def test_remove_entity_data_success(sbml_dfs_w_data):
     """Test successful removal of entity data."""
     # Get initial data
@@ -573,28 +488,72 @@ def test_get_characteristic_species_ids():
         }
     )
 
-    # Create mock SBML_dfs object
-    class MockSBML_dfs:
-        def get_identifiers(self, entity_type):
-            return mock_species_ids
+    # Create minimal required tables for SBML_dfs
+    compartments = pd.DataFrame(
+        {"c_name": ["cytosol"], "c_Identifiers": [None]}, index=["C1"]
+    )
+    compartments.index.name = "c_id"
+    species = pd.DataFrame(
+        {"s_name": ["A"], "s_Identifiers": [None], "s_source": [None]}, index=["s1"]
+    )
+    species.index.name = "s_id"
+    compartmentalized_species = pd.DataFrame(
+        {
+            "sc_name": ["A [cytosol]"],
+            "s_id": ["s1"],
+            "c_id": ["C1"],
+            "sc_source": [None],
+        },
+        index=["SC1"],
+    )
+    compartmentalized_species.index.name = "sc_id"
+    reactions = pd.DataFrame(
+        {
+            "r_name": ["rxn1"],
+            "r_Identifiers": [None],
+            "r_source": [None],
+            "r_isreversible": [False],
+        },
+        index=["R1"],
+    )
+    reactions.index.name = "r_id"
+    reaction_species = pd.DataFrame(
+        {
+            "r_id": ["R1"],
+            "sc_id": ["SC1"],
+            "stoichiometry": [1],
+            "sbo_term": ["SBO:0000459"],
+        },
+        index=["RSC1"],
+    )
+    reaction_species.index.name = "rsc_id"
 
-    mock_sbml = MockSBML_dfs()
+    sbml_dict = {
+        "compartments": compartments,
+        "species": species,
+        "compartmentalized_species": compartmentalized_species,
+        "reactions": reactions,
+        "reaction_species": reaction_species,
+    }
+    sbml = SBML_dfs(sbml_dict, validate=False, resolve=False)
 
     # Test dogmatic case (default)
     expected_bqbs = BQB_DEFINING_ATTRS + [BQB.HAS_PART]  # noqa: F841
-    dogmatic_result = mock_sbml.get_characteristic_species_ids()
-    expected_dogmatic = mock_species_ids.query("bqb in @expected_bqbs")
-
-    pd.testing.assert_frame_equal(dogmatic_result, expected_dogmatic, check_like=True)
+    with patch.object(sbml, "get_identifiers", return_value=mock_species_ids):
+        dogmatic_result = sbml.get_characteristic_species_ids()
+        expected_dogmatic = mock_species_ids.query("bqb in @expected_bqbs")
+        pd.testing.assert_frame_equal(
+            dogmatic_result, expected_dogmatic, check_like=True
+        )
 
     # Test non-dogmatic case
     expected_bqbs = BQB_DEFINING_ATTRS_LOOSE + [BQB.HAS_PART]  # noqa: F841
-    non_dogmatic_result = mock_sbml.get_characteristic_species_ids(dogmatic=False)
-    expected_non_dogmatic = mock_species_ids.query("bqb in @expected_bqbs")
-
-    pd.testing.assert_frame_equal(
-        non_dogmatic_result, expected_non_dogmatic, check_like=True
-    )
+    with patch.object(sbml, "get_identifiers", return_value=mock_species_ids):
+        non_dogmatic_result = sbml.get_characteristic_species_ids(dogmatic=False)
+        expected_non_dogmatic = mock_species_ids.query("bqb in @expected_bqbs")
+        pd.testing.assert_frame_equal(
+            non_dogmatic_result, expected_non_dogmatic, check_like=True
+        )
 
 
 def test_sbml_basic_functionality(test_data):

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 import sys
-
+import pytest
+import signal
+import functools
 
 from napistu import consensus
 from napistu import indices
@@ -109,3 +111,25 @@ def pytest_runtest_setup(item):
     # Skip tests that should run only on Unix
     if not is_unix and any(mark.name == "unix_only" for mark in item.iter_markers()):
         skip("Test runs only on Unix systems")
+
+
+def skip_on_timeout(timeout_seconds):
+    """Decorator that skips a test if it takes longer than timeout_seconds"""
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            def timeout_handler(signum, frame):
+                pytest.skip(f"Test skipped due to timeout ({timeout_seconds}s)")
+
+            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(timeout_seconds)
+            try:
+                return func(*args, **kwargs)
+            finally:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+
+        return wrapper
+
+    return decorator

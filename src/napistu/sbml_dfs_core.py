@@ -1845,63 +1845,6 @@ def add_sbo_role(reaction_species: pd.DataFrame) -> pd.DataFrame:
     return reaction_species
 
 
-def find_underspecified_reactions(
-    reaction_species_w_roles: pd.DataFrame,
-) -> pd.DataFrame:
-
-    # check that both sbo_role and "new" are present
-    if SBO_ROLES_DEFS.SBO_ROLE not in reaction_species_w_roles.columns:
-        raise ValueError(
-            "The sbo_role column is not present in the reaction_species_w_roles table. Please call add_sbo_role() first."
-        )
-    if "new" not in reaction_species_w_roles.columns:
-        raise ValueError(
-            "The new column is not present in the reaction_species_w_roles table. This should indicate what cspecies would be preserved in the reaction should it be preserved."
-        )
-    # check that new is a boolean column
-    if reaction_species_w_roles["new"].dtype != bool:
-        raise ValueError(
-            "The new column is not a boolean column. Please ensure that the new column is a boolean column. This should indicate what cspecies would be preserved in the reaction should it be preserved."
-        )
-
-    reactions_with_lost_defining_members = set(
-        reaction_species_w_roles.query("~new")
-        .query("sbo_role == 'DEFINING'")[SBML_DFS.R_ID]
-        .tolist()
-    )
-
-    N_reactions_with_lost_defining_members = len(reactions_with_lost_defining_members)
-    if N_reactions_with_lost_defining_members > 0:
-        logger.info(
-            f"Removing {N_reactions_with_lost_defining_members} reactions which have lost at least one defining species"
-        )
-
-    # find the cases where all "new" values for a given (r_id, sbo_term) are False
-    reactions_with_lost_requirements = set(
-        reaction_species_w_roles
-        # drop already filtered reactions
-        .query("r_id not in @reactions_with_lost_defining_members")
-        .query("sbo_role == 'REQUIRED'")
-        # which entries which have some required attribute have all False values for that attribute
-        .groupby([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
-        .agg({"new": "any"})
-        .query("new == False")
-        .index.get_level_values(SBML_DFS.R_ID)
-    )
-
-    N_reactions_with_lost_requirements = len(reactions_with_lost_requirements)
-    if N_reactions_with_lost_requirements > 0:
-        logger.info(
-            f"Removing {N_reactions_with_lost_requirements} reactions which have lost all required members"
-        )
-
-    underspecified_reactions = reactions_with_lost_defining_members.union(
-        reactions_with_lost_requirements
-    )
-
-    return underspecified_reactions
-
-
 def _find_underspecified_reactions_by_scids(
     sbml_dfs: SBML_dfs, sc_ids: Iterable[str]
 ) -> set[str]:
@@ -1930,7 +1873,9 @@ def _find_underspecified_reactions_by_scids(
     )
 
     updated_reaction_species = add_sbo_role(updated_reaction_species)
-    underspecified_reactions = find_underspecified_reactions(updated_reaction_species)
+    underspecified_reactions = sbml_dfs_utils.find_underspecified_reactions(
+        updated_reaction_species
+    )
 
     return underspecified_reactions
 
@@ -1950,10 +1895,10 @@ def validate_sbml_dfs_table(table_data: pd.DataFrame, table_name: str) -> None:
     table_name : str
         Name of the table in the SBML_dfs schema
 
-        Raises
-        ------
-        ValueError
-        If table_name is not in schema or validation fails
+    Raises
+    ------
+    ValueError
+    If table_name is not in schema or validation fails
     """
     if table_name not in SBML_DFS_SCHEMA.SCHEMA:
         raise ValueError(
@@ -2039,45 +1984,6 @@ def _perform_sbml_dfs_table_validation(
     # check for empty table
     if table_data.shape[0] == 0:
         raise ValueError(f"{table_name} contained no entries")
-
-
-def _filter_promiscuous_components(
-    bqb_has_parts_species: pd.DataFrame, max_promiscuity: int
-) -> pd.DataFrame:
-
-    # number of complexes a species is part of
-    n_complexes_involvedin = bqb_has_parts_species.value_counts(
-        [IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER]
-    )
-    promiscuous_component_identifiers_index = n_complexes_involvedin[
-        n_complexes_involvedin > max_promiscuity
-    ].index
-    promiscuous_component_identifiers = pd.Series(
-        data=[True] * len(promiscuous_component_identifiers_index),
-        index=promiscuous_component_identifiers_index,
-        name="is_shared_component",
-        dtype=bool,
-    )
-
-    if len(promiscuous_component_identifiers) == 0:
-        return bqb_has_parts_species
-
-    filtered_bqb_has_parts = bqb_has_parts_species.merge(
-        promiscuous_component_identifiers,
-        left_on=[IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER],
-        right_index=True,
-        how="left",
-    )
-
-    filtered_bqb_has_parts["is_shared_component"] = (
-        filtered_bqb_has_parts["is_shared_component"].astype("boolean").fillna(False)
-    )
-    # drop identifiers shared as components across many species
-    filtered_bqb_has_parts = filtered_bqb_has_parts[
-        ~filtered_bqb_has_parts["is_shared_component"]
-    ].drop(["is_shared_component"], axis=1)
-
-    return filtered_bqb_has_parts
 
 
 def _edgelist_assemble_sbml_model(
