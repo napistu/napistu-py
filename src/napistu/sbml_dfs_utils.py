@@ -34,100 +34,112 @@ from napistu.ingestion.constants import GENERIC_COMPARTMENT
 logger = logging.getLogger(__name__)
 
 
-def unnest_identifiers(id_table: pd.DataFrame, id_var: str) -> pd.DataFrame:
-    """
-    Unnest Identifiers
-
-    Take a pd.DataFrame containing an array of Identifiers and
-    return one-row per identifier.
-
-    Parameters:
-    id_table: pd.DataFrame
-        a table containing an array of Identifiers
-    id_var: str
-        variable containing Identifiers
-
-    Returns:
-    pd.Dataframe containing the index of id_table but expanded
-    to include one row per identifier
-
-    """
-
-    # validate inputs
-    utils.match_pd_vars(id_table, {id_var}).assert_present()
-
-    N_invalid_ids = sum(id_table[id_var].isna())
-    if N_invalid_ids != 0:
-        raise ValueError(
-            f'{N_invalid_ids} entries in "id_table" were missing',
-            "entries with no identifiers should still include an Identifiers object",
-        )
-
-    # Get the identifier as a list of dicts
-    df = id_table[id_var].apply(lambda x: x.ids if len(x.ids) > 0 else 0).to_frame()
-    # Filter out zero length lists
-    df = df.query(f"{id_var} != 0")
-    # Unnest the list of dicts into one dict per row
-    df = df.explode(id_var)
-    # Unnest the dict into a dataframe
-    df = pd.DataFrame(df[id_var].values.tolist(), index=df.index)
-    # Add the entry number as an index
-    df["entry"] = df.groupby(df.index).cumcount()
-    df.set_index("entry", append=True, inplace=True)
-    return df
+# =============================================================================
+# PUBLIC FUNCTIONS (ALPHABETICAL ORDER)
+# =============================================================================
 
 
-def id_formatter(id_values: Iterable[Any], id_type: str, id_len: int = 8) -> list[str]:
-    id_prefix = utils.extract_regex_match("^([a-zA-Z]+)_id$", id_type).upper()
-    return [id_prefix + format(x, f"0{id_len}d") for x in id_values]
+def adapt_pw_index(
+    source: str | indices.PWIndex,
+    species: str | Iterable[str] | None,
+    outdir: str | None = None,
+) -> indices.PWIndex:
+    """Adapts a pw_index
 
+    Helpful to filter for species before reconstructing.
 
-def id_formatter_inv(ids: list[str]) -> list[int]:
-    """
-    ID Formatter Inverter
-
-    Convert from internal IDs back to integer IDs
-    """
-
-    id_val = list()
-    for an_id in ids:
-        if re.match("^[A-Z]+[0-9]+$", an_id):
-            id_val.append(int(re.sub("^[A-Z]+", "", an_id)))
-        else:
-            id_val.append(np.nan)  # type: ignore
-
-    return id_val
-
-
-def get_current_max_id(sbml_dfs_table: pd.DataFrame) -> int:
-    """
-    Get Current Max ID
-
-    Look at a table from an SBML_dfs object and find the largest primary key following
-    the default naming convention for a the table.
-
-    Params:
-    sbml_dfs_table (pd.DataFrame):
-        A table derived from an SBML_dfs object.
+    Args:
+        source (str | PWIndex): uri for pw_index.csv file or PWIndex object
+        species (str):
+        outdir (str | None, optional): Optional directory to write pw_index to.
+            Defaults to None.
 
     Returns:
-    current_max_id (int):
-        The largest id which is already defined in the table using its expected naming
-        convention. If no IDs following this convention are present then the default
-        will be -1. In this way new IDs will be added starting with 0.
-
+        indices.PWIndex: Filtered pw index
     """
-
-    existing_ids_numeric = id_formatter_inv(sbml_dfs_table.index.tolist())
-
-    # filter np.nan which will be introduced if the key is not the default format
-    existing_ids_numeric_valid = [x for x in existing_ids_numeric if x is not np.nan]
-    if len(existing_ids_numeric_valid) == 0:
-        current_max_id = -1
+    if isinstance(source, str):
+        pw_index = indices.PWIndex(source)
+    elif isinstance(source, indices.PWIndex):
+        pw_index = copy.deepcopy(source)
     else:
-        current_max_id = max(existing_ids_numeric_valid)
+        raise ValueError("'source' needs to be str or PWIndex.")
+    pw_index.filter(species=species)
 
-    return current_max_id
+    if outdir is not None:
+        with open_fs(outdir, create=True) as fs:
+            with fs.open("pw_index.tsv", "w") as f:
+                pw_index.index.to_csv(f, sep="\t")
+    return pw_index
+
+
+def add_sbo_role(reaction_species: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add an sbo_role column to the reaction_species table.
+
+    The sbo_role column is a string column that contains the SBO role of the reaction species.
+    The values in the sbo_role column are taken from the sbo_term column.
+
+    The sbo_role column is added to the reaction_species table by mapping the sbo_term column to the SBO_NAME_TO_ROLE dictionary.
+    """
+
+    validate_sbml_dfs_table(reaction_species, SBML_DFS.REACTION_SPECIES)
+
+    reaction_species = (
+        reaction_species.assign(sbo_role=reaction_species[SBML_DFS.SBO_TERM])
+        .replace({SBO_ROLES_DEFS.SBO_ROLE: MINI_SBO_TO_NAME})
+        .replace({SBO_ROLES_DEFS.SBO_ROLE: SBO_NAME_TO_ROLE})
+    )
+
+    undefined_roles = set(reaction_species[SBO_ROLES_DEFS.SBO_ROLE].unique()) - set(
+        SBO_NAME_TO_ROLE.values()
+    )
+    if len(undefined_roles) > 0:
+        logger.warning(
+            f"The following SBO roles are not defined: {undefined_roles}. They will be treated as {SBO_ROLES_DEFS.OPTIONAL} when determining reaction operability."
+        )
+        mask = reaction_species[SBO_ROLES_DEFS.SBO_ROLE].isin(undefined_roles)
+        reaction_species.loc[mask, SBO_ROLES_DEFS.SBO_ROLE] = SBO_ROLES_DEFS.OPTIONAL
+
+    return reaction_species
+
+
+def check_entity_data_index_matching(sbml_dfs, table):
+    """
+    Update the input smbl_dfs's entity_data (dict) index
+    with match_entitydata_index_to_entity,
+    so that index for dataframe(s) in entity_data (dict) matches the sbml_dfs'
+    corresponding entity, and then passes sbml_dfs.validate()
+    Args
+        sbml_dfs (cpr.SBML_dfs): a cpr.SBML_dfs
+        table (str): table whose data is being consolidates (currently species or reactions)
+    Returns
+        sbml_dfs (cpr.SBML_dfs):
+        sbml_dfs whose entity_data is checked to have the same index
+        as the corresponding entity.
+    """
+
+    table_data = table + "_data"
+
+    entity_data_dict = getattr(sbml_dfs, table_data)
+    entity_schema = sbml_dfs.schema[table]
+    sbml_dfs_entity = getattr(sbml_dfs, table)
+
+    if entity_data_dict != {}:
+        entity_data_types = set.union(set(entity_data_dict.keys()))
+
+        entity_data_dict_checked = {
+            x: match_entitydata_index_to_entity(
+                entity_data_dict, x, sbml_dfs_entity, entity_schema, table
+            )
+            for x in entity_data_types
+        }
+
+        if table == SBML_DFS.REACTIONS:
+            sbml_dfs.reactions_data = entity_data_dict_checked
+        elif table == SBML_DFS.SPECIES:
+            sbml_dfs.species_data = entity_data_dict_checked
+
+    return sbml_dfs
 
 
 def construct_formula_string(
@@ -200,37 +212,61 @@ def construct_formula_string(
     return f"{substrates}{arrow_type}{products}{modifiers}"
 
 
-def adapt_pw_index(
-    source: str | indices.PWIndex,
-    species: str | Iterable[str] | None,
-    outdir: str | None = None,
-) -> indices.PWIndex:
-    """Adapts a pw_index
+def find_underspecified_reactions(
+    reaction_species_w_roles: pd.DataFrame,
+) -> pd.DataFrame:
 
-    Helpful to filter for species before reconstructing.
+    # check that both sbo_role and "new" are present
+    if SBO_ROLES_DEFS.SBO_ROLE not in reaction_species_w_roles.columns:
+        raise ValueError(
+            "The sbo_role column is not present in the reaction_species_w_roles table. Please call sbml_dfs_utils.add_sbo_role() first."
+        )
+    if "new" not in reaction_species_w_roles.columns:
+        raise ValueError(
+            "The new column is not present in the reaction_species_w_roles table. This should indicate what cspecies would be preserved in the reaction should it be preserved."
+        )
+    # check that new is a boolean column
+    if reaction_species_w_roles["new"].dtype != bool:
+        raise ValueError(
+            "The new column is not a boolean column. Please ensure that the new column is a boolean column. This should indicate what cspecies would be preserved in the reaction should it be preserved."
+        )
 
-    Args:
-        source (str | PWIndex): uri for pw_index.csv file or PWIndex object
-        species (str):
-        outdir (str | None, optional): Optional directory to write pw_index to.
-            Defaults to None.
+    reactions_with_lost_defining_members = set(
+        reaction_species_w_roles.query("~new")
+        .query("sbo_role == 'DEFINING'")[SBML_DFS.R_ID]
+        .tolist()
+    )
 
-    Returns:
-        indices.PWIndex: Filtered pw index
-    """
-    if isinstance(source, str):
-        pw_index = indices.PWIndex(source)
-    elif isinstance(source, indices.PWIndex):
-        pw_index = copy.deepcopy(source)
-    else:
-        raise ValueError("'source' needs to be str or PWIndex.")
-    pw_index.filter(species=species)
+    N_reactions_with_lost_defining_members = len(reactions_with_lost_defining_members)
+    if N_reactions_with_lost_defining_members > 0:
+        logger.info(
+            f"Removing {N_reactions_with_lost_defining_members} reactions which have lost at least one defining species"
+        )
 
-    if outdir is not None:
-        with open_fs(outdir, create=True) as fs:
-            with fs.open("pw_index.tsv", "w") as f:
-                pw_index.index.to_csv(f, sep="\t")
-    return pw_index
+    # find the cases where all "new" values for a given (r_id, sbo_term) are False
+    reactions_with_lost_requirements = set(
+        reaction_species_w_roles
+        # drop already filtered reactions
+        .query("r_id not in @reactions_with_lost_defining_members")
+        .query("sbo_role == 'REQUIRED'")
+        # which entries which have some required attribute have all False values for that attribute
+        .groupby([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
+        .agg({"new": "any"})
+        .query("new == False")
+        .index.get_level_values(SBML_DFS.R_ID)
+    )
+
+    N_reactions_with_lost_requirements = len(reactions_with_lost_requirements)
+    if N_reactions_with_lost_requirements > 0:
+        logger.info(
+            f"Removing {N_reactions_with_lost_requirements} reactions which have lost all required members"
+        )
+
+    underspecified_reactions = reactions_with_lost_defining_members.union(
+        reactions_with_lost_requirements
+    )
+
+    return underspecified_reactions
 
 
 def filter_to_characteristic_species_ids(
@@ -327,6 +363,59 @@ def filter_to_characteristic_species_ids(
     return characteristic_species_ids
 
 
+def get_current_max_id(sbml_dfs_table: pd.DataFrame) -> int:
+    """
+    Get Current Max ID
+
+    Look at a table from an SBML_dfs object and find the largest primary key following
+    the default naming convention for a the table.
+
+    Params:
+    sbml_dfs_table (pd.DataFrame):
+        A table derived from an SBML_dfs object.
+
+    Returns:
+    current_max_id (int):
+        The largest id which is already defined in the table using its expected naming
+        convention. If no IDs following this convention are present then the default
+        will be -1. In this way new IDs will be added starting with 0.
+
+    """
+
+    existing_ids_numeric = id_formatter_inv(sbml_dfs_table.index.tolist())
+
+    # filter np.nan which will be introduced if the key is not the default format
+    existing_ids_numeric_valid = [x for x in existing_ids_numeric if x is not np.nan]
+    if len(existing_ids_numeric_valid) == 0:
+        current_max_id = -1
+    else:
+        current_max_id = max(existing_ids_numeric_valid)
+
+    return current_max_id
+
+
+def id_formatter(id_values: Iterable[Any], id_type: str, id_len: int = 8) -> list[str]:
+    id_prefix = utils.extract_regex_match("^([a-zA-Z]+)_id$", id_type).upper()
+    return [id_prefix + format(x, f"0{id_len}d") for x in id_values]
+
+
+def id_formatter_inv(ids: list[str]) -> list[int]:
+    """
+    ID Formatter Inverter
+
+    Convert from internal IDs back to integer IDs
+    """
+
+    id_val = list()
+    for an_id in ids:
+        if re.match("^[A-Z]+[0-9]+$", an_id):
+            id_val.append(int(re.sub("^[A-Z]+", "", an_id)))
+        else:
+            id_val.append(np.nan)  # type: ignore
+
+    return id_val
+
+
 def match_entitydata_index_to_entity(
     entity_data_dict: dict,
     an_entity_data_type: str,
@@ -356,7 +445,7 @@ def match_entitydata_index_to_entity(
     if len(entity_data_df.index.difference(consensus_entity_df.index)) == 0:
         logger.info(f"{data_table} ids are included in {table} ids")
     else:
-        logger.warnning(
+        logger.warning(
             f"{data_table} have ids are not matched to {table} ids,"
             f"please check mismatched ids first"
         )
@@ -385,73 +474,18 @@ def match_entitydata_index_to_entity(
     return entity_data_df
 
 
-def check_entity_data_index_matching(sbml_dfs, table):
-    """
-    Update the input smbl_dfs's entity_data (dict) index
-    with match_entitydata_index_to_entity,
-    so that index for dataframe(s) in entity_data (dict) matches the sbml_dfs'
-    corresponding entity, and then passes sbml_dfs.validate()
-    Args
-        sbml_dfs (cpr.SBML_dfs): a cpr.SBML_dfs
-        table (str): table whose data is being consolidates (currently species or reactions)
-    Returns
-        sbml_dfs (cpr.SBML_dfs):
-        sbml_dfs whose entity_data is checked to have the same index
-        as the corresponding entity.
-    """
+def species_type_types(x):
+    """Assign a high-level molecule type to a molecular species"""
 
-    table_data = table + "_data"
-
-    entity_data_dict = getattr(sbml_dfs, table_data)
-    entity_schema = sbml_dfs.schema[table]
-    sbml_dfs_entity = getattr(sbml_dfs, table)
-
-    if entity_data_dict != {}:
-        entity_data_types = set.union(set(entity_data_dict.keys()))
-
-        entity_data_dict_checked = {
-            x: match_entitydata_index_to_entity(
-                entity_data_dict, x, sbml_dfs_entity, entity_schema, table
-            )
-            for x in entity_data_types
-        }
-
-        if table == SBML_DFS.REACTIONS:
-            sbml_dfs.reactions_data = entity_data_dict_checked
-        elif table == SBML_DFS.SPECIES:
-            sbml_dfs.species_data = entity_data_dict_checked
-
-    return sbml_dfs
-
-
-def validate_sbml_dfs_table(table_data: pd.DataFrame, table_name: str) -> None:
-    """
-    Validate a standalone table against the SBML_dfs schema.
-
-    This function validates a table against the schema defined in SBML_DFS_SCHEMA,
-    without requiring an SBML_dfs object. Useful for validating tables before
-    creating an SBML_dfs object.
-
-    Parameters
-    ----------
-    table_data : pd.DataFrame
-        The table to validate
-    table_name : str
-        Name of the table in the SBML_dfs schema
-
-    Raises
-    ------
-    ValueError
-    If table_name is not in schema or validation fails
-    """
-    if table_name not in SBML_DFS_SCHEMA.SCHEMA:
-        raise ValueError(
-            f"{table_name} is not a valid table name in SBML_DFS_SCHEMA. "
-            f"Valid tables are: {', '.join(SBML_DFS_SCHEMA.SCHEMA.keys())}"
-        )
-
-    table_schema = SBML_DFS_SCHEMA.SCHEMA[table_name]
-    _perform_sbml_dfs_table_validation(table_data, table_schema, table_name)
+    if isinstance(x, identifiers.Identifiers):
+        if x.filter(["chebi"]):
+            return "metabolite"
+        elif x.filter(["molodex"]):
+            return "drug"
+        else:
+            return "protein"
+    else:
+        return "unknown"
 
 
 def stub_compartments(
@@ -501,106 +535,108 @@ def stub_compartments(
     return compartments_df
 
 
-def species_type_types(x):
-    """Assign a high-level molecule type to a molecular species"""
+def unnest_identifiers(id_table: pd.DataFrame, id_var: str) -> pd.DataFrame:
+    """
+    Unnest Identifiers
 
-    if isinstance(x, identifiers.Identifiers):
-        if x.filter(["chebi"]):
-            return "metabolite"
-        elif x.filter(["molodex"]):
-            return "drug"
-        else:
-            return "protein"
+    Take a pd.DataFrame containing an array of Identifiers and
+    return one-row per identifier.
+
+    Parameters:
+    id_table: pd.DataFrame
+        a table containing an array of Identifiers
+    id_var: str
+        variable containing Identifiers
+
+    Returns:
+    pd.Dataframe containing the index of id_table but expanded
+    to include one row per identifier
+
+    """
+
+    # validate inputs
+    utils.match_pd_vars(id_table, {id_var}).assert_present()
+
+    N_invalid_ids = sum(id_table[id_var].isna())
+    if N_invalid_ids != 0:
+        raise ValueError(
+            f'{N_invalid_ids} entries in "id_table" were missing',
+            "entries with no identifiers should still include an Identifiers object",
+        )
+
+    # Get the identifier as a list of dicts
+    df = id_table[id_var].apply(lambda x: x.ids if len(x.ids) > 0 else 0).to_frame()
+    # Filter out zero length lists
+    df = df.query(f"{id_var} != 0")
+    # Unnest the list of dicts into one dict per row
+    df = df.explode(id_var)
+    # Unnest the dict into a dataframe
+    df = pd.DataFrame(df[id_var].values.tolist(), index=df.index)
+    # Add the entry number as an index
+    df["entry"] = df.groupby(df.index).cumcount()
+    df.set_index("entry", append=True, inplace=True)
+    return df
+
+
+def validate_sbml_dfs_table(table_data: pd.DataFrame, table_name: str) -> None:
+    """
+    Validate a standalone table against the SBML_dfs schema.
+
+    This function validates a table against the schema defined in SBML_DFS_SCHEMA,
+    without requiring an SBML_dfs object. Useful for validating tables before
+    creating an SBML_dfs object.
+
+    Parameters
+    ----------
+    table_data : pd.DataFrame
+        The table to validate
+    table_name : str
+        Name of the table in the SBML_dfs schema
+
+    Raises
+    ------
+    ValueError
+    If table_name is not in schema or validation fails
+    """
+    if table_name not in SBML_DFS_SCHEMA.SCHEMA:
+        raise ValueError(
+            f"{table_name} is not a valid table name in SBML_DFS_SCHEMA. "
+            f"Valid tables are: {', '.join(SBML_DFS_SCHEMA.SCHEMA.keys())}"
+        )
+
+    table_schema = SBML_DFS_SCHEMA.SCHEMA[table_name]
+    _perform_sbml_dfs_table_validation(table_data, table_schema, table_name)
+
+
+# =============================================================================
+# PRIVATE FUNCTIONS (ALPHABETICAL ORDER)
+# =============================================================================
+
+
+def _add_stoi_to_species_name(stoi: float | int, name: str) -> str:
+    """
+    Add Stoi To Species Name
+
+    Add # of molecules to a species name
+
+    Parameters:
+    ----------
+    stoi: float or int
+        Number of molecules
+    name: str
+        Name of species
+
+    Returns:
+    ----------
+    name: str
+        Name containing number of species
+
+    """
+
+    if stoi in [-1, 0, 1]:
+        return name
     else:
-        return "unknown"
-
-
-def add_sbo_role(reaction_species: pd.DataFrame) -> pd.DataFrame:
-    """
-    Add an sbo_role column to the reaction_species table.
-
-    The sbo_role column is a string column that contains the SBO role of the reaction species.
-    The values in the sbo_role column are taken from the sbo_term column.
-
-    The sbo_role column is added to the reaction_species table by mapping the sbo_term column to the SBO_NAME_TO_ROLE dictionary.
-    """
-
-    validate_sbml_dfs_table(reaction_species, SBML_DFS.REACTION_SPECIES)
-
-    reaction_species = (
-        reaction_species.assign(sbo_role=reaction_species[SBML_DFS.SBO_TERM])
-        .replace({SBO_ROLES_DEFS.SBO_ROLE: MINI_SBO_TO_NAME})
-        .replace({SBO_ROLES_DEFS.SBO_ROLE: SBO_NAME_TO_ROLE})
-    )
-
-    undefined_roles = set(reaction_species[SBO_ROLES_DEFS.SBO_ROLE].unique()) - set(
-        SBO_NAME_TO_ROLE.values()
-    )
-    if len(undefined_roles) > 0:
-        logger.warning(
-            f"The following SBO roles are not defined: {undefined_roles}. They will be treated as {SBO_ROLES_DEFS.OPTIONAL} when determining reaction operability."
-        )
-        mask = reaction_species[SBO_ROLES_DEFS.SBO_ROLE].isin(undefined_roles)
-        reaction_species.loc[mask, SBO_ROLES_DEFS.SBO_ROLE] = SBO_ROLES_DEFS.OPTIONAL
-
-    return reaction_species
-
-
-def _find_underspecified_reactions(
-    reaction_species_w_roles: pd.DataFrame,
-) -> pd.DataFrame:
-
-    # check that both sbo_role and "new" are present
-    if SBO_ROLES_DEFS.SBO_ROLE not in reaction_species_w_roles.columns:
-        raise ValueError(
-            "The sbo_role column is not present in the reaction_species_w_roles table. Please call sbml_dfs_utils.add_sbo_role() first."
-        )
-    if "new" not in reaction_species_w_roles.columns:
-        raise ValueError(
-            "The new column is not present in the reaction_species_w_roles table. This should indicate what cspecies would be preserved in the reaction should it be preserved."
-        )
-    # check that new is a boolean column
-    if reaction_species_w_roles["new"].dtype != bool:
-        raise ValueError(
-            "The new column is not a boolean column. Please ensure that the new column is a boolean column. This should indicate what cspecies would be preserved in the reaction should it be preserved."
-        )
-
-    reactions_with_lost_defining_members = set(
-        reaction_species_w_roles.query("~new")
-        .query("sbo_role == 'DEFINING'")[SBML_DFS.R_ID]
-        .tolist()
-    )
-
-    N_reactions_with_lost_defining_members = len(reactions_with_lost_defining_members)
-    if N_reactions_with_lost_defining_members > 0:
-        logger.info(
-            f"Removing {N_reactions_with_lost_defining_members} reactions which have lost at least one defining species"
-        )
-
-    # find the cases where all "new" values for a given (r_id, sbo_term) are False
-    reactions_with_lost_requirements = set(
-        reaction_species_w_roles
-        # drop already filtered reactions
-        .query("r_id not in @reactions_with_lost_defining_members")
-        .query("sbo_role == 'REQUIRED'")
-        # which entries which have some required attribute have all False values for that attribute
-        .groupby([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
-        .agg({"new": "any"})
-        .query("new == False")
-        .index.get_level_values(SBML_DFS.R_ID)
-    )
-
-    N_reactions_with_lost_requirements = len(reactions_with_lost_requirements)
-    if N_reactions_with_lost_requirements > 0:
-        logger.info(
-            f"Removing {N_reactions_with_lost_requirements} reactions which have lost all required members"
-        )
-
-    underspecified_reactions = reactions_with_lost_defining_members.union(
-        reactions_with_lost_requirements
-    )
-
-    return underspecified_reactions
+        return str(abs(stoi)) + " " + name
 
 
 def _dogmatic_to_defining_bqbs(dogmatic: bool = False) -> str:
@@ -622,164 +658,6 @@ def _dogmatic_to_defining_bqbs(dogmatic: bool = False) -> str:
         defining_biological_qualifiers = BQB_DEFINING_ATTRS_LOOSE
 
     return defining_biological_qualifiers
-
-
-def _edgelist_validate_inputs(
-    interaction_edgelist: pd.DataFrame,
-    species_df: pd.DataFrame,
-    compartments_df: pd.DataFrame,
-) -> None:
-    """
-    Validate input DataFrames have required columns.
-
-    Parameters
-    ----------
-    interaction_edgelist : pd.DataFrame
-        Interaction data to validate
-    species_df : pd.DataFrame
-        Species data to validate
-    compartments_df : pd.DataFrame
-        Compartments data to validate
-    """
-
-    # check compartments
-    compartments_df_expected_vars = {SBML_DFS.C_NAME, SBML_DFS.C_IDENTIFIERS}
-    compartments_df_columns = set(compartments_df.columns.tolist())
-    missing_required_fields = compartments_df_expected_vars.difference(
-        compartments_df_columns
-    )
-    if len(missing_required_fields) > 0:
-        raise ValueError(
-            f"{', '.join(missing_required_fields)} are required variables"
-            ' in "compartments_df" but were not present in the input file.'
-        )
-
-    # check species
-    species_df_expected_vars = {SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS}
-    species_df_columns = set(species_df.columns.tolist())
-    missing_required_fields = species_df_expected_vars.difference(species_df_columns)
-    if len(missing_required_fields) > 0:
-        raise ValueError(
-            f"{', '.join(missing_required_fields)} are required"
-            ' variables in "species_df" but were not present '
-            "in the input file."
-        )
-
-    # check interactions
-    interaction_edgelist_columns = set(interaction_edgelist.columns.tolist())
-    missing_required_fields = INTERACTION_EDGELIST_EXPECTED_VARS.difference(
-        interaction_edgelist_columns
-    )
-    if len(missing_required_fields) > 0:
-        raise ValueError(
-            f"{', '.join(missing_required_fields)} are required "
-            'variables in "interaction_edgelist" but were not '
-            "present in the input file."
-        )
-
-    return None
-
-
-def _edgelist_identify_extra_columns(
-    interaction_edgelist, species_df, keep_reactions_data, keep_species_data
-):
-    """
-    Identify extra columns in input data that should be preserved.
-
-    Parameters
-    ----------
-    interaction_edgelist : pd.DataFrame
-        Interaction data containing potential extra columns
-    species_df : pd.DataFrame
-        Species data containing potential extra columns
-    keep_reactions_data : bool or str
-        Whether to keep extra reaction columns
-    keep_species_data : bool or str
-        Whether to keep extra species columns
-
-    Returns
-    -------
-    dict
-        Dictionary with 'reactions' and 'species' keys containing lists of extra column names
-    """
-    extra_reactions_columns = []
-    extra_species_columns = []
-
-    if keep_reactions_data is not False:
-        extra_reactions_columns = [
-            c
-            for c in interaction_edgelist.columns
-            if c not in INTERACTION_EDGELIST_EXPECTED_VARS
-        ]
-
-    if keep_species_data is not False:
-        extra_species_columns = [
-            c
-            for c in species_df.columns
-            if c not in {SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS}
-        ]
-
-    return {"reactions": extra_reactions_columns, "species": extra_species_columns}
-
-
-def _edgelist_process_compartments(compartments_df, interaction_source):
-    """
-    Format compartments DataFrame with source and ID columns.
-
-    Parameters
-    ----------
-    compartments_df : pd.DataFrame
-        Raw compartments data
-    interaction_source : source.Source
-        Source object to assign to compartments
-
-    Returns
-    -------
-    pd.DataFrame
-        Processed compartments with IDs, indexed by compartment ID
-    """
-    compartments = compartments_df.copy()
-    compartments[SBML_DFS.C_SOURCE] = interaction_source
-    compartments[SBML_DFS.C_ID] = id_formatter(
-        range(compartments.shape[0]), SBML_DFS.C_ID
-    )
-    return compartments.set_index(SBML_DFS.C_ID)[
-        [SBML_DFS.C_NAME, SBML_DFS.C_IDENTIFIERS, SBML_DFS.C_SOURCE]
-    ]
-
-
-def _edgelist_process_species(species_df, interaction_source, extra_species_columns):
-    """
-    Format species DataFrame and extract extra data.
-
-    Parameters
-    ----------
-    species_df : pd.DataFrame
-        Raw species data
-    interaction_source : source.Source
-        Source object to assign to species
-    extra_species_columns : list
-        Names of extra columns to preserve separately
-
-    Returns
-    -------
-    tuple of pd.DataFrame
-        Processed species DataFrame and species extra data DataFrame
-    """
-    species = species_df.copy()
-    species[SBML_DFS.S_SOURCE] = interaction_source
-    species[SBML_DFS.S_ID] = id_formatter(range(species.shape[0]), SBML_DFS.S_ID)
-
-    required_cols = [SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS, SBML_DFS.S_SOURCE]
-    species_indexed = species.set_index(SBML_DFS.S_ID)[
-        required_cols + extra_species_columns
-    ]
-
-    # Separate extra data from main species table
-    species_data = species_indexed[extra_species_columns]
-    processed_species = species_indexed[required_cols]
-
-    return processed_species, species_data
 
 
 def _edgelist_create_compartmentalized_species(
@@ -979,89 +857,162 @@ def _edgelist_create_reactions_and_species(
     return reactions_df, reaction_species_df, reactions_data
 
 
-def _sbml_dfs_from_edgelist_check_cspecies_merge(
-    merged_species: pd.DataFrame, original_species: pd.DataFrame
+def _edgelist_identify_extra_columns(
+    interaction_edgelist, species_df, keep_reactions_data, keep_species_data
+):
+    """
+    Identify extra columns in input data that should be preserved.
+
+    Parameters
+    ----------
+    interaction_edgelist : pd.DataFrame
+        Interaction data containing potential extra columns
+    species_df : pd.DataFrame
+        Species data containing potential extra columns
+    keep_reactions_data : bool or str
+        Whether to keep extra reaction columns
+    keep_species_data : bool or str
+        Whether to keep extra species columns
+
+    Returns
+    -------
+    dict
+        Dictionary with 'reactions' and 'species' keys containing lists of extra column names
+    """
+    extra_reactions_columns = []
+    extra_species_columns = []
+
+    if keep_reactions_data is not False:
+        extra_reactions_columns = [
+            c
+            for c in interaction_edgelist.columns
+            if c not in INTERACTION_EDGELIST_EXPECTED_VARS
+        ]
+
+    if keep_species_data is not False:
+        extra_species_columns = [
+            c
+            for c in species_df.columns
+            if c not in {SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS}
+        ]
+
+    return {"reactions": extra_reactions_columns, "species": extra_species_columns}
+
+
+def _edgelist_process_compartments(compartments_df, interaction_source):
+    """
+    Format compartments DataFrame with source and ID columns.
+
+    Parameters
+    ----------
+    compartments_df : pd.DataFrame
+        Raw compartments data
+    interaction_source : source.Source
+        Source object to assign to compartments
+
+    Returns
+    -------
+    pd.DataFrame
+        Processed compartments with IDs, indexed by compartment ID
+    """
+    compartments = compartments_df.copy()
+    compartments[SBML_DFS.C_SOURCE] = interaction_source
+    compartments[SBML_DFS.C_ID] = id_formatter(
+        range(compartments.shape[0]), SBML_DFS.C_ID
+    )
+    return compartments.set_index(SBML_DFS.C_ID)[
+        [SBML_DFS.C_NAME, SBML_DFS.C_IDENTIFIERS, SBML_DFS.C_SOURCE]
+    ]
+
+
+def _edgelist_process_species(species_df, interaction_source, extra_species_columns):
+    """
+    Format species DataFrame and extract extra data.
+
+    Parameters
+    ----------
+    species_df : pd.DataFrame
+        Raw species data
+    interaction_source : source.Source
+        Source object to assign to species
+    extra_species_columns : list
+        Names of extra columns to preserve separately
+
+    Returns
+    -------
+    tuple of pd.DataFrame
+        Processed species DataFrame and species extra data DataFrame
+    """
+    species = species_df.copy()
+    species[SBML_DFS.S_SOURCE] = interaction_source
+    species[SBML_DFS.S_ID] = id_formatter(range(species.shape[0]), SBML_DFS.S_ID)
+
+    required_cols = [SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS, SBML_DFS.S_SOURCE]
+    species_indexed = species.set_index(SBML_DFS.S_ID)[
+        required_cols + extra_species_columns
+    ]
+
+    # Separate extra data from main species table
+    species_data = species_indexed[extra_species_columns]
+    processed_species = species_indexed[required_cols]
+
+    return processed_species, species_data
+
+
+def _edgelist_validate_inputs(
+    interaction_edgelist: pd.DataFrame,
+    species_df: pd.DataFrame,
+    compartments_df: pd.DataFrame,
 ) -> None:
-    """Check for a mismatch between the provided species data and species implied by the edgelist."""
+    """
+    Validate input DataFrames have required columns.
 
-    # check for 1-many merge
-    if merged_species.shape[0] != original_species.shape[0]:
+    Parameters
+    ----------
+    interaction_edgelist : pd.DataFrame
+        Interaction data to validate
+    species_df : pd.DataFrame
+        Species data to validate
+    compartments_df : pd.DataFrame
+        Compartments data to validate
+    """
+
+    # check compartments
+    compartments_df_expected_vars = {SBML_DFS.C_NAME, SBML_DFS.C_IDENTIFIERS}
+    compartments_df_columns = set(compartments_df.columns.tolist())
+    missing_required_fields = compartments_df_expected_vars.difference(
+        compartments_df_columns
+    )
+    if len(missing_required_fields) > 0:
         raise ValueError(
-            "Merging compartmentalized species to species_df"
-            " and compartments_df by names resulted in an "
-            f"increase in the tables from {original_species.shape[0]}"
-            f" to {merged_species.shape[0]} indicating that names were"
-            " not unique"
+            f"{', '.join(missing_required_fields)} are required variables"
+            ' in "compartments_df" but were not present in the input file.'
         )
 
-    # check for missing species and compartments
-    missing_compartments = merged_species[merged_species[SBML_DFS.C_ID].isna()][
-        SBML_DFS.C_NAME
-    ].unique()
-    if len(missing_compartments) >= 1:
+    # check species
+    species_df_expected_vars = {SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS}
+    species_df_columns = set(species_df.columns.tolist())
+    missing_required_fields = species_df_expected_vars.difference(species_df_columns)
+    if len(missing_required_fields) > 0:
         raise ValueError(
-            f"{len(missing_compartments)} compartments were present in"
-            ' "interaction_edgelist" but not "compartments_df":'
-            f" {', '.join(missing_compartments)}"
+            f"{', '.join(missing_required_fields)} are required"
+            ' variables in "species_df" but were not present '
+            "in the input file."
         )
 
-    missing_species = merged_species[merged_species[SBML_DFS.S_ID].isna()][
-        SBML_DFS.S_NAME
-    ].unique()
-    if len(missing_species) >= 1:
+    # check interactions
+    interaction_edgelist_columns = set(interaction_edgelist.columns.tolist())
+    missing_required_fields = INTERACTION_EDGELIST_EXPECTED_VARS.difference(
+        interaction_edgelist_columns
+    )
+    if len(missing_required_fields) > 0:
         raise ValueError(
-            f"{len(missing_species)} species were present in "
-            '"interaction_edgelist" but not "species_df":'
-            f" {', '.join(missing_species)}"
+            f"{', '.join(missing_required_fields)} are required "
+            'variables in "interaction_edgelist" but were not '
+            "present in the input file."
         )
 
     return None
-
-
-def _add_stoi_to_species_name(stoi: float | int, name: str) -> str:
-    """
-    Add Stoi To Species Name
-
-    Add # of molecules to a species name
-
-    Parameters:
-    ----------
-    stoi: float or int
-        Number of molecules
-    name: str
-        Name of species
-
-    Returns:
-    ----------
-    name: str
-        Name containing number of species
-
-    """
-
-    if stoi in [-1, 0, 1]:
-        return name
-    else:
-        return str(abs(stoi)) + " " + name
-
-
-def _dogmatic_to_defining_bqbs(dogmatic: bool = False) -> str:
-    if dogmatic:
-        logger.info(
-            "Running in dogmatic mode - differences genes, transcripts, and proteins will "
-            "try to be maintained as separate species."
-        )
-        # preserve differences between genes, transcripts, and proteins
-        defining_biological_qualifiers = BQB_DEFINING_ATTRS
-    else:
-        logger.info(
-            "Running in non-dogmatic mode - genes, transcripts, and proteins will "
-            "be merged if possible."
-        )
-        # merge genes, transcripts, and proteins (if they are defined with
-        # bqb terms which specify their relationships).
-        defining_biological_qualifiers = BQB_DEFINING_ATTRS_LOOSE
-
-    return defining_biological_qualifiers
 
 
 def _filter_promiscuous_components(
@@ -1103,43 +1054,75 @@ def _filter_promiscuous_components(
     return filtered_bqb_has_parts
 
 
-def _validate_matching_data(data_table: pd.DataFrame, ref_table: pd.DataFrame):
-    """Validates a table against a reference
+def _find_underspecified_reactions(
+    reaction_species_w_roles: pd.DataFrame,
+) -> pd.DataFrame:
 
-    This check if the table has the same index, no duplicates in the index
-    and that all values in the index are in the reference table.
+    # check that both sbo_role and "new" are present
+    if SBO_ROLES_DEFS.SBO_ROLE not in reaction_species_w_roles.columns:
+        raise ValueError(
+            "The sbo_role column is not present in the reaction_species_w_roles table. Please call add_sbo_role() first."
+        )
+    if "new" not in reaction_species_w_roles.columns:
+        raise ValueError(
+            "The new column is not present in the reaction_species_w_roles table. This should indicate what cspecies would be preserved in the reaction should it be preserved."
+        )
+    # check that new is a boolean column
+    if reaction_species_w_roles["new"].dtype != bool:
+        raise ValueError(
+            "The new column is not a boolean column. Please ensure that the new column is a boolean column. This should indicate what cspecies would be preserved in the reaction should it be preserved."
+        )
 
-    Args:
-        data_table (pd.DataFrame): a table with data that should
-            match the reference
-        ref_table (pd.DataFrame): a reference table
+    reactions_with_lost_defining_members = set(
+        reaction_species_w_roles.query("~new")
+        .query("sbo_role == 'DEFINING'")[SBML_DFS.R_ID]
+        .tolist()
+    )
 
-    Raises:
-        ValueError: not same index name
-        ValueError: index contains duplicates
-        ValueError: index not subset of index of reactions table
-    """
-    ref_index_name = ref_table.index.name
-    if data_table.index.name != ref_index_name:
-        raise ValueError(
-            "the index name for reaction data table was not"
-            f" {ref_index_name}: {data_table.index.name}"
+    N_reactions_with_lost_defining_members = len(reactions_with_lost_defining_members)
+    if N_reactions_with_lost_defining_members > 0:
+        logger.info(
+            f"Removing {N_reactions_with_lost_defining_members} reactions which have lost at least one defining species"
         )
-    ids = data_table.index
-    if any(ids.duplicated()):
-        raise ValueError(
-            "the index for reaction data table " "contained duplicate values"
+
+    # find the cases where all "new" values for a given (r_id, sbo_term) are False
+    reactions_with_lost_requirements = set(
+        reaction_species_w_roles
+        # drop already filtered reactions
+        .query("r_id not in @reactions_with_lost_defining_members")
+        .query("sbo_role == 'REQUIRED'")
+        # which entries which have some required attribute have all False values for that attribute
+        .groupby([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
+        .agg({"new": "any"})
+        .query("new == False")
+        .index.get_level_values(SBML_DFS.R_ID)
+    )
+
+    N_reactions_with_lost_requirements = len(reactions_with_lost_requirements)
+    if N_reactions_with_lost_requirements > 0:
+        logger.info(
+            f"Removing {N_reactions_with_lost_requirements} reactions which have lost all required members"
         )
-    if not all(ids.isin(ref_table.index)):
-        raise ValueError(
-            "the index for reaction data table contained values"
-            " not found in the reactions table"
+
+    underspecified_reactions = reactions_with_lost_defining_members.union(
+        reactions_with_lost_requirements
+    )
+
+    return underspecified_reactions
+
+
+def _id_dict_to_df(ids):
+    if len(ids) == 0:
+        return pd.DataFrame(
+            {
+                IDENTIFIERS.ONTOLOGY: [None],
+                IDENTIFIERS.IDENTIFIER: [None],
+                IDENTIFIERS.URL: [None],
+                IDENTIFIERS.BQB: [None],
+            }
         )
-    if not isinstance(data_table, pd.DataFrame):
-        raise TypeError(
-            f"The data table was type {type(data_table).__name__}"
-            " but must be a pd.DataFrame"
-        )
+    else:
+        return pd.DataFrame(ids)
 
 
 def _perform_sbml_dfs_table_validation(
@@ -1218,15 +1201,79 @@ def _perform_sbml_dfs_table_validation(
         raise ValueError(f"{table_name} contained no entries")
 
 
-def _id_dict_to_df(ids):
-    if len(ids) == 0:
-        return pd.DataFrame(
-            {
-                IDENTIFIERS.ONTOLOGY: [None],
-                IDENTIFIERS.IDENTIFIER: [None],
-                IDENTIFIERS.URL: [None],
-                IDENTIFIERS.BQB: [None],
-            }
+def _sbml_dfs_from_edgelist_check_cspecies_merge(
+    merged_species: pd.DataFrame, original_species: pd.DataFrame
+) -> None:
+    """Check for a mismatch between the provided species data and species implied by the edgelist."""
+
+    # check for 1-many merge
+    if merged_species.shape[0] != original_species.shape[0]:
+        raise ValueError(
+            "Merging compartmentalized species to species_df"
+            " and compartments_df by names resulted in an "
+            f"increase in the tables from {original_species.shape[0]}"
+            f" to {merged_species.shape[0]} indicating that names were"
+            " not unique"
         )
-    else:
-        return pd.DataFrame(ids)
+
+    # check for missing species and compartments
+    missing_compartments = merged_species[merged_species[SBML_DFS.C_ID].isna()][
+        SBML_DFS.C_NAME
+    ].unique()
+    if len(missing_compartments) >= 1:
+        raise ValueError(
+            f"{len(missing_compartments)} compartments were present in"
+            ' "interaction_edgelist" but not "compartments_df":'
+            f" {', '.join(missing_compartments)}"
+        )
+
+    missing_species = merged_species[merged_species[SBML_DFS.S_ID].isna()][
+        SBML_DFS.S_NAME
+    ].unique()
+    if len(missing_species) >= 1:
+        raise ValueError(
+            f"{len(missing_species)} species were present in "
+            '"interaction_edgelist" but not "species_df":'
+            f" {', '.join(missing_species)}"
+        )
+
+    return None
+
+
+def _validate_matching_data(data_table: pd.DataFrame, ref_table: pd.DataFrame):
+    """Validates a table against a reference
+
+    This check if the table has the same index, no duplicates in the index
+    and that all values in the index are in the reference table.
+
+    Args:
+        data_table (pd.DataFrame): a table with data that should
+            match the reference
+        ref_table (pd.DataFrame): a reference table
+
+    Raises:
+        ValueError: not same index name
+        ValueError: index contains duplicates
+        ValueError: index not subset of index of reactions table
+    """
+    ref_index_name = ref_table.index.name
+    if data_table.index.name != ref_index_name:
+        raise ValueError(
+            "the index name for reaction data table was not"
+            f" {ref_index_name}: {data_table.index.name}"
+        )
+    ids = data_table.index
+    if any(ids.duplicated()):
+        raise ValueError(
+            "the index for reaction data table " "contained duplicate values"
+        )
+    if not all(ids.isin(ref_table.index)):
+        raise ValueError(
+            "the index for reaction data table contained values"
+            " not found in the reactions table"
+        )
+    if not isinstance(data_table, pd.DataFrame):
+        raise TypeError(
+            f"The data table was type {type(data_table).__name__}"
+            " but must be a pd.DataFrame"
+        )
