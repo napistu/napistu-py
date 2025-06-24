@@ -356,7 +356,7 @@ class Genodexito:
             )
             logger.debug(
                 f"{ids.shape[0] - expanded_ids.shape[0]} "
-                "ids are not included in expanded ids"
+                "ids are not included in expanded ids. These will be filled with empty Identifiers"
             )
         else:
             matched_expanded_ids = expanded_ids

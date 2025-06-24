@@ -140,8 +140,7 @@ def unnest_SBML_df(
     """
 
     # check that all sbml_dfs have the same schema
-    _test_same_schema(sbml_dfs_dict)
-    table_schema = sbml_dfs_dict[list(sbml_dfs_dict.keys())[0]].schema[table]
+    table_schema = SBML_DFS_SCHEMA.SCHEMA[table]
 
     df_list = [
         getattr(sbml_dfs_dict[x], table).assign(model=x) for x in sbml_dfs_dict.keys()
@@ -2041,22 +2040,6 @@ def _merge_entity_data_report_mismatches(
             )
 
             logger.warning(full_warning_msg)
-
-    return None
-
-
-def _test_same_schema(sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs]) -> None:
-    """
-    Ensure that all sbml_dfs in the dict have the same schema
-    """
-
-    if len(sbml_dfs_dict) != 0:
-        # extract all schemas
-        schema_list = [sbml_dfs_dict[x].schema for x in sbml_dfs_dict.keys()]
-        # if multiple entries are present then are they the same?
-        if len(sbml_dfs_dict) > 1:
-            if not all([x == schema_list[0] for x in schema_list]):
-                raise ValueError("sbml_df schemas were not identical")
 
     return None
 

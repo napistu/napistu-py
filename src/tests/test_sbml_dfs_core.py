@@ -5,6 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 import pytest
+from napistu import identifiers
 from napistu import sbml_dfs_core
 from napistu.source import Source
 from napistu.ingestion import sbml
@@ -25,11 +26,13 @@ from unittest.mock import patch
 def test_data():
     """Create test data for SBML integration tests."""
 
+    blank_id = identifiers.Identifiers([])
+
     # Test compartments
     compartments_df = pd.DataFrame(
         [
-            {"c_name": "nucleus", "c_Identifiers": None},
-            {"c_name": "cytoplasm", "c_Identifiers": None},
+            {"c_name": "nucleus", "c_Identifiers": blank_id},
+            {"c_name": "cytoplasm", "c_Identifiers": blank_id},
         ]
     )
 
@@ -38,13 +41,13 @@ def test_data():
         [
             {
                 "s_name": "TP53",
-                "s_Identifiers": None,
+                "s_Identifiers": blank_id,
                 "gene_type": "tumor_suppressor",
             },
-            {"s_name": "MDM2", "s_Identifiers": None, "gene_type": "oncogene"},
+            {"s_name": "MDM2", "s_Identifiers": blank_id, "gene_type": "oncogene"},
             {
                 "s_name": "CDKN1A",
-                "s_Identifiers": None,
+                "s_Identifiers": blank_id,
                 "gene_type": "cell_cycle",
             },
         ]
@@ -60,7 +63,7 @@ def test_data():
                 "downstream_compartment": "nucleus",
                 "r_name": "TP53_activates_CDKN1A",
                 "sbo_term": "SBO:0000459",
-                "r_Identifiers": None,
+                "r_Identifiers": blank_id,
                 "r_isreversible": False,
                 "confidence": 0.95,
             },
@@ -71,7 +74,7 @@ def test_data():
                 "downstream_compartment": "nucleus",
                 "r_name": "MDM2_inhibits_TP53",
                 "sbo_term": "SBO:0000020",
-                "r_Identifiers": None,
+                "r_Identifiers": blank_id,
                 "r_isreversible": False,
                 "confidence": 0.87,
             },

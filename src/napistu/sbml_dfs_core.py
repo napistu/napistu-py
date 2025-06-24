@@ -1401,6 +1401,10 @@ class SBML_dfs:
         # validate reaction_species sbo_terms and stoi
         self._validate_reaction_species()
 
+        # validate identifiers and sources
+        self._validate_identifiers()
+        self._validate_sources()
+
     def validate_and_resolve(self):
         """
         Validate and attempt to automatically fix common issues.
@@ -1641,6 +1645,27 @@ class SBML_dfs:
         s_ids = self._get_unused_species()
         self._remove_species(s_ids)
 
+    def _validate_identifiers(self):
+        """
+        Validate identifiers in the model
+
+        Iterates through all tables and checks if the identifier columns are valid.
+
+        Raises:
+            ValueError: missing identifiers in the table
+        """
+
+        SCHEMA = SBML_DFS_SCHEMA.SCHEMA
+        for table in SBML_DFS_SCHEMA.SCHEMA.keys():
+            if "id" not in SCHEMA[table].keys():
+                continue
+            id_series = self.get_table(table)[SCHEMA[table]["id"]]
+            if id_series.isna().sum() > 0:
+                missing_ids = id_series[id_series.isna()].index
+                raise ValueError(
+                    f"{table} has {len(missing_ids)} missing ids: {missing_ids}"
+                )
+
     def _validate_r_ids(self, r_ids: Optional[Union[str, list[str]]]) -> list[str]:
 
         if isinstance(r_ids, str):
@@ -1694,6 +1719,27 @@ class SBML_dfs:
             ValueError: r_id not in reactions table
         """
         sbml_dfs_utils._validate_matching_data(reactions_data_table, self.reactions)
+
+    def _validate_sources(self):
+        """
+        Validate sources in the model
+
+        Iterates through all tables and checks if the source columns are valid.
+
+        Raises:
+            ValueError: missing sources in the table
+        """
+
+        SCHEMA = SBML_DFS_SCHEMA.SCHEMA
+        for table in SBML_DFS_SCHEMA.SCHEMA.keys():
+            if "source" not in SCHEMA[table].keys():
+                continue
+            source_series = self.get_table(table)[SCHEMA[table]["source"]]
+            if source_series.isna().sum() > 0:
+                missing_sources = source_series[source_series.isna()].index
+                raise ValueError(
+                    f"{table} has {len(missing_sources)} missing sources: {missing_sources}"
+                )
 
     def _validate_species_data(self, species_data_table: pd.DataFrame):
         """Validates species data attribute
