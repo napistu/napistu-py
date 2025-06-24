@@ -5,12 +5,13 @@ import os
 import pandas as pd
 import pytest
 from napistu import consensus
+from napistu import identifiers
 from napistu import indices
 from napistu import source
 from napistu import sbml_dfs_core
 from napistu.ingestion import sbml
 from napistu.modify import pathwayannot
-from napistu.constants import SBML_DFS, SBML_DFS_SCHEMA, SCHEMA_DEFS
+from napistu.constants import SBML_DFS, SBML_DFS_SCHEMA, SCHEMA_DEFS, IDENTIFIERS, BQB
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")
@@ -338,6 +339,68 @@ def test_report_consensus_merges_reactions(tmp_path):
     # No assertion: this is a smoke test to ensure the Series output is handled without error
 
 
+def test_build_consensus_identifiers_handles_merges_and_missing_ids():
+
+    # Three entities:
+    # - 'A' with identifier X
+    # - 'B' with no identifiers
+    # - 'C' with identifier X (should merge with 'A')
+    df = pd.DataFrame(
+        {
+            "s_id": ["A", "B", "C"],
+            "s_Identifiers": [
+                identifiers.Identifiers(
+                    [
+                        {
+                            IDENTIFIERS.ONTOLOGY: "test",
+                            IDENTIFIERS.IDENTIFIER: "X",
+                            IDENTIFIERS.BQB: BQB.IS,
+                        }
+                    ]
+                ),
+                identifiers.Identifiers([]),
+                identifiers.Identifiers(
+                    [
+                        {
+                            IDENTIFIERS.ONTOLOGY: "test",
+                            IDENTIFIERS.IDENTIFIER: "X",
+                            IDENTIFIERS.BQB: BQB.IS,
+                        }
+                    ]
+                ),
+            ],
+        }
+    ).set_index("s_id")
+
+    schema = SBML_DFS_SCHEMA.SCHEMA[SBML_DFS.SPECIES]
+
+    indexed_cluster, cluster_consensus_identifiers = (
+        consensus.build_consensus_identifiers(df, schema)
+    )
+
+    # All entities should be assigned to a cluster
+    assert set(indexed_cluster.index) == set(df.index)
+    assert not indexed_cluster.isnull().any()
+    # There should be a consensus identifier for each cluster
+    assert set(cluster_consensus_identifiers.index) == set(indexed_cluster.values)
+
+    # Entities 'A' and 'C' should be merged (same cluster)
+    assert indexed_cluster.loc["A"] == indexed_cluster.loc["C"]
+    # Entity 'B' should be in a different cluster
+    assert indexed_cluster.loc["B"] != indexed_cluster.loc["A"]
+
+    # The consensus identifier for the merged cluster should include identifier X
+    merged_cluster_id = indexed_cluster.loc["A"]
+    ids_obj = cluster_consensus_identifiers.loc[merged_cluster_id, schema["id"]]
+    assert any(i["identifier"] == "X" for i in getattr(ids_obj, "ids", []))
+
+    # The consensus identifier for the entity with no identifiers should be empty
+    noid_cluster_id = indexed_cluster.loc["B"]
+    ids_obj_noid = cluster_consensus_identifiers.loc[noid_cluster_id, schema["id"]]
+    assert hasattr(ids_obj_noid, "ids")
+    assert len(getattr(ids_obj_noid, "ids", [])) == 0
+
+
 ################################################
 # __main__
 ################################################
@@ -349,3 +412,4 @@ if __name__ == "__main__":
     test_passing_entity_data()
     test_consensus_ontology_check()
     test_report_consensus_merges_reactions()
+    test_build_consensus_identifiers_handles_merges_and_missing_ids()

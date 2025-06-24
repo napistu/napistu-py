@@ -7,7 +7,7 @@ import re
 import libsbml
 import pandas as pd
 from fs import open_fs
-from pydantic import conlist, field_validator, RootModel
+from pydantic import field_validator, RootModel
 
 from napistu import consensus
 from napistu import identifiers
@@ -26,8 +26,6 @@ from napistu.ingestion.constants import VALID_COMPARTMENTS
 from napistu.ingestion.constants import GENERIC_COMPARTMENT
 
 logger = logging.getLogger(__name__)
-
-NonEmptyStringList = conlist(str, min_length=1)
 
 
 class SBML:

@@ -21,6 +21,7 @@ from napistu.constants import SBML_DFS_SCHEMA
 from napistu.constants import IDENTIFIERS
 from napistu.constants import SOURCE_SPEC
 from napistu.constants import BQB_DEFINING_ATTRS
+from napistu.constants import VALID_BQB_TERMS
 
 logger = logging.getLogger(__name__)
 # set the level to show logger.info message
@@ -1512,6 +1513,11 @@ def _filter_identifiers_by_qualifier(
     pd.DataFrame
         Filtered identifiers
     """
+
+    invalid_bqbs = set(meta_identifiers[IDENTIFIERS.BQB]) - set(VALID_BQB_TERMS)
+    if len(invalid_bqbs) > 0:
+        logger.warning(f"Invalid biological qualifiers: {invalid_bqbs}")
+
     valid_identifiers = meta_identifiers.copy()
     return valid_identifiers[
         meta_identifiers[IDENTIFIERS.BQB].isin(defining_biological_qualifiers)
