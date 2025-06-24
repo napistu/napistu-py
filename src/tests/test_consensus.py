@@ -22,8 +22,8 @@ def test_reduce_to_consensus_ids():
 
     # test aggregating by IDs, by moving from compartmentalized_species -> species
 
-    sbml_model = sbml.SBML(sbml_path).model
-    comp_species_df = sbml._setup_cspecies(sbml_model)
+    sbml_model = sbml.SBML(sbml_path)
+    comp_species_df = sbml_model._define_cspecies()
     comp_species_df.index.names = [SBML_DFS.S_ID]
     consensus_species, species_lookup = consensus.reduce_to_consensus_ids(
         comp_species_df,

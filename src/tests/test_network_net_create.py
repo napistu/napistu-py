@@ -20,7 +20,7 @@ test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")
 
 sbml_path = os.path.join(test_data, "R-HSA-1237044.sbml")
-sbml_model = sbml.SBML(sbml_path).model
+sbml_model = sbml.SBML(sbml_path)
 sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
 
 

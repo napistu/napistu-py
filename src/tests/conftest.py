@@ -60,7 +60,7 @@ def sbml_dfs_glucose_metabolism():
     test_data = os.path.join(test_path, "test_data")
     sbml_path = os.path.join(test_data, "reactome_glucose_metabolism.sbml")
 
-    sbml_model = SBML(sbml_path).model
+    sbml_model = SBML(sbml_path)
     sbml_dfs = SBML_dfs(sbml_model)
 
     return sbml_dfs
