@@ -31,8 +31,8 @@ def test_data():
     # Test compartments
     compartments_df = pd.DataFrame(
         [
-            {"c_name": "nucleus", "c_Identifiers": blank_id},
-            {"c_name": "cytoplasm", "c_Identifiers": blank_id},
+            {SBML_DFS.C_NAME: "nucleus", SBML_DFS.C_IDENTIFIERS: blank_id},
+            {SBML_DFS.C_NAME: "cytoplasm", SBML_DFS.C_IDENTIFIERS: blank_id},
         ]
     )
 
@@ -40,14 +40,18 @@ def test_data():
     species_df = pd.DataFrame(
         [
             {
-                "s_name": "TP53",
-                "s_Identifiers": blank_id,
+                SBML_DFS.S_NAME: "TP53",
+                SBML_DFS.S_IDENTIFIERS: blank_id,
                 "gene_type": "tumor_suppressor",
             },
-            {"s_name": "MDM2", "s_Identifiers": blank_id, "gene_type": "oncogene"},
             {
-                "s_name": "CDKN1A",
-                "s_Identifiers": blank_id,
+                SBML_DFS.S_NAME: "MDM2",
+                SBML_DFS.S_IDENTIFIERS: blank_id,
+                "gene_type": "oncogene",
+            },
+            {
+                SBML_DFS.S_NAME: "CDKN1A",
+                SBML_DFS.S_IDENTIFIERS: blank_id,
                 "gene_type": "cell_cycle",
             },
         ]
@@ -61,10 +65,10 @@ def test_data():
                 "downstream_name": "CDKN1A",
                 "upstream_compartment": "nucleus",
                 "downstream_compartment": "nucleus",
-                "r_name": "TP53_activates_CDKN1A",
-                "sbo_term": "SBO:0000459",
-                "r_Identifiers": blank_id,
-                "r_isreversible": False,
+                SBML_DFS.R_NAME: "TP53_activates_CDKN1A",
+                SBML_DFS.SBO_TERM: "SBO:0000459",
+                SBML_DFS.R_IDENTIFIERS: blank_id,
+                SBML_DFS.R_ISREVERSIBLE: False,
                 "confidence": 0.95,
             },
             {
@@ -72,10 +76,10 @@ def test_data():
                 "downstream_name": "TP53",
                 "upstream_compartment": "cytoplasm",
                 "downstream_compartment": "nucleus",
-                "r_name": "MDM2_inhibits_TP53",
-                "sbo_term": "SBO:0000020",
-                "r_Identifiers": blank_id,
-                "r_isreversible": False,
+                SBML_DFS.R_NAME: "MDM2_inhibits_TP53",
+                SBML_DFS.SBO_TERM: "SBO:0000020",
+                SBML_DFS.R_IDENTIFIERS: blank_id,
+                SBML_DFS.R_ISREVERSIBLE: False,
                 "confidence": 0.87,
             },
         ]
@@ -614,3 +618,146 @@ def test_sbml_custom_stoichiometry(test_data):
     stoichiometries = result.reaction_species["stoichiometry"].unique()
     assert 2 in stoichiometries  # upstream
     assert 3 in stoichiometries  # downstream
+
+
+def test_validate_schema_missing(minimal_valid_sbml_dfs):
+    """Test validation fails when schema is missing."""
+    delattr(minimal_valid_sbml_dfs, "schema")
+    with pytest.raises(ValueError, match="No schema found"):
+        minimal_valid_sbml_dfs.validate()
+
+
+def test_validate_table(minimal_valid_sbml_dfs):
+    """Test _validate_table fails for various table structure issues."""
+    # Wrong index name
+    sbml_dfs = minimal_valid_sbml_dfs.copy()
+    sbml_dfs.species.index.name = "wrong_name"
+    with pytest.raises(ValueError, match="the index name for species was not the pk"):
+        sbml_dfs.validate()
+
+    # Duplicate primary keys
+    sbml_dfs = minimal_valid_sbml_dfs.copy()
+    duplicate_species = pd.DataFrame(
+        {
+            SBML_DFS.S_NAME: ["ATP", "ADP"],
+            SBML_DFS.S_IDENTIFIERS: [
+                identifiers.Identifiers([]),
+                identifiers.Identifiers([]),
+            ],
+            SBML_DFS.S_SOURCE: [Source(init=True), Source(init=True)],
+        },
+        index=pd.Index(["S00001", "S00001"], name=SBML_DFS.S_ID),
+    )
+    sbml_dfs.species = duplicate_species
+    with pytest.raises(ValueError, match="primary keys were duplicated"):
+        sbml_dfs.validate()
+
+    # Missing required variables
+    sbml_dfs = minimal_valid_sbml_dfs.copy()
+    sbml_dfs.species = sbml_dfs.species.drop(columns=[SBML_DFS.S_NAME])
+    with pytest.raises(ValueError, match="Missing .+ required variables for species"):
+        sbml_dfs.validate()
+
+    # Empty table
+    sbml_dfs = minimal_valid_sbml_dfs.copy()
+    sbml_dfs.species = pd.DataFrame(
+        {
+            SBML_DFS.S_NAME: [],
+            SBML_DFS.S_IDENTIFIERS: [],
+            SBML_DFS.S_SOURCE: [],
+        },
+        index=pd.Index([], name=SBML_DFS.S_ID),
+    )
+    with pytest.raises(ValueError, match="species contained no entries"):
+        sbml_dfs.validate()
+
+
+def test_check_pk_fk_correspondence(minimal_valid_sbml_dfs):
+    """Test _check_pk_fk_correspondence fails for various foreign key issues."""
+    # Missing species reference
+    sbml_dfs = minimal_valid_sbml_dfs.copy()
+    sbml_dfs.compartmentalized_species[SBML_DFS.S_ID] = ["S99999"]
+    with pytest.raises(
+        ValueError,
+        match="s_id values were found in compartmentalized_species but missing from species",
+    ):
+        sbml_dfs.validate()
+
+    # Missing compartment reference
+    sbml_dfs = minimal_valid_sbml_dfs.copy()
+    sbml_dfs.compartmentalized_species[SBML_DFS.C_ID] = ["C99999"]
+    with pytest.raises(
+        ValueError,
+        match="c_id values were found in compartmentalized_species but missing from compartments",
+    ):
+        sbml_dfs.validate()
+
+    # Null foreign keys
+    sbml_dfs = minimal_valid_sbml_dfs.copy()
+    sbml_dfs.compartmentalized_species[SBML_DFS.S_ID] = [None]
+    with pytest.raises(
+        ValueError, match="compartmentalized_species included missing s_id values"
+    ):
+        sbml_dfs.validate()
+
+
+def test_validate_reaction_species(minimal_valid_sbml_dfs):
+    """Test _validate_reaction_species fails for various reaction species issues."""
+    # Null stoichiometry
+    sbml_dfs = minimal_valid_sbml_dfs.copy()
+    sbml_dfs.reaction_species[SBML_DFS.STOICHIOMETRY] = [None]
+    with pytest.raises(ValueError, match="All reaction_species.* must be not null"):
+        sbml_dfs.validate()
+
+    # Null SBO terms
+    sbml_dfs = minimal_valid_sbml_dfs.copy()
+    sbml_dfs.reaction_species[SBML_DFS.SBO_TERM] = [None]
+    with pytest.raises(
+        ValueError, match="sbo_terms were None; all terms should be defined"
+    ):
+        sbml_dfs.validate()
+
+    # Invalid SBO terms
+    sbml_dfs = minimal_valid_sbml_dfs.copy()
+    sbml_dfs.reaction_species[SBML_DFS.SBO_TERM] = ["INVALID_SBO_TERM"]
+    with pytest.raises(ValueError, match="sbo_terms were not defined"):
+        sbml_dfs.validate()
+
+
+def test_validate_identifiers(minimal_valid_sbml_dfs):
+    """Test _validate_identifiers fails when identifiers are missing."""
+    minimal_valid_sbml_dfs.species[SBML_DFS.S_IDENTIFIERS] = [None]
+    with pytest.raises(ValueError, match="species has .+ missing ids"):
+        minimal_valid_sbml_dfs.validate()
+
+
+def test_validate_sources(minimal_valid_sbml_dfs):
+    """Test _validate_sources fails when sources are missing."""
+    minimal_valid_sbml_dfs.species[SBML_DFS.S_SOURCE] = [None]
+    with pytest.raises(ValueError, match="species has .+ missing sources"):
+        minimal_valid_sbml_dfs.validate()
+
+
+def test_validate_species_data(minimal_valid_sbml_dfs):
+    """Test _validate_species_data fails when species_data has invalid structure."""
+    invalid_data = pd.DataFrame(
+        {"extra_info": ["test"]}, index=pd.Index(["S99999"], name=SBML_DFS.S_ID)
+    )  # Non-existent species
+    minimal_valid_sbml_dfs.species_data["invalid"] = invalid_data
+    with pytest.raises(ValueError, match="species data invalid was invalid"):
+        minimal_valid_sbml_dfs.validate()
+
+
+def test_validate_reactions_data(minimal_valid_sbml_dfs):
+    """Test _validate_reactions_data fails when reactions_data has invalid structure."""
+    invalid_data = pd.DataFrame(
+        {"extra_info": ["test"]}, index=pd.Index(["R99999"], name=SBML_DFS.R_ID)
+    )  # Non-existent reaction
+    minimal_valid_sbml_dfs.reactions_data["invalid"] = invalid_data
+    with pytest.raises(ValueError, match="reactions data invalid was invalid"):
+        minimal_valid_sbml_dfs.validate()
+
+
+def test_validate_passes_with_valid_data(minimal_valid_sbml_dfs):
+    """Test that validation passes with completely valid data."""
+    minimal_valid_sbml_dfs.validate()  # Should not raise any exceptions
