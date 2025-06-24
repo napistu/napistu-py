@@ -440,7 +440,7 @@ class SBML_dfs:
             If id_type is invalid or identifiers are malformed
         """
         selected_table = self.get_table(id_type, {"id"})
-        schema = self.schema
+        schema = SBML_DFS_SCHEMA.SCHEMA
 
         identifiers_dict = dict()
         for sysid in selected_table.index:
@@ -458,6 +458,7 @@ class SBML_dfs:
         if not identifiers_dict:
             # Return empty DataFrame with expected columns if nothing found
             return pd.DataFrame(columns=[schema[id_type]["pk"], "entry"])
+
         identifiers_tbl = pd.concat(identifiers_dict)
 
         identifiers_tbl.index.names = [schema[id_type]["pk"], "entry"]
