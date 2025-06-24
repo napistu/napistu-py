@@ -15,7 +15,9 @@ from napistu import source
 from napistu import utils
 from napistu.ingestion import sbml
 
+from napistu.constants import SCHEMA_DEFS
 from napistu.constants import SBML_DFS
+from napistu.constants import SBML_DFS_SCHEMA
 from napistu.constants import IDENTIFIERS
 from napistu.constants import SOURCE_SPEC
 from napistu.constants import BQB_DEFINING_ATTRS
@@ -192,7 +194,7 @@ def construct_meta_entities_identifiers(
     agg_tbl = unnest_SBML_df(sbml_dfs_dict, table=table)
 
     # since all sbml_dfs have the same schema pull out one schema for reference
-    table_schema = sbml_dfs_dict[list(sbml_dfs_dict.keys())[0]].schema[table]
+    table_schema = SBML_DFS_SCHEMA.SCHEMA[table]
 
     # update foreign keys using provided lookup tables
     if "fk" in table_schema.keys():
@@ -244,6 +246,8 @@ def reduce_to_consensus_ids(
         Series mapping the index of the aggregated entities to new consensus IDs.
     """
     # Step 1: Build consensus identifiers to create clusters of equivalent entities
+    table_name = table_schema[SCHEMA_DEFS.TABLE]
+    logger.debug(f"Building consensus identifiers for {table_name}")
     indexed_cluster, cluster_consensus_identifiers = build_consensus_identifiers(
         sbml_df, table_schema, defining_biological_qualifiers
     )
@@ -252,25 +256,28 @@ def reduce_to_consensus_ids(
     agg_table_harmonized = sbml_df.join(indexed_cluster)
 
     # Step 3: Create lookup table for entity IDs
+    logger.debug(f"Creating lookup table for {table_name}")
     lookup_table = _create_entity_lookup_table(agg_table_harmonized, table_schema)
 
     # Step 4: Add nameness scores to help select representative names
     agg_table_harmonized = utils._add_nameness_score_wrapper(
-        agg_table_harmonized, "label", table_schema
+        agg_table_harmonized, SCHEMA_DEFS.LABEL, table_schema
     )
 
     # Step 5: Prepare the consensus table with one row per unique entity
+    logger.debug(f"Preparing consensus table for {table_name}")
     new_id_table = _prepare_consensus_table(
         agg_table_harmonized, table_schema, cluster_consensus_identifiers
     )
 
     # Step 6: Add source information if required
-    if "source" in table_schema.keys():
+    if SCHEMA_DEFS.SOURCE in table_schema.keys():
         new_id_table = _add_consensus_sources(
             new_id_table, agg_table_harmonized, lookup_table, table_schema, pw_index
         )
 
     # Step 7: Validate the resulting table
+    logger.debug(f"Validating consensus table for {table_name}")
     _validate_consensus_table(new_id_table, sbml_df)
 
     return new_id_table, lookup_table
@@ -667,7 +674,7 @@ def construct_meta_entities_members(
     defined_by_schema = sbml_dfs_dict[list(sbml_dfs_dict.keys())[0]].schema[defined_by]
 
     # Step 2: Prepare the member table and validate its structure
-    agg_tbl, defining_fk = _prepare_member_table(
+    agg_tbl, _ = _prepare_member_table(
         sbml_dfs_dict,
         defined_by,
         defined_lookup_tables,
@@ -681,9 +688,7 @@ def construct_meta_entities_members(
     membership_lookup = _create_membership_lookup(agg_tbl, table_schema)
 
     # Step 4: Create consensus entities and lookup table
-    consensus_entities, lookup_table = _create_entity_consensus(
-        membership_lookup, table_schema
-    )
+    _, lookup_table = _create_entity_consensus(membership_lookup, table_schema)
 
     # Step 5: Log merger information
     report_consensus_merges(

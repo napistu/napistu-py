@@ -10,7 +10,7 @@ from napistu import source
 from napistu import sbml_dfs_core
 from napistu.ingestion import sbml
 from napistu.modify import pathwayannot
-from napistu.constants import SBML_DFS, SBML_DFS_SCHEMA
+from napistu.constants import SBML_DFS, SBML_DFS_SCHEMA, SCHEMA_DEFS
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")
@@ -23,9 +23,14 @@ def test_reduce_to_consensus_ids():
 
     sbml_model = sbml.SBML(sbml_path).model
     comp_species_df = sbml.setup_cspecies(sbml_model)
-    comp_species_df.index.names = ["s_id"]
+    comp_species_df.index.names = [SBML_DFS.S_ID]
     consensus_species, species_lookup = consensus.reduce_to_consensus_ids(
-        comp_species_df, {"pk": "s_id", "id": "s_Identifiers"}
+        comp_species_df,
+        {
+            SCHEMA_DEFS.PK: SBML_DFS.S_ID,
+            SCHEMA_DEFS.ID: SBML_DFS.S_IDENTIFIERS,
+            SCHEMA_DEFS.TABLE: SBML_DFS.SPECIES,
+        },
     )
 
     assert isinstance(consensus_species, pd.DataFrame)

@@ -17,6 +17,8 @@ from napistu import utils
 from napistu.constants import BQB
 from napistu.constants import ONTOLOGIES
 from napistu.constants import SBML_DFS
+from napistu.constants import SBML_DFS_SCHEMA
+from napistu.constants import SCHEMA_DEFS
 from napistu.ingestion.constants import SBML_DEFS
 from napistu.ingestion.constants import COMPARTMENTS_GO_TERMS
 from napistu.ingestion.constants import COMPARTMENT_ALIASES
@@ -378,9 +380,7 @@ def sbml_dfs_from_sbml(self, sbml_model: SBML, compartment_aliases: dict | None 
     self.compartments = _define_compartments(sbml_model, compartment_aliases)
 
     # 2. Process species and compartmentalized species
-    self.species, self.compartmentalized_species = _define_species(
-        sbml_model, self.schema
-    )
+    self.species, self.compartmentalized_species = _define_species(sbml_model)
 
     # 3. Process reactions and their participating species
     self.reactions, self.reaction_species = _define_reactions(sbml_model)
@@ -496,9 +496,7 @@ def _define_compartments(
     return pd.DataFrame(compartments).set_index(SBML_DFS.C_ID)
 
 
-def _define_species(
-    sbml_model: SBML, schema: dict
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+def _define_species(sbml_model: SBML) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Extracts and defines species and compartmentalized species.
 
     This function creates two DataFrames: one for unique molecular species
@@ -521,8 +519,10 @@ def _define_species(
         - The second DataFrame represents compartmentalized species.
     """
 
-    SPECIES_VARS = schema["species"]["vars"]
-    CSPECIES_VARS = schema["compartmentalized_species"]["vars"]
+    SPECIES_SCHEMA = SBML_DFS_SCHEMA.SCHEMA[SBML_DFS.SPECIES]
+    CSPECIES_SCHEMA = SBML_DFS_SCHEMA.SCHEMA[SBML_DFS.COMPARTMENTALIZED_SPECIES]
+    SPECIES_VARS = SPECIES_SCHEMA[SCHEMA_DEFS.VARS]
+    CSPECIES_VARS = CSPECIES_SCHEMA[SCHEMA_DEFS.VARS]
 
     comp_species_df = setup_cspecies(sbml_model)
 
@@ -531,7 +531,13 @@ def _define_species(
     consensus_species_df.index.names = [SBML_DFS.S_ID]
     consensus_species, species_lookup = consensus.reduce_to_consensus_ids(
         consensus_species_df,
-        {"pk": SBML_DFS.S_ID, "id": SBML_DFS.S_IDENTIFIERS},
+        # note that this is an incomplete schema because consensus_species_df isn't a
+        # normal species table
+        {
+            SCHEMA_DEFS.PK: SBML_DFS.S_ID,
+            SCHEMA_DEFS.ID: SBML_DFS.S_IDENTIFIERS,
+            SCHEMA_DEFS.TABLE: SBML_DFS.SPECIES,
+        },
     )
 
     # create a table of unique molecular species
@@ -542,7 +548,7 @@ def _define_species(
     consensus_species = consensus_species.drop(
         [SBML_DFS.SC_NAME, SBML_DFS.C_ID], axis=1
     )
-    consensus_species["s_Source"] = [
+    consensus_species[SBML_DFS.S_SOURCE] = [
         source.Source(init=True) for x in range(0, consensus_species.shape[0])
     ]
 

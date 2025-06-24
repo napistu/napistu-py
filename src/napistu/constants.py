@@ -55,28 +55,49 @@ SBML_DFS = SimpleNamespace(
     SBO_TERM="sbo_term",
 )
 
+SCHEMA_DEFS = SimpleNamespace(
+    TABLE="table",
+    PK="pk",
+    FK="fk",
+    LABEL="label",
+    ID="id",
+    SOURCE="source",
+    VARS="vars",
+)
+
 SBML_DFS_SCHEMA = SimpleNamespace(
     SCHEMA={
         SBML_DFS.COMPARTMENTS: {
-            "pk": SBML_DFS.C_ID,
-            "label": SBML_DFS.C_NAME,
-            "id": SBML_DFS.C_IDENTIFIERS,
-            "source": SBML_DFS.C_SOURCE,
-            "vars": [SBML_DFS.C_NAME, SBML_DFS.C_IDENTIFIERS, SBML_DFS.C_SOURCE],
+            SCHEMA_DEFS.TABLE: SBML_DFS.COMPARTMENTS,
+            SCHEMA_DEFS.PK: SBML_DFS.C_ID,
+            SCHEMA_DEFS.LABEL: SBML_DFS.C_NAME,
+            SCHEMA_DEFS.ID: SBML_DFS.C_IDENTIFIERS,
+            SCHEMA_DEFS.SOURCE: SBML_DFS.C_SOURCE,
+            SCHEMA_DEFS.VARS: [
+                SBML_DFS.C_NAME,
+                SBML_DFS.C_IDENTIFIERS,
+                SBML_DFS.C_SOURCE,
+            ],
         },
         SBML_DFS.SPECIES: {
-            "pk": SBML_DFS.S_ID,
-            "label": SBML_DFS.S_NAME,
-            "id": SBML_DFS.S_IDENTIFIERS,
-            "source": SBML_DFS.S_SOURCE,
-            "vars": [SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS, SBML_DFS.S_SOURCE],
+            SCHEMA_DEFS.TABLE: SBML_DFS.SPECIES,
+            SCHEMA_DEFS.PK: SBML_DFS.S_ID,
+            SCHEMA_DEFS.LABEL: SBML_DFS.S_NAME,
+            SCHEMA_DEFS.ID: SBML_DFS.S_IDENTIFIERS,
+            SCHEMA_DEFS.SOURCE: SBML_DFS.S_SOURCE,
+            SCHEMA_DEFS.VARS: [
+                SBML_DFS.S_NAME,
+                SBML_DFS.S_IDENTIFIERS,
+                SBML_DFS.S_SOURCE,
+            ],
         },
         SBML_DFS.COMPARTMENTALIZED_SPECIES: {
-            "pk": SBML_DFS.SC_ID,
-            "label": SBML_DFS.SC_NAME,
-            "fk": [SBML_DFS.S_ID, SBML_DFS.C_ID],
-            "source": SBML_DFS.SC_SOURCE,
-            "vars": [
+            SCHEMA_DEFS.TABLE: SBML_DFS.COMPARTMENTALIZED_SPECIES,
+            SCHEMA_DEFS.PK: SBML_DFS.SC_ID,
+            SCHEMA_DEFS.LABEL: SBML_DFS.SC_NAME,
+            SCHEMA_DEFS.FK: [SBML_DFS.S_ID, SBML_DFS.C_ID],
+            SCHEMA_DEFS.SOURCE: SBML_DFS.SC_SOURCE,
+            SCHEMA_DEFS.VARS: [
                 SBML_DFS.SC_NAME,
                 SBML_DFS.S_ID,
                 SBML_DFS.C_ID,
@@ -84,11 +105,12 @@ SBML_DFS_SCHEMA = SimpleNamespace(
             ],
         },
         SBML_DFS.REACTIONS: {
-            "pk": SBML_DFS.R_ID,
-            "label": SBML_DFS.R_NAME,
-            "id": SBML_DFS.R_IDENTIFIERS,
-            "source": SBML_DFS.R_SOURCE,
-            "vars": [
+            SCHEMA_DEFS.TABLE: SBML_DFS.REACTIONS,
+            SCHEMA_DEFS.PK: SBML_DFS.R_ID,
+            SCHEMA_DEFS.LABEL: SBML_DFS.R_NAME,
+            SCHEMA_DEFS.ID: SBML_DFS.R_IDENTIFIERS,
+            SCHEMA_DEFS.SOURCE: SBML_DFS.R_SOURCE,
+            SCHEMA_DEFS.VARS: [
                 SBML_DFS.R_NAME,
                 SBML_DFS.R_IDENTIFIERS,
                 SBML_DFS.R_SOURCE,
@@ -96,9 +118,10 @@ SBML_DFS_SCHEMA = SimpleNamespace(
             ],
         },
         SBML_DFS.REACTION_SPECIES: {
-            "pk": SBML_DFS.RSC_ID,
-            "fk": [SBML_DFS.R_ID, SBML_DFS.SC_ID],
-            "vars": [
+            SCHEMA_DEFS.TABLE: SBML_DFS.REACTION_SPECIES,
+            SCHEMA_DEFS.PK: SBML_DFS.RSC_ID,
+            SCHEMA_DEFS.FK: [SBML_DFS.R_ID, SBML_DFS.SC_ID],
+            SCHEMA_DEFS.VARS: [
                 SBML_DFS.R_ID,
                 SBML_DFS.SC_ID,
                 SBML_DFS.STOICHIOMETRY,
@@ -129,10 +152,10 @@ ENTITIES_TO_ENTITY_DATA = {
 REQUIRED_REACTION_FROMEDGELIST_COLUMNS = [
     "sc_id_up",
     "sc_id_down",
-    "sbo_term",
-    "r_name",
-    "r_Identifiers",
-    "r_isreversible",
+    SBML_DFS.SBO_TERM,
+    SBML_DFS.R_NAME,
+    SBML_DFS.R_IDENTIFIERS,
+    SBML_DFS.R_ISREVERSIBLE,
 ]
 
 NAPISTU_STANDARD_OUTPUTS = SimpleNamespace(
@@ -155,20 +178,6 @@ INTERACTION_EDGELIST_EXPECTED_VARS = {
     SBML_DFS.R_ISREVERSIBLE,
 }
 
-BQB_PRIORITIES = pd.DataFrame(
-    [{"bqb": "BQB_IS", "bqb_rank": 1}, {"bqb": "BQB_HAS_PART", "bqb_rank": 2}]
-)
-
-ONTOLOGY_PRIORITIES = pd.DataFrame(
-    [
-        {"ontology": "reactome", "ontology_rank": 1},
-        {"ontology": "ensembl_gene", "ontology_rank": 2},
-        {"ontology": "chebi", "ontology_rank": 3},
-        {"ontology": "uniprot", "ontology_rank": 4},
-        {"ontology": "go", "ontology_rank": 5},
-    ]
-)
-
 # SBML
 # Biological qualifiers
 # Biomodels qualifiers
@@ -189,21 +198,45 @@ BQB = SimpleNamespace(
     UNKNOWN="BQB_UNKNOWN",
 )
 
+VALID_BQB_TERMS = [
+    BQB.IS,
+    BQB.HAS_PART,
+    BQB.IS_PART_OF,
+    BQB.IS_VERSION_OF,
+    BQB.HAS_VERSION,
+    BQB.IS_HOMOLOG_TO,
+    BQB.IS_DESCRIBED_BY,
+    BQB.IS_ENCODED_BY,
+    BQB.ENCODES,
+    BQB.OCCURS_IN,
+    BQB.HAS_PROPERTY,
+    BQB.IS_PROPERTY_OF,
+    BQB.HAS_TAXON,
+    BQB.UNKNOWN,
+]
+
 # molecules are distinctly defined by these BQB terms
-BQB_DEFINING_ATTRS = ["BQB_IS", "IS_HOMOLOG_TO"]
+BQB_DEFINING_ATTRS = [BQB.IS, BQB.IS_HOMOLOG_TO]
 
 # a looser convention which will aggregate genes, transcripts, and proteins
 # if they are linked with the appropriate bioqualifiers
 BQB_DEFINING_ATTRS_LOOSE = [
-    "BQB_IS",
-    "IS_HOMOLOG_TO",
-    "BQB_IS_ENCODED_BY",
-    "BQB_ENCODES",
+    BQB.IS,
+    BQB.IS_HOMOLOG_TO,
+    BQB.IS_ENCODED_BY,
+    BQB.ENCODES,
 ]
 
 # identifiers
 IDENTIFIERS = SimpleNamespace(
     ONTOLOGY="ontology", IDENTIFIER="identifier", BQB="bqb", URL="url"
+)
+
+BQB_PRIORITIES = pd.DataFrame(
+    [
+        {IDENTIFIERS.BQB: BQB.IS, "bqb_rank": 1},
+        {IDENTIFIERS.BQB: BQB.HAS_PART, "bqb_rank": 2},
+    ]
 )
 
 IDENTIFIERS_REQUIRED_VARS = {
@@ -217,26 +250,9 @@ SPECIES_IDENTIFIERS_REQUIRED_VARS = IDENTIFIERS_REQUIRED_VARS | {
     SBML_DFS.S_NAME,
 }
 
-BIOLOGICAL_QUALIFIERS = [
-    "BQB_IS",
-    "BQB_HAS_PART",
-    "BQB_IS_PART_OF",
-    "BQB_IS_VERSION_OF",
-    "BQB_HAS_VERSION",
-    "BQB_IS_HOMOLOG_TO",
-    "BQB_IS_DESCRIBED_BY",
-    "BQB_IS_ENCODED_BY",
-    "BQB_ENCODES",
-    "BQB_OCCURS_IN",
-    "BQB_HAS_PROPERTY",
-    "BQB_IS_PROPERTY_OF",
-    "BQB_HAS_TAXON",
-    "BQB_UNKNOWN",
-]
-
 
 def get_biological_qualifier_codes():
-    bio_qualifier_codes = {getattr(libsbml, bqb): bqb for bqb in BIOLOGICAL_QUALIFIERS}
+    bio_qualifier_codes = {getattr(libsbml, bqb): bqb for bqb in VALID_BQB_TERMS}
 
     return bio_qualifier_codes
 
@@ -408,6 +424,16 @@ ONTOLOGY_SPECIES_ALIASES = {
     ONTOLOGIES.ENSEMBL_GENE: {"ensembl_gene_id"},
     ONTOLOGIES.UNIPROT: {"Uniprot"},
 }
+
+ONTOLOGY_PRIORITIES = pd.DataFrame(
+    [
+        {"ontology": ONTOLOGIES.REACTOME, "ontology_rank": 1},
+        {"ontology": ONTOLOGIES.ENSEMBL_GENE, "ontology_rank": 2},
+        {"ontology": ONTOLOGIES.CHEBI, "ontology_rank": 3},
+        {"ontology": ONTOLOGIES.UNIPROT, "ontology_rank": 4},
+        {"ontology": ONTOLOGIES.GO, "ontology_rank": 5},
+    ]
+)
 
 ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY = {
     "G": ONTOLOGIES.ENSEMBL_GENE,
