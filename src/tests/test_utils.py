@@ -686,3 +686,22 @@ def test_safe_fill():
         "a_very_long\nstringggg",
         "",
     ]
+
+
+def test_update_pathological_names():
+
+    # All numeric
+    s = pd.Series(["1", "2", "3"])
+    out = utils.update_pathological_names(s, "prefix_")
+    assert all(x.startswith("prefix_") for x in out)
+    assert list(out) == ["prefix_1", "prefix_2", "prefix_3"]
+
+    # Mixed numeric and non-numeric
+    s2 = pd.Series(["1", "foo", "3"])
+    out2 = utils.update_pathological_names(s2, "prefix_")
+    assert list(out2) == ["1", "foo", "3"]
+
+    # All non-numeric
+    s3 = pd.Series(["foo", "bar", "baz"])
+    out3 = utils.update_pathological_names(s3, "prefix_")
+    assert list(out3) == ["foo", "bar", "baz"]

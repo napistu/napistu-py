@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from typing import Any
 
 import libsbml
 import pandas as pd
@@ -423,63 +424,7 @@ def _define_compartments(
                 f"Compartment {comp.getId()} has empty CVterms, mapping its c_Identifiers from the Compartment dict"
             )
 
-            comp_name = comp.getName()
-            mapped_compartment_key = [
-                compkey
-                for compkey, mappednames in aliases.items()
-                if comp_name in mappednames
-            ]
-
-            if len(mapped_compartment_key) == 0:
-                logger.warning(
-                    f"No GO compartment for {comp_name} is mapped, use the generic cellular_component's GO id"
-                )
-                compartments.append(
-                    {
-                        SBML_DFS.C_ID: comp.getId(),
-                        SBML_DFS.C_NAME: comp.getName(),
-                        SBML_DFS.C_IDENTIFIERS: identifiers.Identifiers(
-                            [
-                                identifiers.format_uri(
-                                    uri=identifiers.create_uri_url(
-                                        ontology=ONTOLOGIES.GO,
-                                        identifier=COMPARTMENTS_GO_TERMS[
-                                            GENERIC_COMPARTMENT
-                                        ],
-                                    ),
-                                    biological_qualifier_type=BQB.BQB_IS,
-                                )
-                            ]
-                        ),
-                        SBML_DFS.C_SOURCE: source.Source(init=True),
-                    }
-                )
-
-            if len(mapped_compartment_key) > 0:
-                if len(mapped_compartment_key) > 1:
-                    logger.warning(
-                        f"More than one GO compartments for {comp_name} are mapped, using the first one"
-                    )
-                compartments.append(
-                    {
-                        SBML_DFS.C_ID: comp.getId(),
-                        SBML_DFS.C_NAME: comp.getName(),
-                        SBML_DFS.C_IDENTIFIERS: identifiers.Identifiers(
-                            [
-                                identifiers.format_uri(
-                                    uri=identifiers.create_uri_url(
-                                        ontology=ONTOLOGIES.GO,
-                                        identifier=COMPARTMENTS_GO_TERMS[
-                                            mapped_compartment_key[0]
-                                        ],
-                                    ),
-                                    biological_qualifier_type=BQB.IS,
-                                )
-                            ]
-                        ),
-                        SBML_DFS.C_SOURCE: source.Source(init=True),
-                    }
-                )
+            compartments.append(_define_compartments_missing_cvterms(comp, aliases))
 
         else:
             compartments.append(
@@ -492,6 +437,63 @@ def _define_compartments(
             )
 
     return pd.DataFrame(compartments).set_index(SBML_DFS.C_ID)
+
+
+def _define_compartments_missing_cvterms(
+    comp: libsbml.Compartment, aliases: dict
+) -> dict[str, Any]:
+
+    comp_name = comp.getName()
+    mapped_compartment_key = [
+        compkey for compkey, mappednames in aliases.items() if comp_name in mappednames
+    ]
+
+    if len(mapped_compartment_key) == 0:
+        logger.warning(
+            f"No GO compartment for {comp_name} is mapped, use the generic cellular_component's GO id"
+        )
+
+        compartment_entry = {
+            SBML_DFS.C_ID: comp.getId(),
+            SBML_DFS.C_NAME: comp.getName(),
+            SBML_DFS.C_IDENTIFIERS: identifiers.Identifiers(
+                [
+                    identifiers.format_uri(
+                        uri=identifiers.create_uri_url(
+                            ontology=ONTOLOGIES.GO,
+                            identifier=COMPARTMENTS_GO_TERMS[GENERIC_COMPARTMENT],
+                        ),
+                        biological_qualifier_type=BQB.BQB_IS,
+                    )
+                ]
+            ),
+            SBML_DFS.C_SOURCE: source.Source(init=True),
+        }
+
+    if len(mapped_compartment_key) > 0:
+        if len(mapped_compartment_key) > 1:
+            logger.warning(
+                f"More than one GO compartments for {comp_name} are mapped, using the first one"
+            )
+
+        compartment_entry = {
+            SBML_DFS.C_ID: comp.getId(),
+            SBML_DFS.C_NAME: comp.getName(),
+            SBML_DFS.C_IDENTIFIERS: identifiers.Identifiers(
+                [
+                    identifiers.format_uri(
+                        uri=identifiers.create_uri_url(
+                            ontology=ONTOLOGIES.GO,
+                            identifier=COMPARTMENTS_GO_TERMS[mapped_compartment_key[0]],
+                        ),
+                        biological_qualifier_type=BQB.IS,
+                    )
+                ]
+            ),
+            SBML_DFS.C_SOURCE: source.Source(init=True),
+        }
+
+    return compartment_entry
 
 
 def _define_species(sbml_model: SBML) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -522,7 +524,7 @@ def _define_species(sbml_model: SBML) -> tuple[pd.DataFrame, pd.DataFrame]:
     SPECIES_VARS = SPECIES_SCHEMA[SCHEMA_DEFS.VARS]
     CSPECIES_VARS = CSPECIES_SCHEMA[SCHEMA_DEFS.VARS]
 
-    comp_species_df = setup_cspecies(sbml_model)
+    comp_species_df = _setup_cspecies(sbml_model)
 
     # find unique species and create a table
     consensus_species_df = comp_species_df.copy()
@@ -605,7 +607,7 @@ def _define_reactions(sbml_model: SBML) -> tuple[pd.DataFrame, pd.DataFrame]:
     return reactions, reaction_species_df
 
 
-def setup_cspecies(sbml_model: SBML) -> pd.DataFrame:
+def _setup_cspecies(sbml_model: SBML) -> pd.DataFrame:
     """Creates a DataFrame of compartmentalized species from an SBML model.
 
     This function extracts all species from the model and creates a
@@ -637,30 +639,16 @@ def setup_cspecies(sbml_model: SBML) -> pd.DataFrame:
 
         comp_species.append(spec_dict)
 
-    mplugin = sbml_model.model.getPlugin("fbc")
-
     # add geneproducts defined using L3 FBC extension
-    if mplugin is not None:
-        for i in range(mplugin.getNumGeneProducts()):
-            gene_product = mplugin.getGeneProduct(i)
+    fbc_gene_products = _get_fbc_gene_products(sbml_model)
+    comp_species.extend(fbc_gene_products)
 
-            gene_dict = {
-                SBML_DFS.SC_ID: gene_product.getId(),
-                SBML_DFS.SC_NAME: (
-                    gene_product.getName()
-                    if gene_product.isSetName()
-                    else gene_product.getLabel()
-                ),
-                # use getLabel() to accomendate sbml model (e.g. HumanGEM.xml) with no fbc:name attribute
-                # Recon3D.xml has both fbc:label and fbc:name attributes, with gene name in fbc:nam
-                SBML_DFS.C_ID: None,
-                SBML_DFS.S_IDENTIFIERS: identifiers.cv_to_Identifiers(gene_product),
-                SBML_DFS.SC_SOURCE: source.Source(init=True),
-            }
+    comp_species_df = pd.DataFrame(comp_species).set_index(SBML_DFS.SC_ID)
+    comp_species_df[SBML_DFS.SC_NAME] = utils.update_pathological_names(
+        comp_species_df[SBML_DFS.SC_NAME], "SC"
+    )
 
-            comp_species.append(gene_dict)
-
-    return pd.DataFrame(comp_species).set_index(SBML_DFS.SC_ID)
+    return comp_species_df
 
 
 def _get_gene_product_dict(gp):
@@ -697,3 +685,31 @@ def _extract_gene_products(association: libsbml.Association) -> list[dict]:
 
     _recursive_helper(association)
     return gene_products
+
+
+def _get_fbc_gene_products(sbml_model: SBML) -> list[dict]:
+
+    mplugin = sbml_model.model.getPlugin("fbc")
+
+    fbc_gene_products = list()
+    if mplugin is not None:
+        for i in range(mplugin.getNumGeneProducts()):
+            gene_product = mplugin.getGeneProduct(i)
+
+            gene_dict = {
+                SBML_DFS.SC_ID: gene_product.getId(),
+                SBML_DFS.SC_NAME: (
+                    gene_product.getName()
+                    if gene_product.isSetName()
+                    else gene_product.getLabel()
+                ),
+                # use getLabel() to accomendate sbml model (e.g. HumanGEM.xml) with no fbc:name attribute
+                # Recon3D.xml has both fbc:label and fbc:name attributes, with gene name in fbc:nam
+                SBML_DFS.C_ID: None,
+                SBML_DFS.S_IDENTIFIERS: identifiers.cv_to_Identifiers(gene_product),
+                SBML_DFS.SC_SOURCE: source.Source(init=True),
+            }
+
+            fbc_gene_products.append(gene_dict)
+
+    return fbc_gene_products
