@@ -8,16 +8,11 @@ from napistu import identifiers
 from napistu import sbml_dfs_core
 from napistu import source
 from napistu import utils
+from napistu.constants import BQB
+from napistu.constants import IDENTIFIERS
 from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import SBOTERM_NAMES
-from napistu.ingestion.constants import SBML_COMPARTMENT_DICT_IDENTIFIERS
-from napistu.ingestion.constants import SBML_COMPARTMENT_DICT_NAME
-from napistu.ingestion.constants import SBML_SPECIES_DICT_IDENTIFIERS
-from napistu.ingestion.constants import SBML_SPECIES_DICT_NAME
-from napistu.ingestion.constants import SMBL_REACTION_DICT_IDENTIFIERS
-from napistu.ingestion.constants import SMBL_REACTION_DICT_IS_REVERSIBLE
-from napistu.ingestion.constants import SMBL_REACTION_DICT_NAME
-from napistu.ingestion.constants import SMBL_REACTION_SPEC_SBO_TERM
+from napistu.constants import SBML_DFS
 from napistu.ingestion.constants import SPECIES_FULL_NAME_HUMAN
 from napistu.ingestion.constants import STRING_DOWNSTREAM_COMPARTMENT
 from napistu.ingestion.constants import STRING_DOWNSTREAM_NAME
@@ -81,16 +76,16 @@ def convert_trrust_to_sbml_dfs(
     species_df = (
         pd.DataFrame(
             {
-                SBML_SPECIES_DICT_NAME: list(
+                SBML_DFS.S_NAME: list(
                     {*edge_summaries_df["from"], *edge_summaries_df["to"]}
                 )
             }
         )
         .merge(
-            uniprot_2_symbol.rename({TRRUST_SYMBOL: SBML_SPECIES_DICT_NAME}, axis=1),
+            uniprot_2_symbol.rename({TRRUST_SYMBOL: SBML_DFS.S_NAME}, axis=1),
             how="left",
         )
-        .set_index(SBML_SPECIES_DICT_NAME)
+        .set_index(SBML_DFS.S_NAME)
     )
 
     # create Identifiers objects for all species with uniprot IDs
@@ -106,14 +101,14 @@ def convert_trrust_to_sbml_dfs(
         [
             identifiers.Identifiers(
                 [
-                    identifiers.format_uri(uri=x, biological_qualifier_type="BQB_IS")
-                    for x in species_w_ids.loc[[ind]]["url"].tolist()
+                    identifiers.format_uri(uri=x, biological_qualifier_type=BQB.IS)
+                    for x in species_w_ids.loc[[ind]][IDENTIFIERS.URL].tolist()
                 ]
             )
             for ind in species_w_ids.index.unique()
         ],
         index=species_w_ids.index.unique(),
-    ).rename(SBML_SPECIES_DICT_IDENTIFIERS)
+    ).rename(SBML_DFS.S_IDENTIFIERS)
 
     # just retain s_name and s_Identifiers
     # this just needs a source object which will be added later
@@ -124,21 +119,21 @@ def convert_trrust_to_sbml_dfs(
         .merge(
             species_w_ids_series,
             how="left",
-            left_on=SBML_SPECIES_DICT_NAME,
+            left_on=SBML_DFS.S_NAME,
             right_index=True,
         )
         .reset_index(drop=True)
     )
     # stub genes with missing IDs
-    species_df[SBML_SPECIES_DICT_IDENTIFIERS] = species_df[SBML_SPECIES_DICT_IDENTIFIERS].fillna(  # type: ignore
+    species_df[SBML_DFS.S_IDENTIFIERS] = species_df[SBML_DFS.S_IDENTIFIERS].fillna(  # type: ignore
         value=identifiers.Identifiers([])
     )
 
     # define distinct compartments
     compartments_df = pd.DataFrame(
         {
-            SBML_COMPARTMENT_DICT_NAME: TRRUST_COMPARTMENT_NUCLEOPLASM,
-            SBML_COMPARTMENT_DICT_IDENTIFIERS: identifiers.Identifiers(
+            SBML_DFS.C_NAME: TRRUST_COMPARTMENT_NUCLEOPLASM,
+            SBML_DFS.C_IDENTIFIERS: identifiers.Identifiers(
                 [
                     identifiers.format_uri(
                         uri=identifiers.create_uri_url(
@@ -159,7 +154,7 @@ def convert_trrust_to_sbml_dfs(
         upstream_compartment=TRRUST_COMPARTMENT_NUCLEOPLASM,
         downstream_compartment=TRRUST_COMPARTMENT_NUCLEOPLASM,
     )
-    gene_gene_identifier_edgelist[SMBL_REACTION_DICT_NAME] = [
+    gene_gene_identifier_edgelist[SBML_DFS.R_NAME] = [
         f"{x} {y} of {z}"
         for x, y, z in zip(
             gene_gene_identifier_edgelist[STRING_UPSTREAM_NAME],
@@ -171,15 +166,15 @@ def convert_trrust_to_sbml_dfs(
     # convert relationships to SBO terms
     interaction_edgelist = gene_gene_identifier_edgelist.replace(
         {"sign": MINI_SBO_FROM_NAME}
-    ).rename({"sign": SMBL_REACTION_SPEC_SBO_TERM}, axis=1)
+    ).rename({"sign": SBML_DFS.SBO_TERM}, axis=1)
 
     # format pubmed identifiers of interactions
-    interaction_edgelist[SMBL_REACTION_DICT_IDENTIFIERS] = [
+    interaction_edgelist[SBML_DFS.R_IDENTIFIERS] = [
         _format_pubmed_for_interactions(x) for x in interaction_edgelist["reference"]
     ]
 
     # directionality: by default, set r_isreversible to False for TRRUST data
-    interaction_edgelist[SMBL_REACTION_DICT_IS_REVERSIBLE] = False
+    interaction_edgelist[SBML_DFS.R_ISREVERSIBLE] = False
 
     # reduce to essential variables
     interaction_edgelist = interaction_edgelist[
@@ -188,10 +183,10 @@ def convert_trrust_to_sbml_dfs(
             STRING_DOWNSTREAM_NAME,
             STRING_UPSTREAM_COMPARTMENT,
             STRING_DOWNSTREAM_COMPARTMENT,
-            SMBL_REACTION_DICT_NAME,
-            SMBL_REACTION_SPEC_SBO_TERM,
-            SMBL_REACTION_DICT_IDENTIFIERS,
-            SMBL_REACTION_DICT_IS_REVERSIBLE,
+            SBML_DFS.R_NAME,
+            SBML_DFS.SBO_TERM,
+            SBML_DFS.R_IDENTIFIERS,
+            SBML_DFS.R_ISREVERSIBLE,
         ]
     ]
 
@@ -277,7 +272,7 @@ def _format_pubmed_for_interactions(pubmed_set):
         url = identifiers.create_uri_url(ontology="pubmed", identifier=p, strict=False)
         if url is not None:
             valid_url = identifiers.format_uri(
-                uri=url, biological_qualifier_type="BQB_IS_DESCRIBED_BY"
+                uri=url, biological_qualifier_type=BQB.IS_DESCRIBED_BY
             )
 
             ids.append(valid_url)

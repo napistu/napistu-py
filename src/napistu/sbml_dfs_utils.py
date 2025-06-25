@@ -559,6 +559,10 @@ def unnest_identifiers(id_table: pd.DataFrame, id_var: str) -> pd.DataFrame:
 
     N_invalid_ids = sum(id_table[id_var].isna())
     if N_invalid_ids != 0:
+
+        print("Rows with missing identifiers:")
+        print(id_table.loc[id_table[id_var].isna(), id_var])
+
         raise ValueError(
             f'{N_invalid_ids} entries in "id_table" were missing',
             "entries with no identifiers should still include an Identifiers object",

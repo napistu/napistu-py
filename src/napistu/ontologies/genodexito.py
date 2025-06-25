@@ -356,7 +356,7 @@ class Genodexito:
             )
             logger.debug(
                 f"{ids.shape[0] - expanded_ids.shape[0]} "
-                "ids are not included in expanded ids"
+                "ids are not included in expanded ids. These will be filled with empty Identifiers"
             )
         else:
             matched_expanded_ids = expanded_ids
@@ -364,6 +364,10 @@ class Genodexito:
         updated_ids = ids.drop(SBML_DFS.S_IDENTIFIERS, axis=1).join(
             pd.DataFrame(matched_expanded_ids)
         )
+        # fill missing attributes with empty Identifiers
+        updated_ids[SBML_DFS.S_IDENTIFIERS] = updated_ids[
+            SBML_DFS.S_IDENTIFIERS
+        ].fillna(identifiers.Identifiers([]))
 
         setattr(sbml_dfs, "species", updated_ids)
 

@@ -810,50 +810,15 @@ def drop_extra_cols(
     return df_out.loc[:, ordered_cols]
 
 
-def _merge_and_log_overwrites(
-    left_df: pd.DataFrame, right_df: pd.DataFrame, merge_context: str, **merge_kwargs
-) -> pd.DataFrame:
+def update_pathological_names(names: pd.Series, prefix: str) -> pd.Series:
     """
-    Merge two DataFrames and log any column overwrites.
+    Update pathological names in a pandas Series.
 
-    Parameters
-    ----------
-    left_df : pd.DataFrame
-        Left DataFrame for merge
-    right_df : pd.DataFrame
-        Right DataFrame for merge
-    merge_context : str
-        Description of the merge operation for logging
-    **merge_kwargs : dict
-        Additional keyword arguments passed to pd.merge
-
-    Returns
-    -------
-    pd.DataFrame
-        Merged DataFrame with overwritten columns removed
+    Add a prefix to the names if they are all numeric.
     """
-    # Track original columns
-    original_cols = left_df.columns.tolist()
-
-    # Ensure we're using the correct suffixes
-    merge_kwargs["suffixes"] = ("_old", "")
-
-    # Perform merge
-    merged_df = pd.merge(left_df, right_df, **merge_kwargs)
-
-    # Check for and log any overwritten columns
-    new_cols = merged_df.columns.tolist()
-    overwritten_cols = [col for col in original_cols if col + "_old" in new_cols]
-    if overwritten_cols:
-        logger.warning(
-            f"The following columns were overwritten during {merge_context} merge and their original values "
-            f"have been suffixed with '_old': {', '.join(overwritten_cols)}"
-        )
-        # Drop the old columns
-        cols_to_drop = [col + "_old" for col in overwritten_cols]
-        merged_df = merged_df.drop(columns=cols_to_drop)
-
-    return merged_df
+    if names.apply(lambda x: x.isdigit()).all():
+        names = names.apply(lambda x: f"{prefix}{x}")
+    return names
 
 
 def format_identifiers_as_edgelist(
@@ -1108,3 +1073,49 @@ def _add_nameness_score(df, name_var):
 
     df.loc[:, "nameness_score"] = df[name_var].apply(score_nameness)
     return df
+
+
+def _merge_and_log_overwrites(
+    left_df: pd.DataFrame, right_df: pd.DataFrame, merge_context: str, **merge_kwargs
+) -> pd.DataFrame:
+    """
+    Merge two DataFrames and log any column overwrites.
+
+    Parameters
+    ----------
+    left_df : pd.DataFrame
+        Left DataFrame for merge
+    right_df : pd.DataFrame
+        Right DataFrame for merge
+    merge_context : str
+        Description of the merge operation for logging
+    **merge_kwargs : dict
+        Additional keyword arguments passed to pd.merge
+
+    Returns
+    -------
+    pd.DataFrame
+        Merged DataFrame with overwritten columns removed
+    """
+    # Track original columns
+    original_cols = left_df.columns.tolist()
+
+    # Ensure we're using the correct suffixes
+    merge_kwargs["suffixes"] = ("_old", "")
+
+    # Perform merge
+    merged_df = pd.merge(left_df, right_df, **merge_kwargs)
+
+    # Check for and log any overwritten columns
+    new_cols = merged_df.columns.tolist()
+    overwritten_cols = [col for col in original_cols if col + "_old" in new_cols]
+    if overwritten_cols:
+        logger.warning(
+            f"The following columns were overwritten during {merge_context} merge and their original values "
+            f"have been suffixed with '_old': {', '.join(overwritten_cols)}"
+        )
+        # Drop the old columns
+        cols_to_drop = [col + "_old" for col in overwritten_cols]
+        merged_df = merged_df.drop(columns=cols_to_drop)
+
+    return merged_df

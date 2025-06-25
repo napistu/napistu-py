@@ -266,6 +266,7 @@ def adapt_pw_index(
     source: str | PWIndex,
     species: str | Iterable[str] | None,
     outdir: str | None = None,
+    update_index: bool = False,
 ) -> PWIndex:
     """Adapts a pw_index
 
@@ -288,8 +289,9 @@ def adapt_pw_index(
         raise ValueError("'source' needs to be str or PWIndex")
     pw_index.filter(species=species)
 
-    if outdir is not None:
+    if outdir is not None and update_index:
         with open_fs(outdir, create=True) as fs:
             with fs.open("pw_index.tsv", "w") as f:
                 pw_index.index.to_csv(f, sep="\t")
+
     return pw_index

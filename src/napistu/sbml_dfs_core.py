@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import logging
 import re
 from typing import Any
@@ -64,6 +65,8 @@ class SBML_dfs:
         Add a new reactions data table to the model with validation.
     add_species_data(label, data)
         Add a new species data table to the model with validation.
+    copy()
+        Return a deep copy of the SBML_dfs object.
     export_sbml_dfs(model_prefix, outdir, overwrite=False, dogmatic=True)
         Export the SBML_dfs model and its tables to files in a specified directory.
     get_characteristic_species_ids(dogmatic=True)
@@ -114,7 +117,6 @@ class SBML_dfs:
     Private/Hidden Methods (alphabetical, appear after public methods)
     -----------------------------------------------------------------
     _attempt_resolve(e)
-    _check_pk_fk_correspondence()
     _find_underspecified_reactions_by_scids(sc_ids)
     _get_unused_cspecies()
     _get_unused_species()
@@ -123,9 +125,12 @@ class SBML_dfs:
     _remove_species(s_ids)
     _remove_unused_cspecies()
     _remove_unused_species()
+    _validate_identifiers()
+    _validate_pk_fk_correspondence()
     _validate_r_ids(r_ids)
     _validate_reaction_species()
     _validate_reactions_data(reactions_data_table)
+    _validate_sources()
     _validate_species_data(species_data_table)
     _validate_table(table_name)
     """
@@ -254,6 +259,17 @@ class SBML_dfs:
                 f"{label} already exists in species_data. " "Drop it first."
             )
         self.species_data[label] = data
+
+    def copy(self):
+        """
+        Return a deep copy of the SBML_dfs object.
+
+        Returns
+        -------
+        SBML_dfs
+            A deep copy of the current SBML_dfs object.
+        """
+        return copy.deepcopy(self)
 
     def export_sbml_dfs(
         self,
@@ -440,7 +456,7 @@ class SBML_dfs:
             If id_type is invalid or identifiers are malformed
         """
         selected_table = self.get_table(id_type, {"id"})
-        schema = self.schema
+        schema = SBML_DFS_SCHEMA.SCHEMA
 
         identifiers_dict = dict()
         for sysid in selected_table.index:
@@ -458,6 +474,7 @@ class SBML_dfs:
         if not identifiers_dict:
             # Return empty DataFrame with expected columns if nothing found
             return pd.DataFrame(columns=[schema[id_type]["pk"], "entry"])
+
         identifiers_tbl = pd.concat(identifiers_dict)
 
         identifiers_tbl.index.names = [schema[id_type]["pk"], "entry"]
@@ -1382,7 +1399,7 @@ class SBML_dfs:
             self._validate_table(table)
 
         # check whether pks and fks agree
-        self._check_pk_fk_correspondence()
+        self._validate_pk_fk_correspondence()
 
         # check optional data tables:
         for k, v in self.species_data.items():
@@ -1399,6 +1416,10 @@ class SBML_dfs:
 
         # validate reaction_species sbo_terms and stoi
         self._validate_reaction_species()
+
+        # validate identifiers and sources
+        self._validate_identifiers()
+        self._validate_sources()
 
     def validate_and_resolve(self):
         """
@@ -1454,67 +1475,6 @@ class SBML_dfs:
                 "An error occurred which could not be automatically resolved"
             )
             raise e
-
-    def _check_pk_fk_correspondence(self):
-        """
-        Check whether primary keys and foreign keys agree for all tables in the schema.
-        Raises ValueError if any correspondence fails.
-        """
-
-        pk_df = pd.DataFrame(
-            [{"pk_table": k, "key": v["pk"]} for k, v in self.schema.items()]
-        )
-
-        fk_df = (
-            pd.DataFrame(
-                [
-                    {"fk_table": k, "fk": v["fk"]}
-                    for k, v in self.schema.items()
-                    if "fk" in v.keys()
-                ]
-            )
-            .set_index("fk_table")["fk"]
-            .apply(pd.Series)
-            .reset_index()
-            .melt(id_vars="fk_table")
-            .drop(["variable"], axis=1)
-            .rename(columns={"value": "key"})
-        )
-
-        pk_fk_correspondences = pk_df.merge(fk_df)
-
-        for i in range(0, pk_fk_correspondences.shape[0]):
-            pk_table_keys = set(
-                getattr(self, pk_fk_correspondences["pk_table"][i]).index.tolist()
-            )
-            if None in pk_table_keys:
-                raise ValueError(
-                    f"{pk_fk_correspondences['pk_table'][i]} had "
-                    "missing values in its index"
-                )
-
-            fk_table_keys = set(
-                getattr(self, pk_fk_correspondences["fk_table"][i]).loc[
-                    :, pk_fk_correspondences["key"][i]
-                ]
-            )
-            if None in fk_table_keys:
-                raise ValueError(
-                    f"{pk_fk_correspondences['fk_table'][i]} included "
-                    f"missing {pk_fk_correspondences['key'][i]} values"
-                )
-
-            # all foreign keys need to match a primary key
-            extra_fks = fk_table_keys.difference(pk_table_keys)
-            if len(extra_fks) != 0:
-                raise ValueError(
-                    f"{len(extra_fks)} distinct "
-                    f"{pk_fk_correspondences['key'][i]} values were"
-                    f" found in {pk_fk_correspondences['fk_table'][i]} "
-                    f"but missing from {pk_fk_correspondences['pk_table'][i]}."
-                    " All foreign keys must have a matching primary key.\n\n"
-                    f"Extra key are: {', '.join(extra_fks)}"
-                )
 
     def _find_underspecified_reactions_by_scids(
         self, sc_ids: Iterable[str]
@@ -1640,6 +1600,88 @@ class SBML_dfs:
         s_ids = self._get_unused_species()
         self._remove_species(s_ids)
 
+    def _validate_identifiers(self):
+        """
+        Validate identifiers in the model
+
+        Iterates through all tables and checks if the identifier columns are valid.
+
+        Raises:
+            ValueError: missing identifiers in the table
+        """
+
+        SCHEMA = SBML_DFS_SCHEMA.SCHEMA
+        for table in SBML_DFS_SCHEMA.SCHEMA.keys():
+            if "id" not in SCHEMA[table].keys():
+                continue
+            id_series = self.get_table(table)[SCHEMA[table]["id"]]
+            if id_series.isna().sum() > 0:
+                missing_ids = id_series[id_series.isna()].index
+                raise ValueError(
+                    f"{table} has {len(missing_ids)} missing ids: {missing_ids}"
+                )
+
+    def _validate_pk_fk_correspondence(self):
+        """
+        Check whether primary keys and foreign keys agree for all tables in the schema.
+        Raises ValueError if any correspondence fails.
+        """
+
+        pk_df = pd.DataFrame(
+            [{"pk_table": k, "key": v["pk"]} for k, v in self.schema.items()]
+        )
+
+        fk_df = (
+            pd.DataFrame(
+                [
+                    {"fk_table": k, "fk": v["fk"]}
+                    for k, v in self.schema.items()
+                    if "fk" in v.keys()
+                ]
+            )
+            .set_index("fk_table")["fk"]
+            .apply(pd.Series)
+            .reset_index()
+            .melt(id_vars="fk_table")
+            .drop(["variable"], axis=1)
+            .rename(columns={"value": "key"})
+        )
+
+        pk_fk_correspondences = pk_df.merge(fk_df)
+
+        for i in range(0, pk_fk_correspondences.shape[0]):
+            pk_table_keys = set(
+                getattr(self, pk_fk_correspondences["pk_table"][i]).index.tolist()
+            )
+            if None in pk_table_keys:
+                raise ValueError(
+                    f"{pk_fk_correspondences['pk_table'][i]} had "
+                    "missing values in its index"
+                )
+
+            fk_table_keys = set(
+                getattr(self, pk_fk_correspondences["fk_table"][i]).loc[
+                    :, pk_fk_correspondences["key"][i]
+                ]
+            )
+            if None in fk_table_keys:
+                raise ValueError(
+                    f"{pk_fk_correspondences['fk_table'][i]} included "
+                    f"missing {pk_fk_correspondences['key'][i]} values"
+                )
+
+            # all foreign keys need to match a primary key
+            extra_fks = fk_table_keys.difference(pk_table_keys)
+            if len(extra_fks) != 0:
+                raise ValueError(
+                    f"{len(extra_fks)} distinct "
+                    f"{pk_fk_correspondences['key'][i]} values were"
+                    f" found in {pk_fk_correspondences['fk_table'][i]} "
+                    f"but missing from {pk_fk_correspondences['pk_table'][i]}."
+                    " All foreign keys must have a matching primary key.\n\n"
+                    f"Extra key are: {', '.join(extra_fks)}"
+                )
+
     def _validate_r_ids(self, r_ids: Optional[Union[str, list[str]]]) -> list[str]:
 
         if isinstance(r_ids, str):
@@ -1693,6 +1735,27 @@ class SBML_dfs:
             ValueError: r_id not in reactions table
         """
         sbml_dfs_utils._validate_matching_data(reactions_data_table, self.reactions)
+
+    def _validate_sources(self):
+        """
+        Validate sources in the model
+
+        Iterates through all tables and checks if the source columns are valid.
+
+        Raises:
+            ValueError: missing sources in the table
+        """
+
+        SCHEMA = SBML_DFS_SCHEMA.SCHEMA
+        for table in SBML_DFS_SCHEMA.SCHEMA.keys():
+            if "source" not in SCHEMA[table].keys():
+                continue
+            source_series = self.get_table(table)[SCHEMA[table]["source"]]
+            if source_series.isna().sum() > 0:
+                missing_sources = source_series[source_series.isna()].index
+                raise ValueError(
+                    f"{table} has {len(missing_sources)} missing sources: {missing_sources}"
+                )
 
     def _validate_species_data(self, species_data_table: pd.DataFrame):
         """Validates species data attribute

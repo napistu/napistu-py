@@ -18,7 +18,7 @@ sbml_path = os.path.join(test_path, "test_data", "reactome_glucose_metabolism.sb
 if not os.path.isfile(sbml_path):
     raise ValueError(f"{sbml_path} not found")
 
-sbml_model = sbml.SBML(sbml_path).model
+sbml_model = sbml.SBML(sbml_path)
 sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
 sbml_dfs.validate()
 
