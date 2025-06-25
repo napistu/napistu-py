@@ -316,7 +316,7 @@ def create_neighborhood_prefix(network_type: str, order: int, top_n: int) -> str
 def load_neighborhoods_by_partition(
     selected_partition: int,
     neighborhood_outdir: str,
-    graph_type: str = GRAPH_WIRING_APPROACHES.REGULATORY,
+    wiring_approach: str = GRAPH_WIRING_APPROACHES.REGULATORY,
 ) -> None:
     """
     Load Neighborhoods By Partition
@@ -380,7 +380,7 @@ def load_neighborhoods_by_partition(
         model_prefix="curated",
         network_dir=consensus_outdir,
         directed=True,
-        graph_type=graph_type,
+        wiring_approach=wiring_approach,
     )
 
     all_neighborhoods_df, neighborhoods_dict = load_neighborhoods(

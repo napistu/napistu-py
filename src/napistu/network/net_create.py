@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from napistu import sbml_dfs_core
 from napistu import utils
-from napistu.network.napistu_graph_core import NapistuGraph
+from napistu.network.ng_core import NapistuGraph
 
 from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import MINI_SBO_TO_NAME
@@ -45,12 +45,12 @@ def create_napistu_graph(
     reaction_graph_attrs: Optional[dict] = None,
     directed: bool = True,
     edge_reversed: bool = False,
-    graph_type: str = GRAPH_WIRING_APPROACHES.REGULATORY,
+    wiring_approach: str = GRAPH_WIRING_APPROACHES.REGULATORY,
     verbose: bool = False,
     custom_transformations: Optional[dict] = None,
 ) -> NapistuGraph:
     """
-    Create a NapistuGraph network from a mechanistic network using one of a set of graph_types.
+    Create a NapistuGraph network from a mechanistic network using one of a set of wiring_approaches.
 
     Parameters
     ----------
@@ -62,7 +62,7 @@ def create_napistu_graph(
         Should a directed (True) or undirected graph be made (False). Default is True.
     edge_reversed : bool, optional
         Should the directions of edges be reversed or not (False). Default is False.
-    graph_type : str, optional
+    wiring_approach : str, optional
         Type of graph to create. Valid values are:
             - 'bipartite': substrates and modifiers point to the reaction they drive, this reaction points to products
             - 'regulatory': non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
@@ -81,9 +81,9 @@ def create_napistu_graph(
     if reaction_graph_attrs is None:
         reaction_graph_attrs = {}
 
-    if graph_type not in VALID_GRAPH_WIRING_APPROACHES:
+    if wiring_approach not in VALID_GRAPH_WIRING_APPROACHES:
         raise ValueError(
-            f"graph_type is not a valid value ({graph_type}), valid values are {','.join(VALID_GRAPH_WIRING_APPROACHES)}"
+            f"wiring_approach is not a valid value ({wiring_approach}), valid values are {','.join(VALID_GRAPH_WIRING_APPROACHES)}"
         )
 
     # fail fast if reaction_graph_attrs is not properly formatted
@@ -138,18 +138,18 @@ def create_napistu_graph(
         columns={"node_id": NAPISTU_GRAPH_NODES.NAME}
     )
 
-    logger.info(f"Formatting edges as a {graph_type} graph")
+    logger.info(f"Formatting edges as a {wiring_approach} graph")
 
-    if graph_type == GRAPH_WIRING_APPROACHES.BIPARTITE:
+    if wiring_approach == GRAPH_WIRING_APPROACHES.BIPARTITE:
         network_edges = _create_napistu_graph_bipartite(working_sbml_dfs)
-    elif graph_type in [
+    elif wiring_approach in [
         GRAPH_WIRING_APPROACHES.REGULATORY,
         GRAPH_WIRING_APPROACHES.SURROGATE,
     ]:
-        # pass graph_type so that an appropriate tiered schema can be used.
-        network_edges = _create_napistu_graph_tiered(working_sbml_dfs, graph_type)
+        # pass wiring_approach so that an appropriate tiered schema can be used.
+        network_edges = _create_napistu_graph_tiered(working_sbml_dfs, wiring_approach)
     else:
-        raise NotImplementedError("Invalid graph_type")
+        raise NotImplementedError("Invalid wiring_approach")
 
     logger.info("Adding reversibility and other meta-data from reactions_data")
     augmented_network_edges = _augment_network_edges(
@@ -224,7 +224,7 @@ def create_napistu_graph(
 
     # Always return NapistuGraph
     napistu_graph = NapistuGraph.from_igraph(
-        napistu_ig_graph, graph_type=graph_type, is_reversed=edge_reversed
+        napistu_ig_graph, wiring_approach=wiring_approach, is_reversed=edge_reversed
     )
 
     if edge_reversed:
@@ -239,7 +239,7 @@ def process_napistu_graph(
     reaction_graph_attrs: Optional[dict] = None,
     directed: bool = True,
     edge_reversed: bool = False,
-    graph_type: str = GRAPH_WIRING_APPROACHES.BIPARTITE,
+    wiring_approach: str = GRAPH_WIRING_APPROACHES.BIPARTITE,
     weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
     verbose: bool = False,
     custom_transformations: dict = None,
@@ -259,7 +259,7 @@ def process_napistu_graph(
         Should a directed (True) or undirected graph be made (False). Default is True.
     edge_reversed : bool, optional
         Should directions of edges be reversed (False). Default is False.
-    graph_type : str, optional
+    wiring_approach : str, optional
         Type of graph to create. Valid values are:
             - 'bipartite': substrates and modifiers point to the reaction they drive, this reaction points to products
             - 'regulatory': non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
@@ -290,7 +290,7 @@ def process_napistu_graph(
         reaction_graph_attrs,
         directed=directed,
         edge_reversed=edge_reversed,
-        graph_type=graph_type,
+        wiring_approach=wiring_approach,
         verbose=verbose,
         custom_transformations=custom_transformations,
     )
@@ -614,7 +614,7 @@ def _create_napistu_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.Data
 
 
 def _create_napistu_graph_tiered(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, graph_type: str
+    sbml_dfs: sbml_dfs_core.SBML_dfs, wiring_approach: str
 ) -> pd.DataFrame:
     """Turn an sbml_dfs model into a tiered graph which links upstream entities to downstream ones."""
 
@@ -630,8 +630,8 @@ def _create_napistu_graph_tiered(
         logger.warning(utils.style_df(invalid_counts, headers="keys"))  # type: ignore
         raise ValueError("Some reaction species have unusable SBO terms")
 
-    # load and validate the schema of graph_type
-    graph_hierarchy_df = _create_graph_hierarchy_df(graph_type)
+    # load and validate the schema of wiring_approach
+    graph_hierarchy_df = _create_graph_hierarchy_df(wiring_approach)
 
     # organize reaction species for defining connections
     sorted_reaction_species = sbml_dfs.reaction_species.set_index(
@@ -768,7 +768,7 @@ def _create_napistu_graph_tiered(
 
         raise ValueError(msg)
 
-    logger.info(f"Done preparing {graph_type} graph")
+    logger.info(f"Done preparing {wiring_approach} graph")
 
     return decorated_all_reaction_edges_df
 

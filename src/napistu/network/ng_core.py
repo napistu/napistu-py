@@ -36,7 +36,7 @@ class NapistuGraph(ig.Graph):
     ----------
     is_reversed : bool
         Whether the graph edges have been reversed from their original direction
-    graph_type : str or None
+    wiring_approach : str or None
         Type of graph (e.g., 'bipartite', 'regulatory', 'surrogate')
     weighting_strategy : str or None
         Strategy used for edge weighting (e.g., 'topology', 'mixed', 'calibrated')
@@ -101,7 +101,7 @@ class NapistuGraph(ig.Graph):
         # Initialize metadata
         self._metadata = {
             "is_reversed": False,
-            "graph_type": None,
+            "wiring_approach": None,
             "weighting_strategy": None,
             "creation_params": {},
         }
@@ -187,9 +187,9 @@ class NapistuGraph(ig.Graph):
         return self._metadata["is_reversed"]
 
     @property
-    def graph_type(self) -> Optional[str]:
+    def wiring_approach(self) -> Optional[str]:
         """Get the graph type (bipartite, regulatory, etc.)."""
-        return self._metadata["graph_type"]
+        return self._metadata["wiring_approach"]
 
     @property
     def weighting_strategy(self) -> Optional[str]:
@@ -252,7 +252,7 @@ class NapistuGraph(ig.Graph):
         base_str = super().__str__()
         metadata_str = (
             f"Reversed: {self.is_reversed}, "
-            f"Type: {self.graph_type}, "
+            f"Type: {self.wiring_approach}, "
             f"Weighting: {self.weighting_strategy}"
         )
         return f"{base_str}\nNapistuGraph metadata: {metadata_str}"

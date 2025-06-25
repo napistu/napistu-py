@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from fs.errors import ResourceNotFound
 
-from napistu.network.napistu_graph_core import NapistuGraph
+from napistu.network.ng_core import NapistuGraph
 from napistu.network.ig_utils import validate_edge_attributes
 from napistu.utils import load_json, save_json
 

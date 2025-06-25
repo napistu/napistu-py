@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import igraph as ig
 
-from napistu.network.napistu_graph_core import NapistuGraph
+from napistu.network.ng_core import NapistuGraph
 
 
 def personalized_pagerank_by_attribute(

@@ -23,7 +23,7 @@ sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
 sbml_dfs.validate()
 
 napistu_graph = net_create.process_napistu_graph(
-    sbml_dfs, graph_type="bipartite", directed=True, weighting_strategy="topology"
+    sbml_dfs, wiring_approach="bipartite", directed=True, weighting_strategy="topology"
 )
 
 # number of species to include when finding all x all paths

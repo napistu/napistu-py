@@ -20,6 +20,7 @@ from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import SBOTERM_NAMES
 from napistu.constants import SOURCE_SPEC
 from napistu.ingestion.constants import EXCHANGE_COMPARTMENT
+from napistu.network.constants import GRAPH_WIRING_APPROACHES
 
 logger = logging.getLogger(__name__)
 
@@ -463,7 +464,7 @@ def _identify_species_needing_transport_reactions(
 
     # create a directed graph
     directed_graph = net_create.create_napistu_graph(
-        sbml_dfs, directed=True, graph_type="bipartite"
+        sbml_dfs, directed=True, wiring_approach=GRAPH_WIRING_APPROACHES.BIPARTITE
     )
 
     # consider each s_id and protein separately

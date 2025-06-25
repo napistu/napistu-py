@@ -9,7 +9,7 @@ import pandas as pd
 
 from napistu import sbml_dfs_core
 from napistu import utils
-from napistu.network.napistu_graph_core import NapistuGraph
+from napistu.network.ng_core import NapistuGraph
 from napistu.network.ng_utils import get_minimal_sources_edges
 from napistu.constants import CPR_PATH_REQ_VARS
 from napistu.constants import MINI_SBO_NAME_TO_POLARITY

@@ -6,7 +6,7 @@ import pandas as pd
 
 from napistu import sbml_dfs_core
 from napistu.network import net_create
-from napistu.network.napistu_graph_core import NapistuGraph
+from napistu.network.ng_core import NapistuGraph
 
 from napistu.constants import SBML_DFS, ENTITIES_W_DATA
 from napistu.network.constants import NAPISTU_GRAPH, DEFAULT_WT_TRANS, WEIGHTING_SPEC
