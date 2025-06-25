@@ -22,7 +22,7 @@ from napistu.network.napistu_graph_core import NapistuGraph
 from napistu.constants import SBML_DFS
 from napistu.constants import SOURCE_SPEC
 from napistu.identifiers import _validate_assets_sbml_ids
-from napistu.network.constants import NAPISTU_GRAPH_TYPES
+from napistu.network.constants import GRAPH_WIRING_APPROACHES
 from napistu.network.constants import NAPISTU_GRAPH_DIRECTEDNESS
 
 logger = logging.getLogger(__name__)
@@ -139,8 +139,8 @@ def export_networks(
     outdir: str,
     directeds: list[bool] = [True, False],
     graph_types: list[str] = [
-        NAPISTU_GRAPH_TYPES.BIPARTITE,
-        NAPISTU_GRAPH_TYPES.REGULATORY,
+        GRAPH_WIRING_APPROACHES.BIPARTITE,
+        GRAPH_WIRING_APPROACHES.REGULATORY,
     ],
 ) -> None:
     """

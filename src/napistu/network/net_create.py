@@ -25,12 +25,11 @@ from napistu.network.constants import NAPISTU_GRAPH_NODES
 from napistu.network.constants import NAPISTU_GRAPH_EDGES
 from napistu.network.constants import NAPISTU_GRAPH_EDGE_DIRECTIONS
 from napistu.network.constants import NAPISTU_GRAPH_NODE_TYPES
-from napistu.network.constants import NAPISTU_GRAPH_TYPES
+from napistu.network.constants import GRAPH_WIRING_APPROACHES
 from napistu.network.constants import NAPISTU_WEIGHTING_STRATEGIES
 from napistu.network.constants import SBOTERM_NAMES
-from napistu.network.constants import REGULATORY_GRAPH_HIERARCHY
-from napistu.network.constants import SURROGATE_GRAPH_HIERARCHY
-from napistu.network.constants import VALID_NAPISTU_GRAPH_TYPES
+from napistu.network.constants import GRAPH_WIRING_LAYOUTS
+from napistu.network.constants import VALID_GRAPH_WIRING_APPROACHES
 from napistu.network.constants import VALID_WEIGHTING_STRATEGIES
 from napistu.network.constants import DEFAULT_WT_TRANS
 from napistu.network.constants import DEFINED_WEIGHT_TRANSFORMATION
@@ -46,7 +45,7 @@ def create_napistu_graph(
     reaction_graph_attrs: Optional[dict] = None,
     directed: bool = True,
     edge_reversed: bool = False,
-    graph_type: str = NAPISTU_GRAPH_TYPES.REGULATORY,
+    graph_type: str = GRAPH_WIRING_APPROACHES.REGULATORY,
     verbose: bool = False,
     custom_transformations: Optional[dict] = None,
 ) -> NapistuGraph:
@@ -82,9 +81,9 @@ def create_napistu_graph(
     if reaction_graph_attrs is None:
         reaction_graph_attrs = {}
 
-    if graph_type not in VALID_NAPISTU_GRAPH_TYPES:
+    if graph_type not in VALID_GRAPH_WIRING_APPROACHES:
         raise ValueError(
-            f"graph_type is not a valid value ({graph_type}), valid values are {','.join(VALID_NAPISTU_GRAPH_TYPES)}"
+            f"graph_type is not a valid value ({graph_type}), valid values are {','.join(VALID_GRAPH_WIRING_APPROACHES)}"
         )
 
     # fail fast if reaction_graph_attrs is not properly formatted
@@ -141,9 +140,12 @@ def create_napistu_graph(
 
     logger.info(f"Formatting edges as a {graph_type} graph")
 
-    if graph_type == NAPISTU_GRAPH_TYPES.BIPARTITE:
+    if graph_type == GRAPH_WIRING_APPROACHES.BIPARTITE:
         network_edges = _create_napistu_graph_bipartite(working_sbml_dfs)
-    elif graph_type in [NAPISTU_GRAPH_TYPES.REGULATORY, NAPISTU_GRAPH_TYPES.SURROGATE]:
+    elif graph_type in [
+        GRAPH_WIRING_APPROACHES.REGULATORY,
+        GRAPH_WIRING_APPROACHES.SURROGATE,
+    ]:
         # pass graph_type so that an appropriate tiered schema can be used.
         network_edges = _create_napistu_graph_tiered(working_sbml_dfs, graph_type)
     else:
@@ -237,7 +239,7 @@ def process_napistu_graph(
     reaction_graph_attrs: Optional[dict] = None,
     directed: bool = True,
     edge_reversed: bool = False,
-    graph_type: str = NAPISTU_GRAPH_TYPES.BIPARTITE,
+    graph_type: str = GRAPH_WIRING_APPROACHES.BIPARTITE,
     weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
     verbose: bool = False,
     custom_transformations: dict = None,
@@ -319,7 +321,7 @@ def pluck_entity_data(
     Pluck Entity Attributes
 
     Pull species or reaction attributes out of an sbml_dfs based on a set of
-      tables and variables to look for.
+    tables and variables to look for.
 
     Parameters:
     sbml_dfs: sbml_dfs_core.SBML_dfs
@@ -876,12 +878,12 @@ def _format_tier_combo(
     Format Tier Combo
 
     Create a set of edges crossing two tiers of a tiered graph. This will involve an
-      all x all combination of entries. Tiers form an ordering along the molecular entities
-      in a reaction plus a tier for the reaction itself. Attributes such as stoichiometry
-      and sbo_term will be passed from the tier which is furthest from the reaction tier
-      to ensure that each tier of molecular data applies its attributes to a single set of
-      edges while the "reaction" tier does not. Reaction entities have neither a
-      stoichiometery or sbo_term annotation.
+    all x all combination of entries. Tiers form an ordering along the molecular entities
+    in a reaction plus a tier for the reaction itself. Attributes such as stoichiometry
+    and sbo_term will be passed from the tier which is furthest from the reaction tier
+    to ensure that each tier of molecular data applies its attributes to a single set of
+    edges while the "reaction" tier does not. Reaction entities have neither a
+    stoichiometery or sbo_term annotation.
 
     Args:
         upstream_tier (pd.DataFrame): A table containing upstream entities in a reaction,
@@ -937,10 +939,10 @@ def _create_graph_hierarchy_df(graph_type: str) -> pd.DataFrame:
 
     """
 
-    if graph_type == NAPISTU_GRAPH_TYPES.REGULATORY:
-        sbo_names_hierarchy = REGULATORY_GRAPH_HIERARCHY
-    elif graph_type == NAPISTU_GRAPH_TYPES.SURROGATE:
-        sbo_names_hierarchy = SURROGATE_GRAPH_HIERARCHY
+    if graph_type == GRAPH_WIRING_APPROACHES.REGULATORY:
+        sbo_names_hierarchy = GRAPH_WIRING_LAYOUTS[GRAPH_WIRING_APPROACHES.REGULATORY]
+    elif graph_type == GRAPH_WIRING_APPROACHES.SURROGATE:
+        sbo_names_hierarchy = GRAPH_WIRING_LAYOUTS[GRAPH_WIRING_APPROACHES.SURROGATE]
     else:
         raise NotImplementedError(f"{graph_type} is not a valid graph_type")
 
