@@ -12,9 +12,12 @@ from napistu.network import net_create
 from napistu.network import ng_utils
 from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import SBML_DFS
+from napistu.constants import VALID_SBO_TERM_NAMES
 from napistu.network.constants import DEFAULT_WT_TRANS
 from napistu.network.constants import WEIGHTING_SPEC
-
+from napistu.network.constants import VALID_GRAPH_WIRING_APPROACHES
+from napistu.network.constants import NAPISTU_GRAPH_NODE_TYPES
+from napistu.network.constants import NAPISTU_GRAPH_EDGES
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")
@@ -457,3 +460,19 @@ def test_pluck_entity_data_empty_species_dict(sbml_dfs):
     graph_attrs = {SBML_DFS.SPECIES: {}}
     result = net_create.pluck_entity_data(sbml_dfs, graph_attrs, SBML_DFS.SPECIES)
     assert result is None
+
+
+def test_graph_hierarchy_layouts():
+    REQUIRED_NAMES = VALID_SBO_TERM_NAMES + [NAPISTU_GRAPH_NODE_TYPES.REACTION]
+    for value in VALID_GRAPH_WIRING_APPROACHES:
+        layout_df = net_create._create_graph_hierarchy_df(value)
+        # all terms should be represented
+        missing = set(REQUIRED_NAMES).difference(
+            set(layout_df[NAPISTU_GRAPH_EDGES.SBO_NAME])
+        )
+        assert not missing, f"Missing SBO names in {value}: {missing}"
+        # all terms should be unique
+        duplicated = layout_df[layout_df[NAPISTU_GRAPH_EDGES.SBO_NAME].duplicated()]
+        assert (
+            duplicated.empty
+        ), f"Duplicated SBO names in {value}: {duplicated[NAPISTU_GRAPH_EDGES.SBO_NAME].tolist()}"

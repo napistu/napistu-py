@@ -17,7 +17,7 @@ import pandas as pd
 from napistu import sbml_dfs_core
 from napistu import source
 from napistu.network import net_create
-from napistu.network.napistu_graph_core import NapistuGraph
+from napistu.network.ng_core import NapistuGraph
 
 from napistu.constants import SBML_DFS
 from napistu.constants import SOURCE_SPEC

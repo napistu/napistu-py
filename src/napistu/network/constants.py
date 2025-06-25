@@ -61,24 +61,25 @@ GRAPH_WIRING_LAYOUTS = {
     # in a bipartite networks molecules are connected to reactions but not other molecules
     GRAPH_WIRING_APPROACHES.BIPARTITE: [
         [
-            SBOTERM_NAMES.REACTANT,
-            SBOTERM_NAMES.MODIFIER,
-            SBOTERM_NAMES.STIMULATOR,
+            SBOTERM_NAMES.CATALYST,
             SBOTERM_NAMES.INHIBITOR,
             SBOTERM_NAMES.INTERACTOR,
+            SBOTERM_NAMES.MODIFIER,
+            SBOTERM_NAMES.REACTANT,
+            SBOTERM_NAMES.STIMULATOR,
         ],
         [NAPISTU_GRAPH_NODE_TYPES.REACTION],
-        [SBOTERM_NAMES.PRODUCT, SBOTERM_NAMES.MODIFIED],
+        [SBOTERM_NAMES.MODIFIED, SBOTERM_NAMES.PRODUCT],
     ],
     # the regulatory graph defines a hierarchy of upstream and downstream
     # entities in a reaction
     # modifier/stimulator/inhibitor -> catalyst -> reactant -> reaction -> product
     GRAPH_WIRING_APPROACHES.REGULATORY: [
-        [SBOTERM_NAMES.MODIFIER, SBOTERM_NAMES.STIMULATOR, SBOTERM_NAMES.INHIBITOR],
+        [SBOTERM_NAMES.INHIBITOR, SBOTERM_NAMES.MODIFIER, SBOTERM_NAMES.STIMULATOR],
         [SBOTERM_NAMES.CATALYST],
-        [SBOTERM_NAMES.REACTANT, SBOTERM_NAMES.INTERACTOR],
+        [SBOTERM_NAMES.INTERACTOR, SBOTERM_NAMES.REACTANT],
         [NAPISTU_GRAPH_NODE_TYPES.REACTION],
-        [SBOTERM_NAMES.PRODUCT, SBOTERM_NAMES.MODIFIED],
+        [SBOTERM_NAMES.MODIFIED, SBOTERM_NAMES.PRODUCT],
     ],
     # an alternative layout to regulatory where enyzmes are downstream of substrates.
     # this doesn't make much sense from a regulatory perspective because
@@ -86,11 +87,11 @@ GRAPH_WIRING_LAYOUTS = {
     # expect if catalysts are a surrogate for reactions as is the case for metabolic
     # network layouts
     GRAPH_WIRING_APPROACHES.SURROGATE: [
-        [SBOTERM_NAMES.MODIFIER, SBOTERM_NAMES.STIMULATOR, SBOTERM_NAMES.INHIBITOR],
-        [SBOTERM_NAMES.REACTANT, SBOTERM_NAMES.INTERACTOR],
+        [SBOTERM_NAMES.INHIBITOR, SBOTERM_NAMES.MODIFIER, SBOTERM_NAMES.STIMULATOR],
+        [SBOTERM_NAMES.INTERACTOR, SBOTERM_NAMES.REACTANT],
         [SBOTERM_NAMES.CATALYST],
         [NAPISTU_GRAPH_NODE_TYPES.REACTION],
-        [SBOTERM_NAMES.PRODUCT, SBOTERM_NAMES.MODIFIED],
+        [SBOTERM_NAMES.MODIFIED, SBOTERM_NAMES.PRODUCT],
     ],
 }
 
