@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from napistu import sbml_dfs_utils
 from napistu.constants import (
@@ -10,6 +11,10 @@ from napistu.constants import (
     SBML_DFS,
     IDENTIFIERS,
     SBOTERM_NAMES,
+    VALID_SBO_TERMS,
+    VALID_SBO_TERM_NAMES,
+    MINI_SBO_FROM_NAME,
+    MINI_SBO_TO_NAME,
 )
 
 
@@ -219,3 +224,43 @@ def test_stubbed_compartment():
         "url": "https://www.ebi.ac.uk/QuickGO/term/GO:0005575",
         "bqb": "BQB_IS",
     }
+
+
+def test_validate_sbo_values_success():
+    # Should not raise
+    sbml_dfs_utils._validate_sbo_values(pd.Series(VALID_SBO_TERMS), validate="terms")
+    sbml_dfs_utils._validate_sbo_values(
+        pd.Series(VALID_SBO_TERM_NAMES), validate="names"
+    )
+
+
+def test_validate_sbo_values_invalid_type():
+    with pytest.raises(ValueError, match="Invalid validation type"):
+        sbml_dfs_utils._validate_sbo_values(
+            pd.Series(VALID_SBO_TERMS), validate="badtype"
+        )
+
+
+def test_validate_sbo_values_invalid_value():
+    # Add an invalid term
+    s = pd.Series(VALID_SBO_TERMS + ["SBO:9999999"])
+    with pytest.raises(ValueError, match="unusable SBO terms"):
+        sbml_dfs_utils._validate_sbo_values(s, validate="terms")
+    # Add an invalid name
+    s = pd.Series(VALID_SBO_TERM_NAMES + ["not_a_name"])
+    with pytest.raises(ValueError, match="unusable SBO terms"):
+        sbml_dfs_utils._validate_sbo_values(s, validate="names")
+
+
+def test_sbo_constants_internal_consistency():
+    # Every term should have a name and vice versa
+    # MINI_SBO_FROM_NAME: name -> term, MINI_SBO_TO_NAME: term -> name
+    terms_from_names = set(MINI_SBO_FROM_NAME.values())
+    names_from_terms = set(MINI_SBO_TO_NAME.values())
+    assert terms_from_names == set(VALID_SBO_TERMS)
+    assert names_from_terms == set(VALID_SBO_TERM_NAMES)
+    # Bijective mapping
+    for name, term in MINI_SBO_FROM_NAME.items():
+        assert MINI_SBO_TO_NAME[term] == name
+    for term, name in MINI_SBO_TO_NAME.items():
+        assert MINI_SBO_FROM_NAME[name] == term

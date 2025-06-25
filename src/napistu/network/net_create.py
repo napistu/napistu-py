@@ -924,14 +924,14 @@ def _format_tier_combo(
     return formatted_tier_combo
 
 
-def _create_graph_hierarchy_df(graph_type: str) -> pd.DataFrame:
+def _create_graph_hierarchy_df(wiring_approach: str) -> pd.DataFrame:
     """
     Create Graph Hierarchy DataFrame
 
     Format a graph hierarchy list of lists and a pd.DataFrame
 
     Args:
-        graph_type (str):
+        wiring_approach (str):
             The type of tiered graph to work with. Each type has its own specification in constants.py.
 
     Returns:
@@ -939,12 +939,12 @@ def _create_graph_hierarchy_df(graph_type: str) -> pd.DataFrame:
 
     """
 
-    if graph_type == GRAPH_WIRING_APPROACHES.REGULATORY:
-        sbo_names_hierarchy = GRAPH_WIRING_LAYOUTS[GRAPH_WIRING_APPROACHES.REGULATORY]
-    elif graph_type == GRAPH_WIRING_APPROACHES.SURROGATE:
-        sbo_names_hierarchy = GRAPH_WIRING_LAYOUTS[GRAPH_WIRING_APPROACHES.SURROGATE]
-    else:
-        raise NotImplementedError(f"{graph_type} is not a valid graph_type")
+    if wiring_approach not in VALID_GRAPH_WIRING_APPROACHES:
+        raise ValueError(
+            f"{wiring_approach} is not a valid wiring approach. Valid approaches are {', '.join(VALID_GRAPH_WIRING_APPROACHES)}"
+        )
+
+    sbo_names_hierarchy = GRAPH_WIRING_LAYOUTS[wiring_approach]
 
     # format as a DF
     graph_hierarchy_df = pd.concat(

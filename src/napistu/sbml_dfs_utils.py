@@ -27,6 +27,8 @@ from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import MINI_SBO_TO_NAME
 from napistu.constants import SBO_NAME_TO_ROLE
 from napistu.constants import ONTOLOGIES
+from napistu.constants import VALID_SBO_TERM_NAMES
+from napistu.constants import VALID_SBO_TERMS
 from napistu.ingestion.constants import VALID_COMPARTMENTS
 from napistu.ingestion.constants import COMPARTMENTS_GO_TERMS
 from napistu.ingestion.constants import GENERIC_COMPARTMENT
@@ -1281,3 +1283,47 @@ def _validate_matching_data(data_table: pd.DataFrame, ref_table: pd.DataFrame):
             f"The data table was type {type(data_table).__name__}"
             " but must be a pd.DataFrame"
         )
+
+
+def _validate_sbo_values(sbo_series: pd.Series, validate: str = "names") -> None:
+    """
+    Validate SBO terms or names
+
+    Parameters
+    ----------
+    sbo_series : pd.Series
+        The SBO terms or names to validate.
+    validate : str, optional
+        Whether the values are SBO terms ("terms") or names ("names", default).
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    ValueError
+        If the validation type is invalid.
+    TypeError
+        If the invalid_counts is not a pandas DataFrame.
+    ValueError
+        If some reaction species have unusable SBO terms.
+    """
+
+    if validate == "terms":
+        valid_values = VALID_SBO_TERMS
+    elif validate == "names":
+        valid_values = VALID_SBO_TERM_NAMES
+    else:
+        raise ValueError(f"Invalid validation type: {validate}")
+
+    invalid_sbo_terms = sbo_series[~sbo_series.isin(valid_values)]
+
+    if invalid_sbo_terms.shape[0] != 0:
+        invalid_counts = invalid_sbo_terms.value_counts(sbo_series.name).to_frame("N")
+        if not isinstance(invalid_counts, pd.DataFrame):
+            raise TypeError("invalid_counts must be a pandas DataFrame")
+        print(invalid_counts)
+        raise ValueError("Some reaction species have unusable SBO terms")
+
+    return None
