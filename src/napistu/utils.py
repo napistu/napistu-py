@@ -13,10 +13,7 @@ import zipfile
 from contextlib import closing
 from itertools import starmap
 from textwrap import fill
-from typing import Any
-from typing import Union
-from typing import Optional
-from typing import List
+from typing import Any, Dict, Optional, List, Union
 from urllib.parse import urlparse
 import requests
 from requests.adapters import HTTPAdapter
@@ -1089,6 +1086,28 @@ def safe_fill(x: str, fill_width: int = 15) -> str:
         return ""
     else:
         return fill(x, fill_width)
+
+
+def match_regex_dict(s: str, regex_dict: Dict[str, any]) -> Optional[any]:
+    """
+    Apply each regex in regex_dict to the string s. If a regex matches, return its value.
+    If no regex matches, return None.
+
+    Parameters
+    ----------
+    s : str
+        The string to test.
+    regex_dict : dict
+        Dictionary where keys are regex patterns (str), and values are the values to return.
+
+    Returns
+    -------
+    The value associated with the first matching regex, or None if no match.
+    """
+    for pattern, value in regex_dict.items():
+        if re.search(pattern, s):
+            return value
+    return None
 
 
 def _add_nameness_score_wrapper(df, name_var, table_schema):
