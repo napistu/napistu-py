@@ -195,14 +195,13 @@ def test_igraph_loading():
 
 
 def test_reverse_network_edges(reaction_species_examples):
-    r_id, reaction_species_examples_dict = reaction_species_examples
 
     graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df("regulatory")
 
     rxn_edges = net_create_utils.format_tiered_reaction_species(
-        r_id,
-        reaction_species_examples_dict["all_entities"],
-        graph_hierarchy_df,
+        rxn_species=reaction_species_examples["all_entities"],
+        r_id="foo",
+        graph_hierarchy_df=graph_hierarchy_df,
         drop_reactions_when=DROP_REACTIONS_WHEN.SAME_TIER,
     )
     augmented_network_edges = rxn_edges.assign(r_isreversible=True)

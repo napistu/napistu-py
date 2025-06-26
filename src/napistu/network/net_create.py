@@ -695,36 +695,32 @@ def _create_napistu_graph_tiered(
     graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df(wiring_approach)
 
     # organize reaction species for defining connections
-    sorted_reaction_species = sbml_dfs.reaction_species.set_index(
-        [SBML_DFS.R_ID, SBML_DFS.SBO_TERM]
-    ).sort_index()
-
     logger.info(
-        f"Formatting {sorted_reaction_species.shape[0]} reactions species as "
+        f"Formatting {sbml_dfs.reaction_species.shape[0]} reactions species as "
         "tiered edges."
     )
 
-    # infer tiered edges in each reaction
+    rspecies_fields = [
+        SBML_DFS.R_ID,
+        SBML_DFS.SC_ID,
+        SBML_DFS.SBO_TERM,
+        SBML_DFS.STOICHIOMETRY,
+    ]
+    reaction_groups = sbml_dfs.reaction_species[rspecies_fields].groupby(SBML_DFS.R_ID)
+
     all_reaction_edges = [
         net_create_utils.format_tiered_reaction_species(
-            r, sorted_reaction_species, graph_hierarchy_df, drop_reactions_when
+            rxn_group.drop(columns=[SBML_DFS.R_ID])
+            .set_index(SBML_DFS.SBO_TERM)
+            .sort_index(),  # Set index here
+            r_id,
+            graph_hierarchy_df,
+            drop_reactions_when,
         )
-        for r in sorted_reaction_species.index.get_level_values(SBML_DFS.R_ID).unique()
+        for r_id, rxn_group in reaction_groups
     ]
+
     all_reaction_edges_df = pd.concat(all_reaction_edges).reset_index(drop=True)
-
-    # test for reactions missing substrates
-    r_id_list = sorted_reaction_species.index.get_level_values(0).unique()
-    r_id_reactant_only = [
-        x for x in r_id_list if len(sorted_reaction_species.loc[x]) == 1
-    ]
-
-    if len(r_id_reactant_only) > 0:
-        logger.warning(f"{len(r_id_reactant_only)} reactions are missing substrates")
-        all_reaction_edges_df_pre = all_reaction_edges_df.copy()
-        all_reaction_edges_df = all_reaction_edges_df_pre[
-            ~all_reaction_edges_df_pre[SBML_DFS.R_ID].isin(r_id_reactant_only)
-        ]
 
     logger.info(
         "Adding additional attributes to edges, e.g., # of children and parents."

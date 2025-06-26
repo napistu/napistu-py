@@ -144,12 +144,10 @@ def reaction_species_examples():
     """
     Pytest fixture providing a dictionary of example reaction species DataFrames for various test cases.
     """
-    r_id = "foo"
 
     d = dict()
     d["valid_interactor"] = pd.DataFrame(
         {
-            SBML_DFS.R_ID: [r_id] * 2,
             SBML_DFS.SBO_TERM: [
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR],
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR],
@@ -157,11 +155,10 @@ def reaction_species_examples():
             SBML_DFS.SC_ID: ["sc1", "sc2"],
             SBML_DFS.STOICHIOMETRY: [0, 0],
         }
-    ).set_index([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
+    ).set_index(SBML_DFS.SBO_TERM)
 
     d["invalid_interactor"] = pd.DataFrame(
         {
-            SBML_DFS.R_ID: [r_id] * 2,
             SBML_DFS.SBO_TERM: [
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR],
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
@@ -169,11 +166,10 @@ def reaction_species_examples():
             SBML_DFS.SC_ID: ["sc1", "sc2"],
             SBML_DFS.STOICHIOMETRY: [0, 0],
         }
-    ).set_index([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
+    ).set_index(SBML_DFS.SBO_TERM)
 
     d["sub_and_prod"] = pd.DataFrame(
         {
-            SBML_DFS.R_ID: [r_id] * 2,
             SBML_DFS.SBO_TERM: [
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT],
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
@@ -181,11 +177,10 @@ def reaction_species_examples():
             SBML_DFS.SC_ID: ["sub", "prod"],
             SBML_DFS.STOICHIOMETRY: [-1, 1],
         }
-    ).set_index(["r_id", "sbo_term"])
+    ).set_index(SBML_DFS.SBO_TERM)
 
     d["stimulator"] = pd.DataFrame(
         {
-            SBML_DFS.R_ID: [r_id] * 3,
             SBML_DFS.SBO_TERM: [
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT],
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
@@ -194,11 +189,10 @@ def reaction_species_examples():
             SBML_DFS.SC_ID: ["sub", "prod", "stim"],
             SBML_DFS.STOICHIOMETRY: [-1, 1, 0],
         }
-    ).set_index([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
+    ).set_index(SBML_DFS.SBO_TERM)
 
     d["all_entities"] = pd.DataFrame(
         {
-            SBML_DFS.R_ID: [r_id] * 4,
             SBML_DFS.SBO_TERM: [
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT],
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
@@ -208,11 +202,10 @@ def reaction_species_examples():
             SBML_DFS.SC_ID: ["sub", "prod", "stim", "cat"],
             SBML_DFS.STOICHIOMETRY: [-1, 1, 0, 0],
         }
-    ).set_index([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
+    ).set_index(SBML_DFS.SBO_TERM)
 
     d["no_substrate"] = pd.DataFrame(
         {
-            SBML_DFS.R_ID: [r_id] * 5,
             SBML_DFS.SBO_TERM: [
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.STIMULATOR],
@@ -223,20 +216,18 @@ def reaction_species_examples():
             SBML_DFS.SC_ID: ["prod", "stim1", "stim2", "inh", "cat"],
             SBML_DFS.STOICHIOMETRY: [1, 0, 0, 0, 0],
         }
-    ).set_index([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
+    ).set_index(SBML_DFS.SBO_TERM)
 
     d["single_species"] = pd.DataFrame(
         {
-            SBML_DFS.R_ID: [r_id],
             SBML_DFS.SBO_TERM: [MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT]],
             SBML_DFS.SC_ID: ["lone_prod"],
             SBML_DFS.STOICHIOMETRY: [1],
         }
-    ).set_index([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
+    ).set_index(SBML_DFS.SBO_TERM)
 
     d["activator_and_inhibitor_only"] = pd.DataFrame(
         {
-            SBML_DFS.R_ID: [r_id, r_id],
             SBML_DFS.SBO_TERM: [
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.STIMULATOR],  # activator
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.INHIBITOR],  # inhibitor
@@ -244,9 +235,9 @@ def reaction_species_examples():
             SBML_DFS.SC_ID: ["act", "inh"],
             SBML_DFS.STOICHIOMETRY: [0, 0],
         }
-    ).set_index([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
+    ).set_index(SBML_DFS.SBO_TERM)
 
-    return r_id, d
+    return d
 
 
 # Define custom markers for platforms

@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 
 def format_tiered_reaction_species(
+    rxn_species: pd.DataFrame,
     r_id: str,
-    sorted_reaction_species: pd.DataFrame,
     graph_hierarchy_df: pd.DataFrame,
     drop_reactions_when: str = DROP_REACTIONS_WHEN.SAME_TIER,
 ) -> pd.DataFrame:
@@ -27,10 +27,10 @@ def format_tiered_reaction_species(
 
     Parameters
     ----------
+    rxn_species : pd.DataFrame
+        The reaction's participants indexed by SBO terms
     r_id : str
-        The ID of the reaction.
-    sorted_reaction_species : pd.DataFrame
-        The reaction species.
+        The ID of the reaction. Should be indexed by `sbo_term` and have columns
     graph_hierarchy_df : pd.DataFrame
         The graph hierarchy.
     drop_reactions_when : str, optional
@@ -42,12 +42,11 @@ def format_tiered_reaction_species(
         The edges of the Napistu graph for a single reaction.
     """
 
-    rxn_species = sorted_reaction_species.loc[r_id]
     _validate_sbo_indexed_rsc_stoi(rxn_species)
 
-    if sorted_reaction_species.shape[0] <= 1:
+    if rxn_species.shape[0] <= 1:
         logger.warning(
-            f"Reaction {r_id} has {sorted_reaction_species.shape[0]} species. "
+            f"Reaction {r_id} has {rxn_species.shape[0]} species. "
             "This reaction will be dropped."
         )
         return pd.DataFrame()
