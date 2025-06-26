@@ -19,12 +19,9 @@ from napistu.network.ng_core import NapistuGraph
 
 from napistu.constants import (
     MINI_SBO_FROM_NAME,
-    MINI_SBO_TO_NAME,
     SBO_MODIFIER_NAMES,
     SBOTERM_NAMES,
-    SCHEMA_DEFS,
     SBML_DFS,
-    SBML_DFS_SCHEMA,
     ENTITIES_W_DATA,
 )
 
@@ -360,72 +357,15 @@ def create_napistu_graph_wiring(
         If invalid SBO terms are present or required attributes are missing.
     """
 
-    # check whether all expect SBO terms are present
-    invalid_sbo_terms = sbml_dfs.reaction_species[
-        ~sbml_dfs.reaction_species[SBML_DFS.SBO_TERM].isin(MINI_SBO_TO_NAME.keys())
-    ]
-
-    if invalid_sbo_terms.shape[0] != 0:
-        invalid_counts = invalid_sbo_terms.value_counts(SBML_DFS.SBO_TERM).to_frame("N")
-        if not isinstance(invalid_counts, pd.DataFrame):
-            raise TypeError("invalid_counts must be a pandas DataFrame")
-        logger.warning(utils.style_df(invalid_counts, headers="keys"))  # type: ignore
-        raise ValueError("Some reaction species have unusable SBO terms")
-
-    # load and validate the schema of wiring_approach
-    graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df(wiring_approach)
-
     # organize reaction species for defining connections
     logger.info(
         f"Formatting {sbml_dfs.reaction_species.shape[0]} reactions species as "
         "tiered edges."
     )
 
-    # handle interactors since they can easily be processed en-masse
-    interactor_pairs = net_create_utils._find_sbo_duos(
-        sbml_dfs.reaction_species, MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
+    all_reaction_edges_df = net_create_utils.wire_reaction_species(
+        sbml_dfs.reaction_species, wiring_approach, drop_reactions_when
     )
-
-    if len(interactor_pairs) > 0:
-        logger.info("Processing {len(interactor_pairs)/2} interaction pairs")
-        interactor_duos = sbml_dfs.reaction_species.loc[
-            sbml_dfs.reaction_species[SBML_DFS.R_ID].isin(interactor_pairs)
-        ]
-
-        interactor_edges = net_create_utils._interactor_duos_to_wide(interactor_duos)
-    else:
-        interactor_edges = pd.DataFrame()
-
-    non_interactors_rspecies = sbml_dfs.reaction_species.loc[
-        ~sbml_dfs.reaction_species[SBML_DFS.R_ID].isin(interactor_pairs)
-    ]
-
-    if non_interactors_rspecies.shape[0] > 0:
-        # filter to just the entries which will be processed with the tiered algorithm
-        rspecies_fields = SBML_DFS_SCHEMA.SCHEMA[SBML_DFS.REACTION_SPECIES][
-            SCHEMA_DEFS.VARS
-        ]
-        reaction_groups = sbml_dfs.reaction_species[rspecies_fields].groupby(
-            SBML_DFS.R_ID
-        )
-
-        all_tiered_edges = [
-            net_create_utils.format_tiered_reaction_species(
-                rxn_group.drop(columns=[SBML_DFS.R_ID])
-                .set_index(SBML_DFS.SBO_TERM)
-                .sort_index(),  # Set index here
-                r_id,
-                graph_hierarchy_df,
-                drop_reactions_when,
-            )
-            for r_id, rxn_group in reaction_groups
-        ]
-
-        all_tiered_edges_df = pd.concat(all_tiered_edges).reset_index(drop=True)
-    else:
-        all_tiered_edges_df = pd.DataFrame()
-
-    all_reaction_edges_df = pd.concat([interactor_edges, all_tiered_edges_df])
 
     logger.info(
         "Adding additional attributes to edges, e.g., # of children and parents."

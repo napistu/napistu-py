@@ -8,6 +8,8 @@ from napistu.constants import (
     MINI_SBO_TO_NAME,
     SBML_DFS,
     SBOTERM_NAMES,
+    SBML_DFS_SCHEMA,
+    SCHEMA_DEFS,
 )
 from napistu.network.constants import (
     NAPISTU_GRAPH_EDGES,
@@ -19,6 +21,171 @@ from napistu.network.constants import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def wire_reaction_species(
+    reaction_species: pd.DataFrame, wiring_approach: str, drop_reactions_when: str
+) -> pd.DataFrame:
+    """
+    Convert reaction species data into network edges using specified wiring approach.
+
+    This function processes reaction species data to create network edges that represent
+    the relationships between molecular entities in a biological network. It handles
+    both interactor pairs (processed en-masse) and other reaction species (processed
+    using tiered algorithms based on the wiring approach).
+
+    Parameters
+    ----------
+    reaction_species : pd.DataFrame
+        DataFrame containing reaction species data with columns:
+        - r_id : str
+            Reaction identifier
+        - sc_id : str
+            Compartmentalized species identifier
+        - stoichiometry : float
+            Stoichiometric coefficient (negative for reactants, positive for products, 0 for modifiers)
+        - sbo_term : str
+            Systems Biology Ontology term defining the role of the species in the reaction
+            (e.g., 'SBO:0000010' for reactant, 'SBO:0000011' for product, 'SBO:0000336' for interactor)
+    wiring_approach : str
+        The wiring approach to use for creating the network. Must be one of:
+        - 'bipartite' : Creates bipartite network with molecules connected to reactions
+        - 'regulatory' : Creates regulatory hierarchy (modifiers -> catalysts -> reactants -> reactions -> products)
+        - 'surrogate' : Alternative layout with enzymes downstream of substrates
+    drop_reactions_when : str
+        Condition under which to drop reactions as network vertices. Must be one of:
+        - 'always' : Always drop reaction vertices
+        - 'edgelist' : Drop if there are exactly 2 participants
+        - 'same_tier' : Drop if there are 2 participants which are both "interactor"
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing network edges with columns:
+        - from : str
+            Source node identifier (species or reaction ID)
+        - to : str
+            Target node identifier (species or reaction ID)
+        - stoichiometry : float
+            Stoichiometric coefficient for the edge
+        - sbo_term : str
+            SBO term defining the relationship type
+        - r_id : str
+            Reaction identifier associated with the edge
+
+    Notes
+    -----
+    The function processes reaction species in two phases:
+
+    1. **Interactor Processing**: Pairs of interactors (SBO:0000336) are processed
+        en-masse and converted to wide format edges.
+
+    2. **Tiered Processing**: Non-interactor species are processed using tiered
+        algorithms based on the wiring approach hierarchy. This creates edges
+        between entities at different tiers in the hierarchy.
+
+    Reactions with ≤1 species are automatically dropped as they represent
+    underspecified reactions (e.g., autoregulation or reactions with removed cofactors).
+
+    Examples
+    --------
+    >>> from napistu.network import net_create_utils
+    >>> from napistu.constants import SBML_DFS, MINI_SBO_FROM_NAME, SBOTERM_NAMES
+    >>> import pandas as pd
+    >>>
+    >>> # Create sample reaction species data
+    >>> reaction_species = pd.DataFrame({
+    ...     SBML_DFS.R_ID: ['R1', 'R1', 'R2', 'R2'],
+    ...     SBML_DFS.SC_ID: ['A', 'B', 'C', 'D'],
+    ...     SBML_DFS.STOICHIOMETRY: [-1, 1, 0, 0],
+    ...     SBML_DFS.SBO_TERM: [
+    ...         MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT],
+    ...         MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
+    ...         MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR],
+    ...         MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
+    ...     ]
+    ... })
+    >>>
+    >>> # Wire the reaction species using regulatory approach
+    >>> edges = wire_reaction_species(
+    ...     reaction_species,
+    ...     wiring_approach='regulatory',
+    ...     drop_reactions_when='same_tier'
+    ... )
+
+    Raises
+    ------
+    ValueError
+        If `wiring_approach` is not a valid value.
+        If `drop_reactions_when` is not a valid value.
+        If reaction species have unusable SBO terms.
+
+    See Also
+    --------
+    format_tiered_reaction_species : Process individual reactions with tiered algorithms
+    create_graph_hierarchy_df : Create hierarchy DataFrame for wiring approach
+    """
+
+    # check whether all expect SBO terms are present
+    invalid_sbo_terms = reaction_species[
+        ~reaction_species[SBML_DFS.SBO_TERM].isin(MINI_SBO_TO_NAME.keys())
+    ]
+
+    if invalid_sbo_terms.shape[0] != 0:
+        invalid_counts = invalid_sbo_terms.value_counts(SBML_DFS.SBO_TERM).to_frame("N")
+        if not isinstance(invalid_counts, pd.DataFrame):
+            raise TypeError("invalid_counts must be a pandas DataFrame")
+        logger.warning(utils.style_df(invalid_counts, headers="keys"))  # type: ignore
+        raise ValueError("Some reaction species have unusable SBO terms")
+
+    # load and validate the schema of wiring_approach
+    graph_hierarchy_df = create_graph_hierarchy_df(wiring_approach)
+
+    # handle interactors since they can easily be processed en-masse
+    interactor_pairs = _find_sbo_duos(
+        reaction_species, MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
+    )
+
+    if len(interactor_pairs) > 0:
+        logger.info(f"Processing {len(interactor_pairs)/2} interaction pairs")
+        interactor_duos = reaction_species.loc[
+            reaction_species[SBML_DFS.R_ID].isin(interactor_pairs)
+        ]
+
+        interactor_edges = _interactor_duos_to_wide(interactor_duos)
+    else:
+        interactor_edges = pd.DataFrame()
+
+    non_interactors_rspecies = reaction_species.loc[
+        ~reaction_species[SBML_DFS.R_ID].isin(interactor_pairs)
+    ]
+
+    if non_interactors_rspecies.shape[0] > 0:
+        # filter to just the entries which will be processed with the tiered algorithm
+        rspecies_fields = SBML_DFS_SCHEMA.SCHEMA[SBML_DFS.REACTION_SPECIES][
+            SCHEMA_DEFS.VARS
+        ]
+        reaction_groups = non_interactors_rspecies[rspecies_fields].groupby(
+            SBML_DFS.R_ID
+        )
+
+        all_tiered_edges = [
+            format_tiered_reaction_species(
+                rxn_group.drop(columns=[SBML_DFS.R_ID])
+                .set_index(SBML_DFS.SBO_TERM)
+                .sort_index(),  # Set index here
+                r_id,
+                graph_hierarchy_df,
+                drop_reactions_when,
+            )
+            for r_id, rxn_group in reaction_groups
+        ]
+
+        all_tiered_edges_df = pd.concat(all_tiered_edges).reset_index(drop=True)
+    else:
+        all_tiered_edges_df = pd.DataFrame()
+
+    return pd.concat([interactor_edges, all_tiered_edges_df])
 
 
 def format_tiered_reaction_species(
@@ -526,7 +693,7 @@ def _interactor_duos_to_wide(interactor_duos: pd.DataFrame):
     )
 
     # Flatten column names and rename
-    wide_df.columns = [f"sc_id_{['from', 'to'][col]}" for col in wide_df.columns]
+    wide_df.columns = ["from", "to"]
 
     # Reset index to make r_id a column
     return wide_df.reset_index().assign(

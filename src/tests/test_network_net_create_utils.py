@@ -315,3 +315,224 @@ def test_identifying_and_formatting_interactor_duos(reaction_species_examples):
         reaction_species[SBML_DFS.R_ID].isin(matching_r_ids)
     ]
     assert net_create_utils._interactor_duos_to_wide(interactor_duos).shape[0] == 10
+
+
+def test_wire_reaction_species_mixed_interactions(reaction_species_examples):
+    """
+    Test wire_reaction_species function with a mix of interactor and non-interactor reactions.
+
+    This test verifies that the function correctly processes:
+    1. Interactor pairs (processed en-masse)
+    2. Non-interactor reactions (processed with tiered algorithms)
+    3. Different wiring approaches
+    4. Different drop_reactions_when conditions
+    """
+
+    # Create a mixed dataset with both interactor and non-interactor reactions
+    # Interactor reactions (should be processed en-masse)
+    interactor_template = reaction_species_examples["valid_interactor"]
+    interactor_species = pd.concat(
+        [
+            interactor_template.reset_index().assign(
+                r_id=f"interactor_{i}",
+                sc_id=lambda df: df[SBML_DFS.SC_ID].apply(
+                    lambda x: f"interactor_{i}_{x}"
+                ),
+            )
+            for i in range(3)  # 3 interactor reactions
+        ]
+    )
+
+    # Non-interactor reactions (should be processed with tiered algorithms)
+    non_interactor_species = pd.concat(
+        [
+            reaction_species_examples["sub_and_prod"]
+            .reset_index()
+            .assign(
+                r_id=f"reaction_{i}",
+                sc_id=lambda df: df[SBML_DFS.SC_ID].apply(
+                    lambda x: f"reaction_{i}_{x}"
+                ),
+            )
+            for i in range(2)  # 2 substrate-product reactions
+        ]
+    )
+
+    # Add a complex reaction with multiple entity types
+    complex_reaction = (
+        reaction_species_examples["all_entities"]
+        .reset_index()
+        .assign(
+            r_id="complex_reaction",
+            sc_id=lambda df: df[SBML_DFS.SC_ID].apply(lambda x: f"complex_{x}"),
+        )
+    )
+
+    # Combine all reaction species
+    all_reaction_species = pd.concat(
+        [interactor_species, non_interactor_species, complex_reaction]
+    )
+
+    # Test with regulatory wiring approach
+    edges_regulatory = net_create_utils.wire_reaction_species(
+        all_reaction_species,
+        wiring_approach="regulatory",
+        drop_reactions_when=DROP_REACTIONS_WHEN.SAME_TIER,
+    )
+
+    # Verify the output structure
+    assert not edges_regulatory.empty
+    required_columns = [
+        NAPISTU_GRAPH_EDGES.FROM,
+        NAPISTU_GRAPH_EDGES.TO,
+        NAPISTU_GRAPH_EDGES.STOICHIOMETRY,
+        NAPISTU_GRAPH_EDGES.SBO_TERM,
+        SBML_DFS.R_ID,
+    ]
+
+    for col in required_columns:
+        assert col in edges_regulatory.columns, f"Missing required column: {col}"
+
+    # Check that interactor reactions were processed correctly
+    interactor_edges = edges_regulatory[
+        edges_regulatory[SBML_DFS.R_ID].str.startswith("interactor_")
+    ]
+    assert (
+        len(interactor_edges) == 3
+    ), f"Expected 3 interactor edges, got {len(interactor_edges)}"
+
+    # Check that non-interactor reactions were processed correctly
+    reaction_edges = edges_regulatory[
+        edges_regulatory[SBML_DFS.R_ID].str.startswith("reaction_")
+    ]
+    assert (
+        len(reaction_edges) == 4
+    ), f"Expected 4 reaction edges, got {len(reaction_edges)}"
+
+    # Check that complex reaction was processed correctly
+    complex_edges = edges_regulatory[
+        edges_regulatory[SBML_DFS.R_ID] == "complex_reaction"
+    ]
+    assert (
+        len(complex_edges) == 4
+    ), f"Expected 4 complex reaction edges, got {len(complex_edges)}"
+
+    # Test with different drop_reactions_when condition
+    edges_always_drop = net_create_utils.wire_reaction_species(
+        all_reaction_species,
+        wiring_approach="regulatory",
+        drop_reactions_when=DROP_REACTIONS_WHEN.ALWAYS,
+    )
+
+    # With ALWAYS drop, reaction IDs should not appear in FROM or TO columns
+    reaction_ids = [
+        "interactor_0",
+        "interactor_1",
+        "interactor_2",
+        "reaction_0",
+        "reaction_1",
+        "complex_reaction",
+    ]
+    for r_id in reaction_ids:
+        assert (
+            r_id not in edges_always_drop[NAPISTU_GRAPH_EDGES.FROM].values
+        ), f"Reaction {r_id} should not be in FROM column"
+        assert (
+            r_id not in edges_always_drop[NAPISTU_GRAPH_EDGES.TO].values
+        ), f"Reaction {r_id} should not be in TO column"
+
+    # Test with EDGELIST drop condition
+    edges_edgelist = net_create_utils.wire_reaction_species(
+        all_reaction_species,
+        wiring_approach="regulatory",
+        drop_reactions_when=DROP_REACTIONS_WHEN.EDGELIST,
+    )
+
+    # Simple reactions (2 species) should not have reaction IDs, but complex reactions should
+    simple_reaction_ids = ["reaction_0", "reaction_1"]
+    complex_reaction_id = "complex_reaction"
+
+    for r_id in simple_reaction_ids:
+        assert (
+            r_id not in edges_edgelist[NAPISTU_GRAPH_EDGES.FROM].values
+        ), f"Simple reaction {r_id} should not be in FROM column"
+        assert (
+            r_id not in edges_edgelist[NAPISTU_GRAPH_EDGES.TO].values
+        ), f"Simple reaction {r_id} should not be in TO column"
+
+    # Complex reaction should still have reaction ID in edges
+    complex_in_edges = (
+        complex_reaction_id in edges_edgelist[NAPISTU_GRAPH_EDGES.FROM].values
+        or complex_reaction_id in edges_edgelist[NAPISTU_GRAPH_EDGES.TO].values
+    )
+    assert (
+        complex_in_edges
+    ), f"Complex reaction {complex_reaction_id} should appear in edges"
+
+    # Test edge case: only interactor reactions
+    only_interactors = interactor_species
+    edges_only_interactors = net_create_utils.wire_reaction_species(
+        only_interactors,
+        wiring_approach="regulatory",
+        drop_reactions_when=DROP_REACTIONS_WHEN.SAME_TIER,
+    )
+
+    assert not edges_only_interactors.empty
+    assert (
+        len(edges_only_interactors) == 3
+    ), f"Expected 3 edges for only interactors, got {len(edges_only_interactors)}"
+
+    # Test edge case: only non-interactor reactions
+    only_reactions = pd.concat([non_interactor_species, complex_reaction])
+    edges_only_reactions = net_create_utils.wire_reaction_species(
+        only_reactions,
+        wiring_approach="regulatory",
+        drop_reactions_when=DROP_REACTIONS_WHEN.SAME_TIER,
+    )
+
+    print(edges_only_reactions)
+
+    assert not edges_only_reactions.empty
+    assert (
+        len(edges_only_reactions) == 8
+    ), f"Expected 8 edges for only reactions, got {len(edges_only_reactions)}"
+
+
+def test_wire_reaction_species_validation_errors():
+    """Test wire_reaction_species function with invalid inputs."""
+
+    # Test with invalid wiring approach
+    reaction_species = pd.DataFrame(
+        {
+            SBML_DFS.R_ID: ["R1"],
+            SBML_DFS.SC_ID: ["A"],
+            SBML_DFS.STOICHIOMETRY: [0],
+            SBML_DFS.SBO_TERM: ["SBO:0000336"],  # interactor
+        }
+    )
+
+    with pytest.raises(ValueError, match="is not a valid wiring approach"):
+        net_create_utils.wire_reaction_species(
+            reaction_species,
+            wiring_approach="invalid_approach",
+            drop_reactions_when=DROP_REACTIONS_WHEN.SAME_TIER,
+        )
+
+    # Test with invalid SBO terms
+    invalid_sbo_species = pd.DataFrame(
+        {
+            SBML_DFS.R_ID: ["R1"],
+            SBML_DFS.SC_ID: ["A"],
+            SBML_DFS.STOICHIOMETRY: [0],
+            SBML_DFS.SBO_TERM: ["INVALID_SBO_TERM"],
+        }
+    )
+
+    with pytest.raises(
+        ValueError, match="Some reaction species have unusable SBO terms"
+    ):
+        net_create_utils.wire_reaction_species(
+            invalid_sbo_species,
+            wiring_approach="regulatory",
+            drop_reactions_when=DROP_REACTIONS_WHEN.SAME_TIER,
+        )
