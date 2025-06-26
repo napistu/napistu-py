@@ -4,6 +4,7 @@ import os
 
 import numpy as np
 import pandas as pd
+import pandas.testing as pdt
 import pytest
 
 from napistu import sbml_dfs_core
@@ -17,6 +18,8 @@ from napistu.network.constants import (
     DEFAULT_WT_TRANS,
     WEIGHTING_SPEC,
     GRAPH_WIRING_APPROACHES,
+    NAPISTU_GRAPH_EDGES,
+    VALID_GRAPH_WIRING_APPROACHES,
 )
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
@@ -39,10 +42,51 @@ def test_create_napistu_graph():
     )
 
 
+def test_bipartite_regression():
+    bipartite_og = net_create.create_napistu_graph(
+        sbml_dfs, wiring_approach="bipartite_og"
+    )
+
+    bipartite = net_create.create_napistu_graph(
+        sbml_dfs, wiring_approach=GRAPH_WIRING_APPROACHES.BIPARTITE
+    )
+
+    bipartite_og_edges = bipartite_og.get_edge_dataframe()
+    bipartite_edges = bipartite.get_edge_dataframe()
+
+    try:
+        pdt.assert_frame_equal(
+            bipartite_og_edges, bipartite_edges, check_like=True, check_dtype=False
+        )
+    except AssertionError as e:
+        # Print detailed differences
+        print("DataFrames are not equal!")
+        print(
+            "Shape original:",
+            bipartite_og_edges.shape,
+            "Shape new:",
+            bipartite_edges.shape,
+        )
+        print(
+            "Columns original:",
+            bipartite_og_edges.columns.tolist(),
+            "Columns new:",
+            bipartite_edges.columns.tolist(),
+        )
+        # Show head of both for quick inspection
+        print("Original head:\n", bipartite_og_edges.head())
+        print("New head:\n", bipartite_edges.head())
+        # Optionally, show where values differ
+        if bipartite_og_edges.shape == bipartite_edges.shape:
+            diff = bipartite_og_edges != bipartite_edges
+            print("Differences (first 5 rows):\n", diff.head())
+        raise e  # Re-raise to fail the test
+
+
 def test_create_napistu_graph_edge_reversed():
     """Test that edge_reversed=True properly reverses edges in the graph for all graph types."""
     # Test each graph type
-    for wiring_approach in ["bipartite", "regulatory", "surrogate"]:
+    for wiring_approach in VALID_GRAPH_WIRING_APPROACHES:
         # Create graphs with and without edge reversal
         normal_graph = net_create.create_napistu_graph(
             sbml_dfs,
@@ -69,16 +113,18 @@ def test_create_napistu_graph_edge_reversed():
         for i in range(min(5, len(normal_edges))):
             # Check from/to are swapped
             assert (
-                normal_edges.iloc[i]["from"] == reversed_edges.iloc[i]["to"]
+                normal_edges.iloc[i][NAPISTU_GRAPH_EDGES.FROM]
+                == reversed_edges.iloc[i][NAPISTU_GRAPH_EDGES.TO]
             ), f"From/to not properly swapped in {wiring_approach} graph"
             assert (
-                normal_edges.iloc[i]["to"] == reversed_edges.iloc[i]["from"]
+                normal_edges.iloc[i][NAPISTU_GRAPH_EDGES.TO]
+                == reversed_edges.iloc[i][NAPISTU_GRAPH_EDGES.FROM]
             ), f"From/to not properly swapped in {wiring_approach} graph"
 
             # Check stoichiometry is negated
             assert (
-                normal_edges.iloc[i]["stoichiometry"]
-                == -reversed_edges.iloc[i]["stoichiometry"]
+                normal_edges.iloc[i][SBML_DFS.STOICHIOMETRY]
+                == -reversed_edges.iloc[i][SBML_DFS.STOICHIOMETRY]
             ), f"Stoichiometry not properly negated in {wiring_approach} graph"
 
             # Check direction attributes are properly swapped
@@ -151,7 +197,7 @@ def test_igraph_loading():
 def test_reverse_network_edges(reaction_species_examples):
     r_id, reaction_species_examples_dict = reaction_species_examples
 
-    graph_hierarchy_df = net_create_utils._create_graph_hierarchy_df("regulatory")
+    graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df("regulatory")
 
     rxn_edges = net_create_utils.format_tiered_reaction_species(
         r_id,

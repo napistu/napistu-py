@@ -3,7 +3,7 @@ import logging
 import pandas as pd
 
 from napistu import utils
-from napistu.constants import MINI_SBO_FROM_NAME, SBML_DFS
+from napistu.constants import MINI_SBO_FROM_NAME, MINI_SBO_TO_NAME, SBML_DFS
 from napistu.network.constants import (
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
@@ -33,12 +33,12 @@ def format_tiered_reaction_species(
         The reaction species.
     graph_hierarchy_df : pd.DataFrame
         The graph hierarchy.
-    drop_reactions_when : str
-        The condition under which to drop reactions as a network vertex.
+    drop_reactions_when : str, optional
+        The condition under which to drop reactions as a network vertex. Default is 'same_tier'.
 
     Returns
     -------
-    edges : pd.DataFrame
+    pd.DataFrame
         The edges of the Napistu graph for a single reaction.
     """
 
@@ -70,21 +70,69 @@ def format_tiered_reaction_species(
     return edges
 
 
+def create_graph_hierarchy_df(wiring_approach: str) -> pd.DataFrame:
+    """
+    Create a DataFrame representing the graph hierarchy for a given wiring approach.
+
+    Parameters
+    ----------
+    wiring_approach : str
+        The type of tiered graph to work with. Each type has its own specification in constants.py.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with sbo_name, tier, and sbo_term.
+
+    Raises
+    ------
+    ValueError
+        If wiring_approach is not valid.
+    """
+
+    if wiring_approach not in VALID_GRAPH_WIRING_APPROACHES:
+        raise ValueError(
+            f"{wiring_approach} is not a valid wiring approach. Valid approaches are {', '.join(VALID_GRAPH_WIRING_APPROACHES)}"
+        )
+
+    sbo_names_hierarchy = GRAPH_WIRING_HIERARCHIES[wiring_approach]
+
+    # format as a DF
+    graph_hierarchy_df = pd.concat(
+        [
+            pd.DataFrame({"sbo_name": sbo_names_hierarchy[i]}).assign(tier=i)
+            for i in range(0, len(sbo_names_hierarchy))
+        ]
+    ).reset_index(drop=True)
+    graph_hierarchy_df[SBML_DFS.SBO_TERM] = graph_hierarchy_df["sbo_name"].apply(
+        lambda x: (
+            MINI_SBO_FROM_NAME[x] if x != NAPISTU_GRAPH_NODE_TYPES.REACTION else ""
+        )
+    )
+
+    # ensure that the output is expected
+    utils.match_pd_vars(
+        graph_hierarchy_df,
+        req_vars={NAPISTU_GRAPH_EDGES.SBO_NAME, "tier", SBML_DFS.SBO_TERM},
+        allow_series=False,
+    ).assert_present()
+
+    return graph_hierarchy_df
+
+
 def _should_drop_reaction(
     entities_ordered_by_tier: pd.DataFrame,
     drop_reactions_when: str = DROP_REACTIONS_WHEN.SAME_TIER,
 ):
     """
-    Determine if a reaction should be dropped
-
-    This is determined based on the regulatory relationships between the species and the desired stringency.
+    Determine if a reaction should be dropped based on regulatory relationships and stringency.
 
     Parameters
     ----------
     entities_ordered_by_tier : pd.DataFrame
         The entities ordered by tier.
-    drop_reactions : str
-        The desired stringency for dropping reactions.
+    drop_reactions_when : str, optional
+        The desired stringency for dropping reactions. Default is 'same_tier'.
 
     Returns
     -------
@@ -95,6 +143,11 @@ def _should_drop_reaction(
     _____
     reactions are always dropped if they are on the same tier. This greatly decreases the number of vertices
     in a graph constructed from relatively dense interaction networks like STRING.
+
+    Raises
+    ------
+    ValueError
+        If drop_reactions_when is not a valid value.
 
     """
 
@@ -125,7 +178,26 @@ def _should_drop_reaction(
 
 
 def _format_same_tier_edges(rxn_species: pd.DataFrame, r_id: str) -> pd.DataFrame:
-    """Format edges for reactions where all participants are on the same tier of a wiring hierarcy."""
+    """
+    Format edges for reactions where all participants are on the same tier of a wiring hierarchy.
+
+    Parameters
+    ----------
+    rxn_species : pd.DataFrame
+        DataFrame of reaction species for the reaction.
+    r_id : str
+        Reaction ID.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame of formatted edges for same-tier reactions.
+
+    Raises
+    ------
+    ValueError
+        If reaction has multiple distinct metadata.
+    """
 
     # if they have the same SBO_term and stoichiometry, then the
     # reaction can be trivially treated as reversible
@@ -137,9 +209,8 @@ def _format_same_tier_edges(rxn_species: pd.DataFrame, r_id: str) -> pd.DataFram
         [SBML_DFS.SBO_TERM, SBML_DFS.STOICHIOMETRY]
     ].drop_duplicates()
     if distinct_metadata.shape[0] > 1:
-        raise ValueError(
-            f"Reaction {r_id} has multiple distinct metadata: {distinct_metadata}"
-        )
+        _log_pathological_same_tier(distinct_metadata, r_id)
+        return pd.DataFrame()
 
     crossed_species = (
         valid_species.merge(valid_species, how="cross", suffixes=("_left", "_right"))
@@ -167,11 +238,46 @@ def _format_same_tier_edges(rxn_species: pd.DataFrame, r_id: str) -> pd.DataFram
     return crossed_species[OUT_ATTRS]
 
 
+def _log_pathological_same_tier(distinct_metadata: pd.DataFrame, r_id: str) -> None:
+    """
+    Log a warning if a reaction has multiple distinct metadata.
+    """
+    msg = list(
+        [
+            f"Ignoring reaction {r_id}; its members have distinct annotations but they exist on the same level of a wiring hierarchy so their relationships cannot be determined."
+        ]
+    )
+    sbo_terms = distinct_metadata["sbo_term"].map(MINI_SBO_TO_NAME).unique().tolist()
+    if len(sbo_terms) > 1:
+        msg.append(f"SBO terms: {sbo_terms}")
+    stoichiometries = distinct_metadata["stoichiometry"].unique().tolist()
+    if len(stoichiometries) > 1:
+        msg.append(f"Stoichiometries: {stoichiometries}")
+    logger.warning(msg[0] + "; ".join(msg[1:]))
+
+
 def _format_cross_tier_edges(
     entities_ordered_by_tier: pd.DataFrame,
     r_id: str,
     drop_reactions_when: str = DROP_REACTIONS_WHEN.SAME_TIER,
 ):
+    """
+    Format edges for reactions where participants are on different tiers of a wiring hierarchy.
+
+    Parameters
+    ----------
+    entities_ordered_by_tier : pd.DataFrame
+        DataFrame of entities ordered by tier.
+    r_id : str
+        Reaction ID.
+    drop_reactions_when : str, optional
+        The condition under which to drop reactions as a network vertex. Default is 'same_tier'.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame of formatted edges for cross-tier reactions.
+    """
 
     ordered_tiers = entities_ordered_by_tier.index.get_level_values("tier").unique()
     reaction_tier = entities_ordered_by_tier.query(
@@ -220,7 +326,26 @@ def _format_cross_tier_edges(
     return rxn_edges_df
 
 
-def _validate_sbo_indexed_rsc_stoi(rxn_species) -> None:
+def _validate_sbo_indexed_rsc_stoi(rxn_species: pd.DataFrame) -> None:
+    """
+    Validate that rxn_species is a DataFrame with correct index and columns.
+
+    Parameters
+    ----------
+    rxn_species : pd.DataFrame
+        DataFrame of reaction species, indexed by SBO_TERM.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    TypeError
+        If rxn_species is not a pandas DataFrame.
+    ValueError
+        If index or columns are not as expected.
+    """
 
     if not isinstance(rxn_species, pd.DataFrame):
         raise TypeError("rxn_species must be a pandas DataFrame")
@@ -237,6 +362,23 @@ def _validate_sbo_indexed_rsc_stoi(rxn_species) -> None:
 def _reaction_species_to_tiers(
     rxn_species: pd.DataFrame, graph_hierarchy_df: pd.DataFrame, r_id: str
 ) -> pd.DataFrame:
+    """
+    Map reaction species to tiers based on the graph hierarchy.
+
+    Parameters
+    ----------
+    rxn_species : pd.DataFrame
+        DataFrame of reaction species.
+    graph_hierarchy_df : pd.DataFrame
+        DataFrame defining the graph hierarchy.
+    r_id : str
+        Reaction ID.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame of entities ordered by tier.
+    """
 
     entities_ordered_by_tier = (
         pd.concat(
@@ -262,29 +404,39 @@ def _format_tier_combo(
     upstream_tier: pd.DataFrame, downstream_tier: pd.DataFrame, past_reaction: bool
 ) -> pd.DataFrame:
     """
-    Format Tier Combo
+    Create all edges between two tiers of a tiered reaction graph.
 
-    Create a set of edges crossing two tiers of a tiered graph. This will involve an
-    all x all combination of entries. Tiers form an ordering along the molecular entities
-    in a reaction plus a tier for the reaction itself. Attributes such as stoichiometry
-    and sbo_term will be passed from the tier which is furthest from the reaction tier
-    to ensure that each tier of molecular data applies its attributes to a single set of
-    edges while the "reaction" tier does not. Reaction entities have neither a
-    stoichiometery or sbo_term annotation.
+    This function generates a set of edges by performing an all-vs-all combination between entities
+    in the upstream and downstream tiers. Tiers represent an ordering along the molecular entities
+    in a reaction, plus a tier for the reaction itself. Attributes such as stoichiometry and sbo_term
+    are assigned from the tier furthest from the reaction tier, ensuring that each molecular tier
+    applies its attributes to a single set of edges, while the "reaction" tier does not contribute
+    these attributes. Reaction entities have neither a stoichiometry nor sbo_term annotation.
 
-    Args:
-        upstream_tier (pd.DataFrame): A table containing upstream entities in a reaction,
-            e.g., regulators.
-        downstream_tier (pd.DataFrame): A table containing downstream entities in a reaction,
-            e.g., catalysts.
-        past_reaction (bool): if True then attributes will be taken from downstream_tier and
-            if False they will come from upstream_tier.
+    Parameters
+    ----------
+    upstream_tier : pd.DataFrame
+        DataFrame containing upstream entities in a reaction (e.g., regulators or substrates).
+    downstream_tier : pd.DataFrame
+        DataFrame containing downstream entities in a reaction (e.g., products or targets).
+    past_reaction : bool
+        If True, attributes (stoichiometry, sbo_term) are taken from downstream_tier;
+        if False, from upstream_tier. This controls the direction of attribute assignment
+        depending on whether the reaction tier has already been passed in the tier ordering.
 
-    Returns:
-        formatted_tier_combo (pd.DataFrame): A table of edges containing (from, to, stoichiometry, sbo_term, r_id). The
-        number of edges is the product of the number of entities in the upstream tier
-        times the number in the downstream tier.
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame of edges, each with columns: 'from', 'to', 'stoichiometry', 'sbo_term', and 'r_id'.
+        The number of edges is the product of the number of entities in the upstream tier
+        and the number in the downstream tier.
 
+    Notes
+    -----
+    - This function is used to build the edge list for tiered graphs, where each tier represents
+    a functional group (e.g., substrates, products, modifiers, reaction).
+    - The direction and attributes of edges depend on the position relative to the reaction tier.
+    - Reaction entities themselves do not contribute stoichiometry or sbo_term attributes.
     """
 
     upstream_fields = ["entity_id", SBML_DFS.STOICHIOMETRY, SBML_DFS.SBO_TERM]
@@ -309,48 +461,3 @@ def _format_tier_combo(
     )
 
     return formatted_tier_combo
-
-
-def _create_graph_hierarchy_df(wiring_approach: str) -> pd.DataFrame:
-    """
-    Create Graph Hierarchy DataFrame
-
-    Format a graph hierarchy list of lists and a pd.DataFrame
-
-    Args:
-        wiring_approach (str):
-            The type of tiered graph to work with. Each type has its own specification in constants.py.
-
-    Returns:
-        A pandas DataFrame with sbo_name, tier, and sbo_term.
-
-    """
-
-    if wiring_approach not in VALID_GRAPH_WIRING_APPROACHES:
-        raise ValueError(
-            f"{wiring_approach} is not a valid wiring approach. Valid approaches are {', '.join(VALID_GRAPH_WIRING_APPROACHES)}"
-        )
-
-    sbo_names_hierarchy = GRAPH_WIRING_HIERARCHIES[wiring_approach]
-
-    # format as a DF
-    graph_hierarchy_df = pd.concat(
-        [
-            pd.DataFrame({"sbo_name": sbo_names_hierarchy[i]}).assign(tier=i)
-            for i in range(0, len(sbo_names_hierarchy))
-        ]
-    ).reset_index(drop=True)
-    graph_hierarchy_df[SBML_DFS.SBO_TERM] = graph_hierarchy_df["sbo_name"].apply(
-        lambda x: (
-            MINI_SBO_FROM_NAME[x] if x != NAPISTU_GRAPH_NODE_TYPES.REACTION else ""
-        )
-    )
-
-    # ensure that the output is expected
-    utils.match_pd_vars(
-        graph_hierarchy_df,
-        req_vars={NAPISTU_GRAPH_EDGES.SBO_NAME, "tier", SBML_DFS.SBO_TERM},
-        allow_series=False,
-    ).assert_present()
-
-    return graph_hierarchy_df

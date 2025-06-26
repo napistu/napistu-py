@@ -13,6 +13,10 @@ from fs.errors import ResourceNotFound
 from napistu.network.ng_core import NapistuGraph
 from napistu.network.ig_utils import validate_edge_attributes
 from napistu.utils import load_json, save_json
+from napistu.constants import NAPISTU_EDGELIST, SBML_DFS
+from napistu.network.constants import (
+    NAPISTU_GRAPH_EDGES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +26,13 @@ def precompute_distances(
     max_steps: int = -1,
     max_score_q: float = float(1),
     partition_size: int = int(5000),
-    weights_vars: list[str] = ["weights", "upstream_weights"],
+    weights_vars: list[str] = [
+        NAPISTU_GRAPH_EDGES.WEIGHTS,
+        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS,
+    ],
 ) -> pd.DataFrame:
     """
-    Pre-Compute Distances
+    Precompute Distances between all pairs of species in a NapistuGraph network.
 
     Parameters
     ----------
@@ -80,6 +87,7 @@ def precompute_distances(
     # interate through all partitions of "from" nodes and find their shortest and lowest weighted paths
     unique_partitions = vs_to_partition.index.unique().tolist()
 
+    logger.info(f"Calculating distances for {len(unique_partitions)} partitions")
     precomputed_distances = pd.concat(
         [
             _calculate_distances_subset(
@@ -93,6 +101,10 @@ def precompute_distances(
     ).query("sc_id_origin != sc_id_dest")
 
     # filter by path length and/or weight
+
+    logger.info(
+        f"Filtering distances by path length ({max_steps}) and score quantile ({max_score_q})"
+    )
     filtered_precomputed_distances = _filter_precomputed_distances(
         precomputed_distances=precomputed_distances,
         max_steps=max_steps,
@@ -161,7 +173,10 @@ def _calculate_distances_subset(
     napistu_graph: NapistuGraph,
     vs_to_partition: pd.DataFrame,
     one_partition: pd.DataFrame,
-    weights_vars: list[str] = ["weights", "upstream_weights"],
+    weights_vars: list[str] = [
+        NAPISTU_GRAPH_EDGES.WEIGHTS,
+        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS,
+    ],
 ) -> pd.DataFrame:
     """Calculate distances from a subset of vertices to all vertices."""
 
@@ -169,14 +184,15 @@ def _calculate_distances_subset(
         pd.DataFrame(
             np.array(
                 napistu_graph.distances(
-                    source=one_partition["sc_id"], target=vs_to_partition["sc_id"]
+                    source=one_partition[SBML_DFS.SC_ID],
+                    target=vs_to_partition[SBML_DFS.SC_ID],
                 )
             ),
-            index=one_partition["sc_id"].rename("sc_id_origin"),
-            columns=vs_to_partition["sc_id"].rename("sc_id_dest"),
+            index=one_partition[SBML_DFS.SC_ID].rename(NAPISTU_EDGELIST.SC_ID_ORIGIN),
+            columns=vs_to_partition[SBML_DFS.SC_ID].rename(NAPISTU_EDGELIST.SC_ID_DEST),
         )
         .reset_index()
-        .melt("sc_id_origin", value_name="path_length")
+        .melt(NAPISTU_EDGELIST.SC_ID_ORIGIN, value_name="path_length")
         .replace([np.inf, -np.inf], np.nan, inplace=False)
         .dropna()
     )
@@ -187,16 +203,20 @@ def _calculate_distances_subset(
             pd.DataFrame(
                 np.array(
                     napistu_graph.distances(
-                        source=one_partition["sc_id"],
-                        target=vs_to_partition["sc_id"],
+                        source=one_partition[SBML_DFS.SC_ID],
+                        target=vs_to_partition[SBML_DFS.SC_ID],
                         weights=weight_type,
                     )
                 ),
-                index=one_partition["sc_id"].rename("sc_id_origin"),
-                columns=vs_to_partition["sc_id"].rename("sc_id_dest"),
+                index=one_partition[SBML_DFS.SC_ID].rename(
+                    NAPISTU_EDGELIST.SC_ID_ORIGIN
+                ),
+                columns=vs_to_partition[SBML_DFS.SC_ID].rename(
+                    NAPISTU_EDGELIST.SC_ID_DEST
+                ),
             )
             .reset_index()
-            .melt("sc_id_origin", value_name=f"path_{weight_type}")
+            .melt(NAPISTU_EDGELIST.SC_ID_ORIGIN, value_name=f"path_{weight_type}")
             .replace([np.inf, -np.inf], np.nan, inplace=False)
             .dropna()
         )
@@ -211,8 +231,8 @@ def _calculate_distances_subset(
     # note: these may be different paths! e.g., a longer path may have a lower weight than a short one
     path_summaries = d_steps.merge(
         d_weights,
-        left_on=["sc_id_origin", "sc_id_dest"],
-        right_on=["sc_id_origin", "sc_id_dest"],
+        left_on=[NAPISTU_EDGELIST.SC_ID_ORIGIN, NAPISTU_EDGELIST.SC_ID_DEST],
+        right_on=[NAPISTU_EDGELIST.SC_ID_ORIGIN, NAPISTU_EDGELIST.SC_ID_DEST],
     )
 
     # return connected species

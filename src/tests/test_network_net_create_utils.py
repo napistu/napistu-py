@@ -23,7 +23,7 @@ def test_format_interactors(reaction_species_examples):
     r_id, reaction_species_examples_dict = reaction_species_examples
     # interactions are formatted
 
-    graph_hierarchy_df = net_create_utils._create_graph_hierarchy_df("regulatory")
+    graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df("regulatory")
 
     assert (
         net_create_utils.format_tiered_reaction_species(
@@ -85,7 +85,7 @@ def test_format_interactors(reaction_species_examples):
 
     # use the surrogate model tiered layout also
 
-    graph_hierarchy_df = net_create_utils._create_graph_hierarchy_df("surrogate")
+    graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df("surrogate")
 
     rxn_edges = net_create_utils.format_tiered_reaction_species(
         r_id,
@@ -102,7 +102,7 @@ def test_format_interactors(reaction_species_examples):
 def test_drop_reactions_when_parameters(reaction_species_examples):
     """Test different drop_reactions_when parameter values and edge cases."""
     r_id, examples = reaction_species_examples
-    graph_hierarchy = net_create_utils._create_graph_hierarchy_df("regulatory")
+    graph_hierarchy = net_create_utils.create_graph_hierarchy_df("regulatory")
 
     # Test ALWAYS - should drop reaction regardless of tiers
     edges_always = net_create_utils.format_tiered_reaction_species(
@@ -137,18 +137,24 @@ def test_drop_reactions_when_parameters(reaction_species_examples):
 def test_edge_cases_and_validation(reaction_species_examples):
     """Test edge cases, empty inputs, and validation errors."""
     r_id, examples = reaction_species_examples
-    graph_hierarchy = net_create_utils._create_graph_hierarchy_df("regulatory")
+    graph_hierarchy = net_create_utils.create_graph_hierarchy_df("regulatory")
 
     # Test single species
     edges_single = net_create_utils.format_tiered_reaction_species(
         r_id, examples["single_species"], graph_hierarchy
     )
-    assert isinstance(edges_single, pd.DataFrame)
+    assert edges_single.empty
 
     # Test validation with incorrectly indexed DataFrame (should raise error)
     bad_df = examples["sub_and_prod"].reset_index()  # Remove proper index
     with pytest.raises(KeyError):
         net_create_utils.format_tiered_reaction_species(r_id, bad_df, graph_hierarchy)
+
+    # Test activator and inhibitor only (should return empty DataFrame)
+    edges_ai = net_create_utils.format_tiered_reaction_species(
+        r_id, examples["activator_and_inhibitor_only"], graph_hierarchy
+    )
+    assert edges_ai.empty
 
 
 def test_edgelist_should_have_one_edge():
@@ -157,7 +163,7 @@ def test_edgelist_should_have_one_edge():
 
     reaction_df = pd.DataFrame(
         {
-            SBML_DFS.R_ID: [r_id, r_id],
+            SBML_DFS.R_ID: [r_id] * 2,
             SBML_DFS.SBO_TERM: [
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT],
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
@@ -167,7 +173,7 @@ def test_edgelist_should_have_one_edge():
         }
     ).set_index([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
 
-    graph_hierarchy = net_create_utils._create_graph_hierarchy_df("regulatory")
+    graph_hierarchy = net_create_utils.create_graph_hierarchy_df("regulatory")
     edges = net_create_utils.format_tiered_reaction_species(
         r_id, reaction_df, graph_hierarchy, DROP_REACTIONS_WHEN.EDGELIST
     )
@@ -192,7 +198,7 @@ def test_edgelist_should_not_have_reaction_as_source():
         }
     ).set_index([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
 
-    graph_hierarchy = net_create_utils._create_graph_hierarchy_df("regulatory")
+    graph_hierarchy = net_create_utils.create_graph_hierarchy_df("regulatory")
     edges = net_create_utils.format_tiered_reaction_species(
         r_id, reaction_df, graph_hierarchy, DROP_REACTIONS_WHEN.EDGELIST
     )
@@ -207,7 +213,7 @@ def test_should_drop_reaction(reaction_species_examples):
 
     r_id, reaction_species_examples_dict = reaction_species_examples
 
-    graph_hierarchy_df = net_create_utils._create_graph_hierarchy_df("regulatory")
+    graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df("regulatory")
 
     sorted_reaction_species = reaction_species_examples_dict["sub_and_prod"]
 
@@ -234,7 +240,7 @@ def test_should_drop_reaction(reaction_species_examples):
 def test_graph_hierarchy_layouts():
     REQUIRED_NAMES = VALID_SBO_TERM_NAMES + [NAPISTU_GRAPH_NODE_TYPES.REACTION]
     for value in VALID_GRAPH_WIRING_APPROACHES:
-        layout_df = net_create_utils._create_graph_hierarchy_df(value)
+        layout_df = net_create_utils.create_graph_hierarchy_df(value)
         # all terms should be represented
         missing = set(REQUIRED_NAMES).difference(
             set(layout_df[NAPISTU_GRAPH_EDGES.SBO_NAME])

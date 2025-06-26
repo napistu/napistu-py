@@ -234,6 +234,18 @@ def reaction_species_examples():
         }
     ).set_index([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
 
+    d["activator_and_inhibitor_only"] = pd.DataFrame(
+        {
+            SBML_DFS.R_ID: [r_id, r_id],
+            SBML_DFS.SBO_TERM: [
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.STIMULATOR],  # activator
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.INHIBITOR],  # inhibitor
+            ],
+            SBML_DFS.SC_ID: ["act", "inh"],
+            SBML_DFS.STOICHIOMETRY: [0, 0],
+        }
+    ).set_index([SBML_DFS.R_ID, SBML_DFS.SBO_TERM])
+
     return r_id, d
 
 
