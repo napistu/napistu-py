@@ -13,7 +13,9 @@ from pydantic import BaseModel
 
 from napistu import sbml_dfs_core
 from napistu import utils
+from napistu.network import net_create_utils
 from napistu.network.ng_core import NapistuGraph
+
 
 from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import MINI_SBO_TO_NAME
@@ -28,13 +30,13 @@ from napistu.network.constants import NAPISTU_GRAPH_NODE_TYPES
 from napistu.network.constants import GRAPH_WIRING_APPROACHES
 from napistu.network.constants import NAPISTU_WEIGHTING_STRATEGIES
 from napistu.network.constants import SBOTERM_NAMES
-from napistu.network.constants import GRAPH_WIRING_LAYOUTS
 from napistu.network.constants import VALID_GRAPH_WIRING_APPROACHES
 from napistu.network.constants import VALID_WEIGHTING_STRATEGIES
 from napistu.network.constants import DEFAULT_WT_TRANS
 from napistu.network.constants import DEFINED_WEIGHT_TRANSFORMATION
 from napistu.network.constants import SCORE_CALIBRATION_POINTS_DICT
 from napistu.network.constants import SOURCE_VARS_DICT
+from napistu.network.constants import DROP_REACTIONS_WHEN
 
 
 logger = logging.getLogger(__name__)
@@ -46,6 +48,7 @@ def create_napistu_graph(
     directed: bool = True,
     edge_reversed: bool = False,
     wiring_approach: str = GRAPH_WIRING_APPROACHES.REGULATORY,
+    drop_reactions_when: str = DROP_REACTIONS_WHEN.SAME_TIER,
     verbose: bool = False,
     custom_transformations: Optional[dict] = None,
 ) -> NapistuGraph:
@@ -67,6 +70,12 @@ def create_napistu_graph(
             - 'bipartite': substrates and modifiers point to the reaction they drive, this reaction points to products
             - 'regulatory': non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
             - 'surrogate': non-enzymatic modifiers -> substrates -> enzymes -> reaction -> products
+            - 'bipartite_og': old method for generating a true bipartite graph. retained primarily for regression testing.
+    drop_reactions_when : str, optional
+        The condition under which to drop reactions as a network vertex. Valid values are:
+            - 'same_tier': drop reactions when all participants are on the same tier of a wiring hierarcy
+            - 'edgelist': drop reactions when the reaction species are only 2 (1 reactant + 1 product)
+            - 'always': drop reactions regardless of tiers
     verbose : bool, optional
         Extra reporting. Default is False.
     custom_transformations : dict, optional
@@ -81,7 +90,7 @@ def create_napistu_graph(
     if reaction_graph_attrs is None:
         reaction_graph_attrs = {}
 
-    if wiring_approach not in VALID_GRAPH_WIRING_APPROACHES:
+    if wiring_approach not in VALID_GRAPH_WIRING_APPROACHES + ["bipartite_og"]:
         raise ValueError(
             f"wiring_approach is not a valid value ({wiring_approach}), valid values are {','.join(VALID_GRAPH_WIRING_APPROACHES)}"
         )
@@ -140,14 +149,13 @@ def create_napistu_graph(
 
     logger.info(f"Formatting edges as a {wiring_approach} graph")
 
-    if wiring_approach == GRAPH_WIRING_APPROACHES.BIPARTITE:
+    if wiring_approach == "bipartite_og":
         network_edges = _create_napistu_graph_bipartite(working_sbml_dfs)
-    elif wiring_approach in [
-        GRAPH_WIRING_APPROACHES.REGULATORY,
-        GRAPH_WIRING_APPROACHES.SURROGATE,
-    ]:
+    elif wiring_approach in VALID_GRAPH_WIRING_APPROACHES:
         # pass wiring_approach so that an appropriate tiered schema can be used.
-        network_edges = _create_napistu_graph_tiered(working_sbml_dfs, wiring_approach)
+        network_edges = _create_napistu_graph_tiered(
+            working_sbml_dfs, wiring_approach, drop_reactions_when
+        )
     else:
         raise NotImplementedError("Invalid wiring_approach")
 
@@ -614,7 +622,9 @@ def _create_napistu_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.Data
 
 
 def _create_napistu_graph_tiered(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, wiring_approach: str
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    wiring_approach: str,
+    drop_reactions_when: str = DROP_REACTIONS_WHEN.SAME_TIER,
 ) -> pd.DataFrame:
     """Turn an sbml_dfs model into a tiered graph which links upstream entities to downstream ones."""
 
@@ -631,7 +641,7 @@ def _create_napistu_graph_tiered(
         raise ValueError("Some reaction species have unusable SBO terms")
 
     # load and validate the schema of wiring_approach
-    graph_hierarchy_df = _create_graph_hierarchy_df(wiring_approach)
+    graph_hierarchy_df = net_create_utils._create_graph_hierarchy_df(wiring_approach)
 
     # organize reaction species for defining connections
     sorted_reaction_species = sbml_dfs.reaction_species.set_index(
@@ -645,8 +655,8 @@ def _create_napistu_graph_tiered(
 
     # infer tiered edges in each reaction
     all_reaction_edges = [
-        _format_tiered_reaction_species(
-            r, sorted_reaction_species, sbml_dfs, graph_hierarchy_df
+        net_create_utils.format_tiered_reaction_species(
+            r, sorted_reaction_species, graph_hierarchy_df, drop_reactions_when
         )
         for r in sorted_reaction_species.index.get_level_values(SBML_DFS.R_ID).unique()
     ]
@@ -771,202 +781,6 @@ def _create_napistu_graph_tiered(
     logger.info(f"Done preparing {wiring_approach} graph")
 
     return decorated_all_reaction_edges_df
-
-
-def _format_tiered_reaction_species(
-    r_id: str,
-    sorted_reaction_species: pd.DataFrame,
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
-    graph_hierarchy_df: pd.DataFrame,
-) -> pd.DataFrame:
-    """
-    Format Tiered Reaction Species
-
-    Refactor a reaction's species into tiered edges between substrates, products, enzymes and allosteric regulators.
-    """
-
-    rxn_species = sorted_reaction_species.loc[r_id]
-    if not isinstance(rxn_species, pd.DataFrame):
-        raise TypeError("rxn_species must be a pandas DataFrame")
-    if list(rxn_species.index.names) != [SBML_DFS.SBO_TERM]:
-        raise ValueError("rxn_species index names must be [SBML_DFS.SBO_TERM]")
-    if rxn_species.columns.tolist() != [SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY]:
-        raise ValueError(
-            "rxn_species columns must be [SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY]"
-        )
-
-    rxn_sbo_terms = set(rxn_species.index.unique())
-    # map to common names
-    rxn_sbo_names = {MINI_SBO_TO_NAME[x] for x in rxn_sbo_terms}
-
-    # is the reaction a general purpose interaction
-    if len(rxn_sbo_names) == 1:
-        if list(rxn_sbo_names)[0] == SBOTERM_NAMES.INTERACTOR:
-            # further validation happens in the function - e.g., exactly two interactors
-            return _format_interactors_for_tiered_graph(r_id, rxn_species, sbml_dfs)
-
-    if SBOTERM_NAMES.INTERACTOR in rxn_sbo_names:
-        logger.warning(
-            f"Invalid combinations of SBO_terms in {str(r_id)} : {sbml_dfs.reactions.loc[r_id][SBML_DFS.R_NAME]}. "
-            "If interactors are present then there can't be any other types of reaction species. "
-            f"The following roles were defined: {', '.join(rxn_sbo_names)}"
-        )
-
-    # reorganize molecules and the reaction itself into tiers
-    entities_ordered_by_tier = (
-        pd.concat(
-            [
-                (
-                    rxn_species.reset_index()
-                    .rename({SBML_DFS.SC_ID: "entity_id"}, axis=1)
-                    .merge(graph_hierarchy_df)
-                ),
-                graph_hierarchy_df[
-                    graph_hierarchy_df[NAPISTU_GRAPH_EDGES.SBO_NAME]
-                    == NAPISTU_GRAPH_NODE_TYPES.REACTION
-                ].assign(entity_id=r_id, r_id=r_id),
-            ]
-        )
-        .sort_values(["tier"])
-        .set_index("tier")
-    )
-    ordered_tiers = entities_ordered_by_tier.index.get_level_values("tier").unique()
-
-    if len(ordered_tiers) <= 1:
-        raise ValueError("ordered_tiers must have more than one element")
-
-    # which tier is the reaction?
-    reaction_tier = graph_hierarchy_df["tier"][
-        graph_hierarchy_df[NAPISTU_GRAPH_EDGES.SBO_NAME]
-        == NAPISTU_GRAPH_NODE_TYPES.REACTION
-    ].tolist()[0]
-
-    rxn_edges = list()
-    past_reaction = False
-    for i in range(0, len(ordered_tiers) - 1):
-        formatted_tier_combo = _format_tier_combo(
-            entities_ordered_by_tier.loc[[ordered_tiers[i]]],
-            entities_ordered_by_tier.loc[[ordered_tiers[i + 1]]],
-            past_reaction,
-        )
-
-        if ordered_tiers[i + 1] == reaction_tier:
-            past_reaction = True
-
-        rxn_edges.append(formatted_tier_combo)
-
-    rxn_edges_df = (
-        pd.concat(rxn_edges)[
-            [
-                NAPISTU_GRAPH_EDGES.FROM,
-                NAPISTU_GRAPH_EDGES.TO,
-                NAPISTU_GRAPH_EDGES.STOICHIOMETRY,
-                NAPISTU_GRAPH_EDGES.SBO_TERM,
-            ]
-        ]
-        .reset_index(drop=True)
-        .assign(r_id=r_id)
-    )
-
-    return rxn_edges_df
-
-
-def _format_tier_combo(
-    upstream_tier: pd.DataFrame, downstream_tier: pd.DataFrame, past_reaction: bool
-) -> pd.DataFrame:
-    """
-    Format Tier Combo
-
-    Create a set of edges crossing two tiers of a tiered graph. This will involve an
-    all x all combination of entries. Tiers form an ordering along the molecular entities
-    in a reaction plus a tier for the reaction itself. Attributes such as stoichiometry
-    and sbo_term will be passed from the tier which is furthest from the reaction tier
-    to ensure that each tier of molecular data applies its attributes to a single set of
-    edges while the "reaction" tier does not. Reaction entities have neither a
-    stoichiometery or sbo_term annotation.
-
-    Args:
-        upstream_tier (pd.DataFrame): A table containing upstream entities in a reaction,
-            e.g., regulators.
-        downstream_tier (pd.DataFrame): A table containing downstream entities in a reaction,
-            e.g., catalysts.
-        past_reaction (bool): if True then attributes will be taken from downstream_tier and
-            if False they will come from upstream_tier.
-
-    Returns:
-        formatted_tier_combo (pd.DataFrame): A table of edges containing (from, to, stoichiometry, sbo_term, r_id). The
-        number of edges is the product of the number of entities in the upstream tier
-        times the number in the downstream tier.
-
-    """
-
-    upstream_fields = ["entity_id", SBML_DFS.STOICHIOMETRY, SBML_DFS.SBO_TERM]
-    downstream_fields = ["entity_id"]
-
-    if past_reaction:
-        # swap fields
-        upstream_fields, downstream_fields = downstream_fields, upstream_fields
-
-    formatted_tier_combo = (
-        upstream_tier[upstream_fields]
-        .rename({"entity_id": NAPISTU_GRAPH_EDGES.FROM}, axis=1)
-        .assign(_joiner=1)
-    ).merge(
-        (
-            downstream_tier[downstream_fields]
-            .rename({"entity_id": NAPISTU_GRAPH_EDGES.TO}, axis=1)
-            .assign(_joiner=1)
-        ),
-        left_on="_joiner",
-        right_on="_joiner",
-    )
-
-    return formatted_tier_combo
-
-
-def _create_graph_hierarchy_df(wiring_approach: str) -> pd.DataFrame:
-    """
-    Create Graph Hierarchy DataFrame
-
-    Format a graph hierarchy list of lists and a pd.DataFrame
-
-    Args:
-        wiring_approach (str):
-            The type of tiered graph to work with. Each type has its own specification in constants.py.
-
-    Returns:
-        A pandas DataFrame with sbo_name, tier, and sbo_term.
-
-    """
-
-    if wiring_approach not in VALID_GRAPH_WIRING_APPROACHES:
-        raise ValueError(
-            f"{wiring_approach} is not a valid wiring approach. Valid approaches are {', '.join(VALID_GRAPH_WIRING_APPROACHES)}"
-        )
-
-    sbo_names_hierarchy = GRAPH_WIRING_LAYOUTS[wiring_approach]
-
-    # format as a DF
-    graph_hierarchy_df = pd.concat(
-        [
-            pd.DataFrame({"sbo_name": sbo_names_hierarchy[i]}).assign(tier=i)
-            for i in range(0, len(sbo_names_hierarchy))
-        ]
-    ).reset_index(drop=True)
-    graph_hierarchy_df[SBML_DFS.SBO_TERM] = graph_hierarchy_df["sbo_name"].apply(
-        lambda x: (
-            MINI_SBO_FROM_NAME[x] if x != NAPISTU_GRAPH_NODE_TYPES.REACTION else ""
-        )
-    )
-
-    # ensure that the output is expected
-    utils.match_pd_vars(
-        graph_hierarchy_df,
-        req_vars={NAPISTU_GRAPH_EDGES.SBO_NAME, "tier", SBML_DFS.SBO_TERM},
-        allow_series=False,
-    ).assert_present()
-
-    return graph_hierarchy_df
 
 
 def _add_graph_weights_mixed(

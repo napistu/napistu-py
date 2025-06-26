@@ -49,14 +49,12 @@ VALID_NAPISTU_GRAPH_NODE_TYPES = [
 # translating an SBML_dfs -> NapistuGraph
 
 GRAPH_WIRING_APPROACHES = SimpleNamespace(
-    BIPARTITE="bipartite",
-    REGULATORY="regulatory",
-    SURROGATE="surrogate",
+    BIPARTITE="bipartite", REGULATORY="regulatory", SURROGATE="surrogate"
 )
 
 VALID_GRAPH_WIRING_APPROACHES = list(GRAPH_WIRING_APPROACHES.__dict__.values())
 
-GRAPH_WIRING_LAYOUTS = {
+GRAPH_WIRING_HIERARCHIES = {
     # three tiers with reactions in the middle
     # in a bipartite networks molecules are connected to reactions but not other molecules
     GRAPH_WIRING_APPROACHES.BIPARTITE: [
@@ -94,6 +92,18 @@ GRAPH_WIRING_LAYOUTS = {
         [SBOTERM_NAMES.MODIFIED, SBOTERM_NAMES.PRODUCT],
     ],
 }
+
+# when should reaction vertices be excluded from the graph?
+
+DROP_REACTIONS_WHEN = SimpleNamespace(
+    ALWAYS="always",
+    # if there are 2 participants
+    EDGELIST="edgelist",
+    # if there are 2 participants which are both "interactor"
+    SAME_TIER="same_tier",
+)
+
+VALID_DROP_REACTIONS_WHEN = list(DROP_REACTIONS_WHEN.__dict__.values())
 
 # adding weights to NapistuGraph
 

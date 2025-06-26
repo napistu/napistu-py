@@ -1,24 +1,23 @@
 from __future__ import annotations
 
 import os
-import pytest
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from napistu import sbml_dfs_core
 from napistu.ingestion import sbml
 from napistu.network import net_create
+from napistu.network import net_create_utils
 from napistu.network import ng_utils
-from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import SBML_DFS
-from napistu.constants import VALID_SBO_TERM_NAMES
-from napistu.network.constants import DEFAULT_WT_TRANS
-from napistu.network.constants import WEIGHTING_SPEC
-from napistu.network.constants import VALID_GRAPH_WIRING_APPROACHES
-from napistu.network.constants import NAPISTU_GRAPH_NODE_TYPES
-from napistu.network.constants import NAPISTU_GRAPH_EDGES
-from napistu.network.constants import GRAPH_WIRING_APPROACHES
+from napistu.network.constants import (
+    DROP_REACTIONS_WHEN,
+    DEFAULT_WT_TRANS,
+    WEIGHTING_SPEC,
+    GRAPH_WIRING_APPROACHES,
+)
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")
@@ -26,86 +25,6 @@ test_data = os.path.join(test_path, "test_data")
 sbml_path = os.path.join(test_data, "R-HSA-1237044.sbml")
 sbml_model = sbml.SBML(sbml_path)
 sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
-
-
-@pytest.fixture
-def reaction_species_examples(sbml_dfs):
-    """
-    Pytest fixture providing a dictionary of example reaction species DataFrames for various test cases.
-    """
-    r_id = sbml_dfs.reactions.index[0]
-    d = dict()
-    d["valid_interactor"] = pd.DataFrame(
-        {
-            "r_id": [r_id, r_id],
-            "sbo_term": [
-                MINI_SBO_FROM_NAME["interactor"],
-                MINI_SBO_FROM_NAME["interactor"],
-            ],
-            "sc_id": ["sc1", "sc2"],
-            "stoichiometry": [0, 0],
-        }
-    ).set_index(["r_id", "sbo_term"])
-    d["invalid_interactor"] = pd.DataFrame(
-        {
-            "r_id": [r_id, r_id],
-            "sbo_term": [
-                MINI_SBO_FROM_NAME["interactor"],
-                MINI_SBO_FROM_NAME["product"],
-            ],
-            "sc_id": ["sc1", "sc2"],
-            "stoichiometry": [0, 0],
-        }
-    ).set_index(["r_id", "sbo_term"])
-    d["sub_and_prod"] = pd.DataFrame(
-        {
-            "r_id": [r_id, r_id],
-            "sbo_term": [MINI_SBO_FROM_NAME["reactant"], MINI_SBO_FROM_NAME["product"]],
-            "sc_id": ["sub", "prod"],
-            "stoichiometry": [-1, 1],
-        }
-    ).set_index(["r_id", "sbo_term"])
-    d["stimulator"] = pd.DataFrame(
-        {
-            "r_id": [r_id, r_id, r_id],
-            "sbo_term": [
-                MINI_SBO_FROM_NAME["reactant"],
-                MINI_SBO_FROM_NAME["product"],
-                MINI_SBO_FROM_NAME["stimulator"],
-            ],
-            "sc_id": ["sub", "prod", "stim"],
-            "stoichiometry": [-1, 1, 0],
-        }
-    ).set_index(["r_id", "sbo_term"])
-    d["all_entities"] = pd.DataFrame(
-        {
-            "r_id": [r_id, r_id, r_id, r_id],
-            "sbo_term": [
-                MINI_SBO_FROM_NAME["reactant"],
-                MINI_SBO_FROM_NAME["product"],
-                MINI_SBO_FROM_NAME["stimulator"],
-                MINI_SBO_FROM_NAME["catalyst"],
-            ],
-            "sc_id": ["sub", "prod", "stim", "cat"],
-            "stoichiometry": [-1, 1, 0, 0],
-        }
-    ).set_index(["r_id", "sbo_term"])
-    d["no_substrate"] = pd.DataFrame(
-        {
-            "r_id": [r_id, r_id, r_id, r_id, r_id],
-            "sbo_term": [
-                MINI_SBO_FROM_NAME["product"],
-                MINI_SBO_FROM_NAME["stimulator"],
-                MINI_SBO_FROM_NAME["stimulator"],
-                MINI_SBO_FROM_NAME["inhibitor"],
-                MINI_SBO_FROM_NAME["catalyst"],
-            ],
-            "sc_id": ["prod", "stim1", "stim2", "inh", "cat"],
-            "stoichiometry": [1, 0, 0, 0, 0],
-        }
-    ).set_index(["r_id", "sbo_term"])
-
-    return r_id, d
 
 
 def test_create_napistu_graph():
@@ -229,102 +148,16 @@ def test_igraph_loading():
             os.unlink(import_pkl_path)
 
 
-def test_format_interactors(reaction_species_examples):
-    r_id, reaction_species_examples_dict = reaction_species_examples
-    # interactions are formatted
-
-    graph_hierarchy_df = net_create._create_graph_hierarchy_df("regulatory")
-
-    assert (
-        net_create._format_tiered_reaction_species(
-            r_id,
-            reaction_species_examples_dict["valid_interactor"],
-            sbml_dfs,
-            graph_hierarchy_df,
-        ).shape[0]
-        == 1
-    )
-
-    print("Re-enable test once Issue #102 is solved")
-
-    # catch error from invalid interactor specification
-    # with pytest.raises(ValueError) as excinfo:
-    #    net_create._format_tiered_reaction_species(
-    #        r_id, reaction_species_examples_dict["invalid_interactor"], sbml_dfs
-    #    )
-    # assert str(excinfo.value).startswith("Invalid combinations of SBO_terms")
-
-    # simple reaction with just substrates and products
-    assert (
-        net_create._format_tiered_reaction_species(
-            r_id,
-            reaction_species_examples_dict["sub_and_prod"],
-            sbml_dfs,
-            graph_hierarchy_df,
-        ).shape[0]
-        == 2
-    )
-
-    # add a stimulator (activator)
-    rxn_edges = net_create._format_tiered_reaction_species(
-        r_id, reaction_species_examples_dict["stimulator"], sbml_dfs, graph_hierarchy_df
-    )
-
-    assert rxn_edges.shape[0] == 3
-    assert rxn_edges.iloc[0][["from", "to"]].tolist() == ["stim", "sub"]
-
-    # add catalyst + stimulator
-    rxn_edges = net_create._format_tiered_reaction_species(
-        r_id,
-        reaction_species_examples_dict["all_entities"],
-        sbml_dfs,
-        graph_hierarchy_df,
-    )
-
-    assert rxn_edges.shape[0] == 4
-    assert rxn_edges.iloc[0][["from", "to"]].tolist() == ["stim", "cat"]
-    assert rxn_edges.iloc[1][["from", "to"]].tolist() == ["cat", "sub"]
-
-    # no substrate
-    rxn_edges = net_create._format_tiered_reaction_species(
-        r_id,
-        reaction_species_examples_dict["no_substrate"],
-        sbml_dfs,
-        graph_hierarchy_df,
-    )
-
-    assert rxn_edges.shape[0] == 5
-    # stimulator -> reactant
-    assert rxn_edges.iloc[0][["from", "to"]].tolist() == ["stim1", "cat"]
-    assert rxn_edges.iloc[1][["from", "to"]].tolist() == ["stim2", "cat"]
-    assert rxn_edges.iloc[2][["from", "to"]].tolist() == ["inh", "cat"]
-
-    # use the surrogate model tiered layout also
-
-    graph_hierarchy_df = net_create._create_graph_hierarchy_df("surrogate")
-
-    rxn_edges = net_create._format_tiered_reaction_species(
-        r_id,
-        reaction_species_examples_dict["all_entities"],
-        sbml_dfs,
-        graph_hierarchy_df,
-    )
-
-    assert rxn_edges.shape[0] == 4
-    assert rxn_edges.iloc[0][["from", "to"]].tolist() == ["stim", "sub"]
-    assert rxn_edges.iloc[1][["from", "to"]].tolist() == ["sub", "cat"]
-
-
 def test_reverse_network_edges(reaction_species_examples):
     r_id, reaction_species_examples_dict = reaction_species_examples
 
-    graph_hierarchy_df = net_create._create_graph_hierarchy_df("regulatory")
+    graph_hierarchy_df = net_create_utils._create_graph_hierarchy_df("regulatory")
 
-    rxn_edges = net_create._format_tiered_reaction_species(
+    rxn_edges = net_create_utils.format_tiered_reaction_species(
         r_id,
         reaction_species_examples_dict["all_entities"],
-        sbml_dfs,
         graph_hierarchy_df,
+        drop_reactions_when=DROP_REACTIONS_WHEN.SAME_TIER,
     )
     augmented_network_edges = rxn_edges.assign(r_isreversible=True)
     augmented_network_edges["sc_parents"] = range(0, augmented_network_edges.shape[0])
@@ -470,19 +303,3 @@ def test_pluck_entity_data_empty_species_dict(sbml_dfs):
     graph_attrs = {SBML_DFS.SPECIES: {}}
     result = net_create.pluck_entity_data(sbml_dfs, graph_attrs, SBML_DFS.SPECIES)
     assert result is None
-
-
-def test_graph_hierarchy_layouts():
-    REQUIRED_NAMES = VALID_SBO_TERM_NAMES + [NAPISTU_GRAPH_NODE_TYPES.REACTION]
-    for value in VALID_GRAPH_WIRING_APPROACHES:
-        layout_df = net_create._create_graph_hierarchy_df(value)
-        # all terms should be represented
-        missing = set(REQUIRED_NAMES).difference(
-            set(layout_df[NAPISTU_GRAPH_EDGES.SBO_NAME])
-        )
-        assert not missing, f"Missing SBO names in {value}: {missing}"
-        # all terms should be unique
-        duplicated = layout_df[layout_df[NAPISTU_GRAPH_EDGES.SBO_NAME].duplicated()]
-        assert (
-            duplicated.empty
-        ), f"Duplicated SBO names in {value}: {duplicated[NAPISTU_GRAPH_EDGES.SBO_NAME].tolist()}"
