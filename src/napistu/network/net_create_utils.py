@@ -3,7 +3,12 @@ import logging
 import pandas as pd
 
 from napistu import utils
-from napistu.constants import MINI_SBO_FROM_NAME, MINI_SBO_TO_NAME, SBML_DFS
+from napistu.constants import (
+    MINI_SBO_FROM_NAME,
+    MINI_SBO_TO_NAME,
+    SBML_DFS,
+    SBOTERM_NAMES,
+)
 from napistu.network.constants import (
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
@@ -460,3 +465,98 @@ def _format_tier_combo(
     )
 
     return formatted_tier_combo
+
+
+def _find_sbo_duos(
+    reaction_species: pd.DataFrame,
+    target_sbo_term: str = MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR],
+) -> list[str]:
+    """
+    Find r_ids that have exactly 2 rows with the specified sbo_term and no other sbo_terms.
+
+    Parameters
+    ----------
+    reaction_species : pd.DataFrame
+        DataFrame with columns: sbo_term, sc_id, stoichiometry, r_id
+    target_sbo_term : str
+        The sbo_term to match (e.g., "SBO:0000336" aka "interactor")
+
+    Returns
+    -------
+    list
+        List of r_ids that meet the criteria
+    """
+    # Group by r_id and check conditions
+    grouped = reaction_species.groupby(SBML_DFS.R_ID)
+
+    matching_r_ids = []
+    for r_id, group in grouped:
+        # Check if all sbo_terms match the target AND there are exactly 2 rows
+        if (group[SBML_DFS.SBO_TERM] == target_sbo_term).all() and len(group) == 2:
+            matching_r_ids.append(r_id)
+
+    return matching_r_ids
+
+
+def _interactor_duos_to_wide(interactor_duos: pd.DataFrame):
+    """
+    Convert paired long format to wide format with 'from' and 'to' columns.
+
+    Parameters
+    ----------
+    interactor_duos : pd.DataFrame
+        DataFrame with exactly 2 rows per r_id, containing sc_id and stoichiometry
+
+    Returns
+    -------
+    pd.DataFrame
+        Wide format with from_sc_id, from_stoichiometry, to_sc_id, to_stoichiometry columns
+    """
+    # Sort by sc_id within each group to ensure consistent ordering
+
+    _validate_interactor_duos(interactor_duos)
+    df_sorted = interactor_duos.sort_values([SBML_DFS.R_ID, SBML_DFS.SC_ID])
+
+    # Group by r_id and use cumcount to create row numbers (0, 1)
+    df_sorted["pair_order"] = df_sorted.groupby(SBML_DFS.R_ID).cumcount()
+
+    # Pivot to wide format
+    wide_df = df_sorted.pivot(
+        index=SBML_DFS.R_ID, columns="pair_order", values=SBML_DFS.SC_ID
+    )
+
+    # Flatten column names and rename
+    wide_df.columns = [f"sc_id_{['from', 'to'][col]}" for col in wide_df.columns]
+
+    # Reset index to make r_id a column
+    return wide_df.reset_index().assign(
+        sbo_term=MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR], stoichiometry=0
+    )
+
+
+def _validate_interactor_duos(interactor_duos: pd.DataFrame):
+    """Logs cases when a pair of interactors have non-zero stoichiometry"""
+
+    utils.match_pd_vars(
+        interactor_duos,
+        req_vars={
+            SBML_DFS.R_ID,
+            SBML_DFS.SC_ID,
+            SBML_DFS.SBO_TERM,
+            SBML_DFS.STOICHIOMETRY,
+        },
+    ).assert_present()
+
+    non_zero_stoi = interactor_duos[interactor_duos[SBML_DFS.STOICHIOMETRY] != 0]
+
+    if not non_zero_stoi.empty:
+        affected_r_ids = non_zero_stoi[SBML_DFS.R_ID].unique()
+        n_reactions = len(affected_r_ids)
+        sample_r_ids = affected_r_ids[:5].tolist()
+
+        logger.warning(
+            f"Found {n_reactions} reactions constructed from pairs of interactors with non-zero"
+            "stoichiometry. These should likely be assigned to another SBO term so their relationship"
+            "can be properly represented.\n"
+            f"Affected r_ids (showing up to 5): {sample_r_ids}"
+        )

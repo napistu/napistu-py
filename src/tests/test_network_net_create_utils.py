@@ -175,8 +175,8 @@ def test_edge_cases_and_validation(reaction_species_examples):
 
 def test_edgelist_should_have_one_edge():
     """EDGELIST with 2 species should create exactly 1 edge, not 2"""
-    r_id = "foo"
 
+    r_id = "foo"
     reaction_df = pd.DataFrame(
         {
             SBML_DFS.SBO_TERM: [
@@ -199,8 +199,8 @@ def test_edgelist_should_have_one_edge():
 
 def test_edgelist_should_not_have_reaction_as_source():
     """EDGELIST should not have reaction ID in FROM column"""
-    r_id = "foo"
 
+    r_id = "foo"
     reaction_df = pd.DataFrame(
         {
             SBML_DFS.SBO_TERM: [
@@ -277,3 +277,41 @@ def test_graph_hierarchy_layouts():
             and reaction_tier_df[NAPISTU_GRAPH_EDGES.SBO_NAME].iloc[0]
             == NAPISTU_GRAPH_NODE_TYPES.REACTION
         ), f"Tier {reaction_tier} in {value} should contain only 'reaction', but contains: {reaction_tier_df[NAPISTU_GRAPH_EDGES.SBO_NAME].tolist()}"
+
+
+def test_identifying_and_formatting_interactor_duos(reaction_species_examples):
+
+    # directly specify interactions as a speed up to same tier procedure
+    interaction_template = reaction_species_examples["valid_interactor"]
+    interactor_species = pd.concat(
+        [
+            interaction_template.reset_index().assign(
+                r_id=str(i),
+                sc_id=lambda df: df[SBML_DFS.SC_ID].apply(lambda x: f"r{i}_{x}"),
+            )
+            for i in range(0, 10)
+        ]
+    )
+
+    invalid_interactor_template = reaction_species_examples["invalid_interactor"]
+    invalid_interactor_species = pd.concat(
+        [
+            invalid_interactor_template.reset_index().assign(
+                r_id=str(i),
+                sc_id=lambda df: df[SBML_DFS.SC_ID].apply(lambda x: f"r{i}_{x}"),
+            )
+            for i in range(10, 12)
+        ]
+    )
+
+    reaction_species = pd.concat([interactor_species, invalid_interactor_species])
+
+    matching_r_ids = net_create_utils._find_sbo_duos(
+        reaction_species, MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
+    )
+    assert set(matching_r_ids) == {str(i) for i in range(0, 10)}
+
+    interactor_duos = reaction_species.loc[
+        reaction_species[SBML_DFS.R_ID].isin(matching_r_ids)
+    ]
+    assert net_create_utils._interactor_duos_to_wide(interactor_duos).shape[0] == 10

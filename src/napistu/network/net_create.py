@@ -17,26 +17,32 @@ from napistu.network import net_create_utils
 from napistu.network.ng_core import NapistuGraph
 
 
-from napistu.constants import MINI_SBO_FROM_NAME
-from napistu.constants import MINI_SBO_TO_NAME
-from napistu.constants import SBML_DFS
-from napistu.constants import SBO_MODIFIER_NAMES
-from napistu.constants import ENTITIES_W_DATA
+from napistu.constants import (
+    MINI_SBO_FROM_NAME,
+    MINI_SBO_TO_NAME,
+    SBO_MODIFIER_NAMES,
+    SBOTERM_NAMES,
+    SCHEMA_DEFS,
+    SBML_DFS,
+    SBML_DFS_SCHEMA,
+    ENTITIES_W_DATA,
+)
 
-from napistu.network.constants import NAPISTU_GRAPH_NODES
-from napistu.network.constants import NAPISTU_GRAPH_EDGES
-from napistu.network.constants import NAPISTU_GRAPH_EDGE_DIRECTIONS
-from napistu.network.constants import NAPISTU_GRAPH_NODE_TYPES
-from napistu.network.constants import GRAPH_WIRING_APPROACHES
-from napistu.network.constants import NAPISTU_WEIGHTING_STRATEGIES
-from napistu.network.constants import SBOTERM_NAMES
-from napistu.network.constants import VALID_GRAPH_WIRING_APPROACHES
-from napistu.network.constants import VALID_WEIGHTING_STRATEGIES
-from napistu.network.constants import DEFAULT_WT_TRANS
-from napistu.network.constants import DEFINED_WEIGHT_TRANSFORMATION
-from napistu.network.constants import SCORE_CALIBRATION_POINTS_DICT
-from napistu.network.constants import SOURCE_VARS_DICT
-from napistu.network.constants import DROP_REACTIONS_WHEN
+from napistu.network.constants import (
+    NAPISTU_GRAPH_NODES,
+    NAPISTU_GRAPH_EDGES,
+    NAPISTU_GRAPH_EDGE_DIRECTIONS,
+    NAPISTU_GRAPH_NODE_TYPES,
+    GRAPH_WIRING_APPROACHES,
+    NAPISTU_WEIGHTING_STRATEGIES,
+    VALID_GRAPH_WIRING_APPROACHES,
+    VALID_WEIGHTING_STRATEGIES,
+    DEFAULT_WT_TRANS,
+    DEFINED_WEIGHT_TRANSFORMATION,
+    SCORE_CALIBRATION_POINTS_DICT,
+    SOURCE_VARS_DICT,
+    DROP_REACTIONS_WHEN,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -158,7 +164,7 @@ def create_napistu_graph(
         network_edges = _create_napistu_graph_bipartite(working_sbml_dfs)
     elif wiring_approach in VALID_GRAPH_WIRING_APPROACHES:
         # pass wiring_approach so that an appropriate tiered schema can be used.
-        network_edges = _create_napistu_graph_tiered(
+        network_edges = create_napistu_graph_wiring(
             working_sbml_dfs, wiring_approach, drop_reactions_when
         )
     else:
@@ -324,6 +330,209 @@ def process_napistu_graph(
     )
 
     return weighted_napistu_graph
+
+
+def create_napistu_graph_wiring(
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    wiring_approach: str,
+    drop_reactions_when: str = DROP_REACTIONS_WHEN.SAME_TIER,
+) -> pd.DataFrame:
+    """
+    Turn an sbml_dfs model into a tiered graph which links upstream entities to downstream ones.
+
+    Parameters
+    ----------
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The SBML_dfs object containing the model data.
+    wiring_approach : str
+        The wiring approach to use for the graph.
+    drop_reactions_when : str, optional
+        The condition under which to drop reactions as a network vertex. Default is 'same_tier'.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame representing the tiered network edges.
+
+    Raises
+    ------
+    ValueError
+        If invalid SBO terms are present or required attributes are missing.
+    """
+
+    # check whether all expect SBO terms are present
+    invalid_sbo_terms = sbml_dfs.reaction_species[
+        ~sbml_dfs.reaction_species[SBML_DFS.SBO_TERM].isin(MINI_SBO_TO_NAME.keys())
+    ]
+
+    if invalid_sbo_terms.shape[0] != 0:
+        invalid_counts = invalid_sbo_terms.value_counts(SBML_DFS.SBO_TERM).to_frame("N")
+        if not isinstance(invalid_counts, pd.DataFrame):
+            raise TypeError("invalid_counts must be a pandas DataFrame")
+        logger.warning(utils.style_df(invalid_counts, headers="keys"))  # type: ignore
+        raise ValueError("Some reaction species have unusable SBO terms")
+
+    # load and validate the schema of wiring_approach
+    graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df(wiring_approach)
+
+    # organize reaction species for defining connections
+    logger.info(
+        f"Formatting {sbml_dfs.reaction_species.shape[0]} reactions species as "
+        "tiered edges."
+    )
+
+    # handle interactors since they can easily be processed en-masse
+    interactor_pairs = net_create_utils._find_sbo_duos(
+        sbml_dfs.reaction_species, MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
+    )
+
+    if len(interactor_pairs) > 0:
+        logger.info("Processing {len(interactor_pairs)/2} interaction pairs")
+        interactor_duos = sbml_dfs.reaction_species.loc[
+            sbml_dfs.reaction_species[SBML_DFS.R_ID].isin(interactor_pairs)
+        ]
+
+        interactor_edges = net_create_utils._interactor_duos_to_wide(interactor_duos)
+    else:
+        interactor_edges = pd.DataFrame()
+
+    non_interactors_rspecies = sbml_dfs.reaction_species.loc[
+        ~sbml_dfs.reaction_species[SBML_DFS.R_ID].isin(interactor_pairs)
+    ]
+
+    if non_interactors_rspecies.shape[0] > 0:
+        # filter to just the entries which will be processed with the tiered algorithm
+        rspecies_fields = SBML_DFS_SCHEMA.SCHEMA[SBML_DFS.REACTION_SPECIES][
+            SCHEMA_DEFS.VARS
+        ]
+        reaction_groups = sbml_dfs.reaction_species[rspecies_fields].groupby(
+            SBML_DFS.R_ID
+        )
+
+        all_tiered_edges = [
+            net_create_utils.format_tiered_reaction_species(
+                rxn_group.drop(columns=[SBML_DFS.R_ID])
+                .set_index(SBML_DFS.SBO_TERM)
+                .sort_index(),  # Set index here
+                r_id,
+                graph_hierarchy_df,
+                drop_reactions_when,
+            )
+            for r_id, rxn_group in reaction_groups
+        ]
+
+        all_tiered_edges_df = pd.concat(all_tiered_edges).reset_index(drop=True)
+    else:
+        all_tiered_edges_df = pd.DataFrame()
+
+    all_reaction_edges_df = pd.concat([interactor_edges, all_tiered_edges_df])
+
+    logger.info(
+        "Adding additional attributes to edges, e.g., # of children and parents."
+    )
+
+    # add compartmentalized species summaries to weight edges
+    cspecies_features = sbml_dfs.get_cspecies_features()
+
+    # calculate undirected and directed degrees (i.e., # of parents and children)
+    # based on a network's edgelist. this used when the network representation is
+    # not the bipartite network which can be trivially obtained from the pathway
+    # specification
+    unique_edges = (
+        all_reaction_edges_df.groupby(
+            [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+        )
+        .first()
+        .reset_index()
+    )
+
+    # children
+    n_children = (
+        unique_edges[NAPISTU_GRAPH_EDGES.FROM]
+        .value_counts()
+        # rename values to the child name
+        .to_frame(name=NAPISTU_GRAPH_EDGES.SC_CHILDREN)
+        .reset_index()
+        .rename(
+            {
+                NAPISTU_GRAPH_EDGES.FROM: SBML_DFS.SC_ID,
+            },
+            axis=1,
+        )
+    )
+
+    # parents
+    n_parents = (
+        unique_edges[NAPISTU_GRAPH_EDGES.TO]
+        .value_counts()
+        # rename values to the parent name
+        .to_frame(name=NAPISTU_GRAPH_EDGES.SC_PARENTS)
+        .reset_index()
+        .rename(
+            {
+                NAPISTU_GRAPH_EDGES.TO: SBML_DFS.SC_ID,
+            },
+            axis=1,
+        )
+    )
+
+    graph_degree_by_edgelist = n_children.merge(n_parents, how="outer").fillna(int(0))
+
+    graph_degree_by_edgelist[NAPISTU_GRAPH_EDGES.SC_DEGREE] = (
+        graph_degree_by_edgelist[NAPISTU_GRAPH_EDGES.SC_CHILDREN]
+        + graph_degree_by_edgelist[NAPISTU_GRAPH_EDGES.SC_PARENTS]
+    )
+    graph_degree_by_edgelist = (
+        graph_degree_by_edgelist[
+            ~graph_degree_by_edgelist[SBML_DFS.SC_ID].str.contains("R[0-9]{8}")
+        ]
+        .set_index(SBML_DFS.SC_ID)
+        .sort_index()
+    )
+
+    cspecies_features = (
+        cspecies_features.drop(
+            [
+                NAPISTU_GRAPH_EDGES.SC_DEGREE,
+                NAPISTU_GRAPH_EDGES.SC_CHILDREN,
+                NAPISTU_GRAPH_EDGES.SC_PARENTS,
+            ],
+            axis=1,
+        )
+        .join(graph_degree_by_edgelist)
+        .fillna(int(0))
+    )
+
+    is_from_reaction = all_reaction_edges_df[NAPISTU_GRAPH_EDGES.FROM].isin(
+        sbml_dfs.reactions.index.tolist()
+    )
+    is_from_reaction = all_reaction_edges_df[NAPISTU_GRAPH_EDGES.FROM].isin(
+        sbml_dfs.reactions.index
+    )
+    # add substrate weight whenever "from" edge is a molecule
+    # and product weight when the "from" edge is a reaction
+    decorated_all_reaction_edges_df = pd.concat(
+        [
+            all_reaction_edges_df[~is_from_reaction].merge(
+                cspecies_features, left_on=NAPISTU_GRAPH_EDGES.FROM, right_index=True
+            ),
+            all_reaction_edges_df[is_from_reaction].merge(
+                cspecies_features, left_on=NAPISTU_GRAPH_EDGES.TO, right_index=True
+            ),
+        ]
+    ).sort_index()
+
+    if all_reaction_edges_df.shape[0] != decorated_all_reaction_edges_df.shape[0]:
+        msg = (
+            "'decorated_all_reaction_edges_df' and 'all_reaction_edges_df' should\n"
+            "have the same number of rows but they did not"
+        )
+
+        raise ValueError(msg)
+
+    logger.info(f"Done preparing {wiring_approach} graph")
+
+    return decorated_all_reaction_edges_df
 
 
 def pluck_entity_data(
@@ -649,185 +858,6 @@ def _create_napistu_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.Data
     network_edges = pd.concat([origin_edges, dest_edges])
 
     return network_edges
-
-
-def _create_napistu_graph_tiered(
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
-    wiring_approach: str,
-    drop_reactions_when: str = DROP_REACTIONS_WHEN.SAME_TIER,
-) -> pd.DataFrame:
-    """
-    Turn an sbml_dfs model into a tiered graph which links upstream entities to downstream ones.
-
-    Parameters
-    ----------
-    sbml_dfs : sbml_dfs_core.SBML_dfs
-        The SBML_dfs object containing the model data.
-    wiring_approach : str
-        The wiring approach to use for the graph.
-    drop_reactions_when : str, optional
-        The condition under which to drop reactions as a network vertex. Default is 'same_tier'.
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame representing the tiered network edges.
-
-    Raises
-    ------
-    ValueError
-        If invalid SBO terms are present or required attributes are missing.
-    """
-
-    # check whether all expect SBO terms are present
-    invalid_sbo_terms = sbml_dfs.reaction_species[
-        ~sbml_dfs.reaction_species[SBML_DFS.SBO_TERM].isin(MINI_SBO_TO_NAME.keys())
-    ]
-
-    if invalid_sbo_terms.shape[0] != 0:
-        invalid_counts = invalid_sbo_terms.value_counts(SBML_DFS.SBO_TERM).to_frame("N")
-        if not isinstance(invalid_counts, pd.DataFrame):
-            raise TypeError("invalid_counts must be a pandas DataFrame")
-        logger.warning(utils.style_df(invalid_counts, headers="keys"))  # type: ignore
-        raise ValueError("Some reaction species have unusable SBO terms")
-
-    # load and validate the schema of wiring_approach
-    graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df(wiring_approach)
-
-    # organize reaction species for defining connections
-    logger.info(
-        f"Formatting {sbml_dfs.reaction_species.shape[0]} reactions species as "
-        "tiered edges."
-    )
-
-    rspecies_fields = [
-        SBML_DFS.R_ID,
-        SBML_DFS.SC_ID,
-        SBML_DFS.SBO_TERM,
-        SBML_DFS.STOICHIOMETRY,
-    ]
-    reaction_groups = sbml_dfs.reaction_species[rspecies_fields].groupby(SBML_DFS.R_ID)
-
-    all_reaction_edges = [
-        net_create_utils.format_tiered_reaction_species(
-            rxn_group.drop(columns=[SBML_DFS.R_ID])
-            .set_index(SBML_DFS.SBO_TERM)
-            .sort_index(),  # Set index here
-            r_id,
-            graph_hierarchy_df,
-            drop_reactions_when,
-        )
-        for r_id, rxn_group in reaction_groups
-    ]
-
-    all_reaction_edges_df = pd.concat(all_reaction_edges).reset_index(drop=True)
-
-    logger.info(
-        "Adding additional attributes to edges, e.g., # of children and parents."
-    )
-
-    # add compartmentalized species summaries to weight edges
-    cspecies_features = sbml_dfs.get_cspecies_features()
-
-    # calculate undirected and directed degrees (i.e., # of parents and children)
-    # based on a network's edgelist. this used when the network representation is
-    # not the bipartite network which can be trivially obtained from the pathway
-    # specification
-    unique_edges = (
-        all_reaction_edges_df.groupby(
-            [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
-        )
-        .first()
-        .reset_index()
-    )
-
-    # children
-    n_children = (
-        unique_edges[NAPISTU_GRAPH_EDGES.FROM]
-        .value_counts()
-        # rename values to the child name
-        .to_frame(name=NAPISTU_GRAPH_EDGES.SC_CHILDREN)
-        .reset_index()
-        .rename(
-            {
-                NAPISTU_GRAPH_EDGES.FROM: SBML_DFS.SC_ID,
-            },
-            axis=1,
-        )
-    )
-
-    # parents
-    n_parents = (
-        unique_edges[NAPISTU_GRAPH_EDGES.TO]
-        .value_counts()
-        # rename values to the parent name
-        .to_frame(name=NAPISTU_GRAPH_EDGES.SC_PARENTS)
-        .reset_index()
-        .rename(
-            {
-                NAPISTU_GRAPH_EDGES.TO: SBML_DFS.SC_ID,
-            },
-            axis=1,
-        )
-    )
-
-    graph_degree_by_edgelist = n_children.merge(n_parents, how="outer").fillna(int(0))
-
-    graph_degree_by_edgelist[NAPISTU_GRAPH_EDGES.SC_DEGREE] = (
-        graph_degree_by_edgelist[NAPISTU_GRAPH_EDGES.SC_CHILDREN]
-        + graph_degree_by_edgelist[NAPISTU_GRAPH_EDGES.SC_PARENTS]
-    )
-    graph_degree_by_edgelist = (
-        graph_degree_by_edgelist[
-            ~graph_degree_by_edgelist[SBML_DFS.SC_ID].str.contains("R[0-9]{8}")
-        ]
-        .set_index(SBML_DFS.SC_ID)
-        .sort_index()
-    )
-
-    cspecies_features = (
-        cspecies_features.drop(
-            [
-                NAPISTU_GRAPH_EDGES.SC_DEGREE,
-                NAPISTU_GRAPH_EDGES.SC_CHILDREN,
-                NAPISTU_GRAPH_EDGES.SC_PARENTS,
-            ],
-            axis=1,
-        )
-        .join(graph_degree_by_edgelist)
-        .fillna(int(0))
-    )
-
-    is_from_reaction = all_reaction_edges_df[NAPISTU_GRAPH_EDGES.FROM].isin(
-        sbml_dfs.reactions.index.tolist()
-    )
-    is_from_reaction = all_reaction_edges_df[NAPISTU_GRAPH_EDGES.FROM].isin(
-        sbml_dfs.reactions.index
-    )
-    # add substrate weight whenever "from" edge is a molecule
-    # and product weight when the "from" edge is a reaction
-    decorated_all_reaction_edges_df = pd.concat(
-        [
-            all_reaction_edges_df[~is_from_reaction].merge(
-                cspecies_features, left_on=NAPISTU_GRAPH_EDGES.FROM, right_index=True
-            ),
-            all_reaction_edges_df[is_from_reaction].merge(
-                cspecies_features, left_on=NAPISTU_GRAPH_EDGES.TO, right_index=True
-            ),
-        ]
-    ).sort_index()
-
-    if all_reaction_edges_df.shape[0] != decorated_all_reaction_edges_df.shape[0]:
-        msg = (
-            "'decorated_all_reaction_edges_df' and 'all_reaction_edges_df' should\n"
-            "have the same number of rows but they did not"
-        )
-
-        raise ValueError(msg)
-
-    logger.info(f"Done preparing {wiring_approach} graph")
-
-    return decorated_all_reaction_edges_df
 
 
 def _add_graph_weights_mixed(
