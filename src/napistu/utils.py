@@ -7,24 +7,24 @@ import logging
 import os
 import pickle
 import re
+import requests
 import shutil
 import urllib.request as request
 import zipfile
 from contextlib import closing
 from itertools import starmap
 from textwrap import fill
-from typing import Any
-from typing import Union
-from typing import Optional
-from typing import List
+from typing import Any, List, Optional, Union
 from urllib.parse import urlparse
-import requests
+from pathlib import Path
 from requests.adapters import HTTPAdapter
 from requests.adapters import Retry
 
 import igraph as ig
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 from fs import open_fs
 from fs.copy import copy_dir
 from fs.copy import copy_file
@@ -602,6 +602,81 @@ def load_json(uri: str) -> Any:
             else:
                 raise (e)
         return json.loads(txt)
+
+
+def save_parquet(
+    df: pd.DataFrame, uri: Union[str, Path], compression: str = "snappy"
+) -> None:
+    """
+    Write a DataFrame to a single Parquet file.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The DataFrame to save
+    uri : Union[str, Path]
+        Path where to save the Parquet file. Can be a local path or a GCS URI.
+        Recommended extensions: .parquet or .pq
+    compression : str, default 'snappy'
+        Compression algorithm. Options: 'snappy', 'gzip', 'brotli', 'lz4', 'zstd'
+
+    Raises
+    ------
+    OSError
+        If the file cannot be written to (permission issues, etc.)
+    """
+
+    uri_str = str(uri)
+
+    # Warn about non-standard extensions
+    if not any(uri_str.endswith(ext) for ext in [".parquet", ".pq"]):
+        logger.warning(
+            f"File '{uri_str}' doesn't have a standard Parquet extension (.parquet or .pq)"
+        )
+
+    target_base, target_path = get_target_base_and_path(uri_str)
+
+    with open_fs(target_base, create=True) as target_fs:
+        with target_fs.openbin(target_path, "w") as f:
+            # Convert to Arrow table and write as single file
+            table = pa.Table.from_pandas(df)
+            pq.write_table(
+                table,
+                f,
+                compression=compression,
+                use_dictionary=True,  # Efficient for repeated values
+                write_statistics=True,  # Enables query optimization
+            )
+
+
+def load_parquet(uri: Union[str, Path]) -> pd.DataFrame:
+    """
+    Read a DataFrame from a Parquet file.
+
+    Parameters
+    ----------
+    uri : Union[str, Path]
+        Path to the Parquet file to load
+
+    Returns
+    -------
+    pd.DataFrame
+        The DataFrame loaded from the Parquet file
+
+    Raises
+    ------
+    FileNotFoundError
+        If the specified file does not exist
+    """
+    try:
+        target_base, target_path = get_target_base_and_path(str(uri))
+
+        with open_fs(target_base) as target_fs:
+            with target_fs.openbin(target_path, "r") as f:
+                return pd.read_parquet(f, engine="pyarrow")
+
+    except ResourceNotFound as e:
+        raise FileNotFoundError(f"File not found: {uri}") from e
 
 
 def extract_regex_search(regex: str, query: str, index_value: int = 0) -> str:

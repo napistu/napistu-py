@@ -2,17 +2,12 @@ from __future__ import annotations
 
 import logging
 import math
-from pathlib import Path
-from typing import Union
-import io
 
 import numpy as np
 import pandas as pd
-from fs.errors import ResourceNotFound
 
 from napistu.network.ng_core import NapistuGraph
 from napistu.network.ig_utils import validate_edge_attributes
-from napistu.utils import load_json, save_json
 from napistu.constants import NAPISTU_EDGELIST, SBML_DFS
 from napistu.network.constants import (
     NAPISTU_GRAPH_EDGES,
@@ -113,60 +108,6 @@ def precompute_distances(
     ).reset_index(drop=True)
 
     return filtered_precomputed_distances
-
-
-def save_precomputed_distances(
-    precomputed_distances: pd.DataFrame, uri: Union[str, Path]
-) -> None:
-    """
-    Save a precomputed distances DataFrame to a JSON file.
-
-    Parameters
-    ----------
-    precomputed_distances : pd.DataFrame
-        The precomputed distances DataFrame to save
-    uri : Union[str, Path]
-        Path where to save the JSON file. Can be a local path or a GCS URI.
-
-    Raises
-    ------
-    OSError
-        If the file cannot be written to (permission issues, etc.)
-    """
-    save_json(str(uri), precomputed_distances.to_json())
-
-
-def load_precomputed_distances(uri: Union[str, Path]) -> pd.DataFrame:
-    """
-    Load a precomputed distances DataFrame from a JSON file.
-
-    Parameters
-    ----------
-    uri : Union[str, Path]
-        Path to the JSON file to load
-
-    Returns
-    -------
-    pd.DataFrame
-        The reconstructed precomputed distances DataFrame
-
-    Raises
-    ------
-    FileNotFoundError
-        If the specified file does not exist
-    """
-    try:
-        json_string = load_json(str(uri))
-        df = pd.read_json(io.StringIO(json_string))
-
-        # Convert integer columns to float
-        for col in df.columns:
-            if df[col].dtype in ["int64", "int32", "int16", "int8"]:
-                df[col] = df[col].astype(float)
-
-        return df
-    except ResourceNotFound as e:
-        raise FileNotFoundError(f"File not found: {uri}") from e
 
 
 def _calculate_distances_subset(

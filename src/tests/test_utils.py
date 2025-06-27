@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import gzip
 import os
+import tempfile
 from datetime import datetime
-from unittest.mock import Mock
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pandas as pd
@@ -705,3 +706,26 @@ def test_update_pathological_names():
     s3 = pd.Series(["foo", "bar", "baz"])
     out3 = utils.update_pathological_names(s3, "prefix_")
     assert list(out3) == ["foo", "bar", "baz"]
+
+
+def test_parquet_save_load():
+    """Test that write_parquet and read_parquet work correctly."""
+    # Create test DataFrame
+    original_df = pd.DataFrame(
+        {
+            "sc_id_origin": ["A", "B", "C"],
+            "sc_id_dest": ["B", "C", "A"],
+            "path_length": [1, 2, 3],
+            "path_weights": [0.1, 0.5, 0.8],
+            "has_connection": [True, False, True],
+        }
+    )
+
+    # Write and read using temporary file
+    with tempfile.TemporaryDirectory() as temp_dir:
+        file_path = Path(temp_dir) / "test.parquet"
+        utils.save_parquet(original_df, file_path)
+        result_df = utils.load_parquet(file_path)
+
+        # Verify they're identical
+        pd.testing.assert_frame_equal(original_df, result_df)

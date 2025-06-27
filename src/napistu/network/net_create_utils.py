@@ -147,7 +147,7 @@ def wire_reaction_species(
     )
 
     if len(interactor_pairs) > 0:
-        logger.info(f"Processing {len(interactor_pairs)/2} interaction pairs")
+        logger.info(f"Processing {len(interactor_pairs)} interaction pairs")
         interactor_duos = reaction_species.loc[
             reaction_species[SBML_DFS.R_ID].isin(interactor_pairs)
         ]
@@ -161,6 +161,11 @@ def wire_reaction_species(
     ]
 
     if non_interactors_rspecies.shape[0] > 0:
+
+        logger.info(
+            f"Processing {non_interactors_rspecies.shape[0]} reaction species using the {wiring_approach} hierarchy"
+        )
+
         # filter to just the entries which will be processed with the tiered algorithm
         rspecies_fields = SBML_DFS_SCHEMA.SCHEMA[SBML_DFS.REACTION_SPECIES][
             SCHEMA_DEFS.VARS

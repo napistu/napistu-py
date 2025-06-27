@@ -359,8 +359,7 @@ def create_napistu_graph_wiring(
 
     # organize reaction species for defining connections
     logger.info(
-        f"Formatting {sbml_dfs.reaction_species.shape[0]} reactions species as "
-        "tiered edges."
+        f"Turning {sbml_dfs.reaction_species.shape[0]} reactions species into edges."
     )
 
     all_reaction_edges_df = net_create_utils.wire_reaction_species(

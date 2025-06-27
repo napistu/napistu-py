@@ -20,9 +20,9 @@ def remove_reciprocal_interactions(
 
     Args:
         edgelist (pd.DataFrame): edgelist (pd.DataFrame): edgelist where the first two
-          columns are assumed to be the edge vertices
+            columns are assumed to be the edge vertices
         extra_defining_vars (list): list (which can be empty) of variables which define
-          a unique interaction beyond the vertices
+            a unique interaction beyond the vertices
 
     Returns:
         indegenerate_edgelist (pd.DataFrame): edgelist with B-A edges removed and A-B retained
@@ -58,9 +58,9 @@ def count_fraction_of_reciprocal_interactions(
 
     Args:
         edgelist (pd.DataFrame): edgelist (pd.DataFrame): edgelist where the first two
-          columns are assumed to be the edge vertices
+            columns are assumed to be the edge vertices
         extra_defining_vars (list): list (which can be empty) of variables which define
-          a unique interaction beyond the vertices
+            a unique interaction beyond the vertices
 
     Returns:
         fraction (float): fraction of A-B edges which are also included as B-A edges
