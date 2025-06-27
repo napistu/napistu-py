@@ -1,6 +1,11 @@
 # Napistu Python Library
 
+[![PyPI version](https://badge.fury.io/py/napistu.svg)](https://badge.fury.io/py/napistu)
 [![Documentation Status](https://readthedocs.org/projects/napistu/badge/?version=latest)](https://napistu.readthedocs.io/en/latest/?badge=latest)
+[![CI](https://github.com/napistu/napistu-py/actions/workflows/ci.yml/badge.svg)](https://github.com/napistu/napistu-py/actions/workflows/ci.yml)
+[![Release](https://github.com/napistu/napistu-py/actions/workflows/release.yml/badge.svg)](https://github.com/napistu/napistu-py/actions/workflows/release.yml)
+[![Deploy to Cloud Run](https://github.com/napistu/napistu-py/actions/workflows/deploy.yml/badge.svg)](https://github.com/napistu/napistu-py/actions/workflows/deploy.yml)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 This Python package hosts the majority of the algorithmic code for the [Napistu project](https://github.com/napistu/napistu).
 
