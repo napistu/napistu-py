@@ -621,7 +621,11 @@ def exporter():
     "--format", "-f", default="pickle", help="Output format: gml, edgelist, pickle"
 )
 @click.option(
-    "--graph_type", "-g", type=str, default="bipartite", help="bipartite or regulatory"
+    "--wiring_approach",
+    "-g",
+    type=str,
+    default="bipartite",
+    help="bipartite or regulatory",
 )
 @click.option(
     "--weighting_strategy",
@@ -645,7 +649,7 @@ def export_igraph(
     output_uri: str,
     graph_attrs_spec_uri: str | None,
     format: str,
-    graph_type: str,
+    wiring_approach: str,
     weighting_strategy: str,
     directed: bool,
     reverse: bool,
@@ -663,7 +667,7 @@ def export_igraph(
         reaction_graph_attrs=graph_attrs_spec,
         directed=directed,
         edge_reversed=reverse,
-        graph_type=graph_type,
+        wiring_approach=wiring_approach,
         weighting_strategy=weighting_strategy,
         verbose=True,
     )
@@ -753,7 +757,7 @@ def export_precomputed_distances(
         weights_vars=weights_vars_list,
     )
 
-    precompute.save_precomputed_distances(precomputed_distances, output_uri)
+    utils.save_parquet(precomputed_distances, output_uri)
 
 
 @exporter.command(name="export_smbl_dfs_tables")

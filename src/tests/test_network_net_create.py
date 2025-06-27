@@ -1,20 +1,26 @@
 from __future__ import annotations
 
 import os
-import pytest
 
 import numpy as np
 import pandas as pd
+import pandas.testing as pdt
+import pytest
 
 from napistu import sbml_dfs_core
 from napistu.ingestion import sbml
 from napistu.network import net_create
+from napistu.network import net_create_utils
 from napistu.network import ng_utils
-from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import SBML_DFS
-from napistu.network.constants import DEFAULT_WT_TRANS
-from napistu.network.constants import WEIGHTING_SPEC
-
+from napistu.network.constants import (
+    DROP_REACTIONS_WHEN,
+    DEFAULT_WT_TRANS,
+    WEIGHTING_SPEC,
+    GRAPH_WIRING_APPROACHES,
+    NAPISTU_GRAPH_EDGES,
+    VALID_GRAPH_WIRING_APPROACHES,
+)
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")
@@ -24,102 +30,72 @@ sbml_model = sbml.SBML(sbml_path)
 sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
 
 
-@pytest.fixture
-def reaction_species_examples(sbml_dfs):
-    """
-    Pytest fixture providing a dictionary of example reaction species DataFrames for various test cases.
-    """
-    r_id = sbml_dfs.reactions.index[0]
-    d = dict()
-    d["valid_interactor"] = pd.DataFrame(
-        {
-            "r_id": [r_id, r_id],
-            "sbo_term": [
-                MINI_SBO_FROM_NAME["interactor"],
-                MINI_SBO_FROM_NAME["interactor"],
-            ],
-            "sc_id": ["sc1", "sc2"],
-            "stoichiometry": [0, 0],
-        }
-    ).set_index(["r_id", "sbo_term"])
-    d["invalid_interactor"] = pd.DataFrame(
-        {
-            "r_id": [r_id, r_id],
-            "sbo_term": [
-                MINI_SBO_FROM_NAME["interactor"],
-                MINI_SBO_FROM_NAME["product"],
-            ],
-            "sc_id": ["sc1", "sc2"],
-            "stoichiometry": [0, 0],
-        }
-    ).set_index(["r_id", "sbo_term"])
-    d["sub_and_prod"] = pd.DataFrame(
-        {
-            "r_id": [r_id, r_id],
-            "sbo_term": [MINI_SBO_FROM_NAME["reactant"], MINI_SBO_FROM_NAME["product"]],
-            "sc_id": ["sub", "prod"],
-            "stoichiometry": [-1, 1],
-        }
-    ).set_index(["r_id", "sbo_term"])
-    d["stimulator"] = pd.DataFrame(
-        {
-            "r_id": [r_id, r_id, r_id],
-            "sbo_term": [
-                MINI_SBO_FROM_NAME["reactant"],
-                MINI_SBO_FROM_NAME["product"],
-                MINI_SBO_FROM_NAME["stimulator"],
-            ],
-            "sc_id": ["sub", "prod", "stim"],
-            "stoichiometry": [-1, 1, 0],
-        }
-    ).set_index(["r_id", "sbo_term"])
-    d["all_entities"] = pd.DataFrame(
-        {
-            "r_id": [r_id, r_id, r_id, r_id],
-            "sbo_term": [
-                MINI_SBO_FROM_NAME["reactant"],
-                MINI_SBO_FROM_NAME["product"],
-                MINI_SBO_FROM_NAME["stimulator"],
-                MINI_SBO_FROM_NAME["catalyst"],
-            ],
-            "sc_id": ["sub", "prod", "stim", "cat"],
-            "stoichiometry": [-1, 1, 0, 0],
-        }
-    ).set_index(["r_id", "sbo_term"])
-    d["no_substrate"] = pd.DataFrame(
-        {
-            "r_id": [r_id, r_id, r_id, r_id, r_id],
-            "sbo_term": [
-                MINI_SBO_FROM_NAME["product"],
-                MINI_SBO_FROM_NAME["stimulator"],
-                MINI_SBO_FROM_NAME["stimulator"],
-                MINI_SBO_FROM_NAME["inhibitor"],
-                MINI_SBO_FROM_NAME["catalyst"],
-            ],
-            "sc_id": ["prod", "stim1", "stim2", "inh", "cat"],
-            "stoichiometry": [1, 0, 0, 0, 0],
-        }
-    ).set_index(["r_id", "sbo_term"])
-
-    return r_id, d
-
-
 def test_create_napistu_graph():
-    _ = net_create.create_napistu_graph(sbml_dfs, graph_type="bipartite")
-    _ = net_create.create_napistu_graph(sbml_dfs, graph_type="regulatory")
-    _ = net_create.create_napistu_graph(sbml_dfs, graph_type="surrogate")
+    _ = net_create.create_napistu_graph(
+        sbml_dfs, wiring_approach=GRAPH_WIRING_APPROACHES.BIPARTITE
+    )
+    _ = net_create.create_napistu_graph(
+        sbml_dfs, wiring_approach=GRAPH_WIRING_APPROACHES.REGULATORY
+    )
+    _ = net_create.create_napistu_graph(
+        sbml_dfs, wiring_approach=GRAPH_WIRING_APPROACHES.SURROGATE
+    )
+
+
+def test_bipartite_regression():
+    bipartite_og = net_create.create_napistu_graph(
+        sbml_dfs, wiring_approach="bipartite_og"
+    )
+
+    bipartite = net_create.create_napistu_graph(
+        sbml_dfs, wiring_approach=GRAPH_WIRING_APPROACHES.BIPARTITE
+    )
+
+    bipartite_og_edges = bipartite_og.get_edge_dataframe()
+    bipartite_edges = bipartite.get_edge_dataframe()
+
+    try:
+        pdt.assert_frame_equal(
+            bipartite_og_edges, bipartite_edges, check_like=True, check_dtype=False
+        )
+    except AssertionError as e:
+        # Print detailed differences
+        print("DataFrames are not equal!")
+        print(
+            "Shape original:",
+            bipartite_og_edges.shape,
+            "Shape new:",
+            bipartite_edges.shape,
+        )
+        print(
+            "Columns original:",
+            bipartite_og_edges.columns.tolist(),
+            "Columns new:",
+            bipartite_edges.columns.tolist(),
+        )
+        # Show head of both for quick inspection
+        print("Original head:\n", bipartite_og_edges.head())
+        print("New head:\n", bipartite_edges.head())
+        # Optionally, show where values differ
+        if bipartite_og_edges.shape == bipartite_edges.shape:
+            diff = bipartite_og_edges != bipartite_edges
+            print("Differences (first 5 rows):\n", diff.head())
+        raise e  # Re-raise to fail the test
 
 
 def test_create_napistu_graph_edge_reversed():
     """Test that edge_reversed=True properly reverses edges in the graph for all graph types."""
     # Test each graph type
-    for graph_type in ["bipartite", "regulatory", "surrogate"]:
+    for wiring_approach in VALID_GRAPH_WIRING_APPROACHES:
         # Create graphs with and without edge reversal
         normal_graph = net_create.create_napistu_graph(
-            sbml_dfs, graph_type=graph_type, directed=True, edge_reversed=False
+            sbml_dfs,
+            wiring_approach=wiring_approach,
+            directed=True,
+            edge_reversed=False,
         )
         reversed_graph = net_create.create_napistu_graph(
-            sbml_dfs, graph_type=graph_type, directed=True, edge_reversed=True
+            sbml_dfs, wiring_approach=wiring_approach, directed=True, edge_reversed=True
         )
 
         # Get edge dataframes for comparison
@@ -127,53 +103,55 @@ def test_create_napistu_graph_edge_reversed():
         reversed_edges = reversed_graph.get_edge_dataframe()
 
         # Verify we have edges to test
-        assert len(normal_edges) > 0, f"No edges found in {graph_type} graph"
+        assert len(normal_edges) > 0, f"No edges found in {wiring_approach} graph"
         assert len(normal_edges) == len(
             reversed_edges
-        ), f"Edge count mismatch in {graph_type} graph"
+        ), f"Edge count mismatch in {wiring_approach} graph"
 
         # Test edge reversal
         # Check a few edges to verify from/to are swapped
         for i in range(min(5, len(normal_edges))):
             # Check from/to are swapped
             assert (
-                normal_edges.iloc[i]["from"] == reversed_edges.iloc[i]["to"]
-            ), f"From/to not properly swapped in {graph_type} graph"
+                normal_edges.iloc[i][NAPISTU_GRAPH_EDGES.FROM]
+                == reversed_edges.iloc[i][NAPISTU_GRAPH_EDGES.TO]
+            ), f"From/to not properly swapped in {wiring_approach} graph"
             assert (
-                normal_edges.iloc[i]["to"] == reversed_edges.iloc[i]["from"]
-            ), f"From/to not properly swapped in {graph_type} graph"
+                normal_edges.iloc[i][NAPISTU_GRAPH_EDGES.TO]
+                == reversed_edges.iloc[i][NAPISTU_GRAPH_EDGES.FROM]
+            ), f"From/to not properly swapped in {wiring_approach} graph"
 
             # Check stoichiometry is negated
             assert (
-                normal_edges.iloc[i]["stoichiometry"]
-                == -reversed_edges.iloc[i]["stoichiometry"]
-            ), f"Stoichiometry not properly negated in {graph_type} graph"
+                normal_edges.iloc[i][SBML_DFS.STOICHIOMETRY]
+                == -reversed_edges.iloc[i][SBML_DFS.STOICHIOMETRY]
+            ), f"Stoichiometry not properly negated in {wiring_approach} graph"
 
             # Check direction attributes are properly swapped
             if normal_edges.iloc[i]["direction"] == "forward":
                 assert (
                     reversed_edges.iloc[i]["direction"] == "reverse"
-                ), f"Direction not properly reversed (forward->reverse) in {graph_type} graph"
+                ), f"Direction not properly reversed (forward->reverse) in {wiring_approach} graph"
             elif normal_edges.iloc[i]["direction"] == "reverse":
                 assert (
                     reversed_edges.iloc[i]["direction"] == "forward"
-                ), f"Direction not properly reversed (reverse->forward) in {graph_type} graph"
+                ), f"Direction not properly reversed (reverse->forward) in {wiring_approach} graph"
 
             # Check parents/children are swapped
             assert (
                 normal_edges.iloc[i]["sc_parents"]
                 == reversed_edges.iloc[i]["sc_children"]
-            ), f"Parents/children not properly swapped in {graph_type} graph"
+            ), f"Parents/children not properly swapped in {wiring_approach} graph"
             assert (
                 normal_edges.iloc[i]["sc_children"]
                 == reversed_edges.iloc[i]["sc_parents"]
-            ), f"Parents/children not properly swapped in {graph_type} graph"
+            ), f"Parents/children not properly swapped in {wiring_approach} graph"
 
 
 def test_create_napistu_graph_none_attrs():
     # Should not raise when reaction_graph_attrs is None
     _ = net_create.create_napistu_graph(
-        sbml_dfs, reaction_graph_attrs=None, graph_type="bipartite"
+        sbml_dfs, reaction_graph_attrs=None, wiring_approach="bipartite"
     )
 
 
@@ -186,29 +164,29 @@ def test_process_napistu_graph_none_attrs():
 def test_igraph_loading():
     # test read/write of an igraph network
     directeds = [True, False]
-    graph_types = ["bipartite", "regulatory"]
+    wiring_approaches = ["bipartite", "regulatory"]
 
     ng_utils.export_networks(
         sbml_dfs,
         model_prefix="tmp",
         outdir="/tmp",
         directeds=directeds,
-        graph_types=graph_types,
+        wiring_approaches=wiring_approaches,
     )
 
-    for graph_type in graph_types:
+    for wiring_approach in wiring_approaches:
         for directed in directeds:
             import_pkl_path = ng_utils._create_network_save_string(
                 model_prefix="tmp",
                 outdir="/tmp",
                 directed=directed,
-                graph_type=graph_type,
+                wiring_approach=wiring_approach,
             )
             network_graph = ng_utils.read_network_pkl(
                 model_prefix="tmp",
                 network_dir="/tmp",
                 directed=directed,
-                graph_type=graph_type,
+                wiring_approach=wiring_approach,
             )
 
             assert network_graph.is_directed() == directed
@@ -216,102 +194,15 @@ def test_igraph_loading():
             os.unlink(import_pkl_path)
 
 
-def test_format_interactors(reaction_species_examples):
-    r_id, reaction_species_examples_dict = reaction_species_examples
-    # interactions are formatted
-
-    graph_hierarchy_df = net_create._create_graph_hierarchy_df("regulatory")
-
-    assert (
-        net_create._format_tiered_reaction_species(
-            r_id,
-            reaction_species_examples_dict["valid_interactor"],
-            sbml_dfs,
-            graph_hierarchy_df,
-        ).shape[0]
-        == 1
-    )
-
-    print("Re-enable test once Issue #102 is solved")
-
-    # catch error from invalid interactor specification
-    # with pytest.raises(ValueError) as excinfo:
-    #    net_create._format_tiered_reaction_species(
-    #        r_id, reaction_species_examples_dict["invalid_interactor"], sbml_dfs
-    #    )
-    # assert str(excinfo.value).startswith("Invalid combinations of SBO_terms")
-
-    # simple reaction with just substrates and products
-    assert (
-        net_create._format_tiered_reaction_species(
-            r_id,
-            reaction_species_examples_dict["sub_and_prod"],
-            sbml_dfs,
-            graph_hierarchy_df,
-        ).shape[0]
-        == 2
-    )
-
-    # add a stimulator (activator)
-    rxn_edges = net_create._format_tiered_reaction_species(
-        r_id, reaction_species_examples_dict["stimulator"], sbml_dfs, graph_hierarchy_df
-    )
-
-    assert rxn_edges.shape[0] == 3
-    assert rxn_edges.iloc[0][["from", "to"]].tolist() == ["stim", "sub"]
-
-    # add catalyst + stimulator
-    rxn_edges = net_create._format_tiered_reaction_species(
-        r_id,
-        reaction_species_examples_dict["all_entities"],
-        sbml_dfs,
-        graph_hierarchy_df,
-    )
-
-    assert rxn_edges.shape[0] == 4
-    assert rxn_edges.iloc[0][["from", "to"]].tolist() == ["stim", "cat"]
-    assert rxn_edges.iloc[1][["from", "to"]].tolist() == ["cat", "sub"]
-
-    # no substrate
-    rxn_edges = net_create._format_tiered_reaction_species(
-        r_id,
-        reaction_species_examples_dict["no_substrate"],
-        sbml_dfs,
-        graph_hierarchy_df,
-    )
-
-    assert rxn_edges.shape[0] == 5
-    # stimulator -> reactant
-    assert rxn_edges.iloc[0][["from", "to"]].tolist() == ["stim1", "cat"]
-    assert rxn_edges.iloc[1][["from", "to"]].tolist() == ["stim2", "cat"]
-    assert rxn_edges.iloc[2][["from", "to"]].tolist() == ["inh", "cat"]
-
-    # use the surrogate model tiered layout also
-
-    graph_hierarchy_df = net_create._create_graph_hierarchy_df("surrogate")
-
-    rxn_edges = net_create._format_tiered_reaction_species(
-        r_id,
-        reaction_species_examples_dict["all_entities"],
-        sbml_dfs,
-        graph_hierarchy_df,
-    )
-
-    assert rxn_edges.shape[0] == 4
-    assert rxn_edges.iloc[0][["from", "to"]].tolist() == ["stim", "sub"]
-    assert rxn_edges.iloc[1][["from", "to"]].tolist() == ["sub", "cat"]
-
-
 def test_reverse_network_edges(reaction_species_examples):
-    r_id, reaction_species_examples_dict = reaction_species_examples
 
-    graph_hierarchy_df = net_create._create_graph_hierarchy_df("regulatory")
+    graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df("regulatory")
 
-    rxn_edges = net_create._format_tiered_reaction_species(
-        r_id,
-        reaction_species_examples_dict["all_entities"],
-        sbml_dfs,
-        graph_hierarchy_df,
+    rxn_edges = net_create_utils.format_tiered_reaction_species(
+        rxn_species=reaction_species_examples["all_entities"],
+        r_id="foo",
+        graph_hierarchy_df=graph_hierarchy_df,
+        drop_reactions_when=DROP_REACTIONS_WHEN.SAME_TIER,
     )
     augmented_network_edges = rxn_edges.assign(r_isreversible=True)
     augmented_network_edges["sc_parents"] = range(0, augmented_network_edges.shape[0])

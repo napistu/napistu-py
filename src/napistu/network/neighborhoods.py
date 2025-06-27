@@ -22,7 +22,7 @@ from napistu.constants import SBML_DFS
 from napistu.constants import MINI_SBO_NAME_TO_POLARITY
 from napistu.constants import MINI_SBO_TO_NAME
 
-from napistu.network.constants import NAPISTU_GRAPH_TYPES
+from napistu.network.constants import GRAPH_WIRING_APPROACHES
 from napistu.network.constants import NEIGHBORHOOD_NETWORK_TYPES
 from napistu.network.constants import VALID_NEIGHBORHOOD_NETWORK_TYPES
 
@@ -316,7 +316,7 @@ def create_neighborhood_prefix(network_type: str, order: int, top_n: int) -> str
 def load_neighborhoods_by_partition(
     selected_partition: int,
     neighborhood_outdir: str,
-    graph_type: str = NAPISTU_GRAPH_TYPES.REGULATORY,
+    wiring_approach: str = GRAPH_WIRING_APPROACHES.REGULATORY,
 ) -> None:
     """
     Load Neighborhoods By Partition
@@ -380,7 +380,7 @@ def load_neighborhoods_by_partition(
         model_prefix="curated",
         network_dir=consensus_outdir,
         directed=True,
-        graph_type=graph_type,
+        wiring_approach=wiring_approach,
     )
 
     all_neighborhoods_df, neighborhoods_dict = load_neighborhoods(

@@ -17,12 +17,12 @@ import pandas as pd
 from napistu import sbml_dfs_core
 from napistu import source
 from napistu.network import net_create
-from napistu.network.napistu_graph_core import NapistuGraph
+from napistu.network.ng_core import NapistuGraph
 
 from napistu.constants import SBML_DFS
 from napistu.constants import SOURCE_SPEC
 from napistu.identifiers import _validate_assets_sbml_ids
-from napistu.network.constants import NAPISTU_GRAPH_TYPES
+from napistu.network.constants import GRAPH_WIRING_APPROACHES
 from napistu.network.constants import NAPISTU_GRAPH_DIRECTEDNESS
 
 logger = logging.getLogger(__name__)
@@ -138,9 +138,9 @@ def export_networks(
     model_prefix: str,
     outdir: str,
     directeds: list[bool] = [True, False],
-    graph_types: list[str] = [
-        NAPISTU_GRAPH_TYPES.BIPARTITE,
-        NAPISTU_GRAPH_TYPES.REGULATORY,
+    wiring_approaches: list[str] = [
+        GRAPH_WIRING_APPROACHES.BIPARTITE,
+        GRAPH_WIRING_APPROACHES.REGULATORY,
     ],
 ) -> None:
     """
@@ -158,10 +158,11 @@ def export_networks(
         Path to an existing directory where results should be saved
     directeds : [bool]
         List of directed types to export: a directed (True) or undirected graph be made (False)
-    graph_types : [str]
+    wiring_approaches : [str]
         Types of graphs to construct, valid values are:
             - bipartite: substrates and modifiers point to the reaction they drive, this reaction points to products
             - regulatory: non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
+            - surrogate regulatory approach but with substrates upstream of enzymes
 
     Returns:
     ----------
@@ -177,24 +178,26 @@ def export_networks(
         raise FileNotFoundError(f"{outdir} does not exist")
     if not isinstance(directeds, list):
         raise TypeError(f"directeds must be a list, but was {type(directeds)}")
-    if not isinstance(graph_types, list):
-        raise TypeError(f"graph_types must be a list but was a {type(graph_types)}")
+    if not isinstance(wiring_approaches, list):
+        raise TypeError(
+            f"wiring_approaches must be a list but was a {type(wiring_approaches)}"
+        )
 
-    # iterate through provided graph_types and export each type
-    for graph_type in graph_types:
+    # iterate through provided wiring_approaches and export each type
+    for wiring_approach in wiring_approaches:
         for directed in directeds:
             export_pkl_path = _create_network_save_string(
                 model_prefix=model_prefix,
                 outdir=outdir,
                 directed=directed,
-                graph_type=graph_type,
+                wiring_approach=wiring_approach,
             )
-            print(f"Exporting {graph_type} network to {export_pkl_path}")
+            print(f"Exporting {wiring_approach} network to {export_pkl_path}")
 
             network_graph = net_create.process_napistu_graph(
                 sbml_dfs=sbml_dfs,
                 directed=directed,
-                graph_type=graph_type,
+                wiring_approach=wiring_approach,
                 verbose=True,
             )
 
@@ -206,7 +209,7 @@ def export_networks(
 def read_network_pkl(
     model_prefix: str,
     network_dir: str,
-    graph_type: str,
+    wiring_approach: str,
     directed: bool = True,
 ) -> NapistuGraph:
     """
@@ -222,10 +225,11 @@ def read_network_pkl(
         Path to a directory containing all saved networks.
     directed : bool
         Should a directed (True) or undirected graph be loaded (False)
-    graph_type : [str]
+    wiring_approach : [str]
         Type of graphs to read, valid values are:
             - bipartite: substrates and modifiers point to the reaction they drive, this reaction points to products
             - reguatory: non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
+            - surrogate regulatory approach but with substrates upstream of enzymes
 
     Returns
     -------
@@ -239,15 +243,17 @@ def read_network_pkl(
         raise FileNotFoundError(f"{network_dir} does not exist")
     if not isinstance(directed, bool):
         raise TypeError(f"directed must be a bool, but was {type(directed)}")
-    if not isinstance(graph_type, str):
-        raise TypeError(f"graph_type must be a str but was a {type(graph_type)}")
+    if not isinstance(wiring_approach, str):
+        raise TypeError(
+            f"wiring_approach must be a str but was a {type(wiring_approach)}"
+        )
 
     import_pkl_path = _create_network_save_string(
-        model_prefix, network_dir, directed, graph_type
+        model_prefix, network_dir, directed, wiring_approach
     )
     if not os.path.isfile(import_pkl_path):
         raise FileNotFoundError(f"{import_pkl_path} does not exist")
-    print(f"Importing {graph_type} network from {import_pkl_path}")
+    print(f"Importing {wiring_approach} network from {import_pkl_path}")
 
     network_graph = ig.Graph.Read_Pickle(fname=import_pkl_path)
 
@@ -374,7 +380,7 @@ def read_graph_attrs_spec(graph_attrs_spec_uri: str) -> dict:
 
 # Internal utility functions
 def _create_network_save_string(
-    model_prefix: str, outdir: str, directed: bool, graph_type: str
+    model_prefix: str, outdir: str, directed: bool, wiring_approach: str
 ) -> str:
     if directed:
         directed_str = NAPISTU_GRAPH_DIRECTEDNESS.DIRECTED
@@ -382,7 +388,8 @@ def _create_network_save_string(
         directed_str = NAPISTU_GRAPH_DIRECTEDNESS.UNDIRECTED
 
     export_pkl_path = os.path.join(
-        outdir, model_prefix + "_network_" + graph_type + "_" + directed_str + ".pkl"
+        outdir,
+        model_prefix + "_network_" + wiring_approach + "_" + directed_str + ".pkl",
     )
 
     return export_pkl_path

@@ -7,17 +7,6 @@ from types import SimpleNamespace
 from napistu.constants import SBML_DFS
 from napistu.constants import SBOTERM_NAMES
 
-# Graph types
-NAPISTU_GRAPH_TYPES = SimpleNamespace(
-    BIPARTITE="bipartite", REGULATORY="regulatory", SURROGATE="surrogate"
-)
-
-VALID_NAPISTU_GRAPH_TYPES = [
-    NAPISTU_GRAPH_TYPES.BIPARTITE,
-    NAPISTU_GRAPH_TYPES.REGULATORY,
-    NAPISTU_GRAPH_TYPES.SURROGATE,
-]
-
 NAPISTU_GRAPH = SimpleNamespace(VERTICES="vertices", EDGES="edges", METADATA="metadata")
 
 NAPISTU_GRAPH_DIRECTEDNESS = SimpleNamespace(
@@ -56,6 +45,67 @@ VALID_NAPISTU_GRAPH_NODE_TYPES = [
     NAPISTU_GRAPH_NODE_TYPES.REACTION,
     NAPISTU_GRAPH_NODE_TYPES.SPECIES,
 ]
+
+# translating an SBML_dfs -> NapistuGraph
+
+GRAPH_WIRING_APPROACHES = SimpleNamespace(
+    BIPARTITE="bipartite", REGULATORY="regulatory", SURROGATE="surrogate"
+)
+
+VALID_GRAPH_WIRING_APPROACHES = list(GRAPH_WIRING_APPROACHES.__dict__.values())
+
+GRAPH_WIRING_HIERARCHIES = {
+    # three tiers with reactions in the middle
+    # in a bipartite networks molecules are connected to reactions but not other molecules
+    GRAPH_WIRING_APPROACHES.BIPARTITE: [
+        [
+            SBOTERM_NAMES.CATALYST,
+            SBOTERM_NAMES.INHIBITOR,
+            SBOTERM_NAMES.INTERACTOR,
+            SBOTERM_NAMES.MODIFIER,
+            SBOTERM_NAMES.REACTANT,
+            SBOTERM_NAMES.STIMULATOR,
+        ],
+        [NAPISTU_GRAPH_NODE_TYPES.REACTION],
+        [SBOTERM_NAMES.MODIFIED, SBOTERM_NAMES.PRODUCT],
+    ],
+    # the regulatory graph defines a hierarchy of upstream and downstream
+    # entities in a reaction
+    # modifier/stimulator/inhibitor -> catalyst -> reactant -> reaction -> product
+    GRAPH_WIRING_APPROACHES.REGULATORY: [
+        [SBOTERM_NAMES.INHIBITOR, SBOTERM_NAMES.MODIFIER, SBOTERM_NAMES.STIMULATOR],
+        [SBOTERM_NAMES.CATALYST],
+        [SBOTERM_NAMES.INTERACTOR, SBOTERM_NAMES.REACTANT],
+        [NAPISTU_GRAPH_NODE_TYPES.REACTION],
+        [SBOTERM_NAMES.MODIFIED, SBOTERM_NAMES.PRODUCT],
+    ],
+    # an alternative layout to regulatory where enyzmes are downstream of substrates.
+    # this doesn't make much sense from a regulatory perspective because
+    # enzymes modify substrates not the other way around. but, its what one might
+    # expect if catalysts are a surrogate for reactions as is the case for metabolic
+    # network layouts
+    GRAPH_WIRING_APPROACHES.SURROGATE: [
+        [SBOTERM_NAMES.INHIBITOR, SBOTERM_NAMES.MODIFIER, SBOTERM_NAMES.STIMULATOR],
+        [SBOTERM_NAMES.INTERACTOR, SBOTERM_NAMES.REACTANT],
+        [SBOTERM_NAMES.CATALYST],
+        [NAPISTU_GRAPH_NODE_TYPES.REACTION],
+        [SBOTERM_NAMES.MODIFIED, SBOTERM_NAMES.PRODUCT],
+    ],
+}
+
+# when should reaction vertices be excluded from the graph?
+
+DROP_REACTIONS_WHEN = SimpleNamespace(
+    ALWAYS="always",
+    # if there are 2 participants
+    EDGELIST="edgelist",
+    # if there are 2 participants which are both "interactor"
+    SAME_TIER="same_tier",
+)
+
+VALID_DROP_REACTIONS_WHEN = list(DROP_REACTIONS_WHEN.__dict__.values())
+
+# adding weights to NapistuGraph
 
 NAPISTU_WEIGHTING_STRATEGIES = SimpleNamespace(
     CALIBRATED="calibrated", MIXED="mixed", TOPOLOGY="topology", UNWEIGHTED="unweighted"
@@ -114,40 +164,6 @@ VALID_NET_POLARITIES = [
     NET_POLARITY.AMBIGUOUS,
     NET_POLARITY.AMBIGUOUS_ACTIVATION,
     NET_POLARITY.AMBIGUOUS_INHIBITION,
-]
-
-# the regulatory graph defines a hierarchy of upstream and downstream
-# entities in a reaction
-# modifier/stimulator/inhibitor -> catalyst -> reactant -> reaction -> product
-
-REGULATORY_GRAPH_HIERARCHY = [
-    [SBOTERM_NAMES.MODIFIER, SBOTERM_NAMES.STIMULATOR, SBOTERM_NAMES.INHIBITOR],
-    [SBOTERM_NAMES.CATALYST],
-    [SBOTERM_NAMES.REACTANT],
-    [NAPISTU_GRAPH_NODE_TYPES.REACTION],
-    # normally we don't expect interactors to be defined because they are handled by
-    # net_create._format_interactors_for_regulatory_graph() but include them here
-    # until Issue #102 is solved
-    [SBOTERM_NAMES.INTERACTOR],
-    [SBOTERM_NAMES.PRODUCT],
-]
-
-# an alternative layout to regulatory where enyzmes are downstream of substrates.
-# this doesn't make much sense from a regulatory perspective because
-# enzymes modify substrates not the other way around. but, its what one might
-# expect if catalysts are a surrogate for reactions as is the case for metabolic
-# network layouts
-
-SURROGATE_GRAPH_HIERARCHY = [
-    [SBOTERM_NAMES.MODIFIER, SBOTERM_NAMES.STIMULATOR, SBOTERM_NAMES.INHIBITOR],
-    [SBOTERM_NAMES.REACTANT],
-    [SBOTERM_NAMES.CATALYST],
-    [NAPISTU_GRAPH_NODE_TYPES.REACTION],
-    # normally we don't expect interactors to be defined because they are handled by
-    # net_create._format_interactors_for_regulatory_graph() but include them here
-    # until Issue #102 is solved
-    [SBOTERM_NAMES.INTERACTOR],
-    [SBOTERM_NAMES.PRODUCT],
 ]
 
 NEIGHBORHOOD_NETWORK_TYPES = SimpleNamespace(

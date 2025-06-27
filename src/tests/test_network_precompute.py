@@ -7,6 +7,7 @@ import tempfile
 import numpy as np
 import pandas as pd
 from napistu import sbml_dfs_core
+from napistu import utils
 from napistu.ingestion import sbml
 from napistu.network import neighborhoods
 from napistu.network import net_create
@@ -23,7 +24,7 @@ sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
 sbml_dfs.validate()
 
 napistu_graph = net_create.process_napistu_graph(
-    sbml_dfs, graph_type="bipartite", directed=True, weighting_strategy="topology"
+    sbml_dfs, wiring_approach="bipartite", directed=True, weighting_strategy="topology"
 )
 
 # number of species to include when finding all x all paths
@@ -263,10 +264,10 @@ def test_precomputed_distances_serialization():
 
     try:
         # Test serialization
-        precompute.save_precomputed_distances(original_df, temp_path)
+        utils.save_parquet(original_df, temp_path)
 
         # Test deserialization
-        loaded_df = precompute.load_precomputed_distances(temp_path)
+        loaded_df = utils.load_parquet(temp_path)
 
         # Validate that the loaded DataFrame is identical to the original
         pd.testing.assert_frame_equal(original_df, loaded_df, check_like=True)

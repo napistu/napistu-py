@@ -10,9 +10,9 @@ from napistu import utils
 from napistu import sbml_dfs_core
 from napistu.matching.species import features_to_pathway_species
 from napistu.constants import (
-    CPR_EDGELIST_REQ_VARS,
+    NAPISTU_EDGELIST_REQ_VARS,
     IDENTIFIER_EDGELIST_REQ_VARS,
-    CPR_EDGELIST,
+    NAPISTU_EDGELIST,
     SBML_DFS,
     IDENTIFIERS,
 )
@@ -56,8 +56,8 @@ def edgelist_to_pathway_species(
     """
 
     required_vars_distinct_features = {
-        CPR_EDGELIST.IDENTIFIER_UPSTREAM,
-        CPR_EDGELIST.IDENTIFIER_DOWNSTREAM,
+        NAPISTU_EDGELIST.IDENTIFIER_UPSTREAM,
+        NAPISTU_EDGELIST.IDENTIFIER_DOWNSTREAM,
     }
     missing_required_vars_distinct_features = (
         required_vars_distinct_features.difference(
@@ -76,8 +76,8 @@ def edgelist_to_pathway_species(
     distinct_identifiers = (
         pd.concat(
             [
-                formatted_edgelist[CPR_EDGELIST.IDENTIFIER_UPSTREAM],
-                formatted_edgelist[CPR_EDGELIST.IDENTIFIER_DOWNSTREAM],
+                formatted_edgelist[NAPISTU_EDGELIST.IDENTIFIER_UPSTREAM],
+                formatted_edgelist[NAPISTU_EDGELIST.IDENTIFIER_DOWNSTREAM],
             ]
         )
         .drop_duplicates()
@@ -99,16 +99,16 @@ def edgelist_to_pathway_species(
     edges_on_pathway = formatted_edgelist.merge(
         features_on_pathway[[SBML_DFS.S_ID, IDENTIFIERS.IDENTIFIER]].rename(
             {
-                SBML_DFS.S_ID: CPR_EDGELIST.S_ID_UPSTREAM,
-                IDENTIFIERS.IDENTIFIER: CPR_EDGELIST.IDENTIFIER_UPSTREAM,
+                SBML_DFS.S_ID: NAPISTU_EDGELIST.S_ID_UPSTREAM,
+                IDENTIFIERS.IDENTIFIER: NAPISTU_EDGELIST.IDENTIFIER_UPSTREAM,
             },
             axis=1,
         )
     ).merge(
         features_on_pathway[[SBML_DFS.S_ID, IDENTIFIERS.IDENTIFIER]].rename(
             {
-                SBML_DFS.S_ID: CPR_EDGELIST.S_ID_DOWNSTREAM,
-                IDENTIFIERS.IDENTIFIER: CPR_EDGELIST.IDENTIFIER_DOWNSTREAM,
+                SBML_DFS.S_ID: NAPISTU_EDGELIST.S_ID_DOWNSTREAM,
+                IDENTIFIERS.IDENTIFIER: NAPISTU_EDGELIST.IDENTIFIER_DOWNSTREAM,
             },
             axis=1,
         )
@@ -159,15 +159,15 @@ def edgelist_to_scids(
 
     # expand from s_ids to sc_ids
     s_id_pairs = edges_on_pathway[
-        [CPR_EDGELIST.S_ID_UPSTREAM, CPR_EDGELIST.S_ID_DOWNSTREAM]
+        [NAPISTU_EDGELIST.S_ID_UPSTREAM, NAPISTU_EDGELIST.S_ID_DOWNSTREAM]
     ].drop_duplicates()
     sc_id_pairs = s_id_pairs.merge(
         sbml_dfs.compartmentalized_species[[SBML_DFS.S_ID]]
         .reset_index()
         .rename(
             {
-                SBML_DFS.S_ID: CPR_EDGELIST.S_ID_UPSTREAM,
-                SBML_DFS.SC_ID: CPR_EDGELIST.SC_ID_UPSTREAM,
+                SBML_DFS.S_ID: NAPISTU_EDGELIST.S_ID_UPSTREAM,
+                SBML_DFS.SC_ID: NAPISTU_EDGELIST.SC_ID_UPSTREAM,
             },
             axis=1,
         )
@@ -176,8 +176,8 @@ def edgelist_to_scids(
         .reset_index()
         .rename(
             {
-                SBML_DFS.S_ID: CPR_EDGELIST.S_ID_DOWNSTREAM,
-                SBML_DFS.SC_ID: CPR_EDGELIST.SC_ID_DOWNSTREAM,
+                SBML_DFS.S_ID: NAPISTU_EDGELIST.S_ID_DOWNSTREAM,
+                SBML_DFS.SC_ID: NAPISTU_EDGELIST.SC_ID_DOWNSTREAM,
             },
             axis=1,
         )
@@ -232,7 +232,7 @@ def filter_to_direct_mechanistic_interactions(
     )
 
     # reduce to distinct sc_id pairs
-    sc_id_pairs = edgelist_w_scids[list(CPR_EDGELIST_REQ_VARS)].drop_duplicates()
+    sc_id_pairs = edgelist_w_scids[list(NAPISTU_EDGELIST_REQ_VARS)].drop_duplicates()
 
     # define all existing direct regulatory interactions
     pathway_interactions = pd.concat(
@@ -241,36 +241,36 @@ def filter_to_direct_mechanistic_interactions(
             sbml_dfs.reaction_species[
                 sbml_dfs.reaction_species[SBML_DFS.STOICHIOMETRY] == 0
             ][[SBML_DFS.R_ID, SBML_DFS.SC_ID]]
-            .rename({SBML_DFS.SC_ID: CPR_EDGELIST.SC_ID_UPSTREAM}, axis=1)
+            .rename({SBML_DFS.SC_ID: NAPISTU_EDGELIST.SC_ID_UPSTREAM}, axis=1)
             .merge(
                 sbml_dfs.reaction_species[
                     sbml_dfs.reaction_species[SBML_DFS.STOICHIOMETRY] < 0
                 ][[SBML_DFS.R_ID, SBML_DFS.SC_ID]].rename(
-                    {SBML_DFS.SC_ID: CPR_EDGELIST.SC_ID_DOWNSTREAM}, axis=1
+                    {SBML_DFS.SC_ID: NAPISTU_EDGELIST.SC_ID_DOWNSTREAM}, axis=1
                 )
             ),
             # pair <0 -> >0 # substrates affect products
             sbml_dfs.reaction_species[
                 sbml_dfs.reaction_species[SBML_DFS.STOICHIOMETRY] < 0
             ][[SBML_DFS.R_ID, SBML_DFS.SC_ID]]
-            .rename({SBML_DFS.SC_ID: CPR_EDGELIST.SC_ID_UPSTREAM}, axis=1)
+            .rename({SBML_DFS.SC_ID: NAPISTU_EDGELIST.SC_ID_UPSTREAM}, axis=1)
             .merge(
                 sbml_dfs.reaction_species[
                     sbml_dfs.reaction_species[SBML_DFS.STOICHIOMETRY] > 0
                 ][[SBML_DFS.R_ID, SBML_DFS.SC_ID]].rename(
-                    {SBML_DFS.SC_ID: CPR_EDGELIST.SC_ID_DOWNSTREAM}, axis=1
+                    {SBML_DFS.SC_ID: NAPISTU_EDGELIST.SC_ID_DOWNSTREAM}, axis=1
                 )
             ),
             # pair 0 -> >0 # modifiers affect products
             sbml_dfs.reaction_species[
                 sbml_dfs.reaction_species[SBML_DFS.STOICHIOMETRY] == 0
             ][[SBML_DFS.R_ID, SBML_DFS.SC_ID]]
-            .rename({SBML_DFS.SC_ID: CPR_EDGELIST.SC_ID_UPSTREAM}, axis=1)
+            .rename({SBML_DFS.SC_ID: NAPISTU_EDGELIST.SC_ID_UPSTREAM}, axis=1)
             .merge(
                 sbml_dfs.reaction_species[
                     sbml_dfs.reaction_species[SBML_DFS.STOICHIOMETRY] > 0
                 ][[SBML_DFS.R_ID, SBML_DFS.SC_ID]].rename(
-                    {SBML_DFS.SC_ID: CPR_EDGELIST.SC_ID_DOWNSTREAM}, axis=1
+                    {SBML_DFS.SC_ID: NAPISTU_EDGELIST.SC_ID_DOWNSTREAM}, axis=1
                 )
             ),
         ]
@@ -282,16 +282,16 @@ def filter_to_direct_mechanistic_interactions(
         .merge(
             sbml_dfs.species[SBML_DFS.S_NAME]
             .to_frame()
-            .rename({SBML_DFS.S_NAME: CPR_EDGELIST.S_NAME_UPSTREAM}, axis=1),
-            left_on=CPR_EDGELIST.S_ID_UPSTREAM,
+            .rename({SBML_DFS.S_NAME: NAPISTU_EDGELIST.S_NAME_UPSTREAM}, axis=1),
+            left_on=NAPISTU_EDGELIST.S_ID_UPSTREAM,
             right_index=True,
             # add species metadata for matches
         )
         .merge(
             sbml_dfs.species[SBML_DFS.S_NAME]
             .to_frame()
-            .rename({SBML_DFS.S_NAME: CPR_EDGELIST.S_NAME_DOWNSTREAM}, axis=1),
-            left_on=CPR_EDGELIST.S_ID_DOWNSTREAM,
+            .rename({SBML_DFS.S_NAME: NAPISTU_EDGELIST.S_NAME_DOWNSTREAM}, axis=1),
+            left_on=NAPISTU_EDGELIST.S_ID_DOWNSTREAM,
             right_index=True,
             # add metadata for reactions where interaction occurs
         )
@@ -305,11 +305,11 @@ def filter_to_direct_mechanistic_interactions(
     edgelist_w_direct_mechanistic_interactions = edgelist_w_scids.merge(
         direct_edge_interactions[
             [
-                CPR_EDGELIST.SC_ID_UPSTREAM,
-                CPR_EDGELIST.SC_ID_DOWNSTREAM,
+                NAPISTU_EDGELIST.SC_ID_UPSTREAM,
+                NAPISTU_EDGELIST.SC_ID_DOWNSTREAM,
                 SBML_DFS.R_ID,
-                CPR_EDGELIST.S_NAME_UPSTREAM,
-                CPR_EDGELIST.S_NAME_DOWNSTREAM,
+                NAPISTU_EDGELIST.S_NAME_UPSTREAM,
+                NAPISTU_EDGELIST.S_NAME_DOWNSTREAM,
                 SBML_DFS.R_NAME,
             ]
         ]
@@ -369,23 +369,25 @@ def filter_to_indirect_mechanistic_interactions(
         edgelist_w_scids = paths._filter_paths_by_precomputed_distances(
             edgelist_w_scids.rename(
                 {
-                    CPR_EDGELIST.SC_ID_UPSTREAM: CPR_EDGELIST.SC_ID_ORIGIN,
-                    CPR_EDGELIST.SC_ID_DOWNSTREAM: CPR_EDGELIST.SC_ID_DEST,
+                    NAPISTU_EDGELIST.SC_ID_UPSTREAM: NAPISTU_EDGELIST.SC_ID_ORIGIN,
+                    NAPISTU_EDGELIST.SC_ID_DOWNSTREAM: NAPISTU_EDGELIST.SC_ID_DEST,
                 },
                 axis=1,
             ),
             precomputed_distances,
         ).rename(
             {
-                CPR_EDGELIST.SC_ID_ORIGIN: CPR_EDGELIST.SC_ID_UPSTREAM,
-                CPR_EDGELIST.SC_ID_DEST: CPR_EDGELIST.SC_ID_DOWNSTREAM,
+                NAPISTU_EDGELIST.SC_ID_ORIGIN: NAPISTU_EDGELIST.SC_ID_UPSTREAM,
+                NAPISTU_EDGELIST.SC_ID_DEST: NAPISTU_EDGELIST.SC_ID_DOWNSTREAM,
             },
             axis=1,
         )
 
     # find paths from 1 upstream to all desired downstream sc_ids
     # (this is the convention with igraph)
-    indexed_origin_vertices = edgelist_w_scids.set_index(CPR_EDGELIST.SC_ID_UPSTREAM)
+    indexed_origin_vertices = edgelist_w_scids.set_index(
+        NAPISTU_EDGELIST.SC_ID_UPSTREAM
+    )
 
     # loop through upstream cspecies and find paths to all downstream species
     global_dict = dict()
@@ -410,7 +412,7 @@ def filter_to_indirect_mechanistic_interactions(
             sbml_dfs,
             origin=an_origin_index,
             # find all unique destinations (as a list for compatibility with igraph dest)
-            dest=origin_targets[CPR_EDGELIST.SC_ID_DOWNSTREAM].unique().tolist(),
+            dest=origin_targets[NAPISTU_EDGELIST.SC_ID_DOWNSTREAM].unique().tolist(),
             weight_var=NAPISTU_GRAPH_EDGES.WEIGHTS,
         )
 
@@ -483,7 +485,7 @@ def filter_to_indirect_mechanistic_interactions(
 
     indirect_shortest_paths = edgelist_w_scids.merge(
         all_shortest_paths,
-        left_on=[CPR_EDGELIST.SC_ID_UPSTREAM, CPR_EDGELIST.SC_ID_DOWNSTREAM],
+        left_on=[NAPISTU_EDGELIST.SC_ID_UPSTREAM, NAPISTU_EDGELIST.SC_ID_DOWNSTREAM],
         right_on=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO],
     )
 
@@ -498,9 +500,9 @@ def _edgelist_to_scids_if_needed(
 ) -> pd.DataFrame:
     """Map a set of edgelist species to cspecies or skip if cspecies were provided."""
 
-    if utils.match_pd_vars(edgelist, CPR_EDGELIST_REQ_VARS).are_present:
+    if utils.match_pd_vars(edgelist, NAPISTU_EDGELIST_REQ_VARS).are_present:
         logger.info(
-            f"An edgelist with {', '.join(CPR_EDGELIST_REQ_VARS)} was provided; identifier matching will be skipped"
+            f"An edgelist with {', '.join(NAPISTU_EDGELIST_REQ_VARS)} was provided; identifier matching will be skipped"
         )
         return edgelist
     else:

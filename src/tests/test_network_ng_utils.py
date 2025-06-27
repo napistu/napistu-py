@@ -2,7 +2,7 @@ import igraph as ig
 import pandas as pd
 
 from napistu.network import ng_utils
-from napistu.network.napistu_graph_core import NapistuGraph
+from napistu.network.ng_core import NapistuGraph
 
 
 def test_napistu_graph_to_pandas_dfs():

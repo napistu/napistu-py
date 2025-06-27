@@ -9,9 +9,9 @@ import pandas as pd
 
 from napistu import sbml_dfs_core
 from napistu import utils
-from napistu.network.napistu_graph_core import NapistuGraph
+from napistu.network.ng_core import NapistuGraph
 from napistu.network.ng_utils import get_minimal_sources_edges
-from napistu.constants import CPR_PATH_REQ_VARS
+from napistu.constants import NAPISTU_PATH_REQ_VARS
 from napistu.constants import MINI_SBO_NAME_TO_POLARITY
 from napistu.constants import MINI_SBO_TO_NAME
 from napistu.constants import SBML_DFS
@@ -391,7 +391,7 @@ def _filter_paths_by_precomputed_distances(
 ) -> pd.DataFrame:
     """Filter source -> destination pairs based on precomputed distances if they were provided."""
 
-    utils.match_pd_vars(all_species_pairs, CPR_PATH_REQ_VARS).assert_present()
+    utils.match_pd_vars(all_species_pairs, NAPISTU_PATH_REQ_VARS).assert_present()
 
     if precomputed_distances is None:
         logger.info(
@@ -402,7 +402,7 @@ def _filter_paths_by_precomputed_distances(
         if not isinstance(precomputed_distances, pd.DataFrame):
             raise TypeError('"precomputed_distances" must be a pd.DataFrame')
 
-    utils.match_pd_vars(precomputed_distances, CPR_PATH_REQ_VARS).assert_present()
+    utils.match_pd_vars(precomputed_distances, NAPISTU_PATH_REQ_VARS).assert_present()
 
     # filter to pairs which are connected in the pre-computed distances table
     valid_all_species_pairs = all_species_pairs.merge(
