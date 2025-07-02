@@ -13,10 +13,11 @@ from napistu.modify import pathwayannot
 
 from napistu import identifiers as napistu_identifiers
 from napistu.constants import (
-    SBML_DFS,
+    BQB,
     BQB_DEFINING_ATTRS,
     BQB_DEFINING_ATTRS_LOOSE,
-    BQB,
+    SBML_DFS,
+    ONTOLOGIES,
 )
 from napistu.sbml_dfs_core import SBML_dfs
 from unittest.mock import patch
@@ -316,22 +317,26 @@ def test_search_by_name(sbml_dfs_metabolism):
 def test_search_by_id(sbml_dfs_metabolism):
     identifiers_tbl = sbml_dfs_metabolism.get_identifiers("species")
     ids, species = sbml_dfs_metabolism.search_by_ids(
-        ["P40926"], "species", identifiers_tbl
+        identifiers_tbl, "species", identifiers=["P40926"]
     )
     assert ids.shape[0] == 1
     assert species.shape[0] == 1
 
     ids, species = sbml_dfs_metabolism.search_by_ids(
-        ["57540", "30744"], "species", identifiers_tbl, {"chebi"}
+        identifiers_tbl,
+        "species",
+        identifiers=["57540", "30744"],
+        ontologies={ONTOLOGIES.CHEBI},
     )
     assert ids.shape[0] == 2
     assert species.shape[0] == 2
 
-    ids, species = sbml_dfs_metabolism.search_by_ids(
-        ["baz"], "species", identifiers_tbl
-    )
-    assert ids.shape[0] == 0
-    assert species.shape[0] == 0
+    with pytest.raises(
+        ValueError, match="None of the requested identifiers are present"
+    ):
+        ids, species = sbml_dfs_metabolism.search_by_ids(
+            identifiers_tbl, "species", identifiers=["baz"]  # Non-existent identifier
+        )
 
 
 def test_species_status(sbml_dfs):
