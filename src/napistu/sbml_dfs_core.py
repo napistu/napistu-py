@@ -22,6 +22,7 @@ from napistu.ingestion import sbml
 from napistu.ontologies import id_tables
 from napistu.constants import (
     BQB,
+    BQB_DEFINING_ATTRS_LOOSE,
     BQB_PRIORITIES,
     ENTITIES_W_DATA,
     ENTITIES_TO_ENTITY_DATA,
@@ -1171,7 +1172,8 @@ class SBML_dfs:
         id_table: pd.DataFrame,
         identifiers: Optional[Union[str, list, set]] = None,
         ontologies: Optional[Union[str, list, set]] = None,
-        bqbs: Optional[Union[str, list, set]] = [BQB.IS, BQB.HAS_PART],
+        bqbs: Optional[Union[str, list, set]] = BQB_DEFINING_ATTRS_LOOSE
+        + [BQB.HAS_PART],
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
         Find entities and identifiers matching a set of query IDs.

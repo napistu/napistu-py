@@ -6,6 +6,7 @@ import pandas as pd
 from napistu import sbml_dfs_utils
 from napistu.constants import (
     BQB,
+    BQB_DEFINING_ATTRS_LOOSE,
     IDENTIFIERS,
     SBML_DFS_SCHEMA,
     SCHEMA_DEFS,
@@ -20,7 +21,7 @@ def filter_id_table(
     id_table: pd.DataFrame,
     identifiers: Optional[Union[str, list, set]] = None,
     ontologies: Optional[Union[str, list, set]] = None,
-    bqbs: Optional[Union[str, list, set]] = [BQB.IS, BQB.HAS_PART],
+    bqbs: Optional[Union[str, list, set]] = BQB_DEFINING_ATTRS_LOOSE + [BQB.HAS_PART],
 ) -> pd.DataFrame:
     """
     Filter an identifier table by identifiers, ontologies, and BQB terms for a given entity type.
