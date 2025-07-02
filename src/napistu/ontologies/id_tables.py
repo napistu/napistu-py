@@ -3,10 +3,10 @@ from typing import Optional, Union, Set
 
 import pandas as pd
 
+from napistu import sbml_dfs_utils
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
-    SBML_DFS,
     SBML_DFS_SCHEMA,
     SCHEMA_DEFS,
     VALID_BQB_TERMS,
@@ -21,7 +21,6 @@ def filter_id_table(
     identifiers: Optional[Union[str, list, set]] = None,
     ontologies: Optional[Union[str, list, set]] = None,
     bqbs: Optional[Union[str, list, set]] = [BQB.IS, BQB.HAS_PART],
-    entity_type: str = SBML_DFS.SPECIES,
 ) -> pd.DataFrame:
     """
     Filter an identifier table by identifiers, ontologies, and BQB terms for a given entity type.
@@ -36,8 +35,6 @@ def filter_id_table(
         Ontologies to filter by. If None, no filtering is applied on ontologies.
     bqbs : str, list, set, or None, optional
         BQB terms to filter by. If None, no filtering is applied on BQB terms. Default is [BQB.IS, BQB.HAS_PART].
-    entity_type : str, optional
-        The type of entity (e.g., 'species', 'reactions') to validate and filter. Default is SBML_DFS.SPECIES.
 
     Returns
     -------
@@ -50,6 +47,7 @@ def filter_id_table(
         If the id_table or filter values are invalid, or required columns are missing.
     """
 
+    entity_type = sbml_dfs_utils.infer_entity_type(id_table)
     _validate_id_table(id_table, entity_type)
 
     # bqbs

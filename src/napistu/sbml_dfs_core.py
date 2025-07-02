@@ -106,7 +106,7 @@ class SBML_dfs:
         Remove a reactions data table by label.
     remove_species_data(label)
         Remove a species data table by label.
-    search_by_ids(id_table, entity_type, identifiers=None, ontologies=None, bqbs=None)
+    search_by_ids(id_table, identifiers=None, ontologies=None, bqbs=None)
         Find entities and identifiers matching a set of query IDs.
     search_by_name(name, entity_type, partial_match=True)
         Find entities by exact or partial name match.
@@ -1169,7 +1169,6 @@ class SBML_dfs:
     def search_by_ids(
         self,
         id_table: pd.DataFrame,
-        entity_type: str,
         identifiers: Optional[Union[str, list, set]] = None,
         ontologies: Optional[Union[str, list, set]] = None,
         bqbs: Optional[Union[str, list, set]] = [BQB.IS, BQB.HAS_PART],
@@ -1181,8 +1180,6 @@ class SBML_dfs:
         ----------
         id_table : pd.DataFrame
             DataFrame containing identifier mappings
-        entity_type : str
-            Type of entity to search (e.g., 'species', 'reactions')
         identifiers : Optional[Union[str, list, set]], optional
             Identifiers to filter by, by default None
         ontologies : Optional[Union[str, list, set]], optional
@@ -1204,18 +1201,25 @@ class SBML_dfs:
             If ontologies is not a set
         """
         # validate inputs
+
+        entity_type = sbml_dfs_utils.infer_entity_type(id_table)
         entity_table = self.get_table(entity_type, required_attributes={SCHEMA_DEFS.ID})
         entity_pk = self.schema[entity_type][SCHEMA_DEFS.PK]
 
         matching_identifiers = id_tables.filter_id_table(
-            id_table=id_table,
-            identifiers=identifiers,
-            ontologies=ontologies,
-            bqbs=bqbs,
-            entity_type=entity_type,
+            id_table=id_table, identifiers=identifiers, ontologies=ontologies, bqbs=bqbs
         )
 
-        entity_subset = entity_table.loc[matching_identifiers[entity_pk].tolist()]
+        matching_keys = matching_identifiers[entity_pk].tolist()
+        entity_subset = entity_table.loc[matching_keys]
+
+        if matching_identifiers.shape[0] != entity_subset.shape[0]:
+            raise ValueError(
+                f"Some identifiers did not match to an entity for {entity_type}. "
+                "This suggests that the identifiers and sbml_dfs are not in sync. "
+                "Please create new identifiers with sbml_dfs.get_characteristic_species_ids() "
+                "or sbml_dfs.get_identifiers()."
+            )
 
         return entity_subset, matching_identifiers
 
