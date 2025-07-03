@@ -402,12 +402,14 @@ ONTOLOGIES = SimpleNamespace(
     ENSEMBL_PROTEIN_VERSION="ensembl_protein_version",
     GENE_NAME="gene_name",
     GO="go",
+    KEGG="kegg",
     MIRBASE="mirbase",
     NCBI_ENTREZ_GENE="ncbi_entrez_gene",
     PHAROS="pharos",
     REACTOME="reactome",
     SYMBOL="symbol",
     UNIPROT="uniprot",
+    WIKIPATHWAYS="wikipathways",
 )
 
 ONTOLOGIES_LIST = list(ONTOLOGIES.__dict__.values())

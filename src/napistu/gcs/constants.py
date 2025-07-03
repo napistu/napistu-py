@@ -5,17 +5,17 @@ from types import SimpleNamespace
 
 GCS_SUBASSET_NAMES = SimpleNamespace(
     SBML_DFS="sbml_dfs",
-    IDENTIFIERS="identifiers",
-    REGULATORY_GRAPH="regulatory_graph",
+    NAPISTU_GRAPH="napistu_graph",
+    SPECIES_IDENTIFIERS="species_identifiers",
     REGULATORY_DISTANCES="regulatory_distances",
 )
 
 
 GCS_FILETYPES = SimpleNamespace(
     SBML_DFS="sbml_dfs.pkl",
-    IDENTIFIERS="identifiers.tsv",
-    REGULATORY_GRAPH="regulatory_graph.pkl",
-    REGULATORY_DISTANCES="regulatory_distances.json",
+    NAPISTU_GRAPH="napistu_graph.pkl",
+    SPECIES_IDENTIFIERS="species_identifiers.tsv",
+    REGULATORY_DISTANCES="regulatory_distances.parquet",
 )
 
 
@@ -27,8 +27,8 @@ GCS_ASSETS = SimpleNamespace(
             "file": "test_pathway.tar.gz",
             "subassets": {
                 GCS_SUBASSET_NAMES.SBML_DFS: GCS_FILETYPES.SBML_DFS,
-                GCS_SUBASSET_NAMES.IDENTIFIERS: GCS_FILETYPES.IDENTIFIERS,
-                GCS_SUBASSET_NAMES.REGULATORY_GRAPH: GCS_FILETYPES.REGULATORY_GRAPH,
+                GCS_SUBASSET_NAMES.NAPISTU_GRAPH: GCS_FILETYPES.NAPISTU_GRAPH,
+                GCS_SUBASSET_NAMES.SPECIES_IDENTIFIERS: GCS_FILETYPES.SPECIES_IDENTIFIERS,
                 GCS_SUBASSET_NAMES.REGULATORY_DISTANCES: GCS_FILETYPES.REGULATORY_DISTANCES,
             },
             "public_url": "https://storage.googleapis.com/shackett-napistu-public/test_pathway.tar.gz",
@@ -37,8 +37,8 @@ GCS_ASSETS = SimpleNamespace(
             "file": "human_consensus.tar.gz",
             "subassets": {
                 GCS_SUBASSET_NAMES.SBML_DFS: GCS_FILETYPES.SBML_DFS,
-                GCS_SUBASSET_NAMES.IDENTIFIERS: GCS_FILETYPES.IDENTIFIERS,
-                GCS_SUBASSET_NAMES.REGULATORY_GRAPH: GCS_FILETYPES.REGULATORY_GRAPH,
+                GCS_SUBASSET_NAMES.NAPISTU_GRAPH: GCS_FILETYPES.NAPISTU_GRAPH,
+                GCS_SUBASSET_NAMES.SPECIES_IDENTIFIERS: GCS_FILETYPES.SPECIES_IDENTIFIERS,
             },
             "public_url": "https://storage.googleapis.com/shackett-napistu-public/human_consensus.tar.gz",
         },
@@ -46,8 +46,8 @@ GCS_ASSETS = SimpleNamespace(
             "file": "human_consensus_w_distances.tar.gz",
             "subassets": {
                 GCS_SUBASSET_NAMES.SBML_DFS: GCS_FILETYPES.SBML_DFS,
-                GCS_SUBASSET_NAMES.IDENTIFIERS: GCS_FILETYPES.IDENTIFIERS,
-                GCS_SUBASSET_NAMES.REGULATORY_GRAPH: GCS_FILETYPES.REGULATORY_GRAPH,
+                GCS_SUBASSET_NAMES.NAPISTU_GRAPH: GCS_FILETYPES.NAPISTU_GRAPH,
+                GCS_SUBASSET_NAMES.SPECIES_IDENTIFIERS: GCS_FILETYPES.SPECIES_IDENTIFIERS,
                 GCS_SUBASSET_NAMES.REGULATORY_DISTANCES: GCS_FILETYPES.REGULATORY_DISTANCES,
             },
             "public_url": "https://storage.googleapis.com/calico-cpr-public/human_consensus_w_distances.tar.gz",

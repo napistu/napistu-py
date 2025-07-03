@@ -19,17 +19,23 @@ from napistu import sbml_dfs_utils
 from napistu import source
 from napistu import utils
 from napistu.ingestion import sbml
-from napistu.constants import SBML_DFS
-from napistu.constants import SBML_DFS_SCHEMA
-from napistu.constants import IDENTIFIERS
-from napistu.constants import NAPISTU_STANDARD_OUTPUTS
-from napistu.constants import BQB_PRIORITIES
-from napistu.constants import ONTOLOGY_PRIORITIES
-from napistu.constants import MINI_SBO_FROM_NAME
-from napistu.constants import MINI_SBO_TO_NAME
-from napistu.constants import SBOTERM_NAMES
-from napistu.constants import ENTITIES_W_DATA
-from napistu.constants import ENTITIES_TO_ENTITY_DATA
+from napistu.ontologies import id_tables
+from napistu.constants import (
+    BQB,
+    BQB_DEFINING_ATTRS_LOOSE,
+    BQB_PRIORITIES,
+    ENTITIES_W_DATA,
+    ENTITIES_TO_ENTITY_DATA,
+    IDENTIFIERS,
+    MINI_SBO_FROM_NAME,
+    MINI_SBO_TO_NAME,
+    NAPISTU_STANDARD_OUTPUTS,
+    ONTOLOGY_PRIORITIES,
+    SBML_DFS,
+    SBML_DFS_SCHEMA,
+    SBOTERM_NAMES,
+    SCHEMA_DEFS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +107,7 @@ class SBML_dfs:
         Remove a reactions data table by label.
     remove_species_data(label)
         Remove a species data table by label.
-    search_by_ids(ids, entity_type, identifiers_df, ontologies=None)
+    search_by_ids(id_table, identifiers=None, ontologies=None, bqbs=None)
         Find entities and identifiers matching a set of query IDs.
     search_by_name(name, entity_type, partial_match=True)
         Find entities by exact or partial name match.
@@ -455,12 +461,12 @@ class SBML_dfs:
         ValueError
             If id_type is invalid or identifiers are malformed
         """
-        selected_table = self.get_table(id_type, {"id"})
+        selected_table = self.get_table(id_type, {SCHEMA_DEFS.ID})
         schema = SBML_DFS_SCHEMA.SCHEMA
 
         identifiers_dict = dict()
         for sysid in selected_table.index:
-            id_entry = selected_table[schema[id_type]["id"]][sysid]
+            id_entry = selected_table[schema[id_type][SCHEMA_DEFS.ID]][sysid]
 
             if isinstance(id_entry, identifiers.Identifiers):
                 identifiers_dict[sysid] = pd.DataFrame(id_entry.ids)
@@ -473,16 +479,16 @@ class SBML_dfs:
                 )
         if not identifiers_dict:
             # Return empty DataFrame with expected columns if nothing found
-            return pd.DataFrame(columns=[schema[id_type]["pk"], "entry"])
+            return pd.DataFrame(columns=[schema[id_type][SCHEMA_DEFS.PK], "entry"])
 
         identifiers_tbl = pd.concat(identifiers_dict)
 
-        identifiers_tbl.index.names = [schema[id_type]["pk"], "entry"]
+        identifiers_tbl.index.names = [schema[id_type][SCHEMA_DEFS.PK], "entry"]
         identifiers_tbl = identifiers_tbl.reset_index()
 
         named_identifiers = identifiers_tbl.merge(
-            selected_table.drop(schema[id_type]["id"], axis=1),
-            left_on=schema[id_type]["pk"],
+            selected_table.drop(schema[id_type][SCHEMA_DEFS.ID], axis=1),
+            left_on=schema[id_type][SCHEMA_DEFS.PK],
             right_index=True,
         )
 
@@ -1163,24 +1169,25 @@ class SBML_dfs:
 
     def search_by_ids(
         self,
-        ids: list[str],
-        entity_type: str,
-        identifiers_df: pd.DataFrame,
-        ontologies: None | set[str] = None,
+        id_table: pd.DataFrame,
+        identifiers: Optional[Union[str, list, set]] = None,
+        ontologies: Optional[Union[str, list, set]] = None,
+        bqbs: Optional[Union[str, list, set]] = BQB_DEFINING_ATTRS_LOOSE
+        + [BQB.HAS_PART],
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
         Find entities and identifiers matching a set of query IDs.
 
         Parameters
         ----------
-        ids : List[str]
-            List of identifiers to search for
-        entity_type : str
-            Type of entity to search (e.g., 'species', 'reactions')
-        identifiers_df : pd.DataFrame
+        id_table : pd.DataFrame
             DataFrame containing identifier mappings
-        ontologies : Optional[Set[str]], optional
-            Set of ontologies to filter by, by default None
+        identifiers : Optional[Union[str, list, set]], optional
+            Identifiers to filter by, by default None
+        ontologies : Optional[Union[str, list, set]], optional
+            Ontologies to filter by, by default None
+        bqbs : Optional[Union[str, list, set]], optional
+            BQB terms to filter by, by default [BQB.IS, BQB.HAS_PART]
 
         Returns
         -------
@@ -1196,42 +1203,25 @@ class SBML_dfs:
             If ontologies is not a set
         """
         # validate inputs
-        entity_table = self.get_table(entity_type, required_attributes={"id"})
-        entity_pk = self.schema[entity_type]["pk"]
 
-        utils.match_pd_vars(
-            identifiers_df,
-            req_vars={
-                entity_pk,
-                IDENTIFIERS.ONTOLOGY,
-                IDENTIFIERS.IDENTIFIER,
-                IDENTIFIERS.URL,
-                IDENTIFIERS.BQB,
-            },
-            allow_series=False,
-        ).assert_present()
+        entity_type = sbml_dfs_utils.infer_entity_type(id_table)
+        entity_table = self.get_table(entity_type, required_attributes={SCHEMA_DEFS.ID})
+        entity_pk = self.schema[entity_type][SCHEMA_DEFS.PK]
 
-        if ontologies is not None:
-            if not isinstance(ontologies, set):
-                # for clarity this should not be reachable based on type hints
-                raise TypeError(
-                    f"ontologies must be a set, but got {type(ontologies).__name__}"
-                )
-            ALL_VALID_ONTOLOGIES = identifiers_df["ontology"].unique()
-            invalid_ontologies = ontologies.difference(ALL_VALID_ONTOLOGIES)
-            if len(invalid_ontologies) > 0:
-                raise ValueError(
-                    f"The following ontologies are not valid: {', '.join(invalid_ontologies)}.\n"
-                    f"Valid ontologies are {', '.join(ALL_VALID_ONTOLOGIES)}"
-                )
+        matching_identifiers = id_tables.filter_id_table(
+            id_table=id_table, identifiers=identifiers, ontologies=ontologies, bqbs=bqbs
+        )
 
-            # fitler to just to identifiers matchign the ontologies of interest
-            identifiers_df = identifiers_df.query("ontology in @ontologies")
+        matching_keys = matching_identifiers[entity_pk].tolist()
+        entity_subset = entity_table.loc[matching_keys]
 
-        matching_identifiers = identifiers_df.loc[
-            identifiers_df["identifier"].isin(ids)
-        ]
-        entity_subset = entity_table.loc[matching_identifiers[entity_pk].tolist()]
+        if matching_identifiers.shape[0] != entity_subset.shape[0]:
+            raise ValueError(
+                f"Some identifiers did not match to an entity for {entity_type}. "
+                "This suggests that the identifiers and sbml_dfs are not in sync. "
+                "Please create new identifiers with sbml_dfs.get_characteristic_species_ids() "
+                "or sbml_dfs.get_identifiers()."
+            )
 
         return entity_subset, matching_identifiers
 

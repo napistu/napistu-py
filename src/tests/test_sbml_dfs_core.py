@@ -13,10 +13,12 @@ from napistu.modify import pathwayannot
 
 from napistu import identifiers as napistu_identifiers
 from napistu.constants import (
-    SBML_DFS,
+    BQB,
     BQB_DEFINING_ATTRS,
     BQB_DEFINING_ATTRS_LOOSE,
-    BQB,
+    SBML_DFS,
+    SCHEMA_DEFS,
+    ONTOLOGIES,
 )
 from napistu.sbml_dfs_core import SBML_dfs
 from unittest.mock import patch
@@ -291,53 +293,62 @@ def test_read_sbml_with_invalid_ids():
 
 
 def test_get_table(sbml_dfs):
-    assert isinstance(sbml_dfs.get_table("species"), pd.DataFrame)
-    assert isinstance(sbml_dfs.get_table("species", {"id"}), pd.DataFrame)
+    assert isinstance(sbml_dfs.get_table(SBML_DFS.SPECIES), pd.DataFrame)
+    assert isinstance(
+        sbml_dfs.get_table(SBML_DFS.SPECIES, {SCHEMA_DEFS.ID}), pd.DataFrame
+    )
 
     # invalid table
     with pytest.raises(ValueError):
-        sbml_dfs.get_table("foo", {"id"})
+        sbml_dfs.get_table("foo", {SCHEMA_DEFS.ID})
 
     # bad type
     with pytest.raises(TypeError):
-        sbml_dfs.get_table("reaction_species", "id")
+        sbml_dfs.get_table(SBML_DFS.REACTION_SPECIES, SCHEMA_DEFS.ID)
 
     # reaction species don't have ids
     with pytest.raises(ValueError):
-        sbml_dfs.get_table("reaction_species", {"id"})
+        sbml_dfs.get_table(SBML_DFS.REACTION_SPECIES, {SCHEMA_DEFS.ID})
 
 
 def test_search_by_name(sbml_dfs_metabolism):
-    assert sbml_dfs_metabolism.search_by_name("atp", "species", False).shape[0] == 1
-    assert sbml_dfs_metabolism.search_by_name("pyr", "species").shape[0] == 3
-    assert sbml_dfs_metabolism.search_by_name("kinase", "reactions").shape[0] == 4
+    assert (
+        sbml_dfs_metabolism.search_by_name("atp", SBML_DFS.SPECIES, False).shape[0] == 1
+    )
+    assert sbml_dfs_metabolism.search_by_name("pyr", SBML_DFS.SPECIES).shape[0] == 3
+    assert (
+        sbml_dfs_metabolism.search_by_name("kinase", SBML_DFS.REACTIONS).shape[0] == 4
+    )
 
 
 def test_search_by_id(sbml_dfs_metabolism):
-    identifiers_tbl = sbml_dfs_metabolism.get_identifiers("species")
+    identifiers_tbl = sbml_dfs_metabolism.get_identifiers(SBML_DFS.SPECIES)
     ids, species = sbml_dfs_metabolism.search_by_ids(
-        ["P40926"], "species", identifiers_tbl
+        identifiers_tbl, identifiers=["P40926"]
     )
     assert ids.shape[0] == 1
     assert species.shape[0] == 1
 
     ids, species = sbml_dfs_metabolism.search_by_ids(
-        ["57540", "30744"], "species", identifiers_tbl, {"chebi"}
+        identifiers_tbl,
+        identifiers=["57540", "30744"],
+        ontologies={ONTOLOGIES.CHEBI},
     )
     assert ids.shape[0] == 2
     assert species.shape[0] == 2
 
-    ids, species = sbml_dfs_metabolism.search_by_ids(
-        ["baz"], "species", identifiers_tbl
-    )
-    assert ids.shape[0] == 0
-    assert species.shape[0] == 0
+    with pytest.raises(
+        ValueError, match="None of the requested identifiers are present"
+    ):
+        ids, species = sbml_dfs_metabolism.search_by_ids(
+            identifiers_tbl, identifiers=["baz"]  # Non-existent identifier
+        )
 
 
 def test_species_status(sbml_dfs):
 
     species = sbml_dfs.species
-    select_species = species[species["s_name"] == "OxyHbA"]
+    select_species = species[species[SBML_DFS.S_NAME] == "OxyHbA"]
     assert select_species.shape[0] == 1
 
     status = sbml_dfs.species_status(select_species.index[0])

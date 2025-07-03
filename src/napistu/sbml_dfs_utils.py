@@ -14,24 +14,29 @@ from napistu import utils
 from napistu import identifiers
 from napistu import indices
 
-from napistu.constants import BQB
-from napistu.constants import SBML_DFS
-from napistu.constants import SBML_DFS_SCHEMA
-from napistu.constants import IDENTIFIERS
-from napistu.constants import BQB_DEFINING_ATTRS
-from napistu.constants import BQB_DEFINING_ATTRS_LOOSE
-from napistu.constants import REQUIRED_REACTION_FROMEDGELIST_COLUMNS
-from napistu.constants import INTERACTION_EDGELIST_EXPECTED_VARS
-from napistu.constants import SBO_ROLES_DEFS
-from napistu.constants import MINI_SBO_FROM_NAME
-from napistu.constants import MINI_SBO_TO_NAME
-from napistu.constants import SBO_NAME_TO_ROLE
-from napistu.constants import ONTOLOGIES
-from napistu.constants import VALID_SBO_TERM_NAMES
-from napistu.constants import VALID_SBO_TERMS
-from napistu.ingestion.constants import VALID_COMPARTMENTS
-from napistu.ingestion.constants import COMPARTMENTS_GO_TERMS
-from napistu.ingestion.constants import GENERIC_COMPARTMENT
+from napistu.constants import (
+    BQB,
+    BQB_DEFINING_ATTRS,
+    BQB_DEFINING_ATTRS_LOOSE,
+    SBML_DFS,
+    SBML_DFS_SCHEMA,
+    SCHEMA_DEFS,
+    IDENTIFIERS,
+    INTERACTION_EDGELIST_EXPECTED_VARS,
+    ONTOLOGIES,
+    MINI_SBO_FROM_NAME,
+    MINI_SBO_TO_NAME,
+    REQUIRED_REACTION_FROMEDGELIST_COLUMNS,
+    SBO_ROLES_DEFS,
+    SBO_NAME_TO_ROLE,
+    VALID_SBO_TERM_NAMES,
+    VALID_SBO_TERMS,
+)
+from napistu.ingestion.constants import (
+    COMPARTMENTS_GO_TERMS,
+    GENERIC_COMPARTMENT,
+    VALID_COMPARTMENTS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -416,6 +421,65 @@ def id_formatter_inv(ids: list[str]) -> list[int]:
             id_val.append(np.nan)  # type: ignore
 
     return id_val
+
+
+def infer_entity_type(df: pd.DataFrame) -> str:
+    """
+    Infer the entity type of a DataFrame based on its structure and schema.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The DataFrame to analyze
+
+    Returns
+    -------
+    str
+        The inferred entity type name
+
+    Raises
+    ------
+    ValueError
+        If no entity type can be determined
+    """
+    schema = SBML_DFS_SCHEMA.SCHEMA
+
+    # Get all primary keys
+    primary_keys = [
+        entity_schema.get(SCHEMA_DEFS.PK) for entity_schema in schema.values()
+    ]
+    primary_keys = [pk for pk in primary_keys if pk is not None]
+
+    # Check if index matches a primary key
+    if df.index.name in primary_keys:
+        for entity_type, entity_schema in schema.items():
+            if entity_schema.get(SCHEMA_DEFS.PK) == df.index.name:
+                return entity_type
+
+    # Get DataFrame columns that are also primary keys
+    df_columns = set(df.columns).intersection(primary_keys)
+
+    # Check for exact match with primary key + foreign keys
+    for entity_type, entity_schema in schema.items():
+        expected_keys = set()
+
+        # Add primary key
+        pk = entity_schema.get(SCHEMA_DEFS.PK)
+        if pk:
+            expected_keys.add(pk)
+
+        # Add foreign keys
+        fks = entity_schema.get(SCHEMA_DEFS.FK, [])
+        expected_keys.update(fks)
+
+        # Check for exact match
+        if df_columns == expected_keys:
+            return entity_type
+
+    # No match found
+    raise ValueError(
+        f"No entity type matches DataFrame with columns: {sorted(df_columns)}"
+    )
 
 
 def match_entitydata_index_to_entity(
