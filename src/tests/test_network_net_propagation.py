@@ -6,11 +6,17 @@ from napistu.network.net_propagation import (
     net_propagate_attributes,
     _validate_additional_propagation_args,
     uniform_null,
-    gaussian_null,
+    parametric_null,
     node_permutation_null,
     edge_permutation_null,
     NULL_GENERATORS,
     network_propagation_with_null,
+    validate_net_propagation_engine_reqs,
+)
+from napistu.network.constants import (
+    NAPISTU_GRAPH_VERTICES,
+    NET_PROPAGATION_DEFS,
+    NULL_STRATEGIES,
 )
 
 
@@ -18,7 +24,7 @@ def test_network_propagation_with_null():
     """Test the main orchestrator function with different null strategies."""
     # Create test graph
     graph = ig.Graph(5)
-    graph.vs["name"] = ["A", "B", "C", "D", "E"]
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C", "D", "E"]
     graph.vs["attr1"] = [1.0, 0.0, 2.0, 0.0, 1.5]  # Non-negative, not all zero
     graph.add_edges([(0, 1), (1, 2), (2, 3), (3, 4)])
 
@@ -26,7 +32,7 @@ def test_network_propagation_with_null():
 
     # Test 1: Uniform null (should return ratios)
     result_uniform = network_propagation_with_null(
-        graph, attributes, null_strategy="uniform"
+        graph, attributes, null_strategy=NULL_STRATEGIES.UNIFORM
     )
 
     # Check structure
@@ -44,7 +50,7 @@ def test_network_propagation_with_null():
     result_permutation = network_propagation_with_null(
         graph,
         attributes,
-        null_strategy="node_permutation",
+        null_strategy=NULL_STRATEGIES.NODE_PERMUTATION,
         n_samples=10,  # Small for testing
     )
 
@@ -61,7 +67,7 @@ def test_network_propagation_with_null():
     result_edge = network_propagation_with_null(
         graph,
         attributes,
-        null_strategy="edge_permutation",
+        null_strategy=NULL_STRATEGIES.EDGE_PERMUTATION,
         n_samples=5,
         burn_in_ratio=2,  # Small for testing
         sampling_ratio=0.2,
@@ -74,21 +80,21 @@ def test_network_propagation_with_null():
     assert (result_edge.values <= 1).all()
 
     # Test 4: Gaussian null
-    result_gaussian = network_propagation_with_null(
-        graph, attributes, null_strategy="gaussian", n_samples=8
+    result_parametric = network_propagation_with_null(
+        graph, attributes, null_strategy=NULL_STRATEGIES.PARAMETRIC, n_samples=8
     )
 
     # Check structure
-    assert isinstance(result_gaussian, pd.DataFrame)
-    assert result_gaussian.shape == (5, 1)
-    assert (result_gaussian.values >= 0).all()
-    assert (result_gaussian.values <= 1).all()
+    assert isinstance(result_parametric, pd.DataFrame)
+    assert result_parametric.shape == (5, 1)
+    assert (result_parametric.values >= 0).all()
+    assert (result_parametric.values <= 1).all()
 
     # Test 5: Custom propagation parameters
     result_custom = network_propagation_with_null(
         graph,
         attributes,
-        null_strategy="uniform",
+        null_strategy=NULL_STRATEGIES.UNIFORM,
         additional_propagation_args={"damping": 0.7},
     )
 
@@ -102,7 +108,7 @@ def test_network_propagation_with_null():
     result_masked = network_propagation_with_null(
         graph,
         attributes,
-        null_strategy="node_permutation",
+        null_strategy=NULL_STRATEGIES.NODE_PERMUTATION,
         n_samples=5,
         mask=mask_array,
     )
@@ -122,7 +128,7 @@ def test_net_propagate_attributes():
     """Test net_propagate_attributes with multiple attributes and various scenarios."""
     # Create test graph with edges for realistic propagation
     graph = ig.Graph(4)
-    graph.vs["name"] = ["node1", "node2", "node3", "node4"]
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["node1", "node2", "node3", "node4"]
     graph.vs["attr1"] = [1.0, 0.0, 2.0, 0.0]  # Non-negative, not all zero
     graph.vs["attr2"] = [0.5, 1.5, 0.0, 1.0]  # Non-negative, not all zero
     graph.add_edges([(0, 1), (1, 2), (2, 3), (0, 3)])  # Create connected graph
@@ -157,7 +163,7 @@ def test_net_propagate_attributes():
 
     # Test 4: Invalid propagation method
     with pytest.raises(ValueError, match="Invalid method"):
-        net_propagate_attributes(graph, ["attr1"], method="invalid_method")
+        net_propagate_attributes(graph, ["attr1"], propagation_method="invalid_method")
 
     # Test 5: Additional arguments (test damping parameter)
     result_default = net_propagate_attributes(graph, ["attr1"])
@@ -183,7 +189,7 @@ def test_all_null_generators_structure():
     """Test all null generators with default options and validate output structure."""
     # Create test graph with edges for realistic propagation
     graph = ig.Graph(5)
-    graph.vs["name"] = ["A", "B", "C", "D", "E"]
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C", "D", "E"]
     graph.vs["attr1"] = [1.0, 0.0, 2.0, 0.0, 1.5]  # Non-negative, not all zero
     graph.vs["attr2"] = [0.5, 1.0, 0.0, 2.0, 0.0]  # Non-negative, not all zero
     graph.add_edges([(0, 1), (1, 2), (2, 3), (3, 4)])
@@ -194,11 +200,11 @@ def test_all_null_generators_structure():
     for generator_name, generator_func in NULL_GENERATORS.items():
         print(f"Testing {generator_name}")
 
-        if generator_name == "uniform":
+        if generator_name == NULL_STRATEGIES.UNIFORM:
             # Uniform null doesn't take n_samples
             result = generator_func(graph, attributes)
             expected_rows = 5  # One row per node
-        elif generator_name == "edge_permutation":
+        elif generator_name == NULL_STRATEGIES.EDGE_PERMUTATION:
             # Edge permutation has different parameters
             result = generator_func(graph, attributes, n_samples=n_samples)
             expected_rows = n_samples * 5  # n_samples rows per node
@@ -218,7 +224,7 @@ def test_all_null_generators_structure():
         assert list(result.columns) == attributes, f"{generator_name} wrong columns"
 
         # Validate index structure
-        if generator_name == "uniform":
+        if generator_name == NULL_STRATEGIES.UNIFORM:
             assert list(result.index) == [
                 "A",
                 "B",
@@ -243,7 +249,7 @@ def test_all_null_generators_structure():
         ).all(), f"{generator_name} should contain probabilities <= 1"
 
         # Each sample should sum to approximately 1 (PPR property)
-        if generator_name == "uniform":
+        if generator_name == NULL_STRATEGIES.UNIFORM:
             assert np.allclose(
                 result.sum(axis=0), [1.0, 1.0], atol=1e-10
             ), f"{generator_name} doesn't sum to 1"
@@ -262,7 +268,7 @@ def test_mask_application():
     """Test that masks are correctly applied across all null generators."""
     # Create test graph
     graph = ig.Graph(6)
-    graph.vs["name"] = ["A", "B", "C", "D", "E", "F"]
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C", "D", "E", "F"]
     graph.vs["attr1"] = [1.0, 0.0, 2.0, 0.0, 1.5, 0.0]  # Nonzero at indices 0, 2, 4
     graph.vs["attr2"] = [0.0, 1.0, 0.0, 2.0, 0.0, 1.0]  # Nonzero at indices 1, 3, 5
     graph.add_edges([(0, 1), (1, 2), (2, 3), (3, 4), (4, 5)])
@@ -276,7 +282,7 @@ def test_mask_application():
     for generator_name, generator_func in NULL_GENERATORS.items():
         print(f"Testing mask application for {generator_name}")
 
-        if generator_name == "uniform":
+        if generator_name == NULL_STRATEGIES.UNIFORM:
             result = generator_func(graph, attributes, mask=mask_array)
 
             # For uniform null with mask, verify structure is correct
@@ -286,7 +292,7 @@ def test_mask_application():
                 result.values > 0
             ).all(), "All nodes should have positive values after propagation"
 
-        elif generator_name == "edge_permutation":
+        elif generator_name == NULL_STRATEGIES.EDGE_PERMUTATION:
             # Edge permutation ignores mask, just test it doesn't crash
             result = generator_func(graph, attributes, n_samples=2)
             assert result.shape[0] == 12  # 2 samples * 6 nodes
@@ -312,7 +318,7 @@ def test_edge_cases_and_errors():
         uniform_null(graph, ["bad_attr"])
 
     with pytest.raises(ValueError):
-        gaussian_null(graph, ["bad_attr"])
+        parametric_null(graph, ["bad_attr"])
 
     with pytest.raises(ValueError):
         node_permutation_null(graph, ["bad_attr"])
@@ -360,7 +366,7 @@ def test_propagation_method_parameters():
 
     # Test that all generators accept method parameters
     for generator_name, generator_func in NULL_GENERATORS.items():
-        if generator_name == "uniform":
+        if generator_name == NULL_STRATEGIES.UNIFORM:
             result = generator_func(
                 graph, ["attr1"], additional_propagation_args={"damping": 0.8}
             )
@@ -380,12 +386,16 @@ def test_propagation_method_parameters():
 def test_validate_additional_propagation_args():
     """Test _validate_additional_propagation_args with valid and invalid arguments."""
     # Test 1: None input
-    result = _validate_additional_propagation_args("personalized_pagerank", None)
+    result = _validate_additional_propagation_args(
+        NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK, None
+    )
     assert result == {}
 
     # Test 2: Valid arguments (common PPR parameters)
     valid_args = {"damping": 0.85, "directed": True}
-    result = _validate_additional_propagation_args("personalized_pagerank", valid_args)
+    result = _validate_additional_propagation_args(
+        NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK, valid_args
+    )
     assert result == valid_args
 
     # Test 3: Invalid method
@@ -395,5 +405,9 @@ def test_validate_additional_propagation_args():
     # Test 4: Invalid argument for PPR
     with pytest.raises(ValueError, match="Invalid argument for personalized_pagerank"):
         _validate_additional_propagation_args(
-            "personalized_pagerank", {"invalid_arg": 123}
+            NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK, {"invalid_arg": 123}
         )
+
+
+def test_net_propagation_engine_reqs_valid():
+    validate_net_propagation_engine_reqs()

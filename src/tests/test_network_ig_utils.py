@@ -161,7 +161,7 @@ def test_mask_functions_error_cases():
 
 
 def test_ensure_nonnegative_vertex_attribute():
-    """Test _ensure_nonnegative_vertex_attribute with various valid and invalid inputs."""
+    """Test _ensure_valid_attribute with various valid and invalid inputs."""
     # Create test graph
     graph = ig.Graph(4)
     graph.vs["good_attr"] = [1.0, 2.0, 0.0, 3.0]
@@ -170,23 +170,23 @@ def test_ensure_nonnegative_vertex_attribute():
     graph.vs["mixed_attr"] = [1.0, None, 2.0, 0.0]  # Some None values
 
     # Test 1: Valid attribute
-    result = ig_utils._ensure_nonnegative_vertex_attribute(graph, "good_attr")
+    result = ig_utils._ensure_valid_attribute(graph, "good_attr")
     expected = np.array([1.0, 2.0, 0.0, 3.0])
     assert np.array_equal(result, expected)
 
     # Test 2: Attribute with None values (should be replaced with 0)
-    result = ig_utils._ensure_nonnegative_vertex_attribute(graph, "mixed_attr")
+    result = ig_utils._ensure_valid_attribute(graph, "mixed_attr")
     expected = np.array([1.0, 0.0, 2.0, 0.0])
     assert np.array_equal(result, expected)
 
     # Test 3: All zero values
     with pytest.raises(ValueError, match="zero for all vertices"):
-        ig_utils._ensure_nonnegative_vertex_attribute(graph, "zero_attr")
+        ig_utils._ensure_valid_attribute(graph, "zero_attr")
 
     # Test 4: Negative values
     with pytest.raises(ValueError, match="contains negative values"):
-        ig_utils._ensure_nonnegative_vertex_attribute(graph, "negative_attr")
+        ig_utils._ensure_valid_attribute(graph, "negative_attr")
 
     # Test 5: Missing attribute
     with pytest.raises(ValueError, match="missing for all vertices"):
-        ig_utils._ensure_nonnegative_vertex_attribute(graph, "nonexistent_attr")
+        ig_utils._ensure_valid_attribute(graph, "nonexistent_attr")

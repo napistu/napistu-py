@@ -488,20 +488,22 @@ def _get_attribute_masks(
     return masks
 
 
-def _ensure_nonnegative_vertex_attribute(graph: ig.Graph, attribute: str):
+def _ensure_valid_attribute(graph: ig.Graph, attribute: str, non_negative: bool = True):
     """
-    Ensure a vertex attribute is present, numeric, and non-negative for all vertices.
+    Ensure a vertex attribute is present, numeric, and optionally non-negative for all vertices.
 
-    This utility checks that the specified vertex attribute exists, is numeric, and non-negative
+    This utility checks that the specified vertex attribute exists, is numeric, and (optionally) non-negative
     for all vertices in the graph. Missing or None values are treated as 0. Raises ValueError
-    if the attribute is missing for all vertices, if all values are zero, or if any value is negative.
+    if the attribute is missing for all vertices, if all values are zero, or if any value is negative (if non_negative=True).
 
     Parameters
     ----------
-    napistu_graph : NapistuGraph or ig.Graph
+    graph : NapistuGraph or ig.Graph
         The input graph (NapistuGraph or igraph.Graph).
     attribute : str
         The name of the vertex attribute to check.
+    non_negative : bool, default True
+        Whether to require all values to be non-negative.
 
     Returns
     -------
@@ -511,7 +513,7 @@ def _ensure_nonnegative_vertex_attribute(graph: ig.Graph, attribute: str):
     Raises
     ------
     ValueError
-        If the attribute is missing for all vertices, all values are zero, or any value is negative.
+        If the attribute is missing for all vertices, all values are zero, or any value is negative (if non_negative=True).
     """
     all_missing = all(
         (attribute not in v.attributes() or v[attribute] is None) for v in graph.vs
@@ -534,7 +536,7 @@ def _ensure_nonnegative_vertex_attribute(graph: ig.Graph, attribute: str):
         raise ValueError(
             f"Vertex attribute '{attribute}' is zero for all vertices; cannot use as reset vector."
         )
-    if np.any(arr < 0):
+    if non_negative and np.any(arr < 0):
         raise ValueError(f"Attribute '{attribute}' contains negative values.")
 
     return arr

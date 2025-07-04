@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+
 from napistu.constants import SBML_DFS
 from napistu.constants import SBOTERM_NAMES
 
@@ -205,11 +206,27 @@ NET_PROPAGATION_DEFS = SimpleNamespace(PERSONALIZED_PAGERANK="personalized_pager
 
 VALID_NET_PROPAGATION_METHODS = NET_PROPAGATION_DEFS.__dict__.values()
 
-NULL_GENERATOR_DEFS = SimpleNamespace(
+NET_PROPAGATION_ENGINE_DEFS = SimpleNamespace(NON_NEGATIVE="non-negative")
+
+NET_PROPAGATION_ENGINE_REQS = {
+    NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK: {
+        NET_PROPAGATION_ENGINE_DEFS.NON_NEGATIVE: True
+    }
+}
+
+NULL_STRATEGIES = SimpleNamespace(
     UNIFORM="uniform",
-    GAUSSIAN="gaussian",
+    PARAMETRIC="parametric",
     NODE_PERMUTATION="node_permutation",
     EDGE_PERMUTATION="edge_permutation",
 )
 
-VALID_NULL_GENERATORS = NULL_GENERATOR_DEFS.__dict__.values()
+VALID_NULL_STRATEGIES = NULL_STRATEGIES.__dict__.values()
+
+PARAMETRIC_NULL_DEFAULT_DISTRIBUTION = "norm"
+
+# masks
+
+MASK_KEYWORDS = SimpleNamespace(
+    ATTR="attr",
+)
