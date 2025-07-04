@@ -13,7 +13,7 @@ NAPISTU_GRAPH_DIRECTEDNESS = SimpleNamespace(
     DIRECTED="directed", UNDIRECTED="undirected"
 )
 
-NAPISTU_GRAPH_NODES = SimpleNamespace(NAME="name")
+NAPISTU_GRAPH_VERTICES = SimpleNamespace(NAME="name")
 
 NAPISTU_GRAPH_EDGES = SimpleNamespace(
     DIRECTED="directed",
@@ -198,3 +198,18 @@ SCORE_CALIBRATION_POINTS_DICT = {
 }
 
 SOURCE_VARS_DICT = {"string_wt": 10}
+
+# network propagation
+
+NET_PROPAGATION_DEFS = SimpleNamespace(PERSONALIZED_PAGERANK="personalized_pagerank")
+
+VALID_NET_PROPAGATION_METHODS = NET_PROPAGATION_DEFS.__dict__.values()
+
+NULL_GENERATOR_DEFS = SimpleNamespace(
+    UNIFORM="uniform",
+    GAUSSIAN="gaussian",
+    NODE_PERMUTATION="node_permutation",
+    EDGE_PERMUTATION="edge_permutation",
+)
+
+VALID_NULL_GENERATORS = NULL_GENERATOR_DEFS.__dict__.values()
