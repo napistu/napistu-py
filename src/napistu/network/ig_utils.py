@@ -431,7 +431,6 @@ def _parse_mask_input(
 
 def _get_attribute_masks(
     graph: ig.Graph,
-    attributes: List[str],
     mask_specs: Dict[str, Union[str, np.ndarray, List, None]],
 ) -> Dict[str, np.ndarray]:
     """
@@ -454,7 +453,12 @@ def _get_attribute_masks(
     n_nodes = graph.vcount()
     masks = {}
 
-    for attr in attributes:
+    invalid_attrs = set(mask_specs.keys()).difference(graph.vs.attributes())
+    if invalid_attrs:
+        raise ValueError(f"Attributes {invalid_attrs} not found in graph")
+
+    for attr in mask_specs.keys():
+
         mask_spec = mask_specs[attr]
 
         if mask_spec is None:

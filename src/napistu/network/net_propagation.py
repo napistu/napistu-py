@@ -1,4 +1,4 @@
-import inspect
+from dataclasses import dataclass
 import logging
 from typing import Optional, Union, List, Dict, Any
 
@@ -17,23 +17,27 @@ from napistu.network.constants import (
     MASK_KEYWORDS,
     NAPISTU_GRAPH_VERTICES,
     NET_PROPAGATION_DEFS,
-    NET_PROPAGATION_ENGINE_REQS,
-    NET_PROPAGATION_ENGINE_DEFS,
     NULL_STRATEGIES,
     PARAMETRIC_NULL_DEFAULT_DISTRIBUTION,
-    VALID_NET_PROPAGATION_METHODS,
     VALID_NULL_STRATEGIES,
 )
-from pydantic import RootModel, model_validator
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PropagationMethod:
+    method: callable
+    non_negative: bool
 
 
 def network_propagation_with_null(
     graph: ig.Graph,
     attributes: List[str],
     null_strategy: str = NULL_STRATEGIES.NODE_PERMUTATION,
-    propagation_method: str = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
+    propagation_method: Union[
+        str, PropagationMethod
+    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
     additional_propagation_args: Optional[dict] = None,
     n_samples: int = 100,
     **null_kwargs,
@@ -54,7 +58,7 @@ def network_propagation_with_null(
         Attribute names to propagate and test.
     null_strategy : str
         Null distribution strategy. One of: 'uniform', 'parametric', 'node_permutation', 'edge_permutation'.
-    propagation_method : str
+    propagation_method : str or PropagationMethod
         Network propagation method to apply.
     additional_propagation_args : dict, optional
         Additional arguments to pass to the network propagation method.
@@ -132,7 +136,9 @@ def network_propagation_with_null(
 def net_propagate_attributes(
     graph: ig.Graph,
     attributes: List[str],
-    propagation_method: str = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
+    propagation_method: Union[
+        str, PropagationMethod
+    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
     additional_propagation_args: Optional[dict] = None,
 ) -> pd.DataFrame:
     """
@@ -156,10 +162,8 @@ def net_propagate_attributes(
         containing the propagated attribute values.
     """
 
-    _validate_vertex_attributes(graph, attributes, propagation_method)   
-    non_negative = NET_PROPAGATION_ENGINE_REQS[propagation_method][
-        NET_PROPAGATION_ENGINE_DEFS.NON_NEGATIVE
-    ]
+    propagation_method = _ensure_propagation_method(propagation_method)
+    _validate_vertex_attributes(graph, attributes, propagation_method)
 
     if additional_propagation_args is None:
         additional_propagation_args = {}
@@ -167,21 +171,13 @@ def net_propagate_attributes(
     results = []
     for attr in attributes:
         # Validate attributes
-        attr_data = _ensure_valid_attribute(graph, attr, non_negative=non_negative)
-
-        # Validate additional propagation arguments
-        additional_propagation_args = _validate_additional_propagation_args(
-            propagation_method, additional_propagation_args
+        attr_data = _ensure_valid_attribute(
+            graph, attr, non_negative=propagation_method.non_negative
         )
-
-        if propagation_method == NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK:
-            pr_attr = graph.personalized_pagerank(
-                reset=attr_data.tolist(), **additional_propagation_args
-            )
-        else:
-            raise ValueError(
-                f"Invalid method: {propagation_method}, valid methods are {VALID_NET_PROPAGATION_METHODS}"
-            )
+        # apply the propagation method
+        pr_attr = propagation_method.method(
+            graph, attr_data, **additional_propagation_args
+        )
 
         results.append(pr_attr)
 
@@ -195,59 +191,12 @@ def net_propagate_attributes(
     return pd.DataFrame(np.column_stack(results), index=names, columns=attributes)
 
 
-def _validate_additional_propagation_args(
-    propagation_method: str, additional_propagation_args: dict
-) -> dict:
-    """
-    Validate additional arguments for a network propagation method.
-
-    Parameters
-    ----------
-    propagation_method : str
-        The network propagation method to validate.
-    additional_propagation_args : dict
-        The additional arguments to validate.
-
-    Returns
-    -------
-    dict
-        The validated additional arguments.
-
-    Raises
-    ------
-    ValueError
-        If the propagation method is invalid or if the additional arguments are invalid.
-    """
-
-    NET_PROPAGATION_FUNCTIONS = {
-        NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK: ig.Graph.personalized_pagerank
-    }
-
-    if propagation_method not in VALID_NET_PROPAGATION_METHODS:
-        raise ValueError(
-            f"Invalid method: {propagation_method}, valid methods are {VALID_NET_PROPAGATION_METHODS}"
-        )
-
-    # Validate additional_propagation_args
-    if additional_propagation_args is None:
-        return {}
-    else:
-        valid_args = set(
-            inspect.signature(
-                NET_PROPAGATION_FUNCTIONS[propagation_method]
-            ).parameters.keys()
-        )
-        for k in additional_propagation_args:
-            if k not in valid_args:
-                raise ValueError(f"Invalid argument for personalized_pagerank: {k}")
-
-        return additional_propagation_args
-
-
 def uniform_null(
     graph: ig.Graph,
     attributes: List[str],
-    propagation_method: str = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
+    propagation_method: Union[
+        str, PropagationMethod
+    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
     additional_propagation_args: Optional[dict] = None,
     mask: Optional[Union[str, np.ndarray, List, Dict]] = MASK_KEYWORDS.ATTR,
 ) -> pd.DataFrame:
@@ -273,13 +222,14 @@ def uniform_null(
         Propagated null sample with uniform distribution over masked nodes.
         Shape: (n_nodes, n_attributes)
     """
-    
+
     # Validate attributes
+    propagation_method = _ensure_propagation_method(propagation_method)
     _validate_vertex_attributes(graph, attributes, propagation_method)
 
     # Parse mask input
     mask_specs = _parse_mask_input(mask, attributes)
-    masks = _get_attribute_masks(graph, attributes, mask_specs)
+    masks = _get_attribute_masks(graph, mask_specs)
 
     # Create null graph with uniform attributes
     # we'll use these updated attributes when calling net_propagate_attributes() below
@@ -315,7 +265,9 @@ def uniform_null(
 def parametric_null(
     graph: ig.Graph,
     attributes: List[str],
-    propagation_method: str = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
+    propagation_method: Union[
+        str, PropagationMethod
+    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
     distribution: Union[str, Any] = PARAMETRIC_NULL_DEFAULT_DISTRIBUTION,
     additional_propagation_args: Optional[dict] = None,
     mask: Optional[Union[str, np.ndarray, List, Dict]] = MASK_KEYWORDS.ATTR,
@@ -331,7 +283,7 @@ def parametric_null(
         Input graph.
     attributes : List[str]
         Attribute names to generate nulls for.
-    propagation_method : str
+    propagation_method : str or PropagationMethod
         Network propagation method to apply.
     distribution : str or scipy.stats distribution
         Distribution to fit. Can be:
@@ -379,14 +331,12 @@ def parametric_null(
         fit_kwargs = {}
 
     # Validate attributes
+    propagation_method = _ensure_propagation_method(propagation_method)
     _validate_vertex_attributes(graph, attributes, propagation_method)
-    non_negative = NET_PROPAGATION_ENGINE_REQS[propagation_method][
-        NET_PROPAGATION_ENGINE_DEFS.NON_NEGATIVE
-    ]
 
     # Parse mask input and get masks
     mask_specs = _parse_mask_input(mask, attributes)
-    masks = _get_attribute_masks(graph, attributes, mask_specs)
+    masks = _get_attribute_masks(graph, mask_specs)
 
     # Fit distribution parameters for each attribute
     params = _fit_distribution_parameters(graph, attributes, masks, dist, fit_kwargs)
@@ -406,7 +356,10 @@ def parametric_null(
     for i in range(n_samples):
         # Generate null sample (modifies null_graph in-place)
         _generate_parametric_null_sample(
-            null_graph, attributes, params, ensure_nonnegative=non_negative
+            null_graph,
+            attributes,
+            params,
+            ensure_nonnegative=propagation_method.non_negative,
         )
 
         # Apply propagation method to null graph
@@ -425,7 +378,9 @@ def parametric_null(
 def node_permutation_null(
     graph: ig.Graph,
     attributes: List[str],
-    propagation_method: str = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
+    propagation_method: Union[
+        str, PropagationMethod
+    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
     additional_propagation_args: Optional[dict] = None,
     mask: Optional[Union[str, np.ndarray, List, Dict]] = MASK_KEYWORDS.ATTR,
     replace: bool = False,
@@ -440,7 +395,7 @@ def node_permutation_null(
         Input graph.
     attributes : List[str]
         Attribute names to permute.
-    propagation_method : str
+    propagation_method : str or PropagationMethod
         Network propagation method to apply.
     additional_propagation_args : dict, optional
         Additional arguments to pass to the network propagation method.
@@ -458,11 +413,12 @@ def node_permutation_null(
         Shape: (n_samples * n_nodes, n_attributes)
     """
     # Validate attributes
+    propagation_method = _ensure_propagation_method(propagation_method)
     _validate_vertex_attributes(graph, attributes, propagation_method)
 
     # Parse mask input
     mask_specs = _parse_mask_input(mask, attributes)
-    masks = _get_attribute_masks(graph, attributes, mask_specs)
+    masks = _get_attribute_masks(graph, mask_specs)
 
     # Get original attribute values
     original_values = {}
@@ -522,7 +478,9 @@ def node_permutation_null(
 def edge_permutation_null(
     graph: ig.Graph,
     attributes: List[str],
-    propagation_method: str = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
+    propagation_method: Union[
+        str, PropagationMethod
+    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
     additional_propagation_args: Optional[dict] = None,
     burn_in_ratio: float = 10,
     sampling_ratio: float = 0.1,
@@ -537,7 +495,7 @@ def edge_permutation_null(
         Input graph.
     attributes : List[str]
         Attribute names to use (values unchanged by rewiring).
-    propagation_method : str
+    propagation_method : str or PropagationMethod
         Network propagation method to apply.
     additional_propagation_args : dict, optional
         Additional arguments to pass to the network propagation method.
@@ -556,6 +514,7 @@ def edge_permutation_null(
     """
 
     # Validate attributes
+    propagation_method = _ensure_propagation_method(propagation_method)
     _validate_vertex_attributes(graph, attributes, propagation_method)
 
     # Setup rewired graph
@@ -699,47 +658,39 @@ def _generate_parametric_null_sample(
         null_graph.vs[attr] = null_attr_values.tolist()
 
 
-def _validate_vertex_attributes(graph: ig.Graph, attributes: List[str], propagation_method: str) -> None:
+def _validate_vertex_attributes(
+    graph: ig.Graph, attributes: List[str], propagation_method: str
+) -> None:
     """Validate vertex attributes for propagation method."""
 
-    if propagation_method not in VALID_NET_PROPAGATION_METHODS:
-        raise ValueError(
-            f"Invalid method: {propagation_method}, valid methods are {VALID_NET_PROPAGATION_METHODS}"
-        )
-        
+    propagation_method = _ensure_propagation_method(propagation_method)
+
     # check that the attributes are numeric and non-negative if required
-    non_negative = NET_PROPAGATION_ENGINE_REQS[propagation_method][
-        NET_PROPAGATION_ENGINE_DEFS.NON_NEGATIVE
-    ]
     for attr in attributes:
-        _ = _ensure_valid_attribute(graph, attr, non_negative=non_negative)
+        _ = _ensure_valid_attribute(
+            graph, attr, non_negative=propagation_method.non_negative
+        )
 
     return None
 
 
-# --- Runtime validator for NET_PROPAGATION_ENGINE_REQS ---
-class NetPropagationEngineReqsModel(RootModel[Dict[str, Dict[str, Any]]]):
-    @model_validator(mode="after")
-    def check_methods_and_flags(self) -> "NetPropagationEngineReqsModel":
-        reqs = self.root
-        valid_methods = set(str(m) for m in VALID_NET_PROPAGATION_METHODS)
-        req_keys = set(str(k) for k in reqs.keys())
-        missing = valid_methods - req_keys
-        if missing:
-            raise ValueError(
-                f"Missing NET_PROPAGATION_ENGINE_REQS for methods: {missing}"
-            )
-        for method, subdict in reqs.items():
-            if NET_PROPAGATION_ENGINE_DEFS.NON_NEGATIVE not in subdict:
-                raise ValueError(
-                    f"Method '{method}' missing 'non-negative' flag in NET_PROPAGATION_ENGINE_REQS"
-                )
-            if not isinstance(subdict[NET_PROPAGATION_ENGINE_DEFS.NON_NEGATIVE], bool):
-                raise ValueError(
-                    f"'non-negative' flag for method '{method}' must be a boolean"
-                )
-        return self
+def _pagerank_wrapper(graph: ig.Graph, attr_data: np.ndarray, **kwargs):
+    return graph.personalized_pagerank(reset=attr_data.tolist(), **kwargs)
 
 
-def validate_net_propagation_engine_reqs():
-    NetPropagationEngineReqsModel.model_validate(NET_PROPAGATION_ENGINE_REQS)
+_pagerank_method = PropagationMethod(method=_pagerank_wrapper, non_negative=True)
+
+NET_PROPAGATION_METHODS: dict[str, PropagationMethod] = {
+    NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK: _pagerank_method
+}
+VALID_NET_PROPAGATION_METHODS = NET_PROPAGATION_METHODS.keys()
+
+
+def _ensure_propagation_method(
+    propagation_method: Union[str, PropagationMethod],
+) -> PropagationMethod:
+    if isinstance(propagation_method, str):
+        if propagation_method not in VALID_NET_PROPAGATION_METHODS:
+            raise ValueError(f"Invalid propagation method: {propagation_method}")
+        return NET_PROPAGATION_METHODS[propagation_method]
+    return propagation_method

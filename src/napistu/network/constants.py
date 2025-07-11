@@ -201,19 +201,9 @@ SCORE_CALIBRATION_POINTS_DICT = {
 SOURCE_VARS_DICT = {"string_wt": 10}
 
 # network propagation
-
 NET_PROPAGATION_DEFS = SimpleNamespace(PERSONALIZED_PAGERANK="personalized_pagerank")
 
-VALID_NET_PROPAGATION_METHODS = NET_PROPAGATION_DEFS.__dict__.values()
-
-NET_PROPAGATION_ENGINE_DEFS = SimpleNamespace(NON_NEGATIVE="non-negative")
-
-NET_PROPAGATION_ENGINE_REQS = {
-    NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK: {
-        NET_PROPAGATION_ENGINE_DEFS.NON_NEGATIVE: True
-    }
-}
-
+# null distributions
 NULL_STRATEGIES = SimpleNamespace(
     UNIFORM="uniform",
     PARAMETRIC="parametric",

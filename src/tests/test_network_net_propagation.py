@@ -4,18 +4,15 @@ import pandas as pd
 import igraph as ig
 from napistu.network.net_propagation import (
     net_propagate_attributes,
-    _validate_additional_propagation_args,
     uniform_null,
     parametric_null,
     node_permutation_null,
     edge_permutation_null,
     NULL_GENERATORS,
     network_propagation_with_null,
-    validate_net_propagation_engine_reqs,
 )
 from napistu.network.constants import (
     NAPISTU_GRAPH_VERTICES,
-    NET_PROPAGATION_DEFS,
     NULL_STRATEGIES,
 )
 
@@ -162,7 +159,7 @@ def test_net_propagate_attributes():
     assert list(result_no_names.index) == [0, 1, 2]  # Should use integer indices
 
     # Test 4: Invalid propagation method
-    with pytest.raises(ValueError, match="Invalid method"):
+    with pytest.raises(ValueError, match="Invalid propagation method"):
         net_propagate_attributes(graph, ["attr1"], propagation_method="invalid_method")
 
     # Test 5: Additional arguments (test damping parameter)
@@ -381,33 +378,3 @@ def test_propagation_method_parameters():
         # Should produce valid results
         assert isinstance(result, pd.DataFrame)
         assert not result.empty
-
-
-def test_validate_additional_propagation_args():
-    """Test _validate_additional_propagation_args with valid and invalid arguments."""
-    # Test 1: None input
-    result = _validate_additional_propagation_args(
-        NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK, None
-    )
-    assert result == {}
-
-    # Test 2: Valid arguments (common PPR parameters)
-    valid_args = {"damping": 0.85, "directed": True}
-    result = _validate_additional_propagation_args(
-        NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK, valid_args
-    )
-    assert result == valid_args
-
-    # Test 3: Invalid method
-    with pytest.raises(ValueError, match="Invalid method"):
-        _validate_additional_propagation_args("invalid_method", {})
-
-    # Test 4: Invalid argument for PPR
-    with pytest.raises(ValueError, match="Invalid argument for personalized_pagerank"):
-        _validate_additional_propagation_args(
-            NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK, {"invalid_arg": 123}
-        )
-
-
-def test_net_propagation_engine_reqs_valid():
-    validate_net_propagation_engine_reqs()

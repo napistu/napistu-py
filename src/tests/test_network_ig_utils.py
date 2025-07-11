@@ -75,7 +75,7 @@ def test_mask_functions_valid_inputs():
     specs = ig_utils._parse_mask_input(None, attributes)
     assert specs == {"attr1": None, "attr2": None}
 
-    masks = ig_utils._get_attribute_masks(graph, attributes, specs)
+    masks = ig_utils._get_attribute_masks(graph, specs)
     assert np.array_equal(masks["attr1"], np.ones(5, dtype=bool))
     assert np.array_equal(masks["attr2"], np.ones(5, dtype=bool))
 
@@ -83,7 +83,7 @@ def test_mask_functions_valid_inputs():
     specs = ig_utils._parse_mask_input("attr", attributes)
     assert specs == {"attr1": "attr1", "attr2": "attr2"}
 
-    masks = ig_utils._get_attribute_masks(graph, attributes, specs)
+    masks = ig_utils._get_attribute_masks(graph, specs)
     assert np.array_equal(masks["attr1"], np.array([False, True, True, False, True]))
     assert np.array_equal(masks["attr2"], np.array([True, False, True, True, False]))
 
@@ -94,21 +94,21 @@ def test_mask_functions_valid_inputs():
     # Test 4: Boolean array
     bool_mask = np.array([True, False, True, False, False])
     specs = ig_utils._parse_mask_input(bool_mask, attributes)
-    masks = ig_utils._get_attribute_masks(graph, attributes, specs)
+    masks = ig_utils._get_attribute_masks(graph, specs)
     assert np.array_equal(masks["attr1"], bool_mask)
     assert np.array_equal(masks["attr2"], bool_mask)
 
     # Test 5: Node indices list
     indices = [0, 2, 4]
     specs = ig_utils._parse_mask_input(indices, attributes)
-    masks = ig_utils._get_attribute_masks(graph, attributes, specs)
+    masks = ig_utils._get_attribute_masks(graph, specs)
     expected = np.array([True, False, True, False, True])
     assert np.array_equal(masks["attr1"], expected)
 
     # Test 6: Node names list
     names = ["A", "C", "E"]
     specs = ig_utils._parse_mask_input(names, attributes)
-    masks = ig_utils._get_attribute_masks(graph, attributes, specs)
+    masks = ig_utils._get_attribute_masks(graph, specs)
     assert np.array_equal(masks["attr1"], expected)
 
     # Test 7: Dictionary input
@@ -116,7 +116,7 @@ def test_mask_functions_valid_inputs():
     specs = ig_utils._parse_mask_input(mask_dict, attributes)
     assert specs == mask_dict
 
-    masks = ig_utils._get_attribute_masks(graph, attributes, specs)
+    masks = ig_utils._get_attribute_masks(graph, specs)
     assert np.array_equal(masks["attr1"], np.array([False, True, True, False, True]))
     assert np.array_equal(masks["attr2"], np.ones(5, dtype=bool))
 
@@ -150,14 +150,14 @@ def test_mask_functions_error_cases():
     with pytest.raises(
         ValueError, match="Graph has no 'name' attribute for string mask"
     ):
-        ig_utils._get_attribute_masks(graph_no_names, ["attr1"], specs)
+        ig_utils._get_attribute_masks(graph_no_names, specs)
 
     # Test 4: Invalid mask specification type in _get_attribute_masks
     specs = {"attr1": 123}  # Invalid type
     with pytest.raises(
         ValueError, match="Invalid mask specification for attribute 'attr1'"
     ):
-        ig_utils._get_attribute_masks(graph, ["attr1"], specs)
+        ig_utils._get_attribute_masks(graph, specs)
 
 
 def test_ensure_nonnegative_vertex_attribute():
