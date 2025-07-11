@@ -26,7 +26,7 @@ from napistu.constants import (
 )
 
 from napistu.network.constants import (
-    NAPISTU_GRAPH_NODES,
+    NAPISTU_GRAPH_VERTICES,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_EDGE_DIRECTIONS,
     NAPISTU_GRAPH_NODE_TYPES,
@@ -152,7 +152,7 @@ def create_napistu_graph(
 
     # rename nodes to name since it is treated specially
     network_nodes_df = pd.concat(network_nodes).rename(
-        columns={"node_id": NAPISTU_GRAPH_NODES.NAME}
+        columns={"node_id": NAPISTU_GRAPH_VERTICES.NAME}
     )
 
     logger.info(f"Formatting edges as a {wiring_approach} graph")
@@ -234,7 +234,7 @@ def create_napistu_graph(
         vertices=network_nodes_df.to_dict("records"),
         edges=unique_edges.to_dict("records"),
         directed=directed,
-        vertex_name_attr=NAPISTU_GRAPH_NODES.NAME,
+        vertex_name_attr=NAPISTU_GRAPH_VERTICES.NAME,
         edge_foreign_keys=(NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO),
     )
 

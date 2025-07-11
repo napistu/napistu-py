@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+
 from napistu.constants import SBML_DFS
 from napistu.constants import SBOTERM_NAMES
 
@@ -13,7 +14,7 @@ NAPISTU_GRAPH_DIRECTEDNESS = SimpleNamespace(
     DIRECTED="directed", UNDIRECTED="undirected"
 )
 
-NAPISTU_GRAPH_NODES = SimpleNamespace(NAME="name")
+NAPISTU_GRAPH_VERTICES = SimpleNamespace(NAME="name")
 
 NAPISTU_GRAPH_EDGES = SimpleNamespace(
     DIRECTED="directed",
@@ -198,3 +199,24 @@ SCORE_CALIBRATION_POINTS_DICT = {
 }
 
 SOURCE_VARS_DICT = {"string_wt": 10}
+
+# network propagation
+NET_PROPAGATION_DEFS = SimpleNamespace(PERSONALIZED_PAGERANK="personalized_pagerank")
+
+# null distributions
+NULL_STRATEGIES = SimpleNamespace(
+    UNIFORM="uniform",
+    PARAMETRIC="parametric",
+    NODE_PERMUTATION="node_permutation",
+    EDGE_PERMUTATION="edge_permutation",
+)
+
+VALID_NULL_STRATEGIES = NULL_STRATEGIES.__dict__.values()
+
+PARAMETRIC_NULL_DEFAULT_DISTRIBUTION = "norm"
+
+# masks
+
+MASK_KEYWORDS = SimpleNamespace(
+    ATTR="attr",
+)

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import random
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, List, Dict, Union
 
 import igraph as ig
 import numpy as np
@@ -384,3 +384,163 @@ def _get_top_n_nodes(
     top_node_attrs = [graph.vs[idx].attributes() for idx in top_idxs]
     top_vals = [vals[idx] for idx in top_idxs]
     return [{val_name: val, **node} for val, node in zip(top_vals, top_node_attrs)]
+
+
+def _parse_mask_input(
+    mask_input: Optional[Union[str, np.ndarray, List, Dict]], attributes: List[str]
+) -> Dict[str, Union[str, np.ndarray, List, None]]:
+    """
+    Parse mask input and convert to attribute-specific mask specifications.
+
+    Parameters
+    ----------
+    mask_input : str, np.ndarray, List, Dict, or None
+        Mask specification that can be:
+        - None: use all nodes for all attributes
+        - "attr": use each attribute as its own mask
+        - np.ndarray/List: use same mask for all attributes
+        - Dict: attribute-specific mask specifications
+    attributes : List[str]
+        List of attribute names.
+
+    Returns
+    -------
+    Dict[str, Union[str, np.ndarray, List, None]]
+        Dictionary mapping each attribute to its mask specification.
+    """
+    if mask_input is None:
+        return {attr: None for attr in attributes}
+    elif isinstance(mask_input, str):
+        if mask_input == "attr":
+            return {attr: attr for attr in attributes}
+        else:
+            # Single attribute name used for all
+            return {attr: mask_input for attr in attributes}
+    elif isinstance(mask_input, (np.ndarray, list)):
+        # Same mask for all attributes
+        return {attr: mask_input for attr in attributes}
+    elif isinstance(mask_input, dict):
+        # Validate all attributes are present
+        for attr in attributes:
+            if attr not in mask_input:
+                raise ValueError(f"Attribute '{attr}' not found in mask dictionary")
+        return mask_input
+    else:
+        raise ValueError(f"Invalid mask input type: {type(mask_input)}")
+
+
+def _get_attribute_masks(
+    graph: ig.Graph,
+    mask_specs: Dict[str, Union[str, np.ndarray, List, None]],
+) -> Dict[str, np.ndarray]:
+    """
+    Generate boolean masks for each attribute based on specifications.
+
+    Parameters
+    ----------
+    graph : ig.Graph
+        Input graph.
+    attributes : List[str]
+        List of attribute names.
+    mask_specs : Dict[str, Union[str, np.ndarray, List, None]]
+        Dictionary mapping each attribute to its mask specification.
+
+    Returns
+    -------
+    Dict[str, np.ndarray]
+        Dictionary mapping each attribute to its boolean mask array.
+    """
+    n_nodes = graph.vcount()
+    masks = {}
+
+    invalid_attrs = set(mask_specs.keys()).difference(graph.vs.attributes())
+    if invalid_attrs:
+        raise ValueError(f"Attributes {invalid_attrs} not found in graph")
+
+    for attr in mask_specs.keys():
+
+        mask_spec = mask_specs[attr]
+
+        if mask_spec is None:
+            masks[attr] = np.ones(n_nodes, dtype=bool)
+        elif isinstance(mask_spec, str):
+            attr_values = np.array(graph.vs[mask_spec])
+            masks[attr] = attr_values > 0
+        elif isinstance(mask_spec, np.ndarray):
+            masks[attr] = mask_spec.astype(bool)
+        elif isinstance(mask_spec, list):
+            mask_array = np.zeros(n_nodes, dtype=bool)
+            if isinstance(mask_spec[0], str):
+                # Node names
+                node_names = (
+                    graph.vs["name"] if "name" in graph.vs.attributes() else None
+                )
+                if node_names is None:
+                    raise ValueError("Graph has no 'name' attribute for string mask")
+                for name in mask_spec:
+                    idx = node_names.index(name)
+                    mask_array[idx] = True
+            else:
+                # Node indices
+                mask_array[mask_spec] = True
+            masks[attr] = mask_array
+        else:
+            raise ValueError(
+                f"Invalid mask specification for attribute '{attr}': {type(mask_spec)}"
+            )
+
+    return masks
+
+
+def _ensure_valid_attribute(graph: ig.Graph, attribute: str, non_negative: bool = True):
+    """
+    Ensure a vertex attribute is present, numeric, and optionally non-negative for all vertices.
+
+    This utility checks that the specified vertex attribute exists, is numeric, and (optionally) non-negative
+    for all vertices in the graph. Missing or None values are treated as 0. Raises ValueError
+    if the attribute is missing for all vertices, if all values are zero, or if any value is negative (if non_negative=True).
+
+    Parameters
+    ----------
+    graph : NapistuGraph or ig.Graph
+        The input graph (NapistuGraph or igraph.Graph).
+    attribute : str
+        The name of the vertex attribute to check.
+    non_negative : bool, default True
+        Whether to require all values to be non-negative.
+
+    Returns
+    -------
+    np.ndarray
+        Array of attribute values (with missing/None replaced by 0).
+
+    Raises
+    ------
+    ValueError
+        If the attribute is missing for all vertices, all values are zero, or any value is negative (if non_negative=True).
+    """
+    all_missing = all(
+        (attribute not in v.attributes() or v[attribute] is None) for v in graph.vs
+    )
+    if all_missing:
+        raise ValueError(f"Vertex attribute '{attribute}' is missing for all vertices.")
+
+    values = [
+        (
+            v[attribute]
+            if (attribute in v.attributes() and v[attribute] is not None)
+            else 0.0
+        )
+        for v in graph.vs
+    ]
+
+    arr = np.array(values, dtype=float)
+
+    if np.all(arr == 0):
+        raise ValueError(
+            f"Vertex attribute '{attribute}' is zero for all vertices; cannot use as reset vector."
+        )
+    if non_negative and np.any(arr < 0):
+        raise ValueError(f"Attribute '{attribute}' contains negative values.")
+
+    return arr
