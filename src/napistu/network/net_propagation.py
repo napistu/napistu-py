@@ -50,6 +50,43 @@ def network_propagation_with_null(
     2. Generates null distribution using specified strategy
     3. Compares observed vs null using quantiles (for sampled nulls) or ratios (for uniform)
 
+    Null Strategy Selection
+    ----------------------
+    Two main approaches are used in network biology:
+
+    **Node permutation** ('node_permutation'): Permutes node labels/attributes while
+    preserving network topology. This tests whether individual nodes are significant
+    given the network structure. Standard approach for gene prioritization and
+    network-based gene set enrichment analysis.
+    Reference: Schulte-Sasse et al. (2019) BMC Bioinformatics 20:587
+
+    **Edge permutation** ('edge_permutation'): Rewires network edges while preserving
+    degree distribution. This tests whether network topology itself is significant.
+    Used when testing subnetwork patterns or connectivity significance.
+    Reference: Leiserson et al. (2015) Nature Genetics (HotNet2 methodology)
+
+    For vertex-level significance testing (gene prioritization), node permutation
+    is the appropriate null model as it preserves network structure while
+    randomizing signal assignment.
+
+    Other supported null strategies:
+
+    **Uniform ('uniform'):** A quick, qualitative readout. Generates a uniform null distribution over masked nodes and
+    takes the ratio of observed network propagation score.
+
+    **Parametric ('parametric'):** Similar to node permutation but rather than sampling observed values sample
+    draws from a distribution fit to the observed values. First fits a parametric distribution to the observed scores
+    and then samples `n_samples` null samples for each vertex to compare observed to null quantiles.
+
+    Creating Masks
+    --------------
+    Most null strategies benefit from including a mask which indicates which nodes are being tested.
+    For vertex permutation the parametric null only masked nodes will be considered for sampling.
+    Using a mask with uniform null strategy means that numeric reset probabilities will be compared to
+    constant ones by default. Masking is an important consideration for mitigating ascertainment bias.
+    If we are only sampling a subset of vertices like metabolites, we'll only consider those as sources
+    of signals in the null.
+
     Parameters
     ----------
     graph : ig.Graph
