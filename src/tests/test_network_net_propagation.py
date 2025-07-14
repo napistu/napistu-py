@@ -57,8 +57,12 @@ def test_network_propagation_with_null():
     assert list(result_permutation.columns) == attributes
 
     # Should be quantiles (0 to 1)
-    assert (result_permutation.values >= 0).all(), "Quantiles should be >= 0"
-    assert (result_permutation.values <= 1).all(), "Quantiles should be <= 1"
+    # Drop NaNs before checking value range. NaNs can be introduced if a
+    # nodes PPR values with and without the null are all a constant which
+    # can come up in a small sample # testing situation
+    permutation_values = result_permutation.values[~np.isnan(result_permutation.values)]
+    assert (permutation_values >= 0).all(), "Quantiles should be >= 0"
+    assert (permutation_values <= 1).all(), "Quantiles should be <= 1"
 
     # Test 3: Edge permutation null
     result_edge = network_propagation_with_null(
@@ -73,8 +77,12 @@ def test_network_propagation_with_null():
     # Check structure
     assert isinstance(result_edge, pd.DataFrame)
     assert result_edge.shape == (5, 1)
-    assert (result_edge.values >= 0).all()
-    assert (result_edge.values <= 1).all()
+    # Drop NaNs before checking value range. NaNs can be introduced if a
+    # nodes PPR values with and without the null are all a constant which
+    # can come up in a small sample # testing situation
+    edge_values = result_edge.values[~np.isnan(result_edge.values)]
+    assert (edge_values >= 0).all()
+    assert (edge_values <= 1).all()
 
     # Test 4: Gaussian null
     result_parametric = network_propagation_with_null(
