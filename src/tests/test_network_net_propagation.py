@@ -6,7 +6,7 @@ from napistu.network.net_propagation import (
     net_propagate_attributes,
     uniform_null,
     parametric_null,
-    node_permutation_null,
+    vertex_permutation_null,
     edge_permutation_null,
     NULL_GENERATORS,
     network_propagation_with_null,
@@ -47,7 +47,7 @@ def test_network_propagation_with_null():
     result_permutation = network_propagation_with_null(
         graph,
         attributes,
-        null_strategy=NULL_STRATEGIES.NODE_PERMUTATION,
+        null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
         n_samples=10,  # Small for testing
     )
 
@@ -113,7 +113,7 @@ def test_network_propagation_with_null():
     result_masked = network_propagation_with_null(
         graph,
         attributes,
-        null_strategy=NULL_STRATEGIES.NODE_PERMUTATION,
+        null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
         n_samples=5,
         mask=mask_array,
     )
@@ -214,7 +214,7 @@ def test_all_null_generators_structure():
             result = generator_func(graph, attributes, n_samples=n_samples)
             expected_rows = n_samples * 5  # n_samples rows per node
         else:
-            # Gaussian and node_permutation
+            # Gaussian and vertex_permutation
             result = generator_func(graph, attributes, n_samples=n_samples)
             expected_rows = n_samples * 5  # n_samples rows per node
 
@@ -303,7 +303,7 @@ def test_mask_application():
             assert result.shape[0] == 12  # 2 samples * 6 nodes
 
         else:
-            # Gaussian and node_permutation with mask
+            # Gaussian and vertex_permutation with mask
             result = generator_func(graph, attributes, mask=mask_array, n_samples=2)
 
             # Check that structure is maintained
@@ -326,7 +326,7 @@ def test_edge_cases_and_errors():
         parametric_null(graph, ["bad_attr"])
 
     with pytest.raises(ValueError):
-        node_permutation_null(graph, ["bad_attr"])
+        vertex_permutation_null(graph, ["bad_attr"])
 
     with pytest.raises(ValueError):
         edge_permutation_null(graph, ["bad_attr"])
@@ -342,10 +342,12 @@ def test_edge_cases_and_errors():
     assert result.shape == (3, 1)  # Should work
 
     # Test 4: Replace parameter in node permutation
-    result_no_replace = node_permutation_null(
+    result_no_replace = vertex_permutation_null(
         graph, ["attr1"], replace=False, n_samples=2
     )
-    result_replace = node_permutation_null(graph, ["attr1"], replace=True, n_samples=2)
+    result_replace = vertex_permutation_null(
+        graph, ["attr1"], replace=True, n_samples=2
+    )
 
     # Both should have same structure
     assert result_no_replace.shape == result_replace.shape

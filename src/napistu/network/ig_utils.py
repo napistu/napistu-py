@@ -387,7 +387,9 @@ def _get_top_n_nodes(
 
 
 def _parse_mask_input(
-    mask_input: Optional[Union[str, np.ndarray, List, Dict]], attributes: List[str]
+    mask_input: Optional[Union[str, np.ndarray, List, Dict]],
+    attributes: List[str],
+    verbose: bool = False,
 ) -> Dict[str, Union[str, np.ndarray, List, None]]:
     """
     Parse mask input and convert to attribute-specific mask specifications.
@@ -402,6 +404,8 @@ def _parse_mask_input(
         - Dict: attribute-specific mask specifications
     attributes : List[str]
         List of attribute names.
+    verbose : bool, optional
+        Whether to print the mask input parsing result. Default is False.
 
     Returns
     -------
@@ -409,24 +413,29 @@ def _parse_mask_input(
         Dictionary mapping each attribute to its mask specification.
     """
     if mask_input is None:
-        return {attr: None for attr in attributes}
+        masks = {attr: None for attr in attributes}
     elif isinstance(mask_input, str):
         if mask_input == "attr":
-            return {attr: attr for attr in attributes}
+            masks = {attr: attr for attr in attributes}
         else:
             # Single attribute name used for all
-            return {attr: mask_input for attr in attributes}
+            masks = {attr: mask_input for attr in attributes}
     elif isinstance(mask_input, (np.ndarray, list)):
         # Same mask for all attributes
-        return {attr: mask_input for attr in attributes}
+        masks = {attr: mask_input for attr in attributes}
     elif isinstance(mask_input, dict):
         # Validate all attributes are present
         for attr in attributes:
             if attr not in mask_input:
                 raise ValueError(f"Attribute '{attr}' not found in mask dictionary")
-        return mask_input
+        masks = mask_input
     else:
         raise ValueError(f"Invalid mask input type: {type(mask_input)}")
+
+    if verbose:
+        _print_mask_input_result(masks)
+
+    return masks
 
 
 def _get_attribute_masks(
@@ -440,8 +449,6 @@ def _get_attribute_masks(
     ----------
     graph : ig.Graph
         Input graph.
-    attributes : List[str]
-        List of attribute names.
     mask_specs : Dict[str, Union[str, np.ndarray, List, None]]
         Dictionary mapping each attribute to its mask specification.
 
@@ -490,6 +497,17 @@ def _get_attribute_masks(
             )
 
     return masks
+
+
+def _print_mask_input_result(masks):
+    """
+    Print a readable summary of the result of _parse_mask_input(mask_input, attributes).
+    Shows each attribute and its corresponding mask specification.
+    """
+
+    logger.info("Mask input parsing result:")
+    for attr, spec in masks.items():
+        logger.info(f"  Attribute: {attr!r} -> Mask spec: {repr(spec)}")
 
 
 def _ensure_valid_attribute(graph: ig.Graph, attribute: str, non_negative: bool = True):
