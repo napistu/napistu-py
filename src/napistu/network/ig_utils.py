@@ -494,7 +494,7 @@ def _get_attribute_masks(
 
 def _ensure_valid_attribute(graph: ig.Graph, attribute: str, non_negative: bool = True):
     """
-    Ensure a vertex attribute is present, numeric, and optionally non-negative for all vertices.
+    Ensure a vertex attribute is present, numeric, finite, and optionally non-negative for all vertices.
 
     This utility checks that the specified vertex attribute exists, is numeric, and (optionally) non-negative
     for all vertices in the graph. Missing or None values are treated as 0. Raises ValueError
@@ -542,5 +542,9 @@ def _ensure_valid_attribute(graph: ig.Graph, attribute: str, non_negative: bool 
         )
     if non_negative and np.any(arr < 0):
         raise ValueError(f"Attribute '{attribute}' contains negative values.")
+    if not np.all(np.isfinite(arr)):
+        raise ValueError(
+            f"Attribute '{attribute}' contains non-finite values (NaN or inf)."
+        )
 
     return arr

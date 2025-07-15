@@ -190,3 +190,11 @@ def test_ensure_nonnegative_vertex_attribute():
     # Test 5: Missing attribute
     with pytest.raises(ValueError, match="missing for all vertices"):
         ig_utils._ensure_valid_attribute(graph, "nonexistent_attr")
+
+    # Test 6: Non-finite values (NaN and inf)
+    graph.vs["nan_attr"] = [1.0, np.nan, 2.0, 0.0]
+    graph.vs["inf_attr"] = [1.0, np.inf, 2.0, 0.0]
+    with pytest.raises(ValueError, match="non-finite values"):
+        ig_utils._ensure_valid_attribute(graph, "nan_attr")
+    with pytest.raises(ValueError, match="non-finite values"):
+        ig_utils._ensure_valid_attribute(graph, "inf_attr")
