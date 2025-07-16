@@ -110,6 +110,62 @@ def precompute_distances(
     return filtered_precomputed_distances
 
 
+def filter_precomputed_distances_top_n(precomputed_distances, top_n=50):
+    """
+    Filter precomputed distances to only include the top-n pairs for each distance measure.
+
+    Parameters
+    ----------
+    precomputed_distances : pd.DataFrame
+        Precomputed distances.
+    top_n : int, optional
+        Top-n pairs to include for each distance measure.
+
+    Returns
+    -------
+    pd.DataFrame
+        Filtered precomputed distances.
+    """
+
+    # take the union of top-n for each distance measure; and from origin -> dest and dest -> origin
+    distance_vars = set(precomputed_distances.columns) - {
+        NAPISTU_EDGELIST.SC_ID_ORIGIN,
+        NAPISTU_EDGELIST.SC_ID_DEST,
+    }
+
+    valid_pairs = list()
+    for distance_var in distance_vars:
+        top_n_pairs_by_origin = (
+            precomputed_distances.sort_values(by=distance_var, ascending=False)
+            .groupby(NAPISTU_EDGELIST.SC_ID_ORIGIN)
+            .head(top_n)
+        )
+        top_n_pairs_by_dest = (
+            precomputed_distances.sort_values(by=distance_var, ascending=False)
+            .groupby(NAPISTU_EDGELIST.SC_ID_DEST)
+            .head(top_n)
+        )
+
+        valid_pairs.append(
+            top_n_pairs_by_origin[
+                [NAPISTU_EDGELIST.SC_ID_ORIGIN, NAPISTU_EDGELIST.SC_ID_DEST]
+            ]
+        )
+        valid_pairs.append(
+            top_n_pairs_by_dest[
+                [NAPISTU_EDGELIST.SC_ID_ORIGIN, NAPISTU_EDGELIST.SC_ID_DEST]
+            ]
+        )
+
+    all_valid_pairs = pd.concat(valid_pairs).drop_duplicates()
+
+    return precomputed_distances.merge(
+        all_valid_pairs,
+        on=[NAPISTU_EDGELIST.SC_ID_ORIGIN, NAPISTU_EDGELIST.SC_ID_DEST],
+        how="inner",
+    )
+
+
 def _calculate_distances_subset(
     napistu_graph: NapistuGraph,
     vs_to_partition: pd.DataFrame,

@@ -276,3 +276,33 @@ def test_precomputed_distances_serialization():
         # Clean up the temporary file
         if os.path.exists(temp_path):
             os.remove(temp_path)
+
+
+def test_filter_precomputed_distances_top_n_subset():
+    # Use a small top_n for a quick test
+    top_n = 5
+    filtered = precompute.filter_precomputed_distances_top_n(
+        precomputed_distances, top_n=top_n
+    )
+    # Check that the filtered DataFrame is a subset of the original
+    merged = filtered.merge(
+        precomputed_distances,
+        on=[
+            precompute.NAPISTU_EDGELIST.SC_ID_ORIGIN,
+            precompute.NAPISTU_EDGELIST.SC_ID_DEST,
+        ],
+        how="left",
+        indicator=True,
+    )
+    assert (
+        merged["_merge"] == "both"
+    ).all(), "Filtered rows must be present in the original DataFrame"
+    # Check that columns are preserved
+    assert set(
+        [
+            precompute.NAPISTU_EDGELIST.SC_ID_ORIGIN,
+            precompute.NAPISTU_EDGELIST.SC_ID_DEST,
+        ]
+    ).issubset(filtered.columns)
+    # Optionally, check that the number of rows is less than or equal to the input
+    assert filtered.shape[0] <= precomputed_distances.shape[0]
