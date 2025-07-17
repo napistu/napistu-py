@@ -66,7 +66,7 @@ def compartmentalize_species_pairs(
     Compartmentalize Shortest Paths
 
     For a set of origin and destination species pairs, consider each species in every
-      compartment it operates in, seperately.
+    compartment it operates in, seperately.
 
     Parameters
     ----------
