@@ -426,7 +426,7 @@ def post_consensus_species_ontology_check(sbml_dfs: sbml_dfs_core.SBML_dfs) -> s
 
     # get the sources of species in the consensus model
     consensus_sbmldf_tbl_var_sc = (
-        source.unnest_sources(sbml_dfs.species, SBML_DFS.S_SOURCE, verbose=False)
+        source.unnest_sources(sbml_dfs.species, verbose=False)
         .reset_index()
         .sort_values([SOURCE_SPEC.NAME])
     )
@@ -504,12 +504,11 @@ def post_consensus_source_check(
 ) -> pd.DataFrame:
     """Provide sources of tables in a consensus model; the output df will be used to determine whether models are merged."""
 
-    table_source = sbml_dfs.schema[table_name][SOURCE_SPEC.SOURCE]
-    table_pk = sbml_dfs.schema[table_name]["pk"]
+    table_pk = sbml_dfs.schema[table_name][SCHEMA_DEFS.PK]
 
     sbml_dfs_tbl = getattr(sbml_dfs, table_name)
     sbml_dfs_tbl_pathway_source = (
-        source.unnest_sources(sbml_dfs_tbl, table_source, verbose=False)
+        source.unnest_sources(sbml_dfs_tbl, verbose=False)
         .reset_index()
         .sort_values(["name"])
     )
