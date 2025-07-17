@@ -456,8 +456,14 @@ def infer_entity_type(df: pd.DataFrame) -> str:
             if entity_schema.get(SCHEMA_DEFS.PK) == df.index.name:
                 return entity_type
 
-    # Get DataFrame columns that are also primary keys
-    df_columns = set(df.columns).intersection(primary_keys)
+    # Get DataFrame columns that are also primary keys, including index or MultiIndex names
+    index_names = []
+    if isinstance(df.index, pd.MultiIndex):
+        index_names = [name for name in df.index.names if name is not None]
+    elif df.index.name is not None:
+        index_names = [df.index.name]
+
+    df_columns = set(df.columns).union(index_names).intersection(primary_keys)
 
     # Check for exact match with primary key + foreign keys
     for entity_type, entity_schema in schema.items():
