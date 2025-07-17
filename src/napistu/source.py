@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
+from typing import Optional
+
 from napistu import indices
-from napistu.constants import SOURCE_SPEC
+from napistu import sbml_dfs_core
+from napistu import sbml_dfs_utils
+from napistu.statistics import hypothesis_testing
+from napistu.constants import SBML_DFS_SCHEMA, SCHEMA_DEFS, SOURCE_SPEC
 
 
 class Source:
@@ -41,11 +47,18 @@ class Source:
             Creates an empty source object. This is typically used when creating an SBML_dfs
             object from a single source.
         pw_index : indices.PWIndex
+            a pathway index object containing the pathway_id and other metadata
 
         Returns
         -------
         None.
 
+        Raises
+        ------
+        ValueError:
+            if pw_index is not a indices.PWIndex
+        ValueError:
+            if SOURCE_SPEC.MODEL is not present in source_df
         """
 
         if init is True:
@@ -101,8 +114,27 @@ def create_source_table(
     """
     Create Source Table
 
-    Create a table with one row per "new_id" and a Source object created from the union
-      of "old_id" Source objects
+    Create a table with one row per "new_id" and a Source object created from the unionof "old_id" Source objects
+
+    Parameters
+    ----------
+    lookup_table: pd.Series
+        a pd.Series containing the index of the table to create a source table for
+    table_schema: dict
+        a dictionary containing the schema of the table to create a source table for
+    pw_index: indices.PWIndex
+        a pathway index object containing the pathway_id and other metadata
+
+    Returns
+    -------
+    source_table: pd.DataFrame
+        a pd.DataFrame containing the index of the table to create a source table for
+        with one row per "new_id" and a Source object created from the union of "old_id" Source objects
+
+    Raises
+    ------
+    ValueError:
+        if SOURCE_SPEC.SOURCE is not present in table_schema
     """
 
     if SOURCE_SPEC.SOURCE not in table_schema.keys():
@@ -142,7 +174,26 @@ def merge_sources(source_list: list | pd.Series) -> Source:
 
     Merge a list of Source objects into a single Source object
 
+    Parameters
+    ----------
+    source_list: list | pd.Series
+        a list of Source objects or a pd.Series of Source objects
+
+    Returns
+    -------
+    source: Source
+        a Source object created from the union of the Source objects in source_list
+
+    Raises
+    ------
+    TypeError:
+        if source_list is not a list or pd.Series
     """
+
+    if not isinstance(source_list, (list, pd.Series)):
+        raise TypeError(
+            f"source_list must be a list or pd.Series, but was a {type(source_list).__name__}"
+        )
 
     # filter to non-empty sources
     # empty sources have only been initialized; a merge hasn't occured
@@ -160,28 +211,35 @@ def merge_sources(source_list: list | pd.Series) -> Source:
     return Source(pd.concat(existing_source_list))
 
 
-def unnest_sources(
-    source_table: pd.DataFrame, source_var: str, verbose: bool = False
-) -> pd.DataFrame:
+def unnest_sources(source_table: pd.DataFrame, verbose: bool = False) -> pd.DataFrame:
     """
     Unnest Sources
 
     Take a pd.DataFrame containing an array of Sources and
     return one-row per source.
 
-    Parameters:
+    Parameters
+    ----------
     source_table: pd.DataFrame
         a table containing an array of Sources
-    source_var: str
-        variable containing Sources
+    verbose: bool
+        print progress
 
-    Returns:
+    Returns
+    -------
     pd.Dataframe containing the index of source_table but expanded
     to include one row per source
 
     """
 
     sources = list()
+
+    table_type = sbml_dfs_utils.infer_entity_type(source_table)
+    source_table_schema = SBML_DFS_SCHEMA.SCHEMA[table_type]
+    if SCHEMA_DEFS.SOURCE not in source_table_schema.keys():
+        raise ValueError(f"{table_type} does not have a source attribute")
+
+    source_var = source_table_schema[SCHEMA_DEFS.SOURCE]
     source_table_index = source_table.index.to_frame().reset_index(drop=True)
 
     for i in range(source_table.shape[0]):
@@ -216,52 +274,72 @@ def unnest_sources(
     return pd.concat(sources)
 
 
-def greedy_set_coverge_of_sources(
-    source_df: pd.DataFrame, table_schema: dict
+def source_set_coverage(
+    select_sources_df: pd.DataFrame,
+    source_total_counts: Optional[pd.Series] = None,
+    sbml_dfs: Optional[sbml_dfs_core.SBML_dfs] = None,
 ) -> pd.DataFrame:
     """
     Greedy Set Coverage of Sources
 
-    Apply the greedy set coverge algorithm to find the minimal set of
-    sources which cover all entries
+    Find the set of pathways covering `select_sources_df`. If `all_sources_df`
+    is provided pathways will be selected iteratively based on statistical
+    enrichment. If `all_sources_df` is not provided, the largest pathways
+    will be chosen iteratively.
 
-    Parameters:
-    source_df: pd.DataFrame
+    Parameters
+    ----------
+    select_sources_df: pd.DataFrame
         pd.Dataframe containing the index of source_table but expanded to
         include one row per source. As produced by source.unnest_sources()
+    source_total_counts: pd.Series
+        pd.Series containing the total counts of each source. As produced by
+        source.get_source_total_counts()
+    sbml_dfs: sbml_dfs_core.SBML_dfs
+        if `source_total_counts` is provided then `sbml_dfs` must be provided
+        to calculate the total number of entities in the table.
 
-    Returns:
+    Returns
+    -------
     minimial_sources: [str]
         A list of pathway_ids of the minimal source set
 
     """
 
+    table_type = sbml_dfs_utils.infer_entity_type(select_sources_df)
+    pk = SBML_DFS_SCHEMA.SCHEMA[table_type][SCHEMA_DEFS.PK]
+
+    if source_total_counts is not None:
+        if sbml_dfs is None:
+            raise ValueError(
+                "If `source_total_counts` is provided, `sbml_dfs` must be provided to calculate the total number of entities in the table."
+            )
+        n_total_entities = sbml_dfs.get_table(table_type).shape[0]
+
     # rollup pathways with identical membership
-    deduplicated_sources = _deduplicate_source_df(source_df, table_schema)
+    deduplicated_sources = _deduplicate_source_df(select_sources_df)
 
     unaccounted_for_members = deduplicated_sources
     retained_pathway_ids = []
-
     while unaccounted_for_members.shape[0] != 0:
         # find the pathway with the most members
-        pathway_members = unaccounted_for_members.groupby(SOURCE_SPEC.PATHWAY_ID).size()
-        top_pathway = pathway_members[pathway_members == max(pathway_members)].index[0]
+
+        if source_total_counts is None:
+            top_pathway = _select_top_pathway_by_size(unaccounted_for_members)
+        else:
+            top_pathway = _select_top_pathway_by_enrichment(
+                unaccounted_for_members, source_total_counts, n_total_entities, pk
+            )
+
+        if top_pathway is None:
+            break
+
         retained_pathway_ids.append(top_pathway)
 
         # remove all members associated with the top pathway
-        members_captured = (
-            unaccounted_for_members[
-                unaccounted_for_members[SOURCE_SPEC.PATHWAY_ID] == top_pathway
-            ]
-            .index.get_level_values(table_schema["pk"])
-            .tolist()
+        unaccounted_for_members = _update_unaccounted_for_members(
+            top_pathway, unaccounted_for_members
         )
-
-        unaccounted_for_members = unaccounted_for_members[
-            ~unaccounted_for_members.index.get_level_values(table_schema["pk"]).isin(
-                members_captured
-            )
-        ]
 
     minimial_sources = deduplicated_sources[
         deduplicated_sources[SOURCE_SPEC.PATHWAY_ID].isin(retained_pathway_ids)
@@ -270,8 +348,38 @@ def greedy_set_coverge_of_sources(
     return minimial_sources
 
 
-def _deduplicate_source_df(source_df: pd.DataFrame, table_schema: dict) -> pd.DataFrame:
+def get_source_total_counts(
+    sbml_dfs: sbml_dfs_core.SBML_dfs, entity_type: str
+) -> pd.Series:
+    """
+    Get the total counts of each source.
+
+    Parameters
+    ----------
+    sbml_dfs: sbml_dfs_core.SBML_dfs
+        sbml_dfs object containing the table to get the total counts of
+    entity_type: str
+        the type of entity to get the total counts of
+
+    Returns
+    -------
+    source_total_counts: pd.Series
+        pd.Series containing the total counts of each source.
+    """
+
+    all_sources_table = unnest_sources(sbml_dfs.get_table(entity_type))
+    source_total_counts = all_sources_table.value_counts(SOURCE_SPEC.PATHWAY_ID).rename(
+        "total_counts"
+    )
+
+    return source_total_counts
+
+
+def _deduplicate_source_df(source_df: pd.DataFrame) -> pd.DataFrame:
     """Combine entries in a source table when multiple models have the same members."""
+
+    table_type = sbml_dfs_utils.infer_entity_type(source_df)
+    source_table_schema = SBML_DFS_SCHEMA.SCHEMA[table_type]
 
     # drop entries which are missing required attributes and throw an error if none are left
     REQUIRED_NON_NA_ATTRIBUTES = [SOURCE_SPEC.PATHWAY_ID]
@@ -296,7 +404,11 @@ def _deduplicate_source_df(source_df: pd.DataFrame, table_schema: dict) -> pd.Da
                 {
                     SOURCE_SPEC.PATHWAY_ID: p,
                     "membership_string": "_".join(
-                        set(indexed_sources.loc[[p]][table_schema["pk"]].tolist())
+                        set(
+                            indexed_sources.loc[[p]][
+                                source_table_schema[SCHEMA_DEFS.PK]
+                            ].tolist()
+                        )
                     ),
                 }
                 for p in pathways
@@ -320,16 +432,16 @@ def _deduplicate_source_df(source_df: pd.DataFrame, table_schema: dict) -> pd.Da
 
     merged_sources = pd.concat(
         [
-            _collapse_by_membership_string(s, membership_categories, table_schema)  # type: ignore
+            _collapse_by_membership_string(s, membership_categories, source_table_schema)  # type: ignore
             for s in category_index.tolist()
         ]
     )
     merged_sources[SOURCE_SPEC.INDEX_NAME] = merged_sources.groupby(
-        table_schema["pk"]
+        source_table_schema[SCHEMA_DEFS.PK]
     ).cumcount()
 
     return merged_sources.set_index(
-        [table_schema["pk"], SOURCE_SPEC.INDEX_NAME]
+        [source_table_schema[SCHEMA_DEFS.PK], SOURCE_SPEC.INDEX_NAME]
     ).sort_index()
 
 
@@ -345,7 +457,10 @@ def _collapse_by_membership_string(
     return pd.DataFrame(
         [
             pd.concat(
-                [pd.Series({table_schema["pk"]: ms}), collapsed_source_membership]
+                [
+                    pd.Series({table_schema[SCHEMA_DEFS.PK]: ms}),
+                    collapsed_source_membership,
+                ]
             )
             for ms in membership_string.split("_")
         ]
@@ -398,3 +513,91 @@ def _safe_source_merge(member_Sources: Source | list) -> Source:
         return merge_sources(member_Sources.tolist())
     else:
         raise TypeError("Expecting source.Source or pd.Series")
+
+
+def _select_top_pathway_by_size(unaccounted_for_members: pd.DataFrame) -> str:
+
+    pathway_members = unaccounted_for_members.value_counts(SOURCE_SPEC.PATHWAY_ID)
+    top_pathway = pathway_members[pathway_members == max(pathway_members)].index[0]
+
+    return top_pathway
+
+
+def _select_top_pathway_by_enrichment(
+    unaccounted_for_members: pd.DataFrame,
+    source_total_counts: pd.Series,
+    n_total_entities: int,
+    table_pk: str,
+    min_pw_size: int = 5,
+) -> str:
+
+    n_observed_entities = len(
+        unaccounted_for_members.index.get_level_values(table_pk).unique()
+    )
+    pathway_members = unaccounted_for_members.value_counts(
+        SOURCE_SPEC.PATHWAY_ID
+    ).rename("observed_members")
+
+    pathway_members = pathway_members.loc[pathway_members >= min_pw_size]
+    if pathway_members.shape[0] == 0:
+        return None
+
+    wide_contingency_table = (
+        pathway_members.to_frame()
+        .join(source_total_counts)
+        .assign(
+            missing_members=lambda x: x["total_counts"] - x["observed_members"],
+            observed_nonmembers=lambda x: n_observed_entities - x["observed_members"],
+            nonobserved_nonmembers=lambda x: n_total_entities
+            - x["observed_nonmembers"]
+            - x["missing_members"]
+            - x["observed_members"],
+        )
+        .drop(columns=["total_counts"])
+    )
+
+    # calculate enrichments using a fast vectorized normal approximation
+    odds_ratios, _ = hypothesis_testing.fisher_exact_vectorized(
+        wide_contingency_table["observed_members"],
+        wide_contingency_table["missing_members"],
+        wide_contingency_table["observed_nonmembers"],
+        wide_contingency_table["nonobserved_nonmembers"],
+    )
+
+    return pathway_members.index[np.argmax(odds_ratios)]
+
+
+def _update_unaccounted_for_members(
+    top_pathway, unaccounted_for_members
+) -> pd.DataFrame:
+    """
+    Update the unaccounted for members dataframe by removing the members
+    associated with the top pathway.
+
+    Parameters
+    ----------
+    top_pathway: str
+        the pathway to remove from the unaccounted for members
+    unaccounted_for_members: pd.DataFrame
+        the dataframe of unaccounted for members
+
+    Returns
+    -------
+    unaccounted_for_members: pd.DataFrame
+        the dataframe of unaccounted for members with the top pathway removed
+    """
+
+    table_type = sbml_dfs_utils.infer_entity_type(unaccounted_for_members)
+    pk = SBML_DFS_SCHEMA.SCHEMA[table_type][SCHEMA_DEFS.PK]
+
+    members_captured = (
+        unaccounted_for_members[
+            unaccounted_for_members[SOURCE_SPEC.PATHWAY_ID] == top_pathway
+        ]
+        .index.get_level_values(pk)
+        .tolist()
+    )
+
+    return unaccounted_for_members[
+        ~unaccounted_for_members.index.get_level_values(pk).isin(members_captured)
+    ]

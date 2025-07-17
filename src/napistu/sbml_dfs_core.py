@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import logging
 import re
 from typing import Any
@@ -18,17 +19,23 @@ from napistu import sbml_dfs_utils
 from napistu import source
 from napistu import utils
 from napistu.ingestion import sbml
-from napistu.constants import SBML_DFS
-from napistu.constants import SBML_DFS_SCHEMA
-from napistu.constants import IDENTIFIERS
-from napistu.constants import NAPISTU_STANDARD_OUTPUTS
-from napistu.constants import BQB_PRIORITIES
-from napistu.constants import ONTOLOGY_PRIORITIES
-from napistu.constants import MINI_SBO_FROM_NAME
-from napistu.constants import MINI_SBO_TO_NAME
-from napistu.constants import SBOTERM_NAMES
-from napistu.constants import ENTITIES_W_DATA
-from napistu.constants import ENTITIES_TO_ENTITY_DATA
+from napistu.ontologies import id_tables
+from napistu.constants import (
+    BQB,
+    BQB_DEFINING_ATTRS_LOOSE,
+    BQB_PRIORITIES,
+    ENTITIES_W_DATA,
+    ENTITIES_TO_ENTITY_DATA,
+    IDENTIFIERS,
+    MINI_SBO_FROM_NAME,
+    MINI_SBO_TO_NAME,
+    NAPISTU_STANDARD_OUTPUTS,
+    ONTOLOGY_PRIORITIES,
+    SBML_DFS,
+    SBML_DFS_SCHEMA,
+    SBOTERM_NAMES,
+    SCHEMA_DEFS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +71,8 @@ class SBML_dfs:
         Add a new reactions data table to the model with validation.
     add_species_data(label, data)
         Add a new species data table to the model with validation.
+    copy()
+        Return a deep copy of the SBML_dfs object.
     export_sbml_dfs(model_prefix, outdir, overwrite=False, dogmatic=True)
         Export the SBML_dfs model and its tables to files in a specified directory.
     get_characteristic_species_ids(dogmatic=True)
@@ -98,7 +107,7 @@ class SBML_dfs:
         Remove a reactions data table by label.
     remove_species_data(label)
         Remove a species data table by label.
-    search_by_ids(ids, entity_type, identifiers_df, ontologies=None)
+    search_by_ids(id_table, identifiers=None, ontologies=None, bqbs=None)
         Find entities and identifiers matching a set of query IDs.
     search_by_name(name, entity_type, partial_match=True)
         Find entities by exact or partial name match.
@@ -114,7 +123,6 @@ class SBML_dfs:
     Private/Hidden Methods (alphabetical, appear after public methods)
     -----------------------------------------------------------------
     _attempt_resolve(e)
-    _check_pk_fk_correspondence()
     _find_underspecified_reactions_by_scids(sc_ids)
     _get_unused_cspecies()
     _get_unused_species()
@@ -123,9 +131,12 @@ class SBML_dfs:
     _remove_species(s_ids)
     _remove_unused_cspecies()
     _remove_unused_species()
+    _validate_identifiers()
+    _validate_pk_fk_correspondence()
     _validate_r_ids(r_ids)
     _validate_reaction_species()
     _validate_reactions_data(reactions_data_table)
+    _validate_sources()
     _validate_species_data(species_data_table)
     _validate_table(table_name)
     """
@@ -254,6 +265,17 @@ class SBML_dfs:
                 f"{label} already exists in species_data. " "Drop it first."
             )
         self.species_data[label] = data
+
+    def copy(self):
+        """
+        Return a deep copy of the SBML_dfs object.
+
+        Returns
+        -------
+        SBML_dfs
+            A deep copy of the current SBML_dfs object.
+        """
+        return copy.deepcopy(self)
 
     def export_sbml_dfs(
         self,
@@ -439,12 +461,12 @@ class SBML_dfs:
         ValueError
             If id_type is invalid or identifiers are malformed
         """
-        selected_table = self.get_table(id_type, {"id"})
-        schema = self.schema
+        selected_table = self.get_table(id_type, {SCHEMA_DEFS.ID})
+        schema = SBML_DFS_SCHEMA.SCHEMA
 
         identifiers_dict = dict()
         for sysid in selected_table.index:
-            id_entry = selected_table[schema[id_type]["id"]][sysid]
+            id_entry = selected_table[schema[id_type][SCHEMA_DEFS.ID]][sysid]
 
             if isinstance(id_entry, identifiers.Identifiers):
                 identifiers_dict[sysid] = pd.DataFrame(id_entry.ids)
@@ -457,15 +479,16 @@ class SBML_dfs:
                 )
         if not identifiers_dict:
             # Return empty DataFrame with expected columns if nothing found
-            return pd.DataFrame(columns=[schema[id_type]["pk"], "entry"])
+            return pd.DataFrame(columns=[schema[id_type][SCHEMA_DEFS.PK], "entry"])
+
         identifiers_tbl = pd.concat(identifiers_dict)
 
-        identifiers_tbl.index.names = [schema[id_type]["pk"], "entry"]
+        identifiers_tbl.index.names = [schema[id_type][SCHEMA_DEFS.PK], "entry"]
         identifiers_tbl = identifiers_tbl.reset_index()
 
         named_identifiers = identifiers_tbl.merge(
-            selected_table.drop(schema[id_type]["id"], axis=1),
-            left_on=schema[id_type]["pk"],
+            selected_table.drop(schema[id_type][SCHEMA_DEFS.ID], axis=1),
+            left_on=schema[id_type][SCHEMA_DEFS.PK],
             right_index=True,
         )
 
@@ -1146,24 +1169,25 @@ class SBML_dfs:
 
     def search_by_ids(
         self,
-        ids: list[str],
-        entity_type: str,
-        identifiers_df: pd.DataFrame,
-        ontologies: None | set[str] = None,
+        id_table: pd.DataFrame,
+        identifiers: Optional[Union[str, list, set]] = None,
+        ontologies: Optional[Union[str, list, set]] = None,
+        bqbs: Optional[Union[str, list, set]] = BQB_DEFINING_ATTRS_LOOSE
+        + [BQB.HAS_PART],
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
         Find entities and identifiers matching a set of query IDs.
 
         Parameters
         ----------
-        ids : List[str]
-            List of identifiers to search for
-        entity_type : str
-            Type of entity to search (e.g., 'species', 'reactions')
-        identifiers_df : pd.DataFrame
+        id_table : pd.DataFrame
             DataFrame containing identifier mappings
-        ontologies : Optional[Set[str]], optional
-            Set of ontologies to filter by, by default None
+        identifiers : Optional[Union[str, list, set]], optional
+            Identifiers to filter by, by default None
+        ontologies : Optional[Union[str, list, set]], optional
+            Ontologies to filter by, by default None
+        bqbs : Optional[Union[str, list, set]], optional
+            BQB terms to filter by, by default [BQB.IS, BQB.HAS_PART]
 
         Returns
         -------
@@ -1179,42 +1203,25 @@ class SBML_dfs:
             If ontologies is not a set
         """
         # validate inputs
-        entity_table = self.get_table(entity_type, required_attributes={"id"})
-        entity_pk = self.schema[entity_type]["pk"]
 
-        utils.match_pd_vars(
-            identifiers_df,
-            req_vars={
-                entity_pk,
-                IDENTIFIERS.ONTOLOGY,
-                IDENTIFIERS.IDENTIFIER,
-                IDENTIFIERS.URL,
-                IDENTIFIERS.BQB,
-            },
-            allow_series=False,
-        ).assert_present()
+        entity_type = sbml_dfs_utils.infer_entity_type(id_table)
+        entity_table = self.get_table(entity_type, required_attributes={SCHEMA_DEFS.ID})
+        entity_pk = self.schema[entity_type][SCHEMA_DEFS.PK]
 
-        if ontologies is not None:
-            if not isinstance(ontologies, set):
-                # for clarity this should not be reachable based on type hints
-                raise TypeError(
-                    f"ontologies must be a set, but got {type(ontologies).__name__}"
-                )
-            ALL_VALID_ONTOLOGIES = identifiers_df["ontology"].unique()
-            invalid_ontologies = ontologies.difference(ALL_VALID_ONTOLOGIES)
-            if len(invalid_ontologies) > 0:
-                raise ValueError(
-                    f"The following ontologies are not valid: {', '.join(invalid_ontologies)}.\n"
-                    f"Valid ontologies are {', '.join(ALL_VALID_ONTOLOGIES)}"
-                )
+        matching_identifiers = id_tables.filter_id_table(
+            id_table=id_table, identifiers=identifiers, ontologies=ontologies, bqbs=bqbs
+        )
 
-            # fitler to just to identifiers matchign the ontologies of interest
-            identifiers_df = identifiers_df.query("ontology in @ontologies")
+        matching_keys = matching_identifiers[entity_pk].tolist()
+        entity_subset = entity_table.loc[matching_keys]
 
-        matching_identifiers = identifiers_df.loc[
-            identifiers_df["identifier"].isin(ids)
-        ]
-        entity_subset = entity_table.loc[matching_identifiers[entity_pk].tolist()]
+        if matching_identifiers.shape[0] != entity_subset.shape[0]:
+            raise ValueError(
+                f"Some identifiers did not match to an entity for {entity_type}. "
+                "This suggests that the identifiers and sbml_dfs are not in sync. "
+                "Please create new identifiers with sbml_dfs.get_characteristic_species_ids() "
+                "or sbml_dfs.get_identifiers()."
+            )
 
         return entity_subset, matching_identifiers
 
@@ -1382,7 +1389,7 @@ class SBML_dfs:
             self._validate_table(table)
 
         # check whether pks and fks agree
-        self._check_pk_fk_correspondence()
+        self._validate_pk_fk_correspondence()
 
         # check optional data tables:
         for k, v in self.species_data.items():
@@ -1399,6 +1406,10 @@ class SBML_dfs:
 
         # validate reaction_species sbo_terms and stoi
         self._validate_reaction_species()
+
+        # validate identifiers and sources
+        self._validate_identifiers()
+        self._validate_sources()
 
     def validate_and_resolve(self):
         """
@@ -1454,67 +1465,6 @@ class SBML_dfs:
                 "An error occurred which could not be automatically resolved"
             )
             raise e
-
-    def _check_pk_fk_correspondence(self):
-        """
-        Check whether primary keys and foreign keys agree for all tables in the schema.
-        Raises ValueError if any correspondence fails.
-        """
-
-        pk_df = pd.DataFrame(
-            [{"pk_table": k, "key": v["pk"]} for k, v in self.schema.items()]
-        )
-
-        fk_df = (
-            pd.DataFrame(
-                [
-                    {"fk_table": k, "fk": v["fk"]}
-                    for k, v in self.schema.items()
-                    if "fk" in v.keys()
-                ]
-            )
-            .set_index("fk_table")["fk"]
-            .apply(pd.Series)
-            .reset_index()
-            .melt(id_vars="fk_table")
-            .drop(["variable"], axis=1)
-            .rename(columns={"value": "key"})
-        )
-
-        pk_fk_correspondences = pk_df.merge(fk_df)
-
-        for i in range(0, pk_fk_correspondences.shape[0]):
-            pk_table_keys = set(
-                getattr(self, pk_fk_correspondences["pk_table"][i]).index.tolist()
-            )
-            if None in pk_table_keys:
-                raise ValueError(
-                    f"{pk_fk_correspondences['pk_table'][i]} had "
-                    "missing values in its index"
-                )
-
-            fk_table_keys = set(
-                getattr(self, pk_fk_correspondences["fk_table"][i]).loc[
-                    :, pk_fk_correspondences["key"][i]
-                ]
-            )
-            if None in fk_table_keys:
-                raise ValueError(
-                    f"{pk_fk_correspondences['fk_table'][i]} included "
-                    f"missing {pk_fk_correspondences['key'][i]} values"
-                )
-
-            # all foreign keys need to match a primary key
-            extra_fks = fk_table_keys.difference(pk_table_keys)
-            if len(extra_fks) != 0:
-                raise ValueError(
-                    f"{len(extra_fks)} distinct "
-                    f"{pk_fk_correspondences['key'][i]} values were"
-                    f" found in {pk_fk_correspondences['fk_table'][i]} "
-                    f"but missing from {pk_fk_correspondences['pk_table'][i]}."
-                    " All foreign keys must have a matching primary key.\n\n"
-                    f"Extra key are: {', '.join(extra_fks)}"
-                )
 
     def _find_underspecified_reactions_by_scids(
         self, sc_ids: Iterable[str]
@@ -1640,6 +1590,88 @@ class SBML_dfs:
         s_ids = self._get_unused_species()
         self._remove_species(s_ids)
 
+    def _validate_identifiers(self):
+        """
+        Validate identifiers in the model
+
+        Iterates through all tables and checks if the identifier columns are valid.
+
+        Raises:
+            ValueError: missing identifiers in the table
+        """
+
+        SCHEMA = SBML_DFS_SCHEMA.SCHEMA
+        for table in SBML_DFS_SCHEMA.SCHEMA.keys():
+            if "id" not in SCHEMA[table].keys():
+                continue
+            id_series = self.get_table(table)[SCHEMA[table]["id"]]
+            if id_series.isna().sum() > 0:
+                missing_ids = id_series[id_series.isna()].index
+                raise ValueError(
+                    f"{table} has {len(missing_ids)} missing ids: {missing_ids}"
+                )
+
+    def _validate_pk_fk_correspondence(self):
+        """
+        Check whether primary keys and foreign keys agree for all tables in the schema.
+        Raises ValueError if any correspondence fails.
+        """
+
+        pk_df = pd.DataFrame(
+            [{"pk_table": k, "key": v["pk"]} for k, v in self.schema.items()]
+        )
+
+        fk_df = (
+            pd.DataFrame(
+                [
+                    {"fk_table": k, "fk": v["fk"]}
+                    for k, v in self.schema.items()
+                    if "fk" in v.keys()
+                ]
+            )
+            .set_index("fk_table")["fk"]
+            .apply(pd.Series)
+            .reset_index()
+            .melt(id_vars="fk_table")
+            .drop(["variable"], axis=1)
+            .rename(columns={"value": "key"})
+        )
+
+        pk_fk_correspondences = pk_df.merge(fk_df)
+
+        for i in range(0, pk_fk_correspondences.shape[0]):
+            pk_table_keys = set(
+                getattr(self, pk_fk_correspondences["pk_table"][i]).index.tolist()
+            )
+            if None in pk_table_keys:
+                raise ValueError(
+                    f"{pk_fk_correspondences['pk_table'][i]} had "
+                    "missing values in its index"
+                )
+
+            fk_table_keys = set(
+                getattr(self, pk_fk_correspondences["fk_table"][i]).loc[
+                    :, pk_fk_correspondences["key"][i]
+                ]
+            )
+            if None in fk_table_keys:
+                raise ValueError(
+                    f"{pk_fk_correspondences['fk_table'][i]} included "
+                    f"missing {pk_fk_correspondences['key'][i]} values"
+                )
+
+            # all foreign keys need to match a primary key
+            extra_fks = fk_table_keys.difference(pk_table_keys)
+            if len(extra_fks) != 0:
+                raise ValueError(
+                    f"{len(extra_fks)} distinct "
+                    f"{pk_fk_correspondences['key'][i]} values were"
+                    f" found in {pk_fk_correspondences['fk_table'][i]} "
+                    f"but missing from {pk_fk_correspondences['pk_table'][i]}."
+                    " All foreign keys must have a matching primary key.\n\n"
+                    f"Extra key are: {', '.join(extra_fks)}"
+                )
+
     def _validate_r_ids(self, r_ids: Optional[Union[str, list[str]]]) -> list[str]:
 
         if isinstance(r_ids, str):
@@ -1693,6 +1725,27 @@ class SBML_dfs:
             ValueError: r_id not in reactions table
         """
         sbml_dfs_utils._validate_matching_data(reactions_data_table, self.reactions)
+
+    def _validate_sources(self):
+        """
+        Validate sources in the model
+
+        Iterates through all tables and checks if the source columns are valid.
+
+        Raises:
+            ValueError: missing sources in the table
+        """
+
+        SCHEMA = SBML_DFS_SCHEMA.SCHEMA
+        for table in SBML_DFS_SCHEMA.SCHEMA.keys():
+            if "source" not in SCHEMA[table].keys():
+                continue
+            source_series = self.get_table(table)[SCHEMA[table]["source"]]
+            if source_series.isna().sum() > 0:
+                missing_sources = source_series[source_series.isna()].index
+                raise ValueError(
+                    f"{table} has {len(missing_sources)} missing sources: {missing_sources}"
+                )
 
     def _validate_species_data(self, species_data_table: pd.DataFrame):
         """Validates species data attribute

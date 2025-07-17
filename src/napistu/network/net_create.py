@@ -13,29 +13,33 @@ from pydantic import BaseModel
 
 from napistu import sbml_dfs_core
 from napistu import utils
-from napistu.network.napistu_graph_core import NapistuGraph
+from napistu.network import net_create_utils
+from napistu.network.ng_core import NapistuGraph
 
-from napistu.constants import MINI_SBO_FROM_NAME
-from napistu.constants import MINI_SBO_TO_NAME
-from napistu.constants import SBML_DFS
-from napistu.constants import SBO_MODIFIER_NAMES
-from napistu.constants import ENTITIES_W_DATA
 
-from napistu.network.constants import NAPISTU_GRAPH_NODES
-from napistu.network.constants import NAPISTU_GRAPH_EDGES
-from napistu.network.constants import NAPISTU_GRAPH_EDGE_DIRECTIONS
-from napistu.network.constants import NAPISTU_GRAPH_NODE_TYPES
-from napistu.network.constants import NAPISTU_GRAPH_TYPES
-from napistu.network.constants import NAPISTU_WEIGHTING_STRATEGIES
-from napistu.network.constants import SBOTERM_NAMES
-from napistu.network.constants import REGULATORY_GRAPH_HIERARCHY
-from napistu.network.constants import SURROGATE_GRAPH_HIERARCHY
-from napistu.network.constants import VALID_NAPISTU_GRAPH_TYPES
-from napistu.network.constants import VALID_WEIGHTING_STRATEGIES
-from napistu.network.constants import DEFAULT_WT_TRANS
-from napistu.network.constants import DEFINED_WEIGHT_TRANSFORMATION
-from napistu.network.constants import SCORE_CALIBRATION_POINTS_DICT
-from napistu.network.constants import SOURCE_VARS_DICT
+from napistu.constants import (
+    MINI_SBO_FROM_NAME,
+    SBO_MODIFIER_NAMES,
+    SBOTERM_NAMES,
+    SBML_DFS,
+    ENTITIES_W_DATA,
+)
+
+from napistu.network.constants import (
+    NAPISTU_GRAPH_VERTICES,
+    NAPISTU_GRAPH_EDGES,
+    NAPISTU_GRAPH_EDGE_DIRECTIONS,
+    NAPISTU_GRAPH_NODE_TYPES,
+    GRAPH_WIRING_APPROACHES,
+    NAPISTU_WEIGHTING_STRATEGIES,
+    VALID_GRAPH_WIRING_APPROACHES,
+    VALID_WEIGHTING_STRATEGIES,
+    DEFAULT_WT_TRANS,
+    DEFINED_WEIGHT_TRANSFORMATION,
+    SCORE_CALIBRATION_POINTS_DICT,
+    SOURCE_VARS_DICT,
+    DROP_REACTIONS_WHEN,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -46,12 +50,13 @@ def create_napistu_graph(
     reaction_graph_attrs: Optional[dict] = None,
     directed: bool = True,
     edge_reversed: bool = False,
-    graph_type: str = NAPISTU_GRAPH_TYPES.REGULATORY,
+    wiring_approach: str = GRAPH_WIRING_APPROACHES.REGULATORY,
+    drop_reactions_when: str = DROP_REACTIONS_WHEN.SAME_TIER,
     verbose: bool = False,
     custom_transformations: Optional[dict] = None,
 ) -> NapistuGraph:
     """
-    Create a NapistuGraph network from a mechanistic network using one of a set of graph_types.
+    Create a NapistuGraph network from a mechanistic network using one of a set of wiring approaches.
 
     Parameters
     ----------
@@ -60,14 +65,20 @@ def create_napistu_graph(
     reaction_graph_attrs : dict, optional
         Dictionary containing attributes to pull out of reaction_data and a weighting scheme for the graph.
     directed : bool, optional
-        Should a directed (True) or undirected graph be made (False). Default is True.
+        Whether to create a directed (True) or undirected (False) graph. Default is True.
     edge_reversed : bool, optional
-        Should the directions of edges be reversed or not (False). Default is False.
-    graph_type : str, optional
+        Whether to reverse the directions of edges. Default is False.
+    wiring_approach : str, optional
         Type of graph to create. Valid values are:
             - 'bipartite': substrates and modifiers point to the reaction they drive, this reaction points to products
             - 'regulatory': non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
             - 'surrogate': non-enzymatic modifiers -> substrates -> enzymes -> reaction -> products
+            - 'bipartite_og': old method for generating a true bipartite graph. Retained primarily for regression testing.
+    drop_reactions_when : str, optional
+        The condition under which to drop reactions as a network vertex. Valid values are:
+            - 'same_tier': drop reactions when all participants are on the same tier of a wiring hierarchy
+            - 'edgelist': drop reactions when the reaction species are only 2 (1 reactant + 1 product)
+            - 'always': drop reactions regardless of tiers
     verbose : bool, optional
         Extra reporting. Default is False.
     custom_transformations : dict, optional
@@ -77,14 +88,19 @@ def create_napistu_graph(
     -------
     NapistuGraph
         A NapistuGraph network (subclass of igraph.Graph).
+
+    Raises
+    ------
+    ValueError
+        If wiring_approach is not valid or if required attributes are missing.
     """
 
     if reaction_graph_attrs is None:
         reaction_graph_attrs = {}
 
-    if graph_type not in VALID_NAPISTU_GRAPH_TYPES:
+    if wiring_approach not in VALID_GRAPH_WIRING_APPROACHES + ["bipartite_og"]:
         raise ValueError(
-            f"graph_type is not a valid value ({graph_type}), valid values are {','.join(VALID_NAPISTU_GRAPH_TYPES)}"
+            f"wiring_approach is not a valid value ({wiring_approach}), valid values are {','.join(VALID_GRAPH_WIRING_APPROACHES)}"
         )
 
     # fail fast if reaction_graph_attrs is not properly formatted
@@ -136,18 +152,20 @@ def create_napistu_graph(
 
     # rename nodes to name since it is treated specially
     network_nodes_df = pd.concat(network_nodes).rename(
-        columns={"node_id": NAPISTU_GRAPH_NODES.NAME}
+        columns={"node_id": NAPISTU_GRAPH_VERTICES.NAME}
     )
 
-    logger.info(f"Formatting edges as a {graph_type} graph")
+    logger.info(f"Formatting edges as a {wiring_approach} graph")
 
-    if graph_type == NAPISTU_GRAPH_TYPES.BIPARTITE:
+    if wiring_approach == "bipartite_og":
         network_edges = _create_napistu_graph_bipartite(working_sbml_dfs)
-    elif graph_type in [NAPISTU_GRAPH_TYPES.REGULATORY, NAPISTU_GRAPH_TYPES.SURROGATE]:
-        # pass graph_type so that an appropriate tiered schema can be used.
-        network_edges = _create_napistu_graph_tiered(working_sbml_dfs, graph_type)
+    elif wiring_approach in VALID_GRAPH_WIRING_APPROACHES:
+        # pass wiring_approach so that an appropriate tiered schema can be used.
+        network_edges = create_napistu_graph_wiring(
+            working_sbml_dfs, wiring_approach, drop_reactions_when
+        )
     else:
-        raise NotImplementedError("Invalid graph_type")
+        raise NotImplementedError("Invalid wiring_approach")
 
     logger.info("Adding reversibility and other meta-data from reactions_data")
     augmented_network_edges = _augment_network_edges(
@@ -216,14 +234,19 @@ def create_napistu_graph(
         vertices=network_nodes_df.to_dict("records"),
         edges=unique_edges.to_dict("records"),
         directed=directed,
-        vertex_name_attr=NAPISTU_GRAPH_NODES.NAME,
+        vertex_name_attr=NAPISTU_GRAPH_VERTICES.NAME,
         edge_foreign_keys=(NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO),
     )
 
+    # delete singleton nodes (most of these will be reaction nodes associated with pairwise interactions)
+
     # Always return NapistuGraph
     napistu_graph = NapistuGraph.from_igraph(
-        napistu_ig_graph, graph_type=graph_type, is_reversed=edge_reversed
+        napistu_ig_graph, wiring_approach=wiring_approach, is_reversed=edge_reversed
     )
+
+    # remove singleton nodes (mostly reactions that are not part of any interaction)
+    napistu_graph.remove_isolated_vertices()
 
     if edge_reversed:
         logger.info("Applying edge reversal using reversal utilities")
@@ -237,15 +260,15 @@ def process_napistu_graph(
     reaction_graph_attrs: Optional[dict] = None,
     directed: bool = True,
     edge_reversed: bool = False,
-    graph_type: str = NAPISTU_GRAPH_TYPES.BIPARTITE,
+    wiring_approach: str = GRAPH_WIRING_APPROACHES.BIPARTITE,
     weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
     verbose: bool = False,
     custom_transformations: dict = None,
 ) -> NapistuGraph:
     """
-    Process Consensus Graph
+    Process Consensus Graph.
 
-    Setup a NapistuGraph network and then add weights and other malleable attributes.
+    Sets up a NapistuGraph network and then adds weights and other malleable attributes.
 
     Parameters
     ----------
@@ -254,16 +277,13 @@ def process_napistu_graph(
     reaction_graph_attrs : dict, optional
         Dictionary containing attributes to pull out of reaction_data and a weighting scheme for the graph.
     directed : bool, optional
-        Should a directed (True) or undirected graph be made (False). Default is True.
+        Whether to create a directed (True) or undirected (False) graph. Default is True.
     edge_reversed : bool, optional
-        Should directions of edges be reversed (False). Default is False.
-    graph_type : str, optional
-        Type of graph to create. Valid values are:
-            - 'bipartite': substrates and modifiers point to the reaction they drive, this reaction points to products
-            - 'regulatory': non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
-            - 'surrogate': non-enzymatic modifiers -> substrates -> enzymes -> reaction -> products
+        Whether to reverse the directions of edges. Default is False.
+    wiring_approach : str, optional
+        Type of graph to create. See `create_napistu_graph` for valid values.
     weighting_strategy : str, optional
-        A network weighting strategy with options:
+        A network weighting strategy. Options:
             - 'unweighted': all weights (and upstream_weights for directed graphs) are set to 1.
             - 'topology': weight edges by the degree of the source nodes favoring nodes with few connections.
             - 'mixed': transform edges with a quantitative score based on reaction_attrs; and set edges without quantitative score as a source-specific weight.
@@ -288,7 +308,7 @@ def process_napistu_graph(
         reaction_graph_attrs,
         directed=directed,
         edge_reversed=edge_reversed,
-        graph_type=graph_type,
+        wiring_approach=wiring_approach,
         verbose=verbose,
         custom_transformations=custom_transformations,
     )
@@ -309,359 +329,42 @@ def process_napistu_graph(
     return weighted_napistu_graph
 
 
-def pluck_entity_data(
+def create_napistu_graph_wiring(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    graph_attrs: dict[str, dict],
-    data_type: str,
-    custom_transformations: Optional[dict[str, callable]] = None,
-) -> pd.DataFrame | None:
+    wiring_approach: str,
+    drop_reactions_when: str = DROP_REACTIONS_WHEN.SAME_TIER,
+) -> pd.DataFrame:
     """
-    Pluck Entity Attributes
-
-    Pull species or reaction attributes out of an sbml_dfs based on a set of
-      tables and variables to look for.
-
-    Parameters:
-    sbml_dfs: sbml_dfs_core.SBML_dfs
-        A mechanistic model
-    graph_attrs: dict
-        A dictionary of species/reaction attributes to pull out. If the requested
-        data_type ("species" or "reactions") is not present as a key, or if the value
-        is an empty dict, this function will return None (no error).
-    data_type: str
-        "species" or "reactions" to pull out species_data or reactions_data
-    custom_transformations: dict[str, callable], optional
-        A dictionary mapping transformation names to functions. If provided, these
-        will be checked before built-in transformations. Example:
-            custom_transformations = {"square": lambda x: x**2}
-
-    Returns:
-        A table where all extracted attributes are merged based on a common index or None
-        if no attributes were extracted. If the requested data_type is not present in
-        graph_attrs, or if the attribute dict is empty, returns None. This is intended
-        to allow optional annotation blocks.
-
-    """
-
-    if data_type not in ENTITIES_W_DATA:
-        raise ValueError(
-            f'"data_type" was {data_type} and must be in {", ".join(ENTITIES_W_DATA)}'
-        )
-
-    if data_type not in graph_attrs.keys():
-        logger.info(
-            f'No {data_type} annotations provided in "graph_attrs"; returning None'
-        )
-        return None
-
-    entity_attrs = graph_attrs[data_type]
-    # validating dict
-    _validate_entity_attrs(entity_attrs, custom_transformations=custom_transformations)
-
-    if len(entity_attrs) == 0:
-        logger.info(
-            f'No attributes defined for "{data_type}" in graph_attrs; returning None'
-        )
-        return None
-
-    data_type_attr = data_type + "_data"
-    entity_data_tbls = getattr(sbml_dfs, data_type_attr)
-
-    data_list = list()
-    for k, v in entity_attrs.items():
-        # v["table"] is always present if entity_attrs is non-empty and validated
-        if v["table"] not in entity_data_tbls.keys():
-            raise ValueError(
-                f"{v['table']} was defined as a table in \"graph_attrs\" but "
-                f'it is not present in the "{data_type_attr}" of the sbml_dfs'
-            )
-
-        if v["variable"] not in entity_data_tbls[v["table"]].columns.tolist():
-            raise ValueError(
-                f"{v['variable']} was defined as a variable in \"graph_attrs\" but "
-                f"it is not present in the {v['table']} of the \"{data_type_attr}\" of "
-                "the sbml_dfs"
-            )
-
-        entity_series = entity_data_tbls[v["table"]][v["variable"]].rename(k)
-        trans_name = v.get("trans", DEFAULT_WT_TRANS)
-        # Look up transformation
-        if custom_transformations and trans_name in custom_transformations:
-            trans_fxn = custom_transformations[trans_name]
-        elif trans_name in DEFINED_WEIGHT_TRANSFORMATION:
-            trans_fxn = globals()[DEFINED_WEIGHT_TRANSFORMATION[trans_name]]
-        else:
-            # This should never be hit if _validate_entity_attrs is called correctly.
-            raise ValueError(
-                f"Transformation '{trans_name}' not found in custom_transformations or DEFINED_WEIGHT_TRANSFORMATION."
-            )
-        entity_series = entity_series.apply(trans_fxn)
-        data_list.append(entity_series)
-
-    if len(data_list) == 0:
-        return None
-
-    return pd.concat(data_list, axis=1)
-
-
-def apply_weight_transformations(
-    edges_df: pd.DataFrame, reaction_attrs: dict, custom_transformations: dict = None
-):
-    """
-    Apply Weight Transformations
-
-    Args:
-        edges_df (pd.DataFrame): a table of edges and their attributes extracted
-            from a cpr_grpah.
-        reaction_attrs (dict):
-            A dictionary of attributes identifying weighting attributes within
-            an sbml_df's reaction_data, how they will be named in edges_df (the keys),
-            and how they should be transformed (the "trans" aliases")
-        custom_transformations (dict, optional):
-            A dictionary mapping transformation names to functions. If provided, these
-            will be checked before built-in transformations.
-
-    Returns:
-        transformed_edges_df (pd.DataFrame): edges_df with weight variables transformed.
-
-    """
-
-    _validate_entity_attrs(
-        reaction_attrs, custom_transformations=custom_transformations
-    )
-
-    transformed_edges_df = copy.deepcopy(edges_df)
-    for k, v in reaction_attrs.items():
-        if k not in transformed_edges_df.columns:
-            raise ValueError(f"A weighting variable {k} was missing from edges_df")
-
-        trans_name = v["trans"]
-        # Look up transformation
-        if custom_transformations and trans_name in custom_transformations:
-            trans_fxn = custom_transformations[trans_name]
-        elif trans_name in DEFINED_WEIGHT_TRANSFORMATION:
-            trans_fxn = globals()[DEFINED_WEIGHT_TRANSFORMATION[trans_name]]
-        else:
-            # This should never be hit if _validate_entity_attrs is called correctly.
-            raise ValueError(
-                f"Transformation '{trans_name}' not found in custom_transformations or DEFINED_WEIGHT_TRANSFORMATION."
-            )
-
-        transformed_edges_df[k] = transformed_edges_df[k].apply(trans_fxn)
-
-    return transformed_edges_df
-
-
-def summarize_weight_calibration(
-    napistu_graph: NapistuGraph, reaction_attrs: dict
-) -> None:
-    """
-    Summarize Weight Calibration
-
-    For a network with multiple sources for edge weights summarize the alignment of
-    different weighting schemes and how they map onto our notion of "good" versus
-    "dubious" weights.
-
-    Args:
-        napistu_graph (ig.Graph): A graph where edge weights have already been calibrated.
-        reaction_attrs (dict): a dictionary summarizing the types of weights that
-            exist and how they are transformed for calibration.
-
-    Returns:
-        None
-
-    """
-
-    score_calibration_df = pd.DataFrame(SCORE_CALIBRATION_POINTS_DICT)
-    score_calibration_df_calibrated = apply_weight_transformations(
-        score_calibration_df, reaction_attrs
-    )
-
-    calibrated_edges = napistu_graph.get_edge_dataframe()
-
-    _summarize_weight_calibration_table(
-        calibrated_edges, score_calibration_df, score_calibration_df_calibrated
-    )
-
-    _summarize_weight_calibration_plots(
-        calibrated_edges, score_calibration_df_calibrated
-    )
-
-    return None
-
-
-def add_graph_weights(
-    napistu_graph: NapistuGraph,
-    reaction_attrs: dict,
-    weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
-) -> NapistuGraph:
-    """
-    Add Graph Weights
-
-    Apply a weighting strategy to generate edge weights on a NapistuGraph. For directed graphs, "upstream_weights" will
-    be generated as well, which should be used when searching for a node's ancestors.
+    Turn an sbml_dfs model into a tiered graph which links upstream entities to downstream ones.
 
     Parameters
     ----------
-    napistu_graph : NapistuGraph
-        A graphical network of molecules/reactions (nodes) and edges linking them (subclass of igraph.Graph).
-    reaction_attrs : dict
-        An optional dict of reaction attributes.
-    weighting_strategy : str, optional
-        A network weighting strategy with options:
-            - 'unweighted': all weights (and upstream_weights for directed graphs) are set to 1.
-            - 'topology': weight edges by the degree of the source nodes favoring nodes emerging from nodes with few connections.
-            - 'mixed': transform edges with a quantitative score based on reaction_attrs; and set edges without quantitative score as a source-specific weight.
-            - 'calibrated': transform edges with a quantitative score based on reaction_attrs and combine them with topology scores to generate a consensus.
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The SBML_dfs object containing the model data.
+    wiring_approach : str
+        The wiring approach to use for the graph.
+    drop_reactions_when : str, optional
+        The condition under which to drop reactions as a network vertex. Default is 'same_tier'.
 
     Returns
     -------
-    NapistuGraph
-        The weighted NapistuGraph.
+    pd.DataFrame
+        DataFrame representing the tiered network edges.
+
+    Raises
+    ------
+    ValueError
+        If invalid SBO terms are present or required attributes are missing.
     """
 
-    napistu_graph_updated = copy.deepcopy(napistu_graph)
-
-    _validate_entity_attrs(reaction_attrs)
-
-    if weighting_strategy not in VALID_WEIGHTING_STRATEGIES:
-        raise ValueError(
-            f"weighting_strategy was {weighting_strategy} and must be one of: "
-            f"{', '.join(VALID_WEIGHTING_STRATEGIES)}"
-        )
-
-    # count parents and children and create weights based on them
-    topology_weighted_graph = _create_topology_weights(napistu_graph_updated)
-
-    if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY:
-        topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.WEIGHTS] = (
-            topology_weighted_graph.es["topo_weights"]
-        )
-        if napistu_graph_updated.is_directed():
-            topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS] = (
-                topology_weighted_graph.es["upstream_topo_weights"]
-            )
-
-        return topology_weighted_graph
-
-    if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED:
-        # set weights as a constant
-        topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.WEIGHTS] = 1
-        if napistu_graph_updated.is_directed():
-            topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS] = 1
-        return topology_weighted_graph
-
-    if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.MIXED:
-        return _add_graph_weights_mixed(topology_weighted_graph, reaction_attrs)
-
-    if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.CALIBRATED:
-        return _add_graph_weights_calibration(topology_weighted_graph, reaction_attrs)
-
-    raise ValueError(f"No logic implemented for {weighting_strategy}")
-
-
-def _create_napistu_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.DataFrame:
-    """Turn an sbml_dfs model into a bipartite graph linking molecules to reactions."""
-
-    # setup edges
-    network_edges = (
-        sbml_dfs.reaction_species.reset_index()[
-            [SBML_DFS.R_ID, SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY, SBML_DFS.SBO_TERM]
-        ]
-        # rename species and reactions to reflect from -> to edges
-        .rename(
-            columns={
-                SBML_DFS.SC_ID: NAPISTU_GRAPH_NODE_TYPES.SPECIES,
-                SBML_DFS.R_ID: NAPISTU_GRAPH_NODE_TYPES.REACTION,
-            }
-        )
-    )
-    # add back an r_id variable so that each edge is annotated by a reaction
-    network_edges[NAPISTU_GRAPH_EDGES.R_ID] = network_edges[
-        NAPISTU_GRAPH_NODE_TYPES.REACTION
-    ]
-
-    # add edge weights
-    cspecies_features = sbml_dfs.get_cspecies_features()
-    network_edges = network_edges.merge(
-        cspecies_features, left_on=NAPISTU_GRAPH_NODE_TYPES.SPECIES, right_index=True
-    )
-
-    # if directed then flip substrates and modifiers to the origin edge
-    edge_vars = network_edges.columns.tolist()
-
-    origins = network_edges[network_edges[SBML_DFS.STOICHIOMETRY] <= 0]
-    origin_edges = origins.loc[:, [edge_vars[1], edge_vars[0]] + edge_vars[2:]].rename(
-        columns={
-            NAPISTU_GRAPH_NODE_TYPES.SPECIES: NAPISTU_GRAPH_EDGES.FROM,
-            NAPISTU_GRAPH_NODE_TYPES.REACTION: NAPISTU_GRAPH_EDGES.TO,
-        }
-    )
-
-    dests = network_edges[network_edges[SBML_DFS.STOICHIOMETRY] > 0]
-    dest_edges = dests.rename(
-        columns={
-            NAPISTU_GRAPH_NODE_TYPES.REACTION: NAPISTU_GRAPH_EDGES.FROM,
-            NAPISTU_GRAPH_NODE_TYPES.SPECIES: NAPISTU_GRAPH_EDGES.TO,
-        }
-    )
-
-    network_edges = pd.concat([origin_edges, dest_edges])
-
-    return network_edges
-
-
-def _create_napistu_graph_tiered(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, graph_type: str
-) -> pd.DataFrame:
-    """Turn an sbml_dfs model into a tiered graph which links upstream entities to downstream ones."""
-
-    # check whether all expect SBO terms are present
-    invalid_sbo_terms = sbml_dfs.reaction_species[
-        ~sbml_dfs.reaction_species[SBML_DFS.SBO_TERM].isin(MINI_SBO_TO_NAME.keys())
-    ]
-
-    if invalid_sbo_terms.shape[0] != 0:
-        invalid_counts = invalid_sbo_terms.value_counts(SBML_DFS.SBO_TERM).to_frame("N")
-        if not isinstance(invalid_counts, pd.DataFrame):
-            raise TypeError("invalid_counts must be a pandas DataFrame")
-        logger.warning(utils.style_df(invalid_counts, headers="keys"))  # type: ignore
-        raise ValueError("Some reaction species have unusable SBO terms")
-
-    # load and validate the schema of graph_type
-    graph_hierarchy_df = _create_graph_hierarchy_df(graph_type)
-
     # organize reaction species for defining connections
-    sorted_reaction_species = sbml_dfs.reaction_species.set_index(
-        [SBML_DFS.R_ID, SBML_DFS.SBO_TERM]
-    ).sort_index()
-
     logger.info(
-        f"Formatting {sorted_reaction_species.shape[0]} reactions species as "
-        "tiered edges."
+        f"Turning {sbml_dfs.reaction_species.shape[0]} reactions species into edges."
     )
 
-    # infer tiered edges in each reaction
-    all_reaction_edges = [
-        _format_tiered_reaction_species(
-            r, sorted_reaction_species, sbml_dfs, graph_hierarchy_df
-        )
-        for r in sorted_reaction_species.index.get_level_values(SBML_DFS.R_ID).unique()
-    ]
-    all_reaction_edges_df = pd.concat(all_reaction_edges).reset_index(drop=True)
-
-    # test for reactions missing substrates
-    r_id_list = sorted_reaction_species.index.get_level_values(0).unique()
-    r_id_reactant_only = [
-        x for x in r_id_list if len(sorted_reaction_species.loc[x]) == 1
-    ]
-
-    if len(r_id_reactant_only) > 0:
-        logger.warning(f"{len(r_id_reactant_only)} reactions are missing substrates")
-        all_reaction_edges_df_pre = all_reaction_edges_df.copy()
-        all_reaction_edges_df = all_reaction_edges_df_pre[
-            ~all_reaction_edges_df_pre[SBML_DFS.R_ID].isin(r_id_reactant_only)
-        ]
+    all_reaction_edges_df = net_create_utils.wire_reaction_species(
+        sbml_dfs.reaction_species, wiring_approach, drop_reactions_when
+    )
 
     logger.info(
         "Adding additional attributes to edges, e.g., # of children and parents."
@@ -766,205 +469,334 @@ def _create_napistu_graph_tiered(
 
         raise ValueError(msg)
 
-    logger.info(f"Done preparing {graph_type} graph")
+    logger.info(f"Done preparing {wiring_approach} graph")
 
     return decorated_all_reaction_edges_df
 
 
-def _format_tiered_reaction_species(
-    r_id: str,
-    sorted_reaction_species: pd.DataFrame,
+def pluck_entity_data(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    graph_hierarchy_df: pd.DataFrame,
-) -> pd.DataFrame:
+    graph_attrs: dict[str, dict],
+    data_type: str,
+    custom_transformations: Optional[dict[str, callable]] = None,
+) -> pd.DataFrame | None:
     """
-    Format Tiered Reaction Species
+    Pluck Entity Attributes from an sbml_dfs based on a set of tables and variables to look for.
 
-    Refactor a reaction's species into tiered edges between substrates, products, enzymes and allosteric regulators.
+    Parameters
+    ----------
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        A mechanistic model.
+    graph_attrs : dict
+        A dictionary of species/reaction attributes to pull out. If the requested
+        data_type ("species" or "reactions") is not present as a key, or if the value
+        is an empty dict, this function will return None (no error).
+    data_type : str
+        "species" or "reactions" to pull out species_data or reactions_data.
+    custom_transformations : dict[str, callable], optional
+        A dictionary mapping transformation names to functions. If provided, these
+        will be checked before built-in transformations. Example:
+            custom_transformations = {"square": lambda x: x**2}
+
+    Returns
+    -------
+    pd.DataFrame or None
+        A table where all extracted attributes are merged based on a common index or None
+        if no attributes were extracted. If the requested data_type is not present in
+        graph_attrs, or if the attribute dict is empty, returns None. This is intended
+        to allow optional annotation blocks.
+
+    Raises
+    ------
+    ValueError
+        If data_type is not valid or if requested tables/variables are missing.
     """
 
-    rxn_species = sorted_reaction_species.loc[r_id]
-    if not isinstance(rxn_species, pd.DataFrame):
-        raise TypeError("rxn_species must be a pandas DataFrame")
-    if list(rxn_species.index.names) != [SBML_DFS.SBO_TERM]:
-        raise ValueError("rxn_species index names must be [SBML_DFS.SBO_TERM]")
-    if rxn_species.columns.tolist() != [SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY]:
+    if data_type not in ENTITIES_W_DATA:
         raise ValueError(
-            "rxn_species columns must be [SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY]"
+            f'"data_type" was {data_type} and must be in {", ".join(ENTITIES_W_DATA)}'
         )
 
-    rxn_sbo_terms = set(rxn_species.index.unique())
-    # map to common names
-    rxn_sbo_names = {MINI_SBO_TO_NAME[x] for x in rxn_sbo_terms}
-
-    # is the reaction a general purpose interaction
-    if len(rxn_sbo_names) == 1:
-        if list(rxn_sbo_names)[0] == SBOTERM_NAMES.INTERACTOR:
-            # further validation happens in the function - e.g., exactly two interactors
-            return _format_interactors_for_tiered_graph(r_id, rxn_species, sbml_dfs)
-
-    if SBOTERM_NAMES.INTERACTOR in rxn_sbo_names:
-        logger.warning(
-            f"Invalid combinations of SBO_terms in {str(r_id)} : {sbml_dfs.reactions.loc[r_id][SBML_DFS.R_NAME]}. "
-            "If interactors are present then there can't be any other types of reaction species. "
-            f"The following roles were defined: {', '.join(rxn_sbo_names)}"
+    if data_type not in graph_attrs.keys():
+        logger.info(
+            f'No {data_type} annotations provided in "graph_attrs"; returning None'
         )
+        return None
 
-    # reorganize molecules and the reaction itself into tiers
-    entities_ordered_by_tier = (
-        pd.concat(
-            [
-                (
-                    rxn_species.reset_index()
-                    .rename({SBML_DFS.SC_ID: "entity_id"}, axis=1)
-                    .merge(graph_hierarchy_df)
-                ),
-                graph_hierarchy_df[
-                    graph_hierarchy_df[NAPISTU_GRAPH_EDGES.SBO_NAME]
-                    == NAPISTU_GRAPH_NODE_TYPES.REACTION
-                ].assign(entity_id=r_id, r_id=r_id),
-            ]
+    entity_attrs = graph_attrs[data_type]
+    # validating dict
+    _validate_entity_attrs(entity_attrs, custom_transformations=custom_transformations)
+
+    if len(entity_attrs) == 0:
+        logger.info(
+            f'No attributes defined for "{data_type}" in graph_attrs; returning None'
         )
-        .sort_values(["tier"])
-        .set_index("tier")
+        return None
+
+    data_type_attr = data_type + "_data"
+    entity_data_tbls = getattr(sbml_dfs, data_type_attr)
+
+    data_list = list()
+    for k, v in entity_attrs.items():
+        # v["table"] is always present if entity_attrs is non-empty and validated
+        if v["table"] not in entity_data_tbls.keys():
+            raise ValueError(
+                f"{v['table']} was defined as a table in \"graph_attrs\" but "
+                f'it is not present in the "{data_type_attr}" of the sbml_dfs'
+            )
+
+        if v["variable"] not in entity_data_tbls[v["table"]].columns.tolist():
+            raise ValueError(
+                f"{v['variable']} was defined as a variable in \"graph_attrs\" but "
+                f"it is not present in the {v['table']} of the \"{data_type_attr}\" of "
+                "the sbml_dfs"
+            )
+
+        entity_series = entity_data_tbls[v["table"]][v["variable"]].rename(k)
+        trans_name = v.get("trans", DEFAULT_WT_TRANS)
+        # Look up transformation
+        if custom_transformations and trans_name in custom_transformations:
+            trans_fxn = custom_transformations[trans_name]
+        elif trans_name in DEFINED_WEIGHT_TRANSFORMATION:
+            trans_fxn = globals()[DEFINED_WEIGHT_TRANSFORMATION[trans_name]]
+        else:
+            # This should never be hit if _validate_entity_attrs is called correctly.
+            raise ValueError(
+                f"Transformation '{trans_name}' not found in custom_transformations or DEFINED_WEIGHT_TRANSFORMATION."
+            )
+        entity_series = entity_series.apply(trans_fxn)
+        data_list.append(entity_series)
+
+    if len(data_list) == 0:
+        return None
+
+    return pd.concat(data_list, axis=1)
+
+
+def apply_weight_transformations(
+    edges_df: pd.DataFrame, reaction_attrs: dict, custom_transformations: dict = None
+):
+    """
+    Apply Weight Transformations to edge attributes.
+
+    Parameters
+    ----------
+    edges_df : pd.DataFrame
+        A table of edges and their attributes extracted from a cpr_graph.
+    reaction_attrs : dict
+        A dictionary of attributes identifying weighting attributes within
+        an sbml_df's reaction_data, how they will be named in edges_df (the keys),
+        and how they should be transformed (the "trans" aliases).
+    custom_transformations : dict, optional
+        A dictionary mapping transformation names to functions. If provided, these
+        will be checked before built-in transformations.
+
+    Returns
+    -------
+    pd.DataFrame
+        edges_df with weight variables transformed.
+
+    Raises
+    ------
+    ValueError
+        If a weighting variable is missing or transformation is not found.
+    """
+
+    _validate_entity_attrs(
+        reaction_attrs, custom_transformations=custom_transformations
     )
-    ordered_tiers = entities_ordered_by_tier.index.get_level_values("tier").unique()
 
-    if len(ordered_tiers) <= 1:
-        raise ValueError("ordered_tiers must have more than one element")
+    transformed_edges_df = copy.deepcopy(edges_df)
+    for k, v in reaction_attrs.items():
+        if k not in transformed_edges_df.columns:
+            raise ValueError(f"A weighting variable {k} was missing from edges_df")
 
-    # which tier is the reaction?
-    reaction_tier = graph_hierarchy_df["tier"][
-        graph_hierarchy_df[NAPISTU_GRAPH_EDGES.SBO_NAME]
-        == NAPISTU_GRAPH_NODE_TYPES.REACTION
-    ].tolist()[0]
+        trans_name = v["trans"]
+        # Look up transformation
+        if custom_transformations and trans_name in custom_transformations:
+            trans_fxn = custom_transformations[trans_name]
+        elif trans_name in DEFINED_WEIGHT_TRANSFORMATION:
+            trans_fxn = globals()[DEFINED_WEIGHT_TRANSFORMATION[trans_name]]
+        else:
+            # This should never be hit if _validate_entity_attrs is called correctly.
+            raise ValueError(
+                f"Transformation '{trans_name}' not found in custom_transformations or DEFINED_WEIGHT_TRANSFORMATION."
+            )
 
-    rxn_edges = list()
-    past_reaction = False
-    for i in range(0, len(ordered_tiers) - 1):
-        formatted_tier_combo = _format_tier_combo(
-            entities_ordered_by_tier.loc[[ordered_tiers[i]]],
-            entities_ordered_by_tier.loc[[ordered_tiers[i + 1]]],
-            past_reaction,
+        transformed_edges_df[k] = transformed_edges_df[k].apply(trans_fxn)
+
+    return transformed_edges_df
+
+
+def summarize_weight_calibration(
+    napistu_graph: NapistuGraph, reaction_attrs: dict
+) -> None:
+    """
+    Summarize Weight Calibration for a network with multiple sources for edge weights.
+
+    Parameters
+    ----------
+    napistu_graph : NapistuGraph
+        A graph where edge weights have already been calibrated.
+    reaction_attrs : dict
+        A dictionary summarizing the types of weights that exist and how they are transformed for calibration.
+
+    Returns
+    -------
+    None
+    """
+
+    score_calibration_df = pd.DataFrame(SCORE_CALIBRATION_POINTS_DICT)
+    score_calibration_df_calibrated = apply_weight_transformations(
+        score_calibration_df, reaction_attrs
+    )
+
+    calibrated_edges = napistu_graph.get_edge_dataframe()
+
+    _summarize_weight_calibration_table(
+        calibrated_edges, score_calibration_df, score_calibration_df_calibrated
+    )
+
+    _summarize_weight_calibration_plots(
+        calibrated_edges, score_calibration_df_calibrated
+    )
+
+    return None
+
+
+def add_graph_weights(
+    napistu_graph: NapistuGraph,
+    reaction_attrs: dict,
+    weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
+) -> NapistuGraph:
+    """
+    Add Graph Weights to a NapistuGraph using a specified weighting strategy.
+
+    Parameters
+    ----------
+    napistu_graph : NapistuGraph
+        A graphical network of molecules/reactions (nodes) and edges linking them (subclass of igraph.Graph).
+    reaction_attrs : dict
+        An optional dict of reaction attributes.
+    weighting_strategy : str, optional
+        A network weighting strategy. Options:
+            - 'unweighted': all weights (and upstream_weights for directed graphs) are set to 1.
+            - 'topology': weight edges by the degree of the source nodes favoring nodes emerging from nodes with few connections.
+            - 'mixed': transform edges with a quantitative score based on reaction_attrs; and set edges without quantitative score as a source-specific weight.
+            - 'calibrated': transform edges with a quantitative score based on reaction_attrs and combine them with topology scores to generate a consensus.
+
+    Returns
+    -------
+    NapistuGraph
+        The weighted NapistuGraph.
+
+    Raises
+    ------
+    ValueError
+        If weighting_strategy is not valid.
+    """
+
+    napistu_graph_updated = copy.deepcopy(napistu_graph)
+
+    _validate_entity_attrs(reaction_attrs)
+
+    if weighting_strategy not in VALID_WEIGHTING_STRATEGIES:
+        raise ValueError(
+            f"weighting_strategy was {weighting_strategy} and must be one of: "
+            f"{', '.join(VALID_WEIGHTING_STRATEGIES)}"
         )
 
-        if ordered_tiers[i + 1] == reaction_tier:
-            past_reaction = True
+    # count parents and children and create weights based on them
+    topology_weighted_graph = _create_topology_weights(napistu_graph_updated)
 
-        rxn_edges.append(formatted_tier_combo)
+    if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY:
+        topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.WEIGHTS] = (
+            topology_weighted_graph.es["topo_weights"]
+        )
+        if napistu_graph_updated.is_directed():
+            topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS] = (
+                topology_weighted_graph.es["upstream_topo_weights"]
+            )
 
-    rxn_edges_df = (
-        pd.concat(rxn_edges)[
-            [
-                NAPISTU_GRAPH_EDGES.FROM,
-                NAPISTU_GRAPH_EDGES.TO,
-                NAPISTU_GRAPH_EDGES.STOICHIOMETRY,
-                NAPISTU_GRAPH_EDGES.SBO_TERM,
-            ]
+        return topology_weighted_graph
+
+    if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED:
+        # set weights as a constant
+        topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.WEIGHTS] = 1
+        if napistu_graph_updated.is_directed():
+            topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS] = 1
+        return topology_weighted_graph
+
+    if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.MIXED:
+        return _add_graph_weights_mixed(topology_weighted_graph, reaction_attrs)
+
+    if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.CALIBRATED:
+        return _add_graph_weights_calibration(topology_weighted_graph, reaction_attrs)
+
+    raise ValueError(f"No logic implemented for {weighting_strategy}")
+
+
+def _create_napistu_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.DataFrame:
+    """
+    Turn an sbml_dfs model into a bipartite graph linking molecules to reactions.
+
+    Parameters
+    ----------
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The SBML_dfs object containing the model data.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame representing the bipartite network edges.
+    """
+
+    # setup edges
+    network_edges = (
+        sbml_dfs.reaction_species.reset_index()[
+            [SBML_DFS.R_ID, SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY, SBML_DFS.SBO_TERM]
         ]
-        .reset_index(drop=True)
-        .assign(r_id=r_id)
-    )
-
-    return rxn_edges_df
-
-
-def _format_tier_combo(
-    upstream_tier: pd.DataFrame, downstream_tier: pd.DataFrame, past_reaction: bool
-) -> pd.DataFrame:
-    """
-    Format Tier Combo
-
-    Create a set of edges crossing two tiers of a tiered graph. This will involve an
-      all x all combination of entries. Tiers form an ordering along the molecular entities
-      in a reaction plus a tier for the reaction itself. Attributes such as stoichiometry
-      and sbo_term will be passed from the tier which is furthest from the reaction tier
-      to ensure that each tier of molecular data applies its attributes to a single set of
-      edges while the "reaction" tier does not. Reaction entities have neither a
-      stoichiometery or sbo_term annotation.
-
-    Args:
-        upstream_tier (pd.DataFrame): A table containing upstream entities in a reaction,
-            e.g., regulators.
-        downstream_tier (pd.DataFrame): A table containing downstream entities in a reaction,
-            e.g., catalysts.
-        past_reaction (bool): if True then attributes will be taken from downstream_tier and
-            if False they will come from upstream_tier.
-
-    Returns:
-        formatted_tier_combo (pd.DataFrame): A table of edges containing (from, to, stoichiometry, sbo_term, r_id). The
-        number of edges is the product of the number of entities in the upstream tier
-        times the number in the downstream tier.
-
-    """
-
-    upstream_fields = ["entity_id", SBML_DFS.STOICHIOMETRY, SBML_DFS.SBO_TERM]
-    downstream_fields = ["entity_id"]
-
-    if past_reaction:
-        # swap fields
-        upstream_fields, downstream_fields = downstream_fields, upstream_fields
-
-    formatted_tier_combo = (
-        upstream_tier[upstream_fields]
-        .rename({"entity_id": NAPISTU_GRAPH_EDGES.FROM}, axis=1)
-        .assign(_joiner=1)
-    ).merge(
-        (
-            downstream_tier[downstream_fields]
-            .rename({"entity_id": NAPISTU_GRAPH_EDGES.TO}, axis=1)
-            .assign(_joiner=1)
-        ),
-        left_on="_joiner",
-        right_on="_joiner",
-    )
-
-    return formatted_tier_combo
-
-
-def _create_graph_hierarchy_df(graph_type: str) -> pd.DataFrame:
-    """
-    Create Graph Hierarchy DataFrame
-
-    Format a graph hierarchy list of lists and a pd.DataFrame
-
-    Args:
-        graph_type (str):
-            The type of tiered graph to work with. Each type has its own specification in constants.py.
-
-    Returns:
-        A pandas DataFrame with sbo_name, tier, and sbo_term.
-
-    """
-
-    if graph_type == NAPISTU_GRAPH_TYPES.REGULATORY:
-        sbo_names_hierarchy = REGULATORY_GRAPH_HIERARCHY
-    elif graph_type == NAPISTU_GRAPH_TYPES.SURROGATE:
-        sbo_names_hierarchy = SURROGATE_GRAPH_HIERARCHY
-    else:
-        raise NotImplementedError(f"{graph_type} is not a valid graph_type")
-
-    # format as a DF
-    graph_hierarchy_df = pd.concat(
-        [
-            pd.DataFrame({"sbo_name": sbo_names_hierarchy[i]}).assign(tier=i)
-            for i in range(0, len(sbo_names_hierarchy))
-        ]
-    ).reset_index(drop=True)
-    graph_hierarchy_df[SBML_DFS.SBO_TERM] = graph_hierarchy_df["sbo_name"].apply(
-        lambda x: (
-            MINI_SBO_FROM_NAME[x] if x != NAPISTU_GRAPH_NODE_TYPES.REACTION else ""
+        # rename species and reactions to reflect from -> to edges
+        .rename(
+            columns={
+                SBML_DFS.SC_ID: NAPISTU_GRAPH_NODE_TYPES.SPECIES,
+                SBML_DFS.R_ID: NAPISTU_GRAPH_NODE_TYPES.REACTION,
+            }
         )
     )
+    # add back an r_id variable so that each edge is annotated by a reaction
+    network_edges[NAPISTU_GRAPH_EDGES.R_ID] = network_edges[
+        NAPISTU_GRAPH_NODE_TYPES.REACTION
+    ]
 
-    # ensure that the output is expected
-    utils.match_pd_vars(
-        graph_hierarchy_df,
-        req_vars={NAPISTU_GRAPH_EDGES.SBO_NAME, "tier", SBML_DFS.SBO_TERM},
-        allow_series=False,
-    ).assert_present()
+    # add edge weights
+    cspecies_features = sbml_dfs.get_cspecies_features()
+    network_edges = network_edges.merge(
+        cspecies_features, left_on=NAPISTU_GRAPH_NODE_TYPES.SPECIES, right_index=True
+    )
 
-    return graph_hierarchy_df
+    # if directed then flip substrates and modifiers to the origin edge
+    edge_vars = network_edges.columns.tolist()
+
+    origins = network_edges[network_edges[SBML_DFS.STOICHIOMETRY] <= 0]
+    origin_edges = origins.loc[:, [edge_vars[1], edge_vars[0]] + edge_vars[2:]].rename(
+        columns={
+            NAPISTU_GRAPH_NODE_TYPES.SPECIES: NAPISTU_GRAPH_EDGES.FROM,
+            NAPISTU_GRAPH_NODE_TYPES.REACTION: NAPISTU_GRAPH_EDGES.TO,
+        }
+    )
+
+    dests = network_edges[network_edges[SBML_DFS.STOICHIOMETRY] > 0]
+    dest_edges = dests.rename(
+        columns={
+            NAPISTU_GRAPH_NODE_TYPES.REACTION: NAPISTU_GRAPH_EDGES.FROM,
+            NAPISTU_GRAPH_NODE_TYPES.SPECIES: NAPISTU_GRAPH_EDGES.TO,
+        }
+    )
+
+    network_edges = pd.concat([origin_edges, dest_edges])
+
+    return network_edges
 
 
 def _add_graph_weights_mixed(
@@ -1162,7 +994,23 @@ def _summarize_weight_calibration_table(
     score_calibration_df: pd.DataFrame,
     score_calibration_df_calibrated: pd.DataFrame,
 ):
-    """Create a table comparing edge weights from multiple sources."""
+    """
+    Create a table comparing edge weights from multiple sources.
+
+    Parameters
+    ----------
+    calibrated_edges : pd.DataFrame
+        DataFrame of calibrated edge weights.
+    score_calibration_df : pd.DataFrame
+        DataFrame of raw calibration points.
+    score_calibration_df_calibrated : pd.DataFrame
+        DataFrame of calibrated calibration points.
+
+    Returns
+    -------
+    pd.DataFrame
+        Styled DataFrame summarizing calibration points and quantiles.
+    """
 
     # generate a table summarizing different scoring measures
     #
@@ -1214,7 +1062,20 @@ def _summarize_weight_calibration_table(
 def _summarize_weight_calibration_plots(
     calibrated_edges: pd.DataFrame, score_calibration_df_calibrated: pd.DataFrame
 ) -> None:
-    """Create a couple of plots summarizing the relationships between different scoring measures."""
+    """
+    Create plots summarizing the relationships between different scoring measures.
+
+    Parameters
+    ----------
+    calibrated_edges : pd.DataFrame
+        DataFrame of calibrated edge weights.
+    score_calibration_df_calibrated : pd.DataFrame
+        DataFrame of calibrated calibration points.
+
+    Returns
+    -------
+    None
+    """
 
     # set up a 2 x 1 plot
     f, (ax1, ax2) = plt.subplots(1, 2)
@@ -1240,28 +1101,24 @@ def _create_source_weights(
     source_vars_dict: dict = SOURCE_VARS_DICT,
     source_wt_default: int = 1,
 ) -> pd.DataFrame:
-    """ "
-    Create Source Weights
+    """
+    Create weights based on an edge's source.
 
-    Create weights based on an edges source. This is a simple but crude way of allowing different
-    data sources to have different support if we think that some are more trustworthly than others.
+    Parameters
+    ----------
+    edges_df : pd.DataFrame
+        The edges dataframe to add the source weights to.
+    source_wt_var : str, optional
+        The name of the column to store the source weights. Default is "source_wt".
+    source_vars_dict : dict, optional
+        Dictionary with keys indicating edge attributes and values indicating the weight to assign to that attribute. Default is SOURCE_VARS_DICT.
+    source_wt_default : int, optional
+        The default weight to assign to an edge if no other weight attribute is found. Default is 1.
 
-    Args:
-        edges_df: pd.DataFrame
-            The edges dataframe to add the source weights to.
-        source_wt_var: str
-            The name of the column to store the source weights.
-        source_vars_dict: dict
-            Dictionary with keys indicating edge attributes and values indicating the weight to assign
-            to that attribute. This value is generally the largest weight that can be assigned to an
-            edge so that the numeric weight is chosen over the default.
-        source_wt_default: int
-            The default weight to assign to an edge if no other weight attribute is found.
-
-    Returns:
-        pd.DataFrame
-            The edges dataframe with the source weights added.
-
+    Returns
+    -------
+    pd.DataFrame
+        The edges dataframe with the source weights added.
     """
 
     logger.warning(
@@ -1299,134 +1156,59 @@ def _create_source_weights(
 
 
 def _wt_transformation_identity(x):
-    """Identity"""
+    """
+    Identity transformation for weights.
+
+    Parameters
+    ----------
+    x : any
+        Input value.
+
+    Returns
+    -------
+    any
+        The input value unchanged.
+    """
     return x
 
 
 def _wt_transformation_string(x):
-    """Map STRING scores to a similar scale as topology weights."""
+    """
+    Map STRING scores to a similar scale as topology weights.
 
+    Parameters
+    ----------
+    x : float
+        STRING score.
+
+    Returns
+    -------
+    float
+        Transformed STRING score.
+    """
     return 250000 / np.power(x, 1.7)
 
 
 def _wt_transformation_string_inv(x):
-    """Map STRING scores so they work with source weights."""
+    """
+    Map STRING scores so they work with source weights.
 
+    Parameters
+    ----------
+    x : float
+        STRING score.
+
+    Returns
+    -------
+    float
+        Inverse transformed STRING score.
+    """
     # string scores are bounded on [0, 1000]
     # and score/1000 is roughly a probability that
     # there is a real interaction (physical, genetic, ...)
     # reported string scores are currently on [150, 1000]
     # so this transformation will map these onto {6.67, 1}
-
     return 1 / (x / 1000)
-
-
-def _format_interactors_for_tiered_graph(
-    r_id: str, rxn_species: pd.DataFrame, sbml_dfs: sbml_dfs_core.SBML_dfs
-) -> pd.DataFrame:
-    """Format an undirected interactions for tiered graph so interactions are linked even though they would be on the same tier."""
-
-    interactor_data = rxn_species.loc[MINI_SBO_FROM_NAME["interactor"]]
-    if interactor_data.shape[0] != 2:
-        raise ValueError(
-            f"{interactor_data.shape[0]} interactors present for {str(r_id)} : "
-            f"{sbml_dfs.reactions.loc[r_id]['r_name']}. "
-            "Reactions with interactors must have exactly two interactors"
-        )
-
-    if not (interactor_data["stoichiometry"] == 0).any():
-        raise ValueError(
-            f"Interactors had non-zero stoichiometry for {str(r_id)} : {sbml_dfs.reactions.loc[r_id]['r_name']}. "
-            "If stoichiometry is important for this reaction then it should use other SBO terms "
-            "(e.g., substrate and product)."
-        )
-
-    # set the first entry as "from" and second as "to" if stoi is zero.
-    # the reverse reaction will generally be added later because these
-    # reactions should be reversible
-
-    return pd.DataFrame(
-        {
-            "from": interactor_data["sc_id"].iloc[0],
-            "to": interactor_data["sc_id"].iloc[1],
-            "sbo_term": MINI_SBO_FROM_NAME["interactor"],
-            "stoichiometry": 0,
-            "r_id": r_id,
-        },
-        index=[0],
-    )
-
-
-def _add_graph_species_attribute(
-    napistu_graph: NapistuGraph,
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
-    species_graph_attrs: dict,
-    custom_transformations: Optional[dict] = None,
-) -> NapistuGraph:
-    """
-    Add meta-data from species_data to existing NapistuGraph's vertices.
-
-    This function augments the vertices of a NapistuGraph network with additional attributes
-    derived from the species-level data in the provided SBML_dfs object. The attributes
-    to add are specified in the species_graph_attrs dictionary, and can be transformed
-    using either built-in or user-supplied transformation functions.
-
-    Parameters
-    ----------
-    napistu_graph : NapistuGraph
-        The NapistuGraph network to augment (subclass of igraph.Graph).
-    sbml_dfs : sbml_dfs_core.SBML_dfs
-        The SBML_dfs object containing species data.
-    species_graph_attrs : dict
-        Dictionary specifying which attributes to pull from species_data and how to transform them.
-        The structure should be {attribute_name: {"table": ..., "variable": ..., "trans": ...}}.
-    custom_transformations : dict, optional
-        Dictionary mapping transformation names to functions. If provided, these will be checked
-        before built-in transformations. Example: {"square": lambda x: x**2}
-
-    Returns
-    -------
-    NapistuGraph
-        The input NapistuGraph with additional vertex attributes added from species_data.
-    """
-    if not isinstance(species_graph_attrs, dict):
-        raise TypeError(
-            f"species_graph_attrs must be a dict, but was {type(species_graph_attrs)}"
-        )
-
-    # fail fast if species_graph_attrs is not properly formatted
-    # also flatten attribute list to be added to vertex nodes
-    sp_graph_key_list = []
-    sp_node_attr_list = []
-    for k in species_graph_attrs.keys():
-        _validate_entity_attrs(
-            species_graph_attrs[k], custom_transformations=custom_transformations
-        )
-
-        sp_graph_key_list.append(k)
-        sp_node_attr_list.append(list(species_graph_attrs[k].keys()))
-
-    # flatten sp_node_attr_list
-    flat_sp_node_attr_list = [item for items in sp_node_attr_list for item in items]
-
-    logger.info("Adding meta-data from species_data")
-
-    curr_network_nodes_df = napistu_graph.get_vertex_dataframe()
-
-    # add species-level attributes to nodes dataframe
-    augmented_network_nodes_df = _augment_network_nodes(
-        curr_network_nodes_df,
-        sbml_dfs,
-        species_graph_attrs,
-        custom_transformations=custom_transformations,
-    )
-
-    for vs_attr in flat_sp_node_attr_list:
-        # in case more than one vs_attr in the flat_sp_node_attr_list
-        logger.info(f"Adding new attribute {vs_attr} to vertices")
-        napistu_graph.vs[vs_attr] = augmented_network_nodes_df[vs_attr].values
-
-    return napistu_graph
 
 
 def _augment_network_nodes(
@@ -1448,7 +1230,7 @@ def _augment_network_nodes(
         DataFrame of network nodes. Must include columns 'name', 'node_name', and 'node_type'.
     sbml_dfs : sbml_dfs_core.SBML_dfs
         The SBML_dfs object containing species data.
-    species_graph_attrs : dict
+    species_graph_attrs : dict, optional
         Dictionary specifying which attributes to pull from species_data and how to transform them.
         The structure should be {attribute_name: {"table": ..., "variable": ..., "trans": ...}}.
     custom_transformations : dict, optional
@@ -1459,6 +1241,11 @@ def _augment_network_nodes(
     -------
     pd.DataFrame
         The input network_nodes DataFrame with additional columns for each extracted and transformed attribute.
+
+    Raises
+    ------
+    ValueError
+        If required attributes are missing from network_nodes.
     """
     REQUIRED_NETWORK_NODE_ATTRS = {
         "name",
@@ -1522,7 +1309,8 @@ def _augment_network_edges(
     reaction_graph_attrs: dict = dict(),
     custom_transformations: Optional[dict] = None,
 ) -> pd.DataFrame:
-    """Add reversibility and other metadata from reactions.
+    """
+    Add reversibility and other metadata from reactions.
 
     Parameters
     ----------
@@ -1530,10 +1318,20 @@ def _augment_network_edges(
         DataFrame of network edges.
     sbml_dfs : sbml_dfs_core.SBML_dfs
         The SBML_dfs object containing reaction data.
-    reaction_graph_attrs : dict
+    reaction_graph_attrs : dict, optional
         Dictionary of reaction attributes to add.
     custom_transformations : dict, optional
         Dictionary of custom transformation functions to use for attribute transformation.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame of network edges with additional metadata.
+
+    Raises
+    ------
+    ValueError
+        If required attributes are missing from network_edges.
     """
     REQUIRED_NETWORK_EDGE_ATTRS = {
         "from",
@@ -1583,7 +1381,24 @@ def _augment_network_edges(
 
 
 def _reverse_network_edges(augmented_network_edges: pd.DataFrame) -> pd.DataFrame:
-    """Flip reversible reactions to derive the reverse reaction."""
+    """
+    Flip reversible reactions to derive the reverse reaction.
+
+    Parameters
+    ----------
+    augmented_network_edges : pd.DataFrame
+        DataFrame of network edges with metadata.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with reversed edges for reversible reactions.
+
+    Raises
+    ------
+    ValueError
+        If required variables are missing or if the transformation fails.
+    """
 
     # validate inputs
     required_vars = {NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO}
@@ -1684,27 +1499,36 @@ def _create_topology_weights(
     scale_multiplier_by_meandegree: bool = True,
 ) -> ig.Graph:
     """
-    Create Topology Weights
+    Create Topology Weights for a network based on its topology.
 
-    Add weights to a network based on its topology. Edges downstream of nodes
-    with many connections receive a higher weight suggesting that any one
-    of them is less likely to be regulatory. This is a simple and clearly
-    flawed heuristic which can be combined with more principled weighting
-    schemes.
+    Edges downstream of nodes with many connections receive a higher weight suggesting that any one
+    of them is less likely to be regulatory. This is a simple and clearly flawed heuristic which can be
+    combined with more principled weighting schemes.
 
-    Args:
-        napistu_graph (ig.Graph): a graph containing connections between molecules, proteins, and reactions.
-        base_score (float): offset which will be added to all weights.
-        protein_multiplier (int): multiplier for non-metabolite species (lower weight paths will tend to be selected).
-        metabolite_multiplier (int): multiplier for metabolites [defined a species with a ChEBI ID).
-        unknown_multiplier (int): multiplier for species without any identifier. See sbml_dfs_utils.species_type_types.
-        scale_multiplier_by_meandegree (bool): if True then multipliers will be rescaled by the average number of
-            connections a node has (i.e., its degree) so that weights will be relatively similar regardless of network
-            size and sparsity.
+    Parameters
+    ----------
+    napistu_graph : ig.Graph
+        A graph containing connections between molecules, proteins, and reactions.
+    base_score : float, optional
+        Offset which will be added to all weights. Default is 2.
+    protein_multiplier : int, optional
+        Multiplier for non-metabolite species. Default is 1.
+    metabolite_multiplier : int, optional
+        Multiplier for metabolites. Default is 3.
+    unknown_multiplier : int, optional
+        Multiplier for species without any identifier. Default is 10.
+    scale_multiplier_by_meandegree : bool, optional
+        If True, multipliers will be rescaled by the average number of connections a node has. Default is True.
 
-    Returns:
-        napistu_graph (ig.Graph): graph with added topology weights
+    Returns
+    -------
+    ig.Graph
+        Graph with added topology weights.
 
+    Raises
+    ------
+    ValueError
+        If required attributes are missing or if parameters are invalid.
     """
 
     # check for required attribute before proceeding
@@ -1816,17 +1640,17 @@ def _validate_entity_attrs(
     validate_transformations: bool = True,
     custom_transformations: Optional[dict] = None,
 ) -> None:
-    """Validate that graph attributes are a valid format.
+    """
+    Validate that graph attributes are a valid format.
 
     Parameters
     ----------
     entity_attrs : dict
-        Dictionary of entity attributes to validate
+        Dictionary of entity attributes to validate.
     validate_transformations : bool, optional
-        Whether to validate transformation names, by default True
-    custom_transformations : Optional[dict], optional
-        Dictionary of custom transformation functions, by default None
-        Keys are transformation names, values are transformation functions
+        Whether to validate transformation names, by default True.
+    custom_transformations : dict, optional
+        Dictionary of custom transformation functions, by default None. Keys are transformation names, values are transformation functions.
 
     Returns
     -------
@@ -1835,9 +1659,9 @@ def _validate_entity_attrs(
     Raises
     ------
     AssertionError
-        If entity_attrs is not a dictionary
+        If entity_attrs is not a dictionary.
     ValueError
-        If a transformation is not found in DEFINED_WEIGHT_TRANSFORMATION or custom_transformations
+        If a transformation is not found in DEFINED_WEIGHT_TRANSFORMATION or custom_transformations.
     """
     assert isinstance(entity_attrs, dict), "entity_attrs must be a dictionary"
 

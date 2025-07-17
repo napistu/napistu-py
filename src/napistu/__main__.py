@@ -12,7 +12,7 @@ import click_logging
 import napistu
 import igraph as ig
 import pandas as pd
-from napistu import consensus as cpr_consensus
+from napistu import consensus as napistu_consensus
 from napistu import indices
 from napistu import sbml_dfs_core
 from napistu import utils
@@ -65,7 +65,7 @@ def ingestion():
     "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
 )
 @click_logging.simple_verbosity_option(logger)
-def load_reactome(base_folder: str, overwrite=True):
+def ingest_reactome(base_folder: str, overwrite=True):
     logger.info("Start downloading Reactome to %s", base_folder)
     reactome.reactome_sbml_download(f"{base_folder}/sbml", overwrite=overwrite)
 
@@ -76,7 +76,7 @@ def load_reactome(base_folder: str, overwrite=True):
     "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
 )
 @click_logging.simple_verbosity_option(logger)
-def load_bigg(base_folder: str, overwrite: bool):
+def ingest_bigg(base_folder: str, overwrite: bool):
     logger.info("Start downloading Bigg to %s", base_folder)
     bigg.bigg_sbml_download(base_folder, overwrite)
 
@@ -84,7 +84,7 @@ def load_bigg(base_folder: str, overwrite: bool):
 @ingestion.command(name="trrust")
 @click.argument("target_uri", type=str)
 @click_logging.simple_verbosity_option(logger)
-def load_ttrust(target_uri: str):
+def ingest_ttrust(target_uri: str):
     logger.info("Start downloading TRRUST to %s", target_uri)
     trrust.download_trrust(target_uri)
 
@@ -98,7 +98,7 @@ def load_ttrust(target_uri: str):
     help="URL to download the zipped protein atlas subcellular localization tsv from.",
 )
 @click_logging.simple_verbosity_option(logger)
-def load_proteinatlas_subcell(target_uri: str, url: str):
+def ingest_proteinatlas_subcell(target_uri: str, url: str):
     hpa.download_hpa_data(target_uri, url)
 
 
@@ -111,7 +111,7 @@ def load_proteinatlas_subcell(target_uri: str, url: str):
     help="URL to download the gtex file from.",
 )
 @click_logging.simple_verbosity_option(logger)
-def load_gtex_rnaseq(target_uri: str, url: str):
+def ingest_gtex_rnaseq(target_uri: str, url: str):
     gtex.download_gtex_rnaseq(target_uri, url)
 
 
@@ -124,7 +124,7 @@ def load_gtex_rnaseq(target_uri: str, url: str):
     help="Species name (e.g., Homo sapiens).",
 )
 @click_logging.simple_verbosity_option(logger)
-def load_string_db(target_uri: str, species: str):
+def ingest_string_db(target_uri: str, species: str):
     string.download_string(target_uri, species)
 
 
@@ -137,7 +137,7 @@ def load_string_db(target_uri: str, species: str):
     help="Species name (e.g., Homo sapiens).",
 )
 @click_logging.simple_verbosity_option(logger)
-def load_string_aliases(target_uri: str, species: str):
+def ingest_string_aliases(target_uri: str, species: str):
     string.download_string_aliases(target_uri, species)
 
 
@@ -289,7 +289,7 @@ def create_consensus(
     )
     pw_index_df["species"] = "unknown"
     pw_index = indices.PWIndex(pw_index=pw_index_df, validate_paths=False)
-    consensus_model = cpr_consensus.construct_consensus_model(
+    consensus_model = napistu_consensus.construct_consensus_model(
         sbml_dfs_dict, pw_index, dogmatic
     )
     utils.save_pickle(output_model_uri, consensus_model)
@@ -621,7 +621,11 @@ def exporter():
     "--format", "-f", default="pickle", help="Output format: gml, edgelist, pickle"
 )
 @click.option(
-    "--graph_type", "-g", type=str, default="bipartite", help="bipartite or regulatory"
+    "--wiring_approach",
+    "-g",
+    type=str,
+    default="bipartite",
+    help="bipartite or regulatory",
 )
 @click.option(
     "--weighting_strategy",
@@ -645,7 +649,7 @@ def export_igraph(
     output_uri: str,
     graph_attrs_spec_uri: str | None,
     format: str,
-    graph_type: str,
+    wiring_approach: str,
     weighting_strategy: str,
     directed: bool,
     reverse: bool,
@@ -663,7 +667,7 @@ def export_igraph(
         reaction_graph_attrs=graph_attrs_spec,
         directed=directed,
         edge_reversed=reverse,
-        graph_type=graph_type,
+        wiring_approach=wiring_approach,
         weighting_strategy=weighting_strategy,
         verbose=True,
     )
@@ -753,7 +757,7 @@ def export_precomputed_distances(
         weights_vars=weights_vars_list,
     )
 
-    precompute.save_precomputed_distances(precomputed_distances, output_uri)
+    utils.save_parquet(precomputed_distances, output_uri)
 
 
 @exporter.command(name="export_smbl_dfs_tables")
@@ -853,6 +857,17 @@ def copy_uri(input_uri, output_uri, is_file=True):
     """Copy a uri representing a file or folder from one location to another"""
     logger.info("Copy uri from %s to %s", input_uri, output_uri)
     utils.copy_uri(input_uri, output_uri, is_file=is_file)
+
+
+@helpers.command(name="validate_sbml_dfs")
+@click.argument("input_uri", type=str)
+@click_logging.simple_verbosity_option(logger)
+def validate_sbml_dfs(input_uri):
+    """Validate a sbml_dfs object"""
+    sbml_dfs = utils.load_pickle(input_uri)
+    sbml_dfs.validate()
+
+    logger.info(f"Successfully validated: {input_uri}")
 
 
 @click.group()

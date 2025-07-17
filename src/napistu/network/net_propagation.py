@@ -1,146 +1,696 @@
-import inspect
-from typing import Optional, Union
+from dataclasses import dataclass
+import logging
+from typing import Optional, Union, List, Dict, Any
 
 import pandas as pd
 import numpy as np
 import igraph as ig
+import scipy.stats as stats
 
-from napistu.network.napistu_graph_core import NapistuGraph
+from napistu.network.ig_utils import (
+    _parse_mask_input,
+    _get_attribute_masks,
+    _ensure_valid_attribute,
+)
+from napistu.statistics.quantiles import calculate_quantiles
+from napistu.network.constants import (
+    MASK_KEYWORDS,
+    NAPISTU_GRAPH_VERTICES,
+    NET_PROPAGATION_DEFS,
+    NULL_STRATEGIES,
+    PARAMETRIC_NULL_DEFAULT_DISTRIBUTION,
+    VALID_NULL_STRATEGIES,
+)
+
+logger = logging.getLogger(__name__)
 
 
-def personalized_pagerank_by_attribute(
-    napistu_graph: Union[NapistuGraph, ig.Graph],
-    attribute: str,
-    damping: float = 0.85,
-    calculate_uniform_dist: bool = True,
+@dataclass
+class PropagationMethod:
+    method: callable
+    non_negative: bool
+
+
+def network_propagation_with_null(
+    graph: ig.Graph,
+    attributes: List[str],
+    null_strategy: str = NULL_STRATEGIES.NODE_PERMUTATION,
+    propagation_method: Union[
+        str, PropagationMethod
+    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
     additional_propagation_args: Optional[dict] = None,
+    n_samples: int = 100,
+    **null_kwargs,
 ) -> pd.DataFrame:
     """
-    Run personalized PageRank with reset probability proportional to a vertex attribute.
-    Optionally computes uniform PPR over nonzero attribute nodes.
+    Apply network propagation to attributes and compare against null distributions.
+
+    This is the main orchestrator function that:
+    1. Calculates observed propagated scores
+    2. Generates null distribution using specified strategy
+    3. Compares observed vs null using quantiles (for sampled nulls) or ratios (for uniform)
 
     Parameters
     ----------
-    napistu_graph : NapistuGraph
-        The input graph (subclass of igraph.Graph).
-    attribute : str
-        The vertex attribute to use for personalization.
-    damping : float, optional
-        Damping factor (default 0.85).
-    calculate_uniform_dist : bool, optional
-        If True, also compute uniform PPR over nonzero attribute nodes.
+    graph : ig.Graph
+        Input graph.
+    attributes : List[str]
+        Attribute names to propagate and test.
+    null_strategy : str
+        Null distribution strategy. One of: 'uniform', 'parametric', 'node_permutation', 'edge_permutation'.
+    propagation_method : str or PropagationMethod
+        Network propagation method to apply.
     additional_propagation_args : dict, optional
-        Additional arguments to pass to igraph's personalized_pagerank. Keys must match the method's signature.
+        Additional arguments to pass to the network propagation method.
+    n_samples : int
+        Number of null samples to generate (ignored for uniform null).
+    **null_kwargs
+        Additional arguments to pass to the null generator (e.g., mask, burn_in_ratio, etc.).
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with columns ['name', 'pagerank_by_attribute', attribute] and optionally 'pagerank_uniform'.
+        DataFrame with same structure as observed scores containing:
+        - For uniform null: observed/uniform ratios
+        - For other nulls: quantiles (proportion of null values <= observed values)
 
-    Example
-    -------
-    >>> import igraph as ig
-    >>> from napistu.network.net_propagation import personalized_pagerank_by_attribute
-    >>> g = ig.Graph.Full(3)
-    >>> g.vs['name'] = ['A', 'B', 'C']
-    >>> g.vs['score'] = [1, 0, 2]
-    >>> df = personalized_pagerank_by_attribute(g, 'score')
-    >>> print(df)
+    Examples
+    --------
+    >>> # Node permutation test with custom mask
+    >>> result = network_propagation_with_null(
+    ...     graph, ['gene_score'],
+    ...     null_strategy='node_permutation',
+    ...     n_samples=1000,
+    ...     mask='measured_genes'
+    ... )
+
+    >>> # Edge permutation test
+    >>> result = network_propagation_with_null(
+    ...     graph, ['pathway_score'],
+    ...     null_strategy='edge_permutation',
+    ...     n_samples=100,
+    ...     burn_in_ratio=10,
+    ...     sampling_ratio=0.1
+    ... )
     """
-    # Validate and extract attribute (missing/None as 0)
-    attr = _ensure_nonnegative_vertex_attribute(napistu_graph, attribute)
+    # 1. Calculate observed propagated scores
+    observed_scores = net_propagate_attributes(
+        graph, attributes, propagation_method, additional_propagation_args
+    )
 
-    # Validate additional_propagation_args
-    if additional_propagation_args is None:
-        additional_propagation_args = {}
+    # 2. Get null generator function
+    null_generator = get_null_generator(null_strategy)
+
+    # 3. Generate null distribution
+    if null_strategy == NULL_STRATEGIES.UNIFORM:
+        # Uniform null doesn't take n_samples
+        null_distribution = null_generator(
+            graph=graph,
+            attributes=attributes,
+            propagation_method=propagation_method,
+            additional_propagation_args=additional_propagation_args,
+            **null_kwargs,
+        )
+
+        # 4a. For uniform null: calculate observed/uniform ratios
+        # Avoid division by zero by adding small epsilon
+        epsilon = 1e-10
+        ratios = observed_scores / (null_distribution + epsilon)
+        return ratios
+
     else:
-        valid_args = set(
-            inspect.signature(napistu_graph.personalized_pagerank).parameters.keys()
+        # Other nulls take n_samples
+        null_distribution = null_generator(
+            graph=graph,
+            attributes=attributes,
+            propagation_method=propagation_method,
+            additional_propagation_args=additional_propagation_args,
+            n_samples=n_samples,
+            **null_kwargs,
         )
-        for k in additional_propagation_args:
-            if k not in valid_args:
-                raise ValueError(f"Invalid argument for personalized_pagerank: {k}")
 
-    # Personalized PageRank (no normalization, igraph handles it)
-    pr_attr = napistu_graph.personalized_pagerank(
-        reset=attr.tolist(), damping=damping, **additional_propagation_args
-    )
-
-    # Node names
-    names = (
-        napistu_graph.vs["name"]
-        if "name" in napistu_graph.vs.attributes()
-        else list(range(napistu_graph.vcount()))
-    )
-
-    data = {"name": names, "pagerank_by_attribute": pr_attr, attribute: attr}
-
-    # Uniform PPR over nonzero attribute nodes
-    if calculate_uniform_dist:
-        used_in_uniform = attr > 0
-        n_uniform = used_in_uniform.sum()
-        if n_uniform == 0:
-            raise ValueError("No nonzero attribute values for uniform PPR.")
-        uniform_vec = np.zeros_like(attr, dtype=float)
-        uniform_vec[used_in_uniform] = 1.0 / n_uniform
-        pr_uniform = napistu_graph.personalized_pagerank(
-            reset=uniform_vec.tolist(), damping=damping, **additional_propagation_args
-        )
-        data["pagerank_uniform"] = pr_uniform
-
-    return pd.DataFrame(data)
+        # 4b. For sampled nulls: calculate quantiles
+        return calculate_quantiles(observed_scores, null_distribution)
 
 
-def _ensure_nonnegative_vertex_attribute(
-    napistu_graph: Union[NapistuGraph, ig.Graph], attribute: str
-):
+def net_propagate_attributes(
+    graph: ig.Graph,
+    attributes: List[str],
+    propagation_method: Union[
+        str, PropagationMethod
+    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
+    additional_propagation_args: Optional[dict] = None,
+) -> pd.DataFrame:
     """
-    Ensure a vertex attribute is present, numeric, and non-negative for all vertices.
-
-    This utility checks that the specified vertex attribute exists, is numeric, and non-negative
-    for all vertices in the graph. Missing or None values are treated as 0. Raises ValueError
-    if the attribute is missing for all vertices, if all values are zero, or if any value is negative.
+    Propagate multiple attributes over a network using a network propagation method.
 
     Parameters
     ----------
-    napistu_graph : NapistuGraph or ig.Graph
-        The input graph (NapistuGraph or igraph.Graph).
-    attribute : str
-        The name of the vertex attribute to check.
+    graph : ig.Graph
+        The graph to propagate attributes over.
+    attributes : List[str]
+        List of attribute names to propagate.
+    propagation_method : str
+        The network propagation method to use (e.g., 'personalized_pagerank').
+    additional_propagation_args : dict, optional
+        Additional arguments to pass to the network propagation method.
 
     Returns
     -------
-    np.ndarray
-        Array of attribute values (with missing/None replaced by 0).
-
-    Raises
-    ------
-    ValueError
-        If the attribute is missing for all vertices, all values are zero, or any value is negative.
+    pd.DataFrame
+        DataFrame with node names as index and attributes as columns,
+        containing the propagated attribute values.
     """
-    all_missing = all(
-        (attribute not in v.attributes() or v[attribute] is None)
-        for v in napistu_graph.vs
+
+    propagation_method = _ensure_propagation_method(propagation_method)
+    _validate_vertex_attributes(graph, attributes, propagation_method)
+
+    if additional_propagation_args is None:
+        additional_propagation_args = {}
+
+    results = []
+    for attr in attributes:
+        # Validate attributes
+        attr_data = _ensure_valid_attribute(
+            graph, attr, non_negative=propagation_method.non_negative
+        )
+        # apply the propagation method
+        pr_attr = propagation_method.method(
+            graph, attr_data, **additional_propagation_args
+        )
+
+        results.append(pr_attr)
+
+    # Get node names once
+    names = (
+        graph.vs[NAPISTU_GRAPH_VERTICES.NAME]
+        if NAPISTU_GRAPH_VERTICES.NAME in graph.vs.attributes()
+        else list(range(graph.vcount()))
     )
-    if all_missing:
-        raise ValueError(f"Vertex attribute '{attribute}' is missing for all vertices.")
 
-    values = [
-        (
-            v[attribute]
-            if (attribute in v.attributes() and v[attribute] is not None)
-            else 0.0
+    return pd.DataFrame(np.column_stack(results), index=names, columns=attributes)
+
+
+def uniform_null(
+    graph: ig.Graph,
+    attributes: List[str],
+    propagation_method: Union[
+        str, PropagationMethod
+    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
+    additional_propagation_args: Optional[dict] = None,
+    mask: Optional[Union[str, np.ndarray, List, Dict]] = MASK_KEYWORDS.ATTR,
+) -> pd.DataFrame:
+    """
+    Generate uniform null distribution over masked nodes and apply propagation method.
+
+    Parameters
+    ----------
+    graph : ig.Graph
+        Input graph.
+    attributes : List[str]
+        Attribute names to generate nulls for.
+    propagation_method : str
+        Network propagation method to apply.
+    additional_propagation_args : dict, optional
+        Additional arguments to pass to the network propagation method.
+    mask : str, np.ndarray, List, Dict, or None
+        Mask specification. Default is "attr" (use each attribute as its own mask).
+
+    Returns
+    -------
+    pd.DataFrame
+        Propagated null sample with uniform distribution over masked nodes.
+        Shape: (n_nodes, n_attributes)
+    """
+
+    # Validate attributes
+    propagation_method = _ensure_propagation_method(propagation_method)
+    _validate_vertex_attributes(graph, attributes, propagation_method)
+
+    # Parse mask input
+    mask_specs = _parse_mask_input(mask, attributes)
+    masks = _get_attribute_masks(graph, mask_specs)
+
+    # Create null graph with uniform attributes
+    # we'll use these updated attributes when calling net_propagate_attributes() below
+    null_graph = graph.copy()
+
+    for _, attr in enumerate(attributes):
+        attr_mask = masks[attr]
+        n_masked = attr_mask.sum()
+
+        if n_masked == 0:
+            raise ValueError(f"No nodes in mask for attribute '{attr}'")
+
+        # Check for constant attribute values when mask is the same as attribute
+        if isinstance(mask_specs[attr], str) and mask_specs[attr] == attr:
+            attr_values = np.array(graph.vs[attr])
+            nonzero_values = attr_values[attr_values > 0]
+            if len(np.unique(nonzero_values)) == 1:
+                logger.warning(
+                    f"Attribute '{attr}' has constant non-zero values, uniform null may not be meaningful."
+                )
+
+        # Set uniform values for masked nodes
+        null_attr_values = np.zeros(graph.vcount())
+        null_attr_values[attr_mask] = 1.0 / n_masked
+        null_graph.vs[attr] = null_attr_values.tolist()
+
+    # Apply propagation method to null graph
+    return net_propagate_attributes(
+        null_graph, attributes, propagation_method, additional_propagation_args
+    )
+
+
+def parametric_null(
+    graph: ig.Graph,
+    attributes: List[str],
+    propagation_method: Union[
+        str, PropagationMethod
+    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
+    distribution: Union[str, Any] = PARAMETRIC_NULL_DEFAULT_DISTRIBUTION,
+    additional_propagation_args: Optional[dict] = None,
+    mask: Optional[Union[str, np.ndarray, List, Dict]] = MASK_KEYWORDS.ATTR,
+    n_samples: int = 100,
+    fit_kwargs: Optional[dict] = None,
+) -> pd.DataFrame:
+    """
+    Generate parametric null distribution by fitting scipy.stats distribution to observed values.
+
+    Parameters
+    ----------
+    graph : ig.Graph
+        Input graph.
+    attributes : List[str]
+        Attribute names to generate nulls for.
+    propagation_method : str or PropagationMethod
+        Network propagation method to apply.
+    distribution : str or scipy.stats distribution
+        Distribution to fit. Can be:
+        - String name (e.g., 'norm', 'gamma', 'beta', 'expon', 'lognorm')
+        - SciPy stats distribution object (e.g., stats.gamma, stats.beta)
+    additional_propagation_args : dict, optional
+        Additional arguments to pass to the network propagation method.
+    mask : str, np.ndarray, List, Dict, or None
+        Mask specification. Default is "attr" (use each attribute as its own mask).
+    n_samples : int
+        Number of null samples to generate.
+    fit_kwargs : dict, optional
+        Additional arguments passed to distribution.fit() method.
+        Common examples:
+        - For gamma: {'floc': 0} to fix location at 0
+        - For beta: {'floc': 0, 'fscale': 1} to fix support to [0,1]
+
+    Returns
+    -------
+    pd.DataFrame
+        Propagated null samples with specified parametric distribution over masked nodes.
+        Shape: (n_samples * n_nodes, n_attributes)
+
+    Examples
+    --------
+    >>> # Gaussian null (default)
+    >>> result = parametric_null(graph, ['gene_expression'])
+
+    >>> # Gamma null for positive-valued data
+    >>> result = parametric_null(graph, ['gene_expression'],
+    ...                         distribution='gamma',
+    ...                         fit_kwargs={'floc': 0})
+
+    >>> # Beta null for data in [0,1]
+    >>> result = parametric_null(graph, ['probabilities'],
+    ...                         distribution='beta')
+
+    >>> # Custom scipy distribution
+    >>> result = parametric_null(graph, ['counts'],
+    ...                         distribution=stats.poisson)
+    """
+    # Setup
+    dist = _get_distribution_object(distribution)
+    if fit_kwargs is None:
+        fit_kwargs = {}
+
+    # Validate attributes
+    propagation_method = _ensure_propagation_method(propagation_method)
+    _validate_vertex_attributes(graph, attributes, propagation_method)
+
+    # Parse mask input and get masks
+    mask_specs = _parse_mask_input(mask, attributes)
+    masks = _get_attribute_masks(graph, mask_specs)
+
+    # Fit distribution parameters for each attribute
+    params = _fit_distribution_parameters(graph, attributes, masks, dist, fit_kwargs)
+
+    # Get node names for output
+    node_names = (
+        graph.vs[NAPISTU_GRAPH_VERTICES.NAME]
+        if NAPISTU_GRAPH_VERTICES.NAME in graph.vs.attributes()
+        else list(range(graph.vcount()))
+    )
+
+    # Create null graph once (will overwrite attributes in each sample)
+    null_graph = graph.copy()
+    all_results = []
+
+    # Generate samples
+    for i in range(n_samples):
+        # Generate null sample (modifies null_graph in-place)
+        _generate_parametric_null_sample(
+            null_graph,
+            attributes,
+            params,
+            ensure_nonnegative=propagation_method.non_negative,
         )
-        for v in napistu_graph.vs
-    ]
 
-    arr = np.array(values, dtype=float)
+        # Apply propagation method to null graph
+        result = net_propagate_attributes(
+            null_graph, attributes, propagation_method, additional_propagation_args
+        )
+        all_results.append(result)
 
-    if np.all(arr == 0):
+    # Combine all results
+    full_index = node_names * n_samples
+    all_data = np.vstack([result.values for result in all_results])
+
+    return pd.DataFrame(all_data, index=full_index, columns=attributes)
+
+
+def node_permutation_null(
+    graph: ig.Graph,
+    attributes: List[str],
+    propagation_method: Union[
+        str, PropagationMethod
+    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
+    additional_propagation_args: Optional[dict] = None,
+    mask: Optional[Union[str, np.ndarray, List, Dict]] = MASK_KEYWORDS.ATTR,
+    replace: bool = False,
+    n_samples: int = 100,
+) -> pd.DataFrame:
+    """
+    Generate null distribution by permuting node attribute values and apply propagation method.
+
+    Parameters
+    ----------
+    graph : ig.Graph
+        Input graph.
+    attributes : List[str]
+        Attribute names to permute.
+    propagation_method : str or PropagationMethod
+        Network propagation method to apply.
+    additional_propagation_args : dict, optional
+        Additional arguments to pass to the network propagation method.
+    mask : str, np.ndarray, List, Dict, or None
+        Mask specification. Default is "attr" (use each attribute as its own mask).
+    replace : bool
+        Whether to sample with replacement.
+    n_samples : int
+        Number of null samples to generate.
+
+    Returns
+    -------
+    pd.DataFrame
+        Propagated null samples with permuted attribute values.
+        Shape: (n_samples * n_nodes, n_attributes)
+    """
+    # Validate attributes
+    propagation_method = _ensure_propagation_method(propagation_method)
+    _validate_vertex_attributes(graph, attributes, propagation_method)
+
+    # Parse mask input
+    mask_specs = _parse_mask_input(mask, attributes)
+    masks = _get_attribute_masks(graph, mask_specs)
+
+    # Get original attribute values
+    original_values = {}
+    for attr in attributes:
+        original_values[attr] = np.array(graph.vs[attr])
+
+    # Get node names
+    node_names = (
+        graph.vs[NAPISTU_GRAPH_VERTICES.NAME]
+        if NAPISTU_GRAPH_VERTICES.NAME in graph.vs.attributes()
+        else list(range(graph.vcount()))
+    )
+
+    # Pre-allocate for results
+    all_results = []
+
+    # Generate samples
+    # we'll only do this once and overwrite the attributes in each sample
+    null_graph = graph.copy()
+
+    for _ in range(n_samples):
+
+        # Permute values among masked nodes for each attribute
+        for _, attr in enumerate(attributes):
+            attr_mask = masks[attr]
+            masked_indices = np.where(attr_mask)[0]
+            masked_values = original_values[attr][masked_indices]
+
+            # Start with original values
+            null_attr_values = original_values[attr].copy()
+
+            if replace:
+                # Sample with replacement
+                permuted_values = np.random.choice(
+                    masked_values, size=len(masked_values), replace=True
+                )
+            else:
+                # Permute without replacement
+                permuted_values = np.random.permutation(masked_values)
+
+            null_attr_values[masked_indices] = permuted_values
+            null_graph.vs[attr] = null_attr_values.tolist()
+
+        # Apply propagation method to null graph
+        result = net_propagate_attributes(
+            null_graph, attributes, propagation_method, additional_propagation_args
+        )
+        all_results.append(result)
+
+    # Combine all results
+    full_index = node_names * n_samples
+    all_data = np.vstack([result.values for result in all_results])
+
+    return pd.DataFrame(all_data, index=full_index, columns=attributes)
+
+
+def edge_permutation_null(
+    graph: ig.Graph,
+    attributes: List[str],
+    propagation_method: Union[
+        str, PropagationMethod
+    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
+    additional_propagation_args: Optional[dict] = None,
+    burn_in_ratio: float = 10,
+    sampling_ratio: float = 0.1,
+    n_samples: int = 100,
+) -> pd.DataFrame:
+    """
+    Generate null distribution by edge rewiring and apply propagation method.
+
+    Parameters
+    ----------
+    graph : ig.Graph
+        Input graph.
+    attributes : List[str]
+        Attribute names to use (values unchanged by rewiring).
+    propagation_method : str or PropagationMethod
+        Network propagation method to apply.
+    additional_propagation_args : dict, optional
+        Additional arguments to pass to the network propagation method.
+    burn_in_ratio : float
+        Multiplier for initial rewiring.
+    sampling_ratio : float
+        Proportion of edges to rewire between samples.
+    n_samples : int
+        Number of null samples to generate.
+
+    Returns
+    -------
+    pd.DataFrame
+        Propagated null samples from rewired network.
+        Shape: (n_samples * n_nodes, n_attributes)
+    """
+
+    # Validate attributes
+    propagation_method = _ensure_propagation_method(propagation_method)
+    _validate_vertex_attributes(graph, attributes, propagation_method)
+
+    # Setup rewired graph
+    null_graph = graph.copy()
+    n_edges = len(null_graph.es)
+
+    # Initial burn-in
+    null_graph.rewire(n=burn_in_ratio * n_edges)
+
+    # Get node names
+    node_names = (
+        graph.vs[NAPISTU_GRAPH_VERTICES.NAME]
+        if NAPISTU_GRAPH_VERTICES.NAME in graph.vs.attributes()
+        else list(range(graph.vcount()))
+    )
+
+    # Pre-allocate for results
+    all_results = []
+
+    # Generate samples
+    for _ in range(n_samples):
+        # Incremental rewiring
+        null_graph.rewire(n=int(sampling_ratio * n_edges))
+
+        # Apply propagation method to rewired graph (attributes unchanged)
+        result = net_propagate_attributes(
+            null_graph, attributes, propagation_method, additional_propagation_args
+        )
+        all_results.append(result)
+
+    # Combine all results
+    full_index = node_names * n_samples
+    all_data = np.vstack([result.values for result in all_results])
+
+    return pd.DataFrame(all_data, index=full_index, columns=attributes)
+
+
+# Null generator registry
+NULL_GENERATORS = {
+    NULL_STRATEGIES.UNIFORM: uniform_null,
+    NULL_STRATEGIES.PARAMETRIC: parametric_null,
+    NULL_STRATEGIES.NODE_PERMUTATION: node_permutation_null,
+    NULL_STRATEGIES.EDGE_PERMUTATION: edge_permutation_null,
+}
+
+
+def get_null_generator(strategy: str):
+    """Get null generator function by name."""
+    if strategy not in VALID_NULL_STRATEGIES:
         raise ValueError(
-            f"Vertex attribute '{attribute}' is zero for all vertices; cannot use as reset vector."
+            f"Unknown null strategy: {strategy}. Available: {VALID_NULL_STRATEGIES}"
         )
-    if np.any(arr < 0):
-        raise ValueError(f"Attribute '{attribute}' contains negative values.")
+    return NULL_GENERATORS[strategy]
 
-    return arr
+
+def _get_distribution_object(distribution: Union[str, Any]) -> Any:
+    """Get scipy.stats distribution object from string name or object."""
+    if isinstance(distribution, str):
+        try:
+            return getattr(stats, distribution)
+        except AttributeError:
+            raise ValueError(
+                f"Unknown distribution: '{distribution}'. "
+                f"Must be a valid scipy.stats distribution name."
+            )
+    return distribution
+
+
+def _fit_distribution_parameters(
+    graph: ig.Graph,
+    attributes: List[str],
+    masks: Dict[str, np.ndarray],
+    distribution: Any,
+    fit_kwargs: Dict[str, Any],
+) -> Dict[str, Dict[str, Any]]:
+    """Fit distribution parameters for each attribute using masked data."""
+    params = {}
+
+    for attr in attributes:
+        attr_mask = masks[attr]
+        attr_values = np.array(graph.vs[attr])
+        masked_values = attr_values[attr_mask]
+        masked_nonzero = masked_values[masked_values > 0]
+
+        if len(masked_nonzero) == 0:
+            raise ValueError(f"No nonzero values in mask for attribute '{attr}'")
+
+        try:
+            # Let SciPy handle parameter estimation and validation
+            fitted_params = distribution.fit(masked_nonzero, **fit_kwargs)
+
+            params[attr] = {
+                "fitted_params": fitted_params,
+                "mask": attr_mask,
+                "distribution": distribution,
+            }
+
+        except Exception as e:
+            dist_name = (
+                distribution.name
+                if hasattr(distribution, "name")
+                else str(distribution)
+            )
+            raise ValueError(
+                f"Failed to fit {dist_name} distribution to attribute '{attr}': {str(e)}"
+            )
+
+    return params
+
+
+def _generate_parametric_null_sample(
+    null_graph: ig.Graph,
+    attributes: List[str],
+    params: Dict[str, Dict[str, Any]],
+    ensure_nonnegative: bool,
+) -> None:
+    """Generate one null sample by modifying graph attributes in-place."""
+    for attr in attributes:
+        attr_mask = params[attr]["mask"]
+        fitted_params = params[attr]["fitted_params"]
+        distribution = params[attr]["distribution"]
+
+        # Generate values for masked nodes using fitted distribution
+        null_attr_values = np.zeros(null_graph.vcount())
+        n_masked = attr_mask.sum()
+
+        # Sample from fitted distribution
+        sampled_values = distribution.rvs(*fitted_params, size=n_masked)
+
+        # Ensure non-negative if requested (common for PageRank)
+        if ensure_nonnegative:
+            # warning if there are negative samples since this suggests that the wrong
+            # distribution is being used
+            if np.any(sampled_values < 0):
+                logger.warning(
+                    f"Negative samples for attribute '{attr}' suggest that the wrong distribution is being used"
+                )
+            sampled_values = np.maximum(sampled_values, 0)
+
+        null_attr_values[attr_mask] = sampled_values
+        null_graph.vs[attr] = null_attr_values.tolist()
+
+
+def _validate_vertex_attributes(
+    graph: ig.Graph, attributes: List[str], propagation_method: str
+) -> None:
+    """Validate vertex attributes for propagation method."""
+
+    propagation_method = _ensure_propagation_method(propagation_method)
+
+    # check that the attributes are numeric and non-negative if required
+    for attr in attributes:
+        _ = _ensure_valid_attribute(
+            graph, attr, non_negative=propagation_method.non_negative
+        )
+
+    return None
+
+
+def _pagerank_wrapper(graph: ig.Graph, attr_data: np.ndarray, **kwargs):
+    return graph.personalized_pagerank(reset=attr_data.tolist(), **kwargs)
+
+
+_pagerank_method = PropagationMethod(method=_pagerank_wrapper, non_negative=True)
+
+NET_PROPAGATION_METHODS: dict[str, PropagationMethod] = {
+    NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK: _pagerank_method
+}
+VALID_NET_PROPAGATION_METHODS = NET_PROPAGATION_METHODS.keys()
+
+
+def _ensure_propagation_method(
+    propagation_method: Union[str, PropagationMethod],
+) -> PropagationMethod:
+    if isinstance(propagation_method, str):
+        if propagation_method not in VALID_NET_PROPAGATION_METHODS:
+            raise ValueError(f"Invalid propagation method: {propagation_method}")
+        return NET_PROPAGATION_METHODS[propagation_method]
+    return propagation_method

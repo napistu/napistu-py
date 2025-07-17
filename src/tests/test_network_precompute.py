@@ -7,6 +7,7 @@ import tempfile
 import numpy as np
 import pandas as pd
 from napistu import sbml_dfs_core
+from napistu import utils
 from napistu.ingestion import sbml
 from napistu.network import neighborhoods
 from napistu.network import net_create
@@ -18,12 +19,12 @@ sbml_path = os.path.join(test_path, "test_data", "reactome_glucose_metabolism.sb
 if not os.path.isfile(sbml_path):
     raise ValueError(f"{sbml_path} not found")
 
-sbml_model = sbml.SBML(sbml_path).model
+sbml_model = sbml.SBML(sbml_path)
 sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
 sbml_dfs.validate()
 
 napistu_graph = net_create.process_napistu_graph(
-    sbml_dfs, graph_type="bipartite", directed=True, weighting_strategy="topology"
+    sbml_dfs, wiring_approach="bipartite", directed=True, weighting_strategy="topology"
 )
 
 # number of species to include when finding all x all paths
@@ -263,10 +264,10 @@ def test_precomputed_distances_serialization():
 
     try:
         # Test serialization
-        precompute.save_precomputed_distances(original_df, temp_path)
+        utils.save_parquet(original_df, temp_path)
 
         # Test deserialization
-        loaded_df = precompute.load_precomputed_distances(temp_path)
+        loaded_df = utils.load_parquet(temp_path)
 
         # Validate that the loaded DataFrame is identical to the original
         pd.testing.assert_frame_equal(original_df, loaded_df, check_like=True)
@@ -275,3 +276,33 @@ def test_precomputed_distances_serialization():
         # Clean up the temporary file
         if os.path.exists(temp_path):
             os.remove(temp_path)
+
+
+def test_filter_precomputed_distances_top_n_subset():
+    # Use a small top_n for a quick test
+    top_n = 5
+    filtered = precompute.filter_precomputed_distances_top_n(
+        precomputed_distances, top_n=top_n
+    )
+    # Check that the filtered DataFrame is a subset of the original
+    merged = filtered.merge(
+        precomputed_distances,
+        on=[
+            precompute.NAPISTU_EDGELIST.SC_ID_ORIGIN,
+            precompute.NAPISTU_EDGELIST.SC_ID_DEST,
+        ],
+        how="left",
+        indicator=True,
+    )
+    assert (
+        merged["_merge"] == "both"
+    ).all(), "Filtered rows must be present in the original DataFrame"
+    # Check that columns are preserved
+    assert set(
+        [
+            precompute.NAPISTU_EDGELIST.SC_ID_ORIGIN,
+            precompute.NAPISTU_EDGELIST.SC_ID_DEST,
+        ]
+    ).issubset(filtered.columns)
+    # Optionally, check that the number of rows is less than or equal to the input
+    assert filtered.shape[0] <= precomputed_distances.shape[0]

@@ -7,6 +7,7 @@ import logging
 import os
 import pickle
 import re
+import requests
 import shutil
 import urllib.request as request
 import zipfile
@@ -15,13 +16,15 @@ from itertools import starmap
 from textwrap import fill
 from typing import Any, Dict, Optional, List, Union
 from urllib.parse import urlparse
-import requests
+from pathlib import Path
 from requests.adapters import HTTPAdapter
 from requests.adapters import Retry
 
 import igraph as ig
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 from fs import open_fs
 from fs.copy import copy_dir
 from fs.copy import copy_file
@@ -601,6 +604,81 @@ def load_json(uri: str) -> Any:
         return json.loads(txt)
 
 
+def save_parquet(
+    df: pd.DataFrame, uri: Union[str, Path], compression: str = "snappy"
+) -> None:
+    """
+    Write a DataFrame to a single Parquet file.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The DataFrame to save
+    uri : Union[str, Path]
+        Path where to save the Parquet file. Can be a local path or a GCS URI.
+        Recommended extensions: .parquet or .pq
+    compression : str, default 'snappy'
+        Compression algorithm. Options: 'snappy', 'gzip', 'brotli', 'lz4', 'zstd'
+
+    Raises
+    ------
+    OSError
+        If the file cannot be written to (permission issues, etc.)
+    """
+
+    uri_str = str(uri)
+
+    # Warn about non-standard extensions
+    if not any(uri_str.endswith(ext) for ext in [".parquet", ".pq"]):
+        logger.warning(
+            f"File '{uri_str}' doesn't have a standard Parquet extension (.parquet or .pq)"
+        )
+
+    target_base, target_path = get_target_base_and_path(uri_str)
+
+    with open_fs(target_base, create=True) as target_fs:
+        with target_fs.openbin(target_path, "w") as f:
+            # Convert to Arrow table and write as single file
+            table = pa.Table.from_pandas(df)
+            pq.write_table(
+                table,
+                f,
+                compression=compression,
+                use_dictionary=True,  # Efficient for repeated values
+                write_statistics=True,  # Enables query optimization
+            )
+
+
+def load_parquet(uri: Union[str, Path]) -> pd.DataFrame:
+    """
+    Read a DataFrame from a Parquet file.
+
+    Parameters
+    ----------
+    uri : Union[str, Path]
+        Path to the Parquet file to load
+
+    Returns
+    -------
+    pd.DataFrame
+        The DataFrame loaded from the Parquet file
+
+    Raises
+    ------
+    FileNotFoundError
+        If the specified file does not exist
+    """
+    try:
+        target_base, target_path = get_target_base_and_path(str(uri))
+
+        with open_fs(target_base) as target_fs:
+            with target_fs.openbin(target_path, "r") as f:
+                return pd.read_parquet(f, engine="pyarrow")
+
+    except ResourceNotFound as e:
+        raise FileNotFoundError(f"File not found: {uri}") from e
+
+
 def extract_regex_search(regex: str, query: str, index_value: int = 0) -> str:
     """
     Match an identifier substring and otherwise throw an error
@@ -807,50 +885,15 @@ def drop_extra_cols(
     return df_out.loc[:, ordered_cols]
 
 
-def _merge_and_log_overwrites(
-    left_df: pd.DataFrame, right_df: pd.DataFrame, merge_context: str, **merge_kwargs
-) -> pd.DataFrame:
+def update_pathological_names(names: pd.Series, prefix: str) -> pd.Series:
     """
-    Merge two DataFrames and log any column overwrites.
+    Update pathological names in a pandas Series.
 
-    Parameters
-    ----------
-    left_df : pd.DataFrame
-        Left DataFrame for merge
-    right_df : pd.DataFrame
-        Right DataFrame for merge
-    merge_context : str
-        Description of the merge operation for logging
-    **merge_kwargs : dict
-        Additional keyword arguments passed to pd.merge
-
-    Returns
-    -------
-    pd.DataFrame
-        Merged DataFrame with overwritten columns removed
+    Add a prefix to the names if they are all numeric.
     """
-    # Track original columns
-    original_cols = left_df.columns.tolist()
-
-    # Ensure we're using the correct suffixes
-    merge_kwargs["suffixes"] = ("_old", "")
-
-    # Perform merge
-    merged_df = pd.merge(left_df, right_df, **merge_kwargs)
-
-    # Check for and log any overwritten columns
-    new_cols = merged_df.columns.tolist()
-    overwritten_cols = [col for col in original_cols if col + "_old" in new_cols]
-    if overwritten_cols:
-        logger.warning(
-            f"The following columns were overwritten during {merge_context} merge and their original values "
-            f"have been suffixed with '_old': {', '.join(overwritten_cols)}"
-        )
-        # Drop the old columns
-        cols_to_drop = [col + "_old" for col in overwritten_cols]
-        merged_df = merged_df.drop(columns=cols_to_drop)
-
-    return merged_df
+    if names.apply(lambda x: x.isdigit()).all():
+        names = names.apply(lambda x: f"{prefix}{x}")
+    return names
 
 
 def format_identifiers_as_edgelist(
@@ -1127,3 +1170,49 @@ def _add_nameness_score(df, name_var):
 
     df.loc[:, "nameness_score"] = df[name_var].apply(score_nameness)
     return df
+
+
+def _merge_and_log_overwrites(
+    left_df: pd.DataFrame, right_df: pd.DataFrame, merge_context: str, **merge_kwargs
+) -> pd.DataFrame:
+    """
+    Merge two DataFrames and log any column overwrites.
+
+    Parameters
+    ----------
+    left_df : pd.DataFrame
+        Left DataFrame for merge
+    right_df : pd.DataFrame
+        Right DataFrame for merge
+    merge_context : str
+        Description of the merge operation for logging
+    **merge_kwargs : dict
+        Additional keyword arguments passed to pd.merge
+
+    Returns
+    -------
+    pd.DataFrame
+        Merged DataFrame with overwritten columns removed
+    """
+    # Track original columns
+    original_cols = left_df.columns.tolist()
+
+    # Ensure we're using the correct suffixes
+    merge_kwargs["suffixes"] = ("_old", "")
+
+    # Perform merge
+    merged_df = pd.merge(left_df, right_df, **merge_kwargs)
+
+    # Check for and log any overwritten columns
+    new_cols = merged_df.columns.tolist()
+    overwritten_cols = [col for col in original_cols if col + "_old" in new_cols]
+    if overwritten_cols:
+        logger.warning(
+            f"The following columns were overwritten during {merge_context} merge and their original values "
+            f"have been suffixed with '_old': {', '.join(overwritten_cols)}"
+        )
+        # Drop the old columns
+        cols_to_drop = [col + "_old" for col in overwritten_cols]
+        merged_df = merged_df.drop(columns=cols_to_drop)
+
+    return merged_df

@@ -6,6 +6,7 @@ import igraph as ig
 import pandas as pd
 
 from napistu.network import data_handling, net_create
+from napistu.network.constants import GRAPH_WIRING_APPROACHES
 
 
 # Fixtures
@@ -226,7 +227,7 @@ def test_add_results_table_to_graph(sbml_dfs_glucose_metabolism):
     """Test adding results table to graph."""
     # Create a test graph using create_napistu_graph
     graph = net_create.create_napistu_graph(
-        sbml_dfs_glucose_metabolism, directed=True, graph_type="regulatory"
+        sbml_dfs_glucose_metabolism, directed=True, wiring_approach="regulatory"
     )
 
     # Add some test data to sbml_dfs
@@ -300,7 +301,9 @@ def test_add_graph_species_attribute(sbml_dfs_glucose_metabolism):
     """Test adding species attributes to graph."""
     # Create a test graph using create_napistu_graph
     graph = net_create.create_napistu_graph(
-        sbml_dfs_glucose_metabolism, directed=True, graph_type="regulatory"
+        sbml_dfs_glucose_metabolism,
+        directed=True,
+        wiring_approach=GRAPH_WIRING_APPROACHES.REGULATORY,
     )
 
     # Add test data to sbml_dfs

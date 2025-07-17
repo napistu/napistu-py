@@ -8,15 +8,11 @@ from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
 from napistu import source
 from napistu import utils
+from napistu.ingestion import napistu_edgelist
 from napistu.constants import BQB
 from napistu.constants import MINI_SBO_FROM_NAME
-from napistu.ingestion import napistu_edgelist
-from napistu.ingestion.constants import SBML_SPECIES_DICT_IDENTIFIERS
-from napistu.ingestion.constants import SBML_SPECIES_DICT_NAME
-from napistu.ingestion.constants import SMBL_REACTION_DICT_IDENTIFIERS
-from napistu.ingestion.constants import SMBL_REACTION_DICT_IS_REVERSIBLE
-from napistu.ingestion.constants import SMBL_REACTION_DICT_NAME
-from napistu.ingestion.constants import SMBL_REACTION_SPEC_SBO_TERM
+from napistu.constants import ONTOLOGIES
+from napistu.constants import SBML_DFS
 from napistu.ingestion.constants import STRING_DOWNSTREAM_COMPARTMENT
 from napistu.ingestion.constants import STRING_DOWNSTREAM_NAME
 from napistu.ingestion.constants import STRING_PROTEIN_ID
@@ -137,10 +133,10 @@ def convert_string_to_sbml_dfs(
 
     # define identifier mapping from aliases to use:
     alias_to_identifier = {
-        "Ensembl_gene": ("ensembl_gene", BQB.IS_ENCODED_BY),
-        "Ensembl_transcript": ("ensembl_transcript", BQB.IS_ENCODED_BY),
-        "Ensembl_translation": ("ensembl_protein", BQB.IS),
-        "Ensembl_UniProt_AC": ("uniprot", BQB.IS),
+        "Ensembl_gene": (ONTOLOGIES.ENSEMBL_GENE, BQB.IS_ENCODED_BY),
+        "Ensembl_transcript": (ONTOLOGIES.ENSEMBL_TRANSCRIPT, BQB.IS_ENCODED_BY),
+        "Ensembl_translation": (ONTOLOGIES.ENSEMBL_PROTEIN, BQB.IS),
+        "Ensembl_UniProt_AC": (ONTOLOGIES.UNIPROT, BQB.IS),
     }
 
     # filter aliases to only keep required ones
@@ -276,17 +272,17 @@ def _build_species_df(
     species_df = (
         pd.Series(
             list(set(edgelist[source_col]).union(edgelist[target_col])),
-            name=SBML_SPECIES_DICT_NAME,
+            name=SBML_DFS.S_NAME,
         )
         .to_frame()
-        .set_index(SBML_SPECIES_DICT_NAME, drop=False)
+        .set_index(SBML_DFS.S_NAME, drop=False)
         .apply(
             _get_identifiers,
             alias_to_identifier=alias_to_identifier,
             dat_alias=aliases,
             axis=1,
         )
-        .rename(SBML_SPECIES_DICT_IDENTIFIERS)
+        .rename(SBML_DFS.S_IDENTIFIERS)
         .reset_index()
     )
     return species_df
@@ -312,8 +308,8 @@ def _build_interactor_edgelist(
         **{
             STRING_UPSTREAM_COMPARTMENT: compartment,
             STRING_DOWNSTREAM_COMPARTMENT: compartment,
-            SMBL_REACTION_SPEC_SBO_TERM: sbo_interactor,
-            SMBL_REACTION_DICT_IDENTIFIERS: lambda x: identifiers.Identifiers([]),
+            SBML_DFS.SBO_TERM: sbo_interactor,
+            SBML_DFS.R_IDENTIFIERS: lambda x: identifiers.Identifiers([]),
         }
     )
     if add_reverse_interactions:
@@ -336,10 +332,10 @@ def _build_interactor_edgelist(
         )
 
     interaction_edgelist = dat
-    interaction_edgelist[SMBL_REACTION_DICT_NAME] = _build_string_reaction_name(
+    interaction_edgelist[SBML_DFS.R_NAME] = _build_string_reaction_name(
         dat[STRING_UPSTREAM_NAME], dat[STRING_DOWNSTREAM_NAME]
     )
-    interaction_edgelist[SMBL_REACTION_DICT_IS_REVERSIBLE] = True
+    interaction_edgelist[SBML_DFS.R_ISREVERSIBLE] = True
 
     return interaction_edgelist
 

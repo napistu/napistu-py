@@ -5,15 +5,19 @@ import os
 import sys
 import threading
 
+import pandas as pd
 import pytest
+from pytest import fixture
+from pytest import skip
 
 from napistu import consensus
 from napistu import indices
-from napistu import sbml_dfs_core
-from napistu.ingestion import sbml
-from napistu.network import net_create
-from pytest import fixture
-from pytest import skip
+from napistu.identifiers import Identifiers
+from napistu.sbml_dfs_core import SBML_dfs
+from napistu.source import Source
+from napistu.ingestion.sbml import SBML
+from napistu.network.net_create import process_napistu_graph
+from napistu.constants import SBML_DFS, MINI_SBO_FROM_NAME, SBOTERM_NAMES
 
 
 @fixture
@@ -28,13 +32,13 @@ def sbml_path():
 
 @fixture
 def sbml_model(sbml_path):
-    sbml_model = sbml.SBML(sbml_path)
+    sbml_model = SBML(sbml_path)
     return sbml_model
 
 
 @fixture
 def sbml_dfs(sbml_model):
-    sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
+    sbml_dfs = SBML_dfs(sbml_model)
     return sbml_dfs
 
 
@@ -56,10 +60,65 @@ def sbml_dfs_glucose_metabolism():
     test_data = os.path.join(test_path, "test_data")
     sbml_path = os.path.join(test_data, "reactome_glucose_metabolism.sbml")
 
-    sbml_model = sbml.SBML(sbml_path).model
-    sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
+    sbml_model = SBML(sbml_path)
+    sbml_dfs = SBML_dfs(sbml_model)
 
     return sbml_dfs
+
+
+@pytest.fixture
+def minimal_valid_sbml_dfs():
+    """Create a minimal valid SBML_dfs object for testing."""
+    blank_id = Identifiers([])
+    source = Source(init=True)
+
+    sbml_dict = {
+        SBML_DFS.COMPARTMENTS: pd.DataFrame(
+            {
+                SBML_DFS.C_NAME: ["cytosol"],
+                SBML_DFS.C_IDENTIFIERS: [blank_id],
+                SBML_DFS.C_SOURCE: [source],
+            },
+            index=pd.Index(["C00001"], name=SBML_DFS.C_ID),
+        ),
+        SBML_DFS.SPECIES: pd.DataFrame(
+            {
+                SBML_DFS.S_NAME: ["ATP"],
+                SBML_DFS.S_IDENTIFIERS: [blank_id],
+                SBML_DFS.S_SOURCE: [source],
+            },
+            index=pd.Index(["S00001"], name=SBML_DFS.S_ID),
+        ),
+        SBML_DFS.COMPARTMENTALIZED_SPECIES: pd.DataFrame(
+            {
+                SBML_DFS.SC_NAME: ["ATP [cytosol]"],
+                SBML_DFS.S_ID: ["S00001"],
+                SBML_DFS.C_ID: ["C00001"],
+                SBML_DFS.SC_SOURCE: [source],
+            },
+            index=pd.Index(["SC00001"], name=SBML_DFS.SC_ID),
+        ),
+        SBML_DFS.REACTIONS: pd.DataFrame(
+            {
+                SBML_DFS.R_NAME: ["test_reaction"],
+                SBML_DFS.R_IDENTIFIERS: [blank_id],
+                SBML_DFS.R_SOURCE: [source],
+                SBML_DFS.R_ISREVERSIBLE: [False],
+            },
+            index=pd.Index(["R00001"], name=SBML_DFS.R_ID),
+        ),
+        SBML_DFS.REACTION_SPECIES: pd.DataFrame(
+            {
+                SBML_DFS.R_ID: ["R00001"],
+                SBML_DFS.SC_ID: ["SC00001"],
+                SBML_DFS.STOICHIOMETRY: [1.0],
+                SBML_DFS.SBO_TERM: ["SBO:0000011"],
+            },
+            index=pd.Index(["RSC00001"], name=SBML_DFS.RSC_ID),
+        ),
+    }
+
+    return SBML_dfs(sbml_dict)
 
 
 @fixture
@@ -67,9 +126,7 @@ def napistu_graph(sbml_dfs):
     """
     Pytest fixture to create a NapistuGraph from sbml_dfs with directed=True and topology weighting.
     """
-    return net_create.process_napistu_graph(
-        sbml_dfs, directed=True, weighting_strategy="topology"
-    )
+    return process_napistu_graph(sbml_dfs, directed=True, weighting_strategy="topology")
 
 
 @fixture
@@ -77,9 +134,110 @@ def napistu_graph_undirected(sbml_dfs):
     """
     Pytest fixture to create a NapistuGraph from sbml_dfs with directed=False and topology weighting.
     """
-    return net_create.process_napistu_graph(
+    return process_napistu_graph(
         sbml_dfs, directed=False, weighting_strategy="topology"
     )
+
+
+@pytest.fixture
+def reaction_species_examples():
+    """
+    Pytest fixture providing a dictionary of example reaction species DataFrames for various test cases.
+    """
+
+    d = dict()
+    d["valid_interactor"] = pd.DataFrame(
+        {
+            SBML_DFS.SBO_TERM: [
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR],
+            ],
+            SBML_DFS.SC_ID: ["sc1", "sc2"],
+            SBML_DFS.STOICHIOMETRY: [0, 0],
+        }
+    ).set_index(SBML_DFS.SBO_TERM)
+
+    d["invalid_interactor"] = pd.DataFrame(
+        {
+            SBML_DFS.SBO_TERM: [
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
+            ],
+            SBML_DFS.SC_ID: ["sc1", "sc2"],
+            SBML_DFS.STOICHIOMETRY: [0, 0],
+        }
+    ).set_index(SBML_DFS.SBO_TERM)
+
+    d["sub_and_prod"] = pd.DataFrame(
+        {
+            SBML_DFS.SBO_TERM: [
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
+            ],
+            SBML_DFS.SC_ID: ["sub", "prod"],
+            SBML_DFS.STOICHIOMETRY: [-1, 1],
+        }
+    ).set_index(SBML_DFS.SBO_TERM)
+
+    d["stimulator"] = pd.DataFrame(
+        {
+            SBML_DFS.SBO_TERM: [
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.STIMULATOR],
+            ],
+            SBML_DFS.SC_ID: ["sub", "prod", "stim"],
+            SBML_DFS.STOICHIOMETRY: [-1, 1, 0],
+        }
+    ).set_index(SBML_DFS.SBO_TERM)
+
+    d["all_entities"] = pd.DataFrame(
+        {
+            SBML_DFS.SBO_TERM: [
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.STIMULATOR],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.CATALYST],
+            ],
+            SBML_DFS.SC_ID: ["sub", "prod", "stim", "cat"],
+            SBML_DFS.STOICHIOMETRY: [-1, 1, 0, 0],
+        }
+    ).set_index(SBML_DFS.SBO_TERM)
+
+    d["no_substrate"] = pd.DataFrame(
+        {
+            SBML_DFS.SBO_TERM: [
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.STIMULATOR],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.STIMULATOR],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.INHIBITOR],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.CATALYST],
+            ],
+            SBML_DFS.SC_ID: ["prod", "stim1", "stim2", "inh", "cat"],
+            SBML_DFS.STOICHIOMETRY: [1, 0, 0, 0, 0],
+        }
+    ).set_index(SBML_DFS.SBO_TERM)
+
+    d["single_species"] = pd.DataFrame(
+        {
+            SBML_DFS.SBO_TERM: [MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT]],
+            SBML_DFS.SC_ID: ["lone_prod"],
+            SBML_DFS.STOICHIOMETRY: [1],
+        }
+    ).set_index(SBML_DFS.SBO_TERM)
+
+    d["activator_and_inhibitor_only"] = pd.DataFrame(
+        {
+            SBML_DFS.SBO_TERM: [
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.STIMULATOR],  # activator
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.INHIBITOR],  # inhibitor
+            ],
+            SBML_DFS.SC_ID: ["act", "inh"],
+            SBML_DFS.STOICHIOMETRY: [0, 0],
+        }
+    ).set_index(SBML_DFS.SBO_TERM)
+
+    return d
 
 
 # Define custom markers for platforms

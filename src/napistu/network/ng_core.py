@@ -36,7 +36,7 @@ class NapistuGraph(ig.Graph):
     ----------
     is_reversed : bool
         Whether the graph edges have been reversed from their original direction
-    graph_type : str or None
+    wiring_approach : str or None
         Type of graph (e.g., 'bipartite', 'regulatory', 'surrogate')
     weighting_strategy : str or None
         Strategy used for edge weighting (e.g., 'topology', 'mixed', 'calibrated')
@@ -101,7 +101,7 @@ class NapistuGraph(ig.Graph):
         # Initialize metadata
         self._metadata = {
             "is_reversed": False,
-            "graph_type": None,
+            "wiring_approach": None,
             "weighting_strategy": None,
             "creation_params": {},
         }
@@ -147,6 +147,21 @@ class NapistuGraph(ig.Graph):
 
         return new_graph
 
+    @property
+    def is_reversed(self) -> bool:
+        """Check if the graph has been reversed."""
+        return self._metadata["is_reversed"]
+
+    @property
+    def wiring_approach(self) -> Optional[str]:
+        """Get the graph type (bipartite, regulatory, etc.)."""
+        return self._metadata["wiring_approach"]
+
+    @property
+    def weighting_strategy(self) -> Optional[str]:
+        """Get the weighting strategy used."""
+        return self._metadata["weighting_strategy"]
+
     def reverse_edges(self) -> None:
         """
         Reverse all edges in the graph.
@@ -181,20 +196,47 @@ class NapistuGraph(ig.Graph):
 
         return None
 
-    @property
-    def is_reversed(self) -> bool:
-        """Check if the graph has been reversed."""
-        return self._metadata["is_reversed"]
+    def remove_isolated_vertices(self):
+        """
+        Remove vertices that have no edges (degree 0) from the graph.
 
-    @property
-    def graph_type(self) -> Optional[str]:
-        """Get the graph type (bipartite, regulatory, etc.)."""
-        return self._metadata["graph_type"]
 
-    @property
-    def weighting_strategy(self) -> Optional[str]:
-        """Get the weighting strategy used."""
-        return self._metadata["weighting_strategy"]
+        Returns
+        -------
+        None
+            The graph is modified in-place.
+
+        """
+
+        # Find isolated vertices (degree 0)
+        isolated_vertices = self.vs.select(_degree=0)
+
+        if len(isolated_vertices) == 0:
+            logger.info("No isolated vertices found to remove")
+            return
+
+        # Get vertex names/indices for logging (up to 5 examples)
+        vertex_names = []
+        for v in isolated_vertices[:5]:
+            # Use vertex name if available, otherwise use index
+            name = (
+                v["name"]
+                if "name" in v.attributes() and v["name"] is not None
+                else str(v.index)
+            )
+            vertex_names.append(name)
+
+        # Create log message
+        examples_str = ", ".join(f"'{name}'" for name in vertex_names)
+        if len(isolated_vertices) > 5:
+            examples_str += f" (and {len(isolated_vertices) - 5} more)"
+
+        logger.info(
+            f"Removed {len(isolated_vertices)} isolated vertices: [{examples_str}]"
+        )
+
+        # Remove the isolated vertices
+        self.delete_vertices(isolated_vertices)
 
     def set_metadata(self, **kwargs) -> None:
         """
@@ -252,7 +294,7 @@ class NapistuGraph(ig.Graph):
         base_str = super().__str__()
         metadata_str = (
             f"Reversed: {self.is_reversed}, "
-            f"Type: {self.graph_type}, "
+            f"Type: {self.wiring_approach}, "
             f"Weighting: {self.weighting_strategy}"
         )
         return f"{base_str}\nNapistuGraph metadata: {metadata_str}"

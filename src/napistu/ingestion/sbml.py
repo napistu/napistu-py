@@ -3,11 +3,12 @@ from __future__ import annotations
 import logging
 import os
 import re
+from typing import Any
 
 import libsbml
 import pandas as pd
 from fs import open_fs
-from pydantic import conlist, field_validator, RootModel
+from pydantic import field_validator, RootModel
 
 from napistu import consensus
 from napistu import identifiers
@@ -17,6 +18,8 @@ from napistu import utils
 from napistu.constants import BQB
 from napistu.constants import ONTOLOGIES
 from napistu.constants import SBML_DFS
+from napistu.constants import SBML_DFS_SCHEMA
+from napistu.constants import SCHEMA_DEFS
 from napistu.ingestion.constants import SBML_DEFS
 from napistu.ingestion.constants import COMPARTMENTS_GO_TERMS
 from napistu.ingestion.constants import COMPARTMENT_ALIASES
@@ -24,8 +27,6 @@ from napistu.ingestion.constants import VALID_COMPARTMENTS
 from napistu.ingestion.constants import GENERIC_COMPARTMENT
 
 logger = logging.getLogger(__name__)
-
-NonEmptyStringList = conlist(str, min_length=1)
 
 
 class SBML:
@@ -101,35 +102,6 @@ class SBML:
                     f"Critical errors were found when reading the sbml file: {critical_errors}"
                 )
 
-    def summary(self) -> pd.DataFrame:
-        """Generates a styled summary of the SBML model.
-
-        Returns
-        -------
-        pd.io.formats.style.Styler
-            A styled pandas DataFrame containing a summary of the model,
-            including pathway name, ID, and counts of species and reactions.
-        """
-        model = self.model
-
-        model_summaries = dict()
-
-        model_summaries[SBML_DEFS.SUMMARY_PATHWAY_NAME] = model.getName()
-        model_summaries[SBML_DEFS.SUMMARY_PATHWAY_ID] = model.getId()
-
-        model_summaries[SBML_DEFS.SUMMARY_N_SPECIES] = model.getNumSpecies()
-        model_summaries[SBML_DEFS.SUMMARY_N_REACTIONS] = model.getNumReactions()
-
-        compartments = [
-            model.getCompartment(i).getName() for i in range(model.getNumCompartments())
-        ]
-        compartments.sort()
-        model_summaries[SBML_DEFS.SUMMARY_COMPARTMENTS] = ",\n".join(compartments)
-
-        model_summaries_dat = pd.DataFrame(model_summaries, index=[0]).T
-
-        return utils.style_df(model_summaries_dat)  # type: ignore
-
     def sbml_errors(self, reduced_log: bool = True, return_df: bool = False):
         """Formats and reports all errors found in the SBML file.
 
@@ -198,6 +170,253 @@ class SBML:
             utils.style_df(error_log, headers=headers)
 
             return None
+
+    def summary(self) -> pd.DataFrame:
+        """Generates a styled summary of the SBML model.
+
+        Returns
+        -------
+        pd.io.formats.style.Styler
+            A styled pandas DataFrame containing a summary of the model,
+            including pathway name, ID, and counts of species and reactions.
+        """
+        model = self.model
+
+        model_summaries = dict()
+
+        model_summaries[SBML_DEFS.SUMMARY_PATHWAY_NAME] = model.getName()
+        model_summaries[SBML_DEFS.SUMMARY_PATHWAY_ID] = model.getId()
+
+        model_summaries[SBML_DEFS.SUMMARY_N_SPECIES] = model.getNumSpecies()
+        model_summaries[SBML_DEFS.SUMMARY_N_REACTIONS] = model.getNumReactions()
+
+        compartments = [
+            model.getCompartment(i).getName() for i in range(model.getNumCompartments())
+        ]
+        compartments.sort()
+        model_summaries[SBML_DEFS.SUMMARY_COMPARTMENTS] = ",\n".join(compartments)
+
+        model_summaries_dat = pd.DataFrame(model_summaries, index=[0]).T
+
+        return utils.style_df(model_summaries_dat)  # type: ignore
+
+    def _define_compartments(
+        self, compartment_aliases_dict: dict | None = None
+    ) -> pd.DataFrame:
+        """Extracts and defines compartments from the SBML model.
+
+        This function iterates through the compartments in the SBML model,
+        extracting their IDs, names, and identifiers. It also handles cases where
+        CVTerms are missing by mapping compartment names to known GO terms.
+
+        Parameters
+        ----------
+        sbml_model : SBML
+            The SBML model to process.
+        compartment_aliases_dict : dict, optional
+            A dictionary to map custom compartment names. If None, the default
+            mapping from `COMPARTMENT_ALIASES` is used.
+
+        Returns
+        -------
+        pd.DataFrame
+            A DataFrame containing information about each compartment, indexed by
+            compartment ID.
+        """
+        if compartment_aliases_dict is None:
+            aliases = COMPARTMENT_ALIASES
+        else:
+            aliases = CompartmentAliasesValidator.from_dict(compartment_aliases_dict)
+
+        compartments = list()
+        for i in range(self.model.getNumCompartments()):
+            comp = self.model.getCompartment(i)
+
+            if not comp.getCVTerms():
+                logger.warning(
+                    f"Compartment {comp.getId()} has empty CVterms, mapping its c_Identifiers from the Compartment dict"
+                )
+
+                compartments.append(_define_compartments_missing_cvterms(comp, aliases))
+
+            else:
+                compartments.append(
+                    {
+                        SBML_DFS.C_ID: comp.getId(),
+                        SBML_DFS.C_NAME: comp.getName(),
+                        SBML_DFS.C_IDENTIFIERS: identifiers.cv_to_Identifiers(comp),
+                        SBML_DFS.C_SOURCE: source.Source(init=True),
+                    }
+                )
+
+        return pd.DataFrame(compartments).set_index(SBML_DFS.C_ID)
+
+    def _define_cspecies(self) -> pd.DataFrame:
+        """Creates a DataFrame of compartmentalized species from an SBML model.
+
+        This function extracts all species from the model and creates a
+        standardized DataFrame that includes unique IDs for each compartmentalized
+        species (`sc_id`), along with species and compartment IDs, and their
+        corresponding identifiers.
+
+        Returns
+        -------
+        pd.DataFrame
+            A DataFrame containing information about each compartmentalized species.
+        """
+        comp_species = list()
+        for i in range(self.model.getNumSpecies()):
+            spec = self.model.getSpecies(i)
+
+            spec_dict = {
+                SBML_DFS.SC_ID: spec.getId(),
+                SBML_DFS.SC_NAME: spec.getName(),
+                SBML_DFS.C_ID: spec.getCompartment(),
+                SBML_DFS.S_IDENTIFIERS: identifiers.cv_to_Identifiers(spec),
+                SBML_DFS.SC_SOURCE: source.Source(init=True),
+            }
+
+            comp_species.append(spec_dict)
+
+        # add geneproducts defined using L3 FBC extension
+        fbc_gene_products = self._define_fbc_gene_products()
+        comp_species.extend(fbc_gene_products)
+
+        comp_species_df = pd.DataFrame(comp_species).set_index(SBML_DFS.SC_ID)
+        comp_species_df[SBML_DFS.SC_NAME] = utils.update_pathological_names(
+            comp_species_df[SBML_DFS.SC_NAME], "SC"
+        )
+
+        return comp_species_df
+
+    def _define_fbc_gene_products(self) -> list[dict]:
+
+        mplugin = self.model.getPlugin("fbc")
+
+        fbc_gene_products = list()
+        if mplugin is not None:
+            for i in range(mplugin.getNumGeneProducts()):
+                gene_product = mplugin.getGeneProduct(i)
+
+                gene_dict = {
+                    SBML_DFS.SC_ID: gene_product.getId(),
+                    SBML_DFS.SC_NAME: (
+                        gene_product.getName()
+                        if gene_product.isSetName()
+                        else gene_product.getLabel()
+                    ),
+                    # use getLabel() to accomendate sbml model (e.g. HumanGEM.xml) with no fbc:name attribute
+                    # Recon3D.xml has both fbc:label and fbc:name attributes, with gene name in fbc:nam
+                    SBML_DFS.C_ID: None,
+                    SBML_DFS.S_IDENTIFIERS: identifiers.cv_to_Identifiers(gene_product),
+                    SBML_DFS.SC_SOURCE: source.Source(init=True),
+                }
+
+                fbc_gene_products.append(gene_dict)
+
+        return fbc_gene_products
+
+    def _define_reactions(self) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Extracts and defines reactions and their participating species.
+
+        This function iterates through all reactions in the SBML model, creating
+        a DataFrame for reaction attributes and another for all participating
+        species (reactants, products, and modifiers).
+
+        Parameters
+        ----------
+        sbml_model : SBML
+            The SBML model to process.
+
+        Returns
+        -------
+        tuple[pd.DataFrame, pd.DataFrame]
+            A tuple containing two DataFrames:
+            - The first DataFrame contains reaction attributes, indexed by reaction ID.
+            - The second DataFrame lists all species participating in reactions.
+        """
+        reactions_list = []
+        reaction_species_list = []
+        for i in range(self.model.getNumReactions()):
+            rxn = SBML_reaction(self.model.getReaction(i))
+            reactions_list.append(rxn.reaction_dict)
+
+            rxn_specs = rxn.species
+            rxn_specs[SBML_DFS.R_ID] = rxn.reaction_dict[SBML_DFS.R_ID]
+            reaction_species_list.append(rxn_specs)
+
+        reactions = pd.DataFrame(reactions_list).set_index(SBML_DFS.R_ID)
+
+        reaction_species_df = pd.concat(reaction_species_list)
+        # add an index if reaction species didn't have IDs in the .sbml
+        if all([v == "" for v in reaction_species_df.index.tolist()]):
+            reaction_species_df = (
+                reaction_species_df.reset_index(drop=True)
+                .assign(
+                    rsc_id=sbml_dfs_utils.id_formatter(
+                        range(reaction_species_df.shape[0]), SBML_DFS.RSC_ID
+                    )
+                )
+                .set_index(SBML_DFS.RSC_ID)
+            )
+
+        return reactions, reaction_species_df
+
+    def _define_species(self) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Extracts and defines species and compartmentalized species.
+
+        This function creates two DataFrames: one for unique molecular species
+        (un-compartmentalized) and another for compartmentalized species, which
+        represent a species within a specific compartment.
+
+        Returns
+        -------
+        tuple[pd.DataFrame, pd.DataFrame]
+            A tuple containing two DataFrames:
+            - The first DataFrame represents unique molecular species.
+            - The second DataFrame represents compartmentalized species.
+        """
+
+        SPECIES_SCHEMA = SBML_DFS_SCHEMA.SCHEMA[SBML_DFS.SPECIES]
+        CSPECIES_SCHEMA = SBML_DFS_SCHEMA.SCHEMA[SBML_DFS.COMPARTMENTALIZED_SPECIES]
+        SPECIES_VARS = SPECIES_SCHEMA[SCHEMA_DEFS.VARS]
+        CSPECIES_VARS = CSPECIES_SCHEMA[SCHEMA_DEFS.VARS]
+
+        comp_species_df = self._define_cspecies()
+
+        # find unique species and create a table
+        consensus_species_df = comp_species_df.copy()
+        consensus_species_df.index.names = [SBML_DFS.S_ID]
+        consensus_species, species_lookup = consensus.reduce_to_consensus_ids(
+            consensus_species_df,
+            # note that this is an incomplete schema because consensus_species_df isn't a
+            # normal species table
+            {
+                SCHEMA_DEFS.PK: SBML_DFS.S_ID,
+                SCHEMA_DEFS.ID: SBML_DFS.S_IDENTIFIERS,
+                SCHEMA_DEFS.TABLE: SBML_DFS.SPECIES,
+            },
+        )
+
+        # create a table of unique molecular species
+        consensus_species.index.name = SBML_DFS.S_ID
+        consensus_species[SBML_DFS.S_NAME] = [
+            re.sub("\\[.+\\]", "", x).strip()
+            for x in consensus_species[SBML_DFS.SC_NAME]
+        ]
+        consensus_species = consensus_species.drop(
+            [SBML_DFS.SC_NAME, SBML_DFS.C_ID], axis=1
+        )
+        consensus_species[SBML_DFS.S_SOURCE] = [
+            source.Source(init=True) for x in range(0, consensus_species.shape[0])
+        ]
+
+        species = consensus_species[SPECIES_VARS]
+        compartmentalized_species = comp_species_df.join(species_lookup).rename(
+            columns={"new_id": SBML_DFS.S_ID}
+        )[CSPECIES_VARS]
+
+        return species, compartmentalized_species
 
 
 class CompartmentAliasesValidator(RootModel):
@@ -375,288 +594,72 @@ def sbml_dfs_from_sbml(self, sbml_model: SBML, compartment_aliases: dict | None 
         compartments, species, compartmentalized_species, reactions, and reaction_species
     """
     # 1. Process compartments from the SBML model
-    self.compartments = _define_compartments(sbml_model, compartment_aliases)
+    self.compartments = sbml_model._define_compartments(compartment_aliases)
 
     # 2. Process species and compartmentalized species
-    self.species, self.compartmentalized_species = _define_species(
-        sbml_model, self.schema
-    )
+    self.species, self.compartmentalized_species = sbml_model._define_species()
 
     # 3. Process reactions and their participating species
-    self.reactions, self.reaction_species = _define_reactions(sbml_model)
+    self.reactions, self.reaction_species = sbml_model._define_reactions()
 
     return self
 
 
-def _define_compartments(
-    sbml_model: SBML, compartment_aliases_dict: dict | None = None
-) -> pd.DataFrame:
-    """Extracts and defines compartments from the SBML model.
+def _define_compartments_missing_cvterms(
+    comp: libsbml.Compartment, aliases: dict
+) -> dict[str, Any]:
 
-    This function iterates through the compartments in the SBML model,
-    extracting their IDs, names, and identifiers. It also handles cases where
-    CVTerms are missing by mapping compartment names to known GO terms.
-
-    Parameters
-    ----------
-    sbml_model : SBML
-        The SBML model to process.
-    compartment_aliases_dict : dict, optional
-        A dictionary to map custom compartment names. If None, the default
-        mapping from `COMPARTMENT_ALIASES` is used.
-
-    Returns
-    -------
-    pd.DataFrame
-        A DataFrame containing information about each compartment, indexed by
-        compartment ID.
-    """
-    if compartment_aliases_dict is None:
-        aliases = COMPARTMENT_ALIASES
-    else:
-        aliases = CompartmentAliasesValidator.from_dict(compartment_aliases_dict)
-
-    compartments = list()
-    for i in range(sbml_model.model.getNumCompartments()):
-        comp = sbml_model.model.getCompartment(i)
-
-        if not comp.getCVTerms():
-            logger.warning(
-                f"Compartment {comp.getId()} has empty CVterms, mapping its c_Identifiers from the Compartment dict"
-            )
-
-            comp_name = comp.getName()
-            mapped_compartment_key = [
-                compkey
-                for compkey, mappednames in aliases.items()
-                if comp_name in mappednames
-            ]
-
-            if len(mapped_compartment_key) == 0:
-                logger.warning(
-                    f"No GO compartment for {comp_name} is mapped, use the generic cellular_component's GO id"
-                )
-                compartments.append(
-                    {
-                        SBML_DFS.C_ID: comp.getId(),
-                        SBML_DFS.C_NAME: comp.getName(),
-                        SBML_DFS.C_IDENTIFIERS: identifiers.Identifiers(
-                            [
-                                identifiers.format_uri(
-                                    uri=identifiers.create_uri_url(
-                                        ontology=ONTOLOGIES.GO,
-                                        identifier=COMPARTMENTS_GO_TERMS[
-                                            GENERIC_COMPARTMENT
-                                        ],
-                                    ),
-                                    biological_qualifier_type=BQB.BQB_IS,
-                                )
-                            ]
-                        ),
-                        SBML_DFS.C_SOURCE: source.Source(init=True),
-                    }
-                )
-
-            if len(mapped_compartment_key) > 0:
-                if len(mapped_compartment_key) > 1:
-                    logger.warning(
-                        f"More than one GO compartments for {comp_name} are mapped, using the first one"
-                    )
-                compartments.append(
-                    {
-                        SBML_DFS.C_ID: comp.getId(),
-                        SBML_DFS.C_NAME: comp.getName(),
-                        SBML_DFS.C_IDENTIFIERS: identifiers.Identifiers(
-                            [
-                                identifiers.format_uri(
-                                    uri=identifiers.create_uri_url(
-                                        ontology=ONTOLOGIES.GO,
-                                        identifier=COMPARTMENTS_GO_TERMS[
-                                            mapped_compartment_key[0]
-                                        ],
-                                    ),
-                                    biological_qualifier_type=BQB.IS,
-                                )
-                            ]
-                        ),
-                        SBML_DFS.C_SOURCE: source.Source(init=True),
-                    }
-                )
-
-        else:
-            compartments.append(
-                {
-                    SBML_DFS.C_ID: comp.getId(),
-                    SBML_DFS.C_NAME: comp.getName(),
-                    SBML_DFS.C_IDENTIFIERS: identifiers.cv_to_Identifiers(comp),
-                    SBML_DFS.C_SOURCE: source.Source(init=True),
-                }
-            )
-
-    return pd.DataFrame(compartments).set_index(SBML_DFS.C_ID)
-
-
-def _define_species(
-    sbml_model: SBML, schema: dict
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Extracts and defines species and compartmentalized species.
-
-    This function creates two DataFrames: one for unique molecular species
-    (un-compartmentalized) and another for compartmentalized species, which
-    represent a species within a specific compartment.
-
-    Parameters
-    ----------
-    sbml_model : SBML
-        The SBML model to process.
-    schema : dict
-        A dictionary defining the data schema for species and compartmentalized
-        species tables.
-
-    Returns
-    -------
-    tuple[pd.DataFrame, pd.DataFrame]
-        A tuple containing two DataFrames:
-        - The first DataFrame represents unique molecular species.
-        - The second DataFrame represents compartmentalized species.
-    """
-
-    SPECIES_VARS = schema["species"]["vars"]
-    CSPECIES_VARS = schema["compartmentalized_species"]["vars"]
-
-    comp_species_df = setup_cspecies(sbml_model)
-
-    # find unique species and create a table
-    consensus_species_df = comp_species_df.copy()
-    consensus_species_df.index.names = [SBML_DFS.S_ID]
-    consensus_species, species_lookup = consensus.reduce_to_consensus_ids(
-        consensus_species_df,
-        {"pk": SBML_DFS.S_ID, "id": SBML_DFS.S_IDENTIFIERS},
-    )
-
-    # create a table of unique molecular species
-    consensus_species.index.name = SBML_DFS.S_ID
-    consensus_species[SBML_DFS.S_NAME] = [
-        re.sub("\\[.+\\]", "", x).strip() for x in consensus_species[SBML_DFS.SC_NAME]
-    ]
-    consensus_species = consensus_species.drop(
-        [SBML_DFS.SC_NAME, SBML_DFS.C_ID], axis=1
-    )
-    consensus_species["s_Source"] = [
-        source.Source(init=True) for x in range(0, consensus_species.shape[0])
+    comp_name = comp.getName()
+    mapped_compartment_key = [
+        compkey for compkey, mappednames in aliases.items() if comp_name in mappednames
     ]
 
-    species = consensus_species[SPECIES_VARS]
-    compartmentalized_species = comp_species_df.join(species_lookup).rename(
-        columns={"new_id": SBML_DFS.S_ID}
-    )[CSPECIES_VARS]
-
-    return species, compartmentalized_species
-
-
-def _define_reactions(sbml_model: SBML) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Extracts and defines reactions and their participating species.
-
-    This function iterates through all reactions in the SBML model, creating
-    a DataFrame for reaction attributes and another for all participating
-    species (reactants, products, and modifiers).
-
-    Parameters
-    ----------
-    sbml_model : SBML
-        The SBML model to process.
-
-    Returns
-    -------
-    tuple[pd.DataFrame, pd.DataFrame]
-        A tuple containing two DataFrames:
-        - The first DataFrame contains reaction attributes, indexed by reaction ID.
-        - The second DataFrame lists all species participating in reactions.
-    """
-    reactions_list = []
-    reaction_species_list = []
-    for i in range(sbml_model.model.getNumReactions()):
-        rxn = SBML_reaction(sbml_model.model.getReaction(i))
-        reactions_list.append(rxn.reaction_dict)
-
-        rxn_specs = rxn.species
-        rxn_specs[SBML_DFS.R_ID] = rxn.reaction_dict[SBML_DFS.R_ID]
-        reaction_species_list.append(rxn_specs)
-
-    reactions = pd.DataFrame(reactions_list).set_index(SBML_DFS.R_ID)
-
-    reaction_species_df = pd.concat(reaction_species_list)
-    # add an index if reaction species didn't have IDs in the .sbml
-    if all([v == "" for v in reaction_species_df.index.tolist()]):
-        reaction_species_df = (
-            reaction_species_df.reset_index(drop=True)
-            .assign(
-                rsc_id=sbml_dfs_utils.id_formatter(
-                    range(reaction_species_df.shape[0]), SBML_DFS.RSC_ID
-                )
-            )
-            .set_index(SBML_DFS.RSC_ID)
+    if len(mapped_compartment_key) == 0:
+        logger.warning(
+            f"No GO compartment for {comp_name} is mapped, use the generic cellular_component's GO id"
         )
 
-    return reactions, reaction_species_df
-
-
-def setup_cspecies(sbml_model: SBML) -> pd.DataFrame:
-    """Creates a DataFrame of compartmentalized species from an SBML model.
-
-    This function extracts all species from the model and creates a
-    standardized DataFrame that includes unique IDs for each compartmentalized
-    species (`sc_id`), along with species and compartment IDs, and their
-    corresponding identifiers.
-
-    Parameters
-    ----------
-    sbml_model : SBML
-        The SBML model to process.
-
-    Returns
-    -------
-    pd.DataFrame
-        A DataFrame containing information about each compartmentalized species.
-    """
-    comp_species = list()
-    for i in range(sbml_model.model.getNumSpecies()):
-        spec = sbml_model.model.getSpecies(i)
-
-        spec_dict = {
-            SBML_DFS.SC_ID: spec.getId(),
-            SBML_DFS.SC_NAME: spec.getName(),
-            SBML_DFS.C_ID: spec.getCompartment(),
-            SBML_DFS.S_IDENTIFIERS: identifiers.cv_to_Identifiers(spec),
-            SBML_DFS.SC_SOURCE: source.Source(init=True),
+        compartment_entry = {
+            SBML_DFS.C_ID: comp.getId(),
+            SBML_DFS.C_NAME: comp.getName(),
+            SBML_DFS.C_IDENTIFIERS: identifiers.Identifiers(
+                [
+                    identifiers.format_uri(
+                        uri=identifiers.create_uri_url(
+                            ontology=ONTOLOGIES.GO,
+                            identifier=COMPARTMENTS_GO_TERMS[GENERIC_COMPARTMENT],
+                        ),
+                        biological_qualifier_type=BQB.BQB_IS,
+                    )
+                ]
+            ),
+            SBML_DFS.C_SOURCE: source.Source(init=True),
         }
 
-        comp_species.append(spec_dict)
+    if len(mapped_compartment_key) > 0:
+        if len(mapped_compartment_key) > 1:
+            logger.warning(
+                f"More than one GO compartments for {comp_name} are mapped, using the first one"
+            )
 
-    mplugin = sbml_model.model.getPlugin("fbc")
+        compartment_entry = {
+            SBML_DFS.C_ID: comp.getId(),
+            SBML_DFS.C_NAME: comp.getName(),
+            SBML_DFS.C_IDENTIFIERS: identifiers.Identifiers(
+                [
+                    identifiers.format_uri(
+                        uri=identifiers.create_uri_url(
+                            ontology=ONTOLOGIES.GO,
+                            identifier=COMPARTMENTS_GO_TERMS[mapped_compartment_key[0]],
+                        ),
+                        biological_qualifier_type=BQB.IS,
+                    )
+                ]
+            ),
+            SBML_DFS.C_SOURCE: source.Source(init=True),
+        }
 
-    # add geneproducts defined using L3 FBC extension
-    if mplugin is not None:
-        for i in range(mplugin.getNumGeneProducts()):
-            gene_product = mplugin.getGeneProduct(i)
-
-            gene_dict = {
-                SBML_DFS.SC_ID: gene_product.getId(),
-                SBML_DFS.SC_NAME: (
-                    gene_product.getName()
-                    if gene_product.isSetName()
-                    else gene_product.getLabel()
-                ),
-                # use getLabel() to accomendate sbml model (e.g. HumanGEM.xml) with no fbc:name attribute
-                # Recon3D.xml has both fbc:label and fbc:name attributes, with gene name in fbc:nam
-                SBML_DFS.C_ID: None,
-                SBML_DFS.S_IDENTIFIERS: identifiers.cv_to_Identifiers(gene_product),
-                SBML_DFS.SC_SOURCE: source.Source(init=True),
-            }
-
-            comp_species.append(gene_dict)
-
-    return pd.DataFrame(comp_species).set_index(SBML_DFS.SC_ID)
+    return compartment_entry
 
 
 def _get_gene_product_dict(gp):

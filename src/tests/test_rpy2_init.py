@@ -15,7 +15,6 @@ sys.modules["rpy2.robjects.pandas2ri"] = Mock()
 sys.modules["rpy2.rinterface"] = Mock()
 sys.modules["rpy2_arrow"] = Mock()
 sys.modules["rpy2_arrow.arrow"] = Mock()
-sys.modules["pyarrow"] = Mock()
 
 import napistu.rpy2  # noqa: E402
 

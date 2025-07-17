@@ -33,7 +33,7 @@ def features_to_pathway_species(
         pd.Dataframe containing a "feature_identifiers_var" variable used to match entries
     species_identifiers: pd.DataFrame
         A table of molecular species identifiers produced from sbml_dfs.get_identifiers("species")
-        generally using sbml_dfs_core.export_sbml_dfs()
+        generally using sbml_dfs.export_sbml_dfs()
     ontologies: set
         A set of ontologies used to match features to pathway species
     feature_identifiers_var: str

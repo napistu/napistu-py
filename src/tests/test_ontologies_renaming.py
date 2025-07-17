@@ -1,14 +1,16 @@
 """Tests for the ontology aliases module."""
 
+from unittest.mock import patch
+
 import pytest
 import pandas as pd
 from napistu import identifiers
-from napistu.constants import IDENTIFIERS, SBML_DFS
+from napistu.constants import IDENTIFIERS, SBML_DFS, ONTOLOGIES
 from napistu.ontologies import renaming
 
 
 @pytest.fixture
-def mock_sbml_dfs():
+def mock_sbml_dfs(sbml_dfs):
     """Create a mock SBML_dfs object for testing."""
     # Create a simple species DataFrame with identifiers
     s1_ids = identifiers.Identifiers(
@@ -39,32 +41,27 @@ def mock_sbml_dfs():
         ]
     )
 
+    s3_ids = identifiers.Identifiers([])
+
     species_df = pd.DataFrame(
-        {"s_name": ["gene1", "gene2"], SBML_DFS.S_IDENTIFIERS: [s1_ids, s2_ids]}
+        {
+            SBML_DFS.S_NAME: ["gene1", "gene2", "gene3"],
+            SBML_DFS.S_IDENTIFIERS: [s1_ids, s2_ids, s3_ids],
+        }
     )
 
-    # Create mock SBML_dfs object
-    class MockSBMLDfs:
-        def __init__(self):
-            self.species = species_df
-            self.schema = {"species": {"pk": "s_id", "id": SBML_DFS.S_IDENTIFIERS}}
-
-        def get_identifiers(self, table_name):
-            if table_name == SBML_DFS.SPECIES:
-                all_ids = []
-                for idx, row in self.species.iterrows():
-                    for id_dict in row[SBML_DFS.S_IDENTIFIERS].ids:
-                        all_ids.append({"s_id": idx, **id_dict})
-                return pd.DataFrame(all_ids)
-            return pd.DataFrame()
-
-    return MockSBMLDfs()
+    # Patch the species attribute only for the duration of the test
+    with patch.object(sbml_dfs, "species", new=species_df):
+        yield sbml_dfs  # All methods are real, only .species is patched
 
 
 def test_rename_species_ontologies_basic(mock_sbml_dfs):
     """Test basic alias updating functionality."""
     # Define test aliases
-    test_aliases = {"ncbi_entrez_gene": {"ncbigene"}, "uniprot": {"uniprot_id"}}
+    test_aliases = {
+        ONTOLOGIES.NCBI_ENTREZ_GENE: {"ncbigene"},
+        ONTOLOGIES.UNIPROT: {"uniprot_id"},
+    }
 
     # Update aliases
     renaming.rename_species_ontologies(mock_sbml_dfs, test_aliases)
@@ -73,10 +70,17 @@ def test_rename_species_ontologies_basic(mock_sbml_dfs):
     updated_ids = mock_sbml_dfs.get_identifiers(SBML_DFS.SPECIES)
 
     # Check that ontologies were updated correctly
-    assert "ncbi_entrez_gene" in set(updated_ids[IDENTIFIERS.ONTOLOGY])
-    assert "uniprot" in set(updated_ids[IDENTIFIERS.ONTOLOGY])
+    assert ONTOLOGIES.NCBI_ENTREZ_GENE in set(updated_ids[IDENTIFIERS.ONTOLOGY])
+    assert ONTOLOGIES.UNIPROT in set(updated_ids[IDENTIFIERS.ONTOLOGY])
     assert "ncbigene" not in set(updated_ids[IDENTIFIERS.ONTOLOGY])
     assert "uniprot_id" not in set(updated_ids[IDENTIFIERS.ONTOLOGY])
+
+    # verify that all the species have Identifiers object
+    for row in mock_sbml_dfs.species.itertuples():
+        val = getattr(row, SBML_DFS.S_IDENTIFIERS)
+        assert val is not None and isinstance(
+            val, identifiers.Identifiers
+        ), f"Bad value: {val} in row {row}"
 
 
 def test_rename_species_ontologies_no_overlap(mock_sbml_dfs):
@@ -93,7 +97,7 @@ def test_rename_species_ontologies_partial_update(mock_sbml_dfs):
     """Test that partial updates work correctly."""
     # Define aliases that only update some ontologies
     test_aliases = {
-        "ncbi_entrez_gene": {"ncbigene"}
+        ONTOLOGIES.NCBI_ENTREZ_GENE: {"ncbigene"}
         # Don't include uniprot_id mapping
     }
 
@@ -104,7 +108,7 @@ def test_rename_species_ontologies_partial_update(mock_sbml_dfs):
     updated_ids = mock_sbml_dfs.get_identifiers(SBML_DFS.SPECIES)
 
     # Check that only ncbigene was updated
-    assert "ncbi_entrez_gene" in set(updated_ids[IDENTIFIERS.ONTOLOGY])
+    assert ONTOLOGIES.NCBI_ENTREZ_GENE in set(updated_ids[IDENTIFIERS.ONTOLOGY])
     assert "uniprot_id" in set(
         updated_ids[IDENTIFIERS.ONTOLOGY]
     )  # Should remain unchanged

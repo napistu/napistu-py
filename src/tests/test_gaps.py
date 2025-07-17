@@ -3,21 +3,32 @@ import numpy as np
 import warnings
 
 from napistu.sbml_dfs_core import SBML_dfs
-from napistu.constants import SBML_DFS
-from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.identifiers import Identifiers
-
+from napistu.source import Source
 from napistu.modify import gaps
+from napistu.constants import BQB
+from napistu.constants import IDENTIFIERS
+from napistu.constants import ONTOLOGIES
+from napistu.constants import MINI_SBO_FROM_NAME
+from napistu.constants import SBML_DFS
+from napistu.ingestion.constants import EXCHANGE_COMPARTMENT, COMPARTMENTS
 
 
 # Minimal compartments table
 def _create_sbml_dfs_missing_transport_rxns():
 
+    blank_id = Identifiers([])
+    blank_source = Source(init=True)
+
     compartments = pd.DataFrame(
         {
-            SBML_DFS.C_NAME: ["mitochondria", "nucleus", "cytosol"],
-            SBML_DFS.C_IDENTIFIERS: [None],
-            SBML_DFS.C_SOURCE: [None],
+            SBML_DFS.C_NAME: [
+                COMPARTMENTS.MITOCHONDRIA,
+                COMPARTMENTS.NUCLEUS,
+                EXCHANGE_COMPARTMENT,
+            ],
+            SBML_DFS.C_IDENTIFIERS: [blank_id],
+            SBML_DFS.C_SOURCE: [blank_source],
         },
         index=["c_mito", "c_nucl", "c_cytosol"],
     ).rename_axis(SBML_DFS.C_ID)
@@ -30,15 +41,15 @@ def _create_sbml_dfs_missing_transport_rxns():
                 Identifiers(
                     [
                         {
-                            "ontology": "uniprot",
-                            "identifier": "PFAKE1",
-                            "bqb": "BQB_IS",
-                            "url": None,
+                            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.UNIPROT,
+                            IDENTIFIERS.IDENTIFIER: "PFAKE1",
+                            IDENTIFIERS.BQB: BQB.IS,
+                            IDENTIFIERS.URL: None,
                         }
                     ]
                 )
             ],
-            SBML_DFS.S_SOURCE: [None],
+            SBML_DFS.S_SOURCE: [blank_source],
         },
         index=["s_A"],
     ).rename_axis(SBML_DFS.S_ID)
@@ -49,7 +60,7 @@ def _create_sbml_dfs_missing_transport_rxns():
             SBML_DFS.SC_NAME: ["A [mitochondria]", "A [nucleus]"],
             SBML_DFS.S_ID: ["s_A", "s_A"],
             SBML_DFS.C_ID: ["c_mito", "c_nucl"],
-            SBML_DFS.SC_SOURCE: [None],
+            SBML_DFS.SC_SOURCE: [blank_source],
         },
         index=["sc_A_mito", "sc_A_nucl"],
     ).rename_axis(SBML_DFS.SC_ID)
@@ -58,8 +69,8 @@ def _create_sbml_dfs_missing_transport_rxns():
     reactions = pd.DataFrame(
         {
             SBML_DFS.R_NAME: ["A [mito] -> A [mito]", "A [nucl] -> A [nucl]"],
-            SBML_DFS.R_IDENTIFIERS: [None],
-            SBML_DFS.R_SOURCE: [None],
+            SBML_DFS.R_IDENTIFIERS: [blank_id],
+            SBML_DFS.R_SOURCE: [blank_source],
             SBML_DFS.R_ISREVERSIBLE: [True, True],
         },
         index=["r_A_mito", "r_A_nucl"],
@@ -105,7 +116,7 @@ def test_add_transportation_reactions():
 
     sbml_dfs = _create_sbml_dfs_missing_transport_rxns()
     sbml_dfs_w_transport = gaps.update_sbml_df_with_exchange(
-        np.array(["s_A"]), sbml_dfs, exchange_compartment="cytosol"
+        np.array(["s_A"]), sbml_dfs, exchange_compartment=EXCHANGE_COMPARTMENT
     )
     assert sbml_dfs_w_transport.reactions.shape[0] == 4, "Should add 2 reactions"
     assert sbml_dfs_w_transport.reactions[

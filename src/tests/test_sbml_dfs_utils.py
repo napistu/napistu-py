@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from napistu import sbml_dfs_utils
 from napistu.constants import (
@@ -10,6 +11,10 @@ from napistu.constants import (
     SBML_DFS,
     IDENTIFIERS,
     SBOTERM_NAMES,
+    VALID_SBO_TERMS,
+    VALID_SBO_TERM_NAMES,
+    MINI_SBO_FROM_NAME,
+    MINI_SBO_TO_NAME,
 )
 
 
@@ -219,3 +224,126 @@ def test_stubbed_compartment():
         "url": "https://www.ebi.ac.uk/QuickGO/term/GO:0005575",
         "bqb": "BQB_IS",
     }
+
+
+def test_validate_sbo_values_success():
+    # Should not raise
+    sbml_dfs_utils._validate_sbo_values(pd.Series(VALID_SBO_TERMS), validate="terms")
+    sbml_dfs_utils._validate_sbo_values(
+        pd.Series(VALID_SBO_TERM_NAMES), validate="names"
+    )
+
+
+def test_validate_sbo_values_invalid_type():
+    with pytest.raises(ValueError, match="Invalid validation type"):
+        sbml_dfs_utils._validate_sbo_values(
+            pd.Series(VALID_SBO_TERMS), validate="badtype"
+        )
+
+
+def test_validate_sbo_values_invalid_value():
+    # Add an invalid term
+    s = pd.Series(VALID_SBO_TERMS + ["SBO:9999999"])
+    with pytest.raises(ValueError, match="unusable SBO terms"):
+        sbml_dfs_utils._validate_sbo_values(s, validate="terms")
+    # Add an invalid name
+    s = pd.Series(VALID_SBO_TERM_NAMES + ["not_a_name"])
+    with pytest.raises(ValueError, match="unusable SBO terms"):
+        sbml_dfs_utils._validate_sbo_values(s, validate="names")
+
+
+def test_sbo_constants_internal_consistency():
+    # Every term should have a name and vice versa
+    # MINI_SBO_FROM_NAME: name -> term, MINI_SBO_TO_NAME: term -> name
+    terms_from_names = set(MINI_SBO_FROM_NAME.values())
+    names_from_terms = set(MINI_SBO_TO_NAME.values())
+    assert terms_from_names == set(VALID_SBO_TERMS)
+    assert names_from_terms == set(VALID_SBO_TERM_NAMES)
+    # Bijective mapping
+    for name, term in MINI_SBO_FROM_NAME.items():
+        assert MINI_SBO_TO_NAME[term] == name
+    for term, name in MINI_SBO_TO_NAME.items():
+        assert MINI_SBO_FROM_NAME[name] == term
+
+
+def test_infer_entity_type():
+    """Test entity type inference with valid keys"""
+    # when index matches primary key.
+    # Test compartments with index as primary key
+    df = pd.DataFrame(
+        {SBML_DFS.C_NAME: ["cytoplasm"], SBML_DFS.C_IDENTIFIERS: ["GO:0005737"]}
+    )
+    df.index.name = SBML_DFS.C_ID
+    result = sbml_dfs_utils.infer_entity_type(df)
+    assert result == SBML_DFS.COMPARTMENTS
+
+    # Test species with index as primary key
+    df = pd.DataFrame(
+        {SBML_DFS.S_NAME: ["glucose"], SBML_DFS.S_IDENTIFIERS: ["CHEBI:17234"]}
+    )
+    df.index.name = SBML_DFS.S_ID
+    result = sbml_dfs_utils.infer_entity_type(df)
+    assert result == SBML_DFS.SPECIES
+
+    # Test entity type inference by exact column matching.
+    # Test compartmentalized_species (has foreign keys)
+    df = pd.DataFrame(
+        {
+            SBML_DFS.SC_ID: ["glucose_c"],
+            SBML_DFS.S_ID: ["glucose"],
+            SBML_DFS.C_ID: ["cytoplasm"],
+        }
+    )
+    result = sbml_dfs_utils.infer_entity_type(df)
+    assert result == "compartmentalized_species"
+
+    # Test reaction_species (has foreign keys)
+    df = pd.DataFrame(
+        {
+            SBML_DFS.RSC_ID: ["rxn1_glc"],
+            SBML_DFS.R_ID: ["rxn1"],
+            SBML_DFS.SC_ID: ["glucose_c"],
+        }
+    )
+    result = sbml_dfs_utils.infer_entity_type(df)
+    assert result == SBML_DFS.REACTION_SPECIES
+
+    # Test reactions (only primary key)
+    df = pd.DataFrame({SBML_DFS.R_ID: ["rxn1"]})
+    result = sbml_dfs_utils.infer_entity_type(df)
+    assert result == SBML_DFS.REACTIONS
+
+
+def test_infer_entity_type_errors():
+    """Test error cases for entity type inference."""
+    # Test no matching entity type
+    df = pd.DataFrame({"random_column": ["value"], "another_col": ["data"]})
+    with pytest.raises(ValueError, match="No entity type matches DataFrame"):
+        sbml_dfs_utils.infer_entity_type(df)
+
+    # Test partial match (missing required foreign key)
+    df = pd.DataFrame(
+        {SBML_DFS.SC_ID: ["glucose_c"], SBML_DFS.S_ID: ["glucose"]}
+    )  # Missing c_id
+    with pytest.raises(ValueError):
+        sbml_dfs_utils.infer_entity_type(df)
+
+    # Test extra primary keys that shouldn't be there
+    df = pd.DataFrame(
+        {SBML_DFS.R_ID: ["rxn1"], SBML_DFS.S_ID: ["glucose"]}
+    )  # Two primary keys
+    with pytest.raises(ValueError):
+        sbml_dfs_utils.infer_entity_type(df)
+
+
+def test_infer_entity_type_multindex_reactions():
+    # DataFrame with MultiIndex (r_id, foo), should infer as reactions
+    import pandas as pd
+    from napistu.constants import SBML_DFS
+
+    df = pd.DataFrame({"some_col": [1, 2]})
+    df.index = pd.MultiIndex.from_tuples(
+        [("rxn1", "a"), ("rxn2", "b")], names=[SBML_DFS.R_ID, "foo"]
+    )
+    result = sbml_dfs_utils.infer_entity_type(df)
+    assert result == SBML_DFS.REACTIONS

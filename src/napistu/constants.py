@@ -55,28 +55,49 @@ SBML_DFS = SimpleNamespace(
     SBO_TERM="sbo_term",
 )
 
+SCHEMA_DEFS = SimpleNamespace(
+    TABLE="table",
+    PK="pk",
+    FK="fk",
+    LABEL="label",
+    ID="id",
+    SOURCE="source",
+    VARS="vars",
+)
+
 SBML_DFS_SCHEMA = SimpleNamespace(
     SCHEMA={
         SBML_DFS.COMPARTMENTS: {
-            "pk": SBML_DFS.C_ID,
-            "label": SBML_DFS.C_NAME,
-            "id": SBML_DFS.C_IDENTIFIERS,
-            "source": SBML_DFS.C_SOURCE,
-            "vars": [SBML_DFS.C_NAME, SBML_DFS.C_IDENTIFIERS, SBML_DFS.C_SOURCE],
+            SCHEMA_DEFS.TABLE: SBML_DFS.COMPARTMENTS,
+            SCHEMA_DEFS.PK: SBML_DFS.C_ID,
+            SCHEMA_DEFS.LABEL: SBML_DFS.C_NAME,
+            SCHEMA_DEFS.ID: SBML_DFS.C_IDENTIFIERS,
+            SCHEMA_DEFS.SOURCE: SBML_DFS.C_SOURCE,
+            SCHEMA_DEFS.VARS: [
+                SBML_DFS.C_NAME,
+                SBML_DFS.C_IDENTIFIERS,
+                SBML_DFS.C_SOURCE,
+            ],
         },
         SBML_DFS.SPECIES: {
-            "pk": SBML_DFS.S_ID,
-            "label": SBML_DFS.S_NAME,
-            "id": SBML_DFS.S_IDENTIFIERS,
-            "source": SBML_DFS.S_SOURCE,
-            "vars": [SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS, SBML_DFS.S_SOURCE],
+            SCHEMA_DEFS.TABLE: SBML_DFS.SPECIES,
+            SCHEMA_DEFS.PK: SBML_DFS.S_ID,
+            SCHEMA_DEFS.LABEL: SBML_DFS.S_NAME,
+            SCHEMA_DEFS.ID: SBML_DFS.S_IDENTIFIERS,
+            SCHEMA_DEFS.SOURCE: SBML_DFS.S_SOURCE,
+            SCHEMA_DEFS.VARS: [
+                SBML_DFS.S_NAME,
+                SBML_DFS.S_IDENTIFIERS,
+                SBML_DFS.S_SOURCE,
+            ],
         },
         SBML_DFS.COMPARTMENTALIZED_SPECIES: {
-            "pk": SBML_DFS.SC_ID,
-            "label": SBML_DFS.SC_NAME,
-            "fk": [SBML_DFS.S_ID, SBML_DFS.C_ID],
-            "source": SBML_DFS.SC_SOURCE,
-            "vars": [
+            SCHEMA_DEFS.TABLE: SBML_DFS.COMPARTMENTALIZED_SPECIES,
+            SCHEMA_DEFS.PK: SBML_DFS.SC_ID,
+            SCHEMA_DEFS.LABEL: SBML_DFS.SC_NAME,
+            SCHEMA_DEFS.FK: [SBML_DFS.S_ID, SBML_DFS.C_ID],
+            SCHEMA_DEFS.SOURCE: SBML_DFS.SC_SOURCE,
+            SCHEMA_DEFS.VARS: [
                 SBML_DFS.SC_NAME,
                 SBML_DFS.S_ID,
                 SBML_DFS.C_ID,
@@ -84,11 +105,12 @@ SBML_DFS_SCHEMA = SimpleNamespace(
             ],
         },
         SBML_DFS.REACTIONS: {
-            "pk": SBML_DFS.R_ID,
-            "label": SBML_DFS.R_NAME,
-            "id": SBML_DFS.R_IDENTIFIERS,
-            "source": SBML_DFS.R_SOURCE,
-            "vars": [
+            SCHEMA_DEFS.TABLE: SBML_DFS.REACTIONS,
+            SCHEMA_DEFS.PK: SBML_DFS.R_ID,
+            SCHEMA_DEFS.LABEL: SBML_DFS.R_NAME,
+            SCHEMA_DEFS.ID: SBML_DFS.R_IDENTIFIERS,
+            SCHEMA_DEFS.SOURCE: SBML_DFS.R_SOURCE,
+            SCHEMA_DEFS.VARS: [
                 SBML_DFS.R_NAME,
                 SBML_DFS.R_IDENTIFIERS,
                 SBML_DFS.R_SOURCE,
@@ -96,9 +118,10 @@ SBML_DFS_SCHEMA = SimpleNamespace(
             ],
         },
         SBML_DFS.REACTION_SPECIES: {
-            "pk": SBML_DFS.RSC_ID,
-            "fk": [SBML_DFS.R_ID, SBML_DFS.SC_ID],
-            "vars": [
+            SCHEMA_DEFS.TABLE: SBML_DFS.REACTION_SPECIES,
+            SCHEMA_DEFS.PK: SBML_DFS.RSC_ID,
+            SCHEMA_DEFS.FK: [SBML_DFS.R_ID, SBML_DFS.SC_ID],
+            SCHEMA_DEFS.VARS: [
                 SBML_DFS.R_ID,
                 SBML_DFS.SC_ID,
                 SBML_DFS.STOICHIOMETRY,
@@ -129,10 +152,10 @@ ENTITIES_TO_ENTITY_DATA = {
 REQUIRED_REACTION_FROMEDGELIST_COLUMNS = [
     "sc_id_up",
     "sc_id_down",
-    "sbo_term",
-    "r_name",
-    "r_Identifiers",
-    "r_isreversible",
+    SBML_DFS.SBO_TERM,
+    SBML_DFS.R_NAME,
+    SBML_DFS.R_IDENTIFIERS,
+    SBML_DFS.R_ISREVERSIBLE,
 ]
 
 NAPISTU_STANDARD_OUTPUTS = SimpleNamespace(
@@ -155,20 +178,6 @@ INTERACTION_EDGELIST_EXPECTED_VARS = {
     SBML_DFS.R_ISREVERSIBLE,
 }
 
-BQB_PRIORITIES = pd.DataFrame(
-    [{"bqb": "BQB_IS", "bqb_rank": 1}, {"bqb": "BQB_HAS_PART", "bqb_rank": 2}]
-)
-
-ONTOLOGY_PRIORITIES = pd.DataFrame(
-    [
-        {"ontology": "reactome", "ontology_rank": 1},
-        {"ontology": "ensembl_gene", "ontology_rank": 2},
-        {"ontology": "chebi", "ontology_rank": 3},
-        {"ontology": "uniprot", "ontology_rank": 4},
-        {"ontology": "go", "ontology_rank": 5},
-    ]
-)
-
 # SBML
 # Biological qualifiers
 # Biomodels qualifiers
@@ -189,21 +198,30 @@ BQB = SimpleNamespace(
     UNKNOWN="BQB_UNKNOWN",
 )
 
+VALID_BQB_TERMS = list(BQB.__dict__.values())
+
 # molecules are distinctly defined by these BQB terms
-BQB_DEFINING_ATTRS = ["BQB_IS", "IS_HOMOLOG_TO"]
+BQB_DEFINING_ATTRS = [BQB.IS, BQB.IS_HOMOLOG_TO]
 
 # a looser convention which will aggregate genes, transcripts, and proteins
 # if they are linked with the appropriate bioqualifiers
 BQB_DEFINING_ATTRS_LOOSE = [
-    "BQB_IS",
-    "IS_HOMOLOG_TO",
-    "BQB_IS_ENCODED_BY",
-    "BQB_ENCODES",
+    BQB.IS,
+    BQB.IS_HOMOLOG_TO,
+    BQB.IS_ENCODED_BY,
+    BQB.ENCODES,
 ]
 
 # identifiers
 IDENTIFIERS = SimpleNamespace(
     ONTOLOGY="ontology", IDENTIFIER="identifier", BQB="bqb", URL="url"
+)
+
+BQB_PRIORITIES = pd.DataFrame(
+    [
+        {IDENTIFIERS.BQB: BQB.IS, "bqb_rank": 1},
+        {IDENTIFIERS.BQB: BQB.HAS_PART, "bqb_rank": 2},
+    ]
 )
 
 IDENTIFIERS_REQUIRED_VARS = {
@@ -217,26 +235,9 @@ SPECIES_IDENTIFIERS_REQUIRED_VARS = IDENTIFIERS_REQUIRED_VARS | {
     SBML_DFS.S_NAME,
 }
 
-BIOLOGICAL_QUALIFIERS = [
-    "BQB_IS",
-    "BQB_HAS_PART",
-    "BQB_IS_PART_OF",
-    "BQB_IS_VERSION_OF",
-    "BQB_HAS_VERSION",
-    "BQB_IS_HOMOLOG_TO",
-    "BQB_IS_DESCRIBED_BY",
-    "BQB_IS_ENCODED_BY",
-    "BQB_ENCODES",
-    "BQB_OCCURS_IN",
-    "BQB_HAS_PROPERTY",
-    "BQB_IS_PROPERTY_OF",
-    "BQB_HAS_TAXON",
-    "BQB_UNKNOWN",
-]
-
 
 def get_biological_qualifier_codes():
-    bio_qualifier_codes = {getattr(libsbml, bqb): bqb for bqb in BIOLOGICAL_QUALIFIERS}
+    bio_qualifier_codes = {getattr(libsbml, bqb): bqb for bqb in VALID_BQB_TERMS}
 
     return bio_qualifier_codes
 
@@ -250,6 +251,7 @@ SBOTERM_NAMES = SimpleNamespace(
     CATALYST="catalyst",
     INHIBITOR="inhibitor",
     STIMULATOR="stimulator",
+    MODIFIED="modified",
     MODIFIER="modifier",
     INTERACTOR="interactor",
 )
@@ -258,21 +260,26 @@ MINI_SBO_TO_NAME = {
     "SBO:0000010": SBOTERM_NAMES.REACTANT,
     "SBO:0000011": SBOTERM_NAMES.PRODUCT,
     "SBO:0000013": SBOTERM_NAMES.CATALYST,
-    "SBO:0000020": SBOTERM_NAMES.INHIBITOR,
-    "SBO:0000459": SBOTERM_NAMES.STIMULATOR,
     "SBO:0000019": SBOTERM_NAMES.MODIFIER,
+    "SBO:0000020": SBOTERM_NAMES.INHIBITOR,
     "SBO:0000336": SBOTERM_NAMES.INTERACTOR,
+    "SBO:0000459": SBOTERM_NAMES.STIMULATOR,
+    "SBO:0000644": SBOTERM_NAMES.MODIFIED,
 }
 
 MINI_SBO_FROM_NAME = {
-    SBOTERM_NAMES.REACTANT: "SBO:0000010",
-    SBOTERM_NAMES.PRODUCT: "SBO:0000011",
     SBOTERM_NAMES.CATALYST: "SBO:0000013",
     SBOTERM_NAMES.INHIBITOR: "SBO:0000020",
-    SBOTERM_NAMES.STIMULATOR: "SBO:0000459",
-    SBOTERM_NAMES.MODIFIER: "SBO:0000019",  # parent category of inhibitor and stimulator (i.e., activator)
     SBOTERM_NAMES.INTERACTOR: "SBO:0000336",  # entity participating in a physical or functional interaction
+    SBOTERM_NAMES.MODIFIED: "SBO:0000644",
+    SBOTERM_NAMES.MODIFIER: "SBO:0000019",  # parent category of inhibitor and stimulator (i.e., activator)
+    SBOTERM_NAMES.PRODUCT: "SBO:0000011",
+    SBOTERM_NAMES.REACTANT: "SBO:0000010",  # aka substrate
+    SBOTERM_NAMES.STIMULATOR: "SBO:0000459",  # aka activator
 }
+
+VALID_SBO_TERM_NAMES = list(SBOTERM_NAMES.__dict__.values())
+VALID_SBO_TERMS = list(MINI_SBO_FROM_NAME.values())
 
 SBO_MODIFIER_NAMES = {
     SBOTERM_NAMES.INHIBITOR,
@@ -281,13 +288,14 @@ SBO_MODIFIER_NAMES = {
 }
 
 MINI_SBO_NAME_TO_POLARITY = {
-    SBOTERM_NAMES.REACTANT: "activation",
-    SBOTERM_NAMES.PRODUCT: "activation",
     SBOTERM_NAMES.CATALYST: "activation",
     SBOTERM_NAMES.INHIBITOR: "inhibition",
-    SBOTERM_NAMES.STIMULATOR: "activation",
-    SBOTERM_NAMES.MODIFIER: "ambiguous",
     SBOTERM_NAMES.INTERACTOR: "ambiguous",
+    SBOTERM_NAMES.MODIFIED: "ambiguous",
+    SBOTERM_NAMES.MODIFIER: "ambiguous",
+    SBOTERM_NAMES.PRODUCT: "activation",
+    SBOTERM_NAMES.REACTANT: "ambiguous",
+    SBOTERM_NAMES.STIMULATOR: "activation",
 }
 
 # how does changing a reactions' membership
@@ -305,6 +313,7 @@ SBO_NAME_TO_ROLE = {
     SBOTERM_NAMES.CATALYST: SBO_ROLES_DEFS.REQUIRED,
     SBOTERM_NAMES.INHIBITOR: SBO_ROLES_DEFS.OPTIONAL,
     SBOTERM_NAMES.STIMULATOR: SBO_ROLES_DEFS.OPTIONAL,
+    SBOTERM_NAMES.MODIFIED: SBO_ROLES_DEFS.DEFINING,
     SBOTERM_NAMES.MODIFIER: SBO_ROLES_DEFS.OPTIONAL,
 }
 
@@ -322,7 +331,7 @@ VALID_SBO_ROLES = (
 
 # required variables for the edgelist formats used by the matching subpackage
 # also used in some network modules
-CPR_EDGELIST = SimpleNamespace(
+NAPISTU_EDGELIST = SimpleNamespace(
     S_ID_UPSTREAM="s_id_upstream",
     S_ID_DOWNSTREAM="s_id_downstream",
     SC_ID_UPSTREAM="sc_id_upstream",
@@ -336,18 +345,18 @@ CPR_EDGELIST = SimpleNamespace(
 )
 
 IDENTIFIER_EDGELIST_REQ_VARS = {
-    CPR_EDGELIST.IDENTIFIER_UPSTREAM,
-    CPR_EDGELIST.IDENTIFIER_DOWNSTREAM,
+    NAPISTU_EDGELIST.IDENTIFIER_UPSTREAM,
+    NAPISTU_EDGELIST.IDENTIFIER_DOWNSTREAM,
 }
 
-CPR_EDGELIST_REQ_VARS = {
-    CPR_EDGELIST.S_ID_UPSTREAM,
-    CPR_EDGELIST.S_ID_DOWNSTREAM,
-    CPR_EDGELIST.SC_ID_UPSTREAM,
-    CPR_EDGELIST.SC_ID_DOWNSTREAM,
+NAPISTU_EDGELIST_REQ_VARS = {
+    NAPISTU_EDGELIST.S_ID_UPSTREAM,
+    NAPISTU_EDGELIST.S_ID_DOWNSTREAM,
+    NAPISTU_EDGELIST.SC_ID_UPSTREAM,
+    NAPISTU_EDGELIST.SC_ID_DOWNSTREAM,
 }
 
-CPR_PATH_REQ_VARS = {CPR_EDGELIST.SC_ID_ORIGIN, CPR_EDGELIST.SC_ID_DEST}
+NAPISTU_PATH_REQ_VARS = {NAPISTU_EDGELIST.SC_ID_ORIGIN, NAPISTU_EDGELIST.SC_ID_DEST}
 
 FEATURE_ID_VAR_DEFAULT = "feature_id"
 
@@ -393,12 +402,14 @@ ONTOLOGIES = SimpleNamespace(
     ENSEMBL_PROTEIN_VERSION="ensembl_protein_version",
     GENE_NAME="gene_name",
     GO="go",
+    KEGG="kegg",
     MIRBASE="mirbase",
     NCBI_ENTREZ_GENE="ncbi_entrez_gene",
     PHAROS="pharos",
     REACTOME="reactome",
     SYMBOL="symbol",
     UNIPROT="uniprot",
+    WIKIPATHWAYS="wikipathways",
 )
 
 ONTOLOGIES_LIST = list(ONTOLOGIES.__dict__.values())
@@ -408,6 +419,16 @@ ONTOLOGY_SPECIES_ALIASES = {
     ONTOLOGIES.ENSEMBL_GENE: {"ensembl_gene_id"},
     ONTOLOGIES.UNIPROT: {"Uniprot"},
 }
+
+ONTOLOGY_PRIORITIES = pd.DataFrame(
+    [
+        {"ontology": ONTOLOGIES.REACTOME, "ontology_rank": 1},
+        {"ontology": ONTOLOGIES.ENSEMBL_GENE, "ontology_rank": 2},
+        {"ontology": ONTOLOGIES.CHEBI, "ontology_rank": 3},
+        {"ontology": ONTOLOGIES.UNIPROT, "ontology_rank": 4},
+        {"ontology": ONTOLOGIES.GO, "ontology_rank": 5},
+    ]
+)
 
 ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY = {
     "G": ONTOLOGIES.ENSEMBL_GENE,
