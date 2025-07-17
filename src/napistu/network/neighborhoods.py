@@ -34,6 +34,7 @@ def find_and_prune_neighborhoods(
     napistu_graph: ig.Graph,
     compartmentalized_species: str | list[str],
     precomputed_distances: pd.DataFrame | None = None,
+    source_total_counts: pd.Series | None = None,
     network_type: str = NEIGHBORHOOD_NETWORK_TYPES.DOWNSTREAM,
     order: int = 3,
     verbose: bool = True,
@@ -44,7 +45,7 @@ def find_and_prune_neighborhoods(
 
     Wrapper which combines find_neighborhoods() and prune_neighborhoods()
 
-     Parameters
+    Parameters
     ----------
     sbml_dfs: sbml_dfs_core.SBML_dfs
         A mechanistic molecular model
@@ -54,6 +55,9 @@ def find_and_prune_neighborhoods(
         Compartmentalized species IDs for neighborhood centers
     precomputed_distances : pd.DataFrame or None
         If provided, an edgelist of origin->destination path weights and lengths
+    source_total_counts: pd.Series | None
+        Optional, A series of the total counts of each source. As produced by
+        source.get_source_total_counts()
     network_type: str
         If the network is directed should neighbors be located "downstream",
         or "upstream" of each compartmentalized species. The "hourglass" option
@@ -109,6 +113,7 @@ def find_and_prune_neighborhoods(
         order=order,
         verbose=verbose,
         precomputed_neighbors=precomputed_neighbors,
+        source_total_counts=source_total_counts,
     )
 
     pruned_neighborhoods = prune_neighborhoods(neighborhoods, top_n=top_n)
@@ -132,7 +137,7 @@ def load_neighborhoods(
 
     Load existing neighborhoods if they exist
     (and overwrite = False) and otherwise construct
-     neighborhoods using the provided settings
+    neighborhoods using the provided settings
 
     Parameters
     ----------
@@ -509,12 +514,13 @@ def find_neighborhoods(
     order: int = 3,
     verbose: bool = True,
     precomputed_neighbors: pd.DataFrame | None = None,
+    source_total_counts: pd.Series | None = None,
 ) -> dict:
     """
     Find Neighborhood
 
     Create a network composed of all species and reactions within N steps of
-      each of a set of compartmentalized species.
+    each of a set of compartmentalized species.
 
     Parameters
     ----------
@@ -535,11 +541,14 @@ def find_neighborhoods(
     precomputed_neighbors: pd.DataFrame or None
         If provided, a pre-filtered table of nodes nearby the compartmentalized species
         which will be used to skip on-the-fly neighborhood generation.
+    source_total_counts: pd.Series | None
+        Optional, A series of the total counts of each source. As produced by
+        source.get_source_total_counts()
 
     Returns:
     ----------
     A dict containing the neighborhood of each compartmentalized species.
-      Each entry in the dict is a dict of the subgraph, vertices, and edges.
+    Each entry in the dict is a dict of the subgraph, vertices, and edges.
     """
 
     if not isinstance(network_type, str):
@@ -567,7 +576,12 @@ def find_neighborhoods(
     # format the vertices and edges in each compartmentalized species' network
     neighborhood_dict = {
         sc_id: create_neighborhood_dict_entry(
-            sc_id, neighborhood_df, sbml_dfs, napistu_graph, verbose=verbose
+            sc_id,
+            neighborhood_df=neighborhood_df,
+            sbml_dfs=sbml_dfs,
+            napistu_graph=napistu_graph,
+            source_total_counts=source_total_counts,
+            verbose=verbose,
         )
         for sc_id in compartmentalized_species
     }
@@ -580,6 +594,7 @@ def create_neighborhood_dict_entry(
     neighborhood_df: pd.DataFrame,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     napistu_graph: ig.Graph,
+    source_total_counts: pd.Series | None = None,
     verbose: bool = False,
 ) -> dict[str, Any]:
     """
@@ -597,6 +612,9 @@ def create_neighborhood_dict_entry(
         A mechanistic molecular model
     napistu_graph: igraph.Graph
         A network connecting molecular species and reactions
+    source_total_counts: pd.Series
+        Optional, A series of the total counts of each source. As produced by
+        source.get_source_total_counts()
     verbose: bool
         Extra reporting?
 
@@ -645,7 +663,10 @@ def create_neighborhood_dict_entry(
 
     try:
         edge_sources = ng_utils.get_minimal_sources_edges(
-            vertices.rename(columns={"name": "node"}), sbml_dfs
+            vertices.rename(columns={"name": "node"}),
+            sbml_dfs,
+            # optional, counts of sources across the whole model
+            source_total_counts,
         )
     except Exception:
         edge_sources = None
@@ -1441,7 +1462,7 @@ def _prune_vertex_set(one_neighborhood: dict, top_n: int) -> pd.DataFrame:
     ----------
     one_neighborhood: dict
         The neighborhood around a single compartmentalized species - one of the values
-         in dict created by find_neighborhoods().
+        in dict created by find_neighborhoods().
     top_n: int
         How many neighboring molecular species should be retained?
         If the neighborhood includes both upstream and downstream connections
