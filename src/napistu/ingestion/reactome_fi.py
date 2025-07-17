@@ -1,8 +1,16 @@
 import logging
 import pandas as pd
 
-from napistu.identifiers import Identifiers
 from napistu import utils
+from napistu import identifiers
+from napistu.ontologies.genodexito import Genodexito
+from napistu.constants import (
+    BQB,
+    IDENTIFIERS,
+    ONTOLOGIES,
+    SBML_DFS,
+)
+from napistu.ontologies.constants import GENODEXITO_DEFS
 from napistu.ingestion.constants import (
     REACTOME_FI,
     REACTOME_FI_RULES_FORWARD,
@@ -10,7 +18,6 @@ from napistu.ingestion.constants import (
     REACTOME_FI_URL,
     VALID_REACTOME_FI_DIRECTIONS,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -126,10 +133,70 @@ def format_reactome_fi_edgelist(interactions: pd.DataFrame):
                 REACTOME_FI.GENE2: "downstream_name",
             }
         )
-        .assign(r_Identifiers=Identifiers([]))
+        .assign(r_Identifiers=identifiers.Identifiers([]))
     )
 
     return fi_edgelist
+
+
+def create_species_df(
+    interactions: pd.DataFrame,
+    preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
+    allow_fallback: bool = True,
+) -> pd.DataFrame:
+    """
+    Create a species DataFrame from a set of interactions.
+
+    Parameters
+    ----------
+    interactions : pd.DataFrame
+        The interactions to create the species DataFrame from.
+    preferred_method : str
+        The preferred method to use for identifier mapping.
+    allow_fallback : bool
+        Whether to allow fallback to other methods for identifier mapping.
+
+    Returns
+    -------
+    pd.DataFrame
+        The species DataFrame containing the species names and their identifiers:
+        - SBML_DFS.S_NAME : The species' name
+        - SBML_DFS.S_IDENTIFIERS : The identifiers for the species
+    """
+
+    all_gene_names = set(interactions[REACTOME_FI.GENE1]) | set(
+        interactions[REACTOME_FI.GENE2]
+    )
+    species_systematic_ids = _get_reactome_fi_species_systematic_ids(
+        all_gene_names, preferred_method, allow_fallback
+    )
+
+    # create Identifiers objects
+    id_table = species_systematic_ids.rename(
+        columns={
+            ONTOLOGIES.SYMBOL: SBML_DFS.S_ID,
+            ONTOLOGIES.NCBI_ENTREZ_GENE: IDENTIFIERS.IDENTIFIER,
+        }
+    ).assign(ontology=ONTOLOGIES.NCBI_ENTREZ_GENE, bqb=BQB.IS)
+
+    species_identifiers = (
+        identifiers.df_to_identifiers(id_table)
+        .reset_index()
+        .rename(columns={SBML_DFS.S_ID: SBML_DFS.S_NAME})
+    )
+
+    # fill missing entries with empty identifiers
+    missing_species_names = list(
+        all_gene_names - set(species_identifiers[SBML_DFS.S_NAME])
+    )
+    missing_species = pd.DataFrame({SBML_DFS.S_NAME: missing_species_names}).assign(
+        **{SBML_DFS.S_IDENTIFIERS: identifiers.Identifiers([])}
+    )
+    species_identifiers = pd.concat([species_identifiers, missing_species]).reset_index(
+        drop=True
+    )
+
+    return species_identifiers
 
 
 def _parse_reactome_fi_annotations(interactions: pd.DataFrame) -> pd.DataFrame:
@@ -206,3 +273,79 @@ def _parse_reactome_fi_annotations(interactions: pd.DataFrame) -> pd.DataFrame:
             )
 
     return pd.DataFrame(annotations)
+
+
+def _get_reactome_fi_species_systematic_ids(
+    all_gene_names: set[str],
+    preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
+    allow_fallback: bool = True,
+) -> pd.DataFrame:
+    """
+    Get the species systematic IDs for the genes in the interactions.
+
+    Parameters
+    ----------
+    all_gene_names: set[str]
+        The gene names to get the species systematic IDs for.
+    preferred_method: str
+        The preferred Genodexito method to use for identifier mapping.
+    allow_fallback: bool
+        Whether to allow fallback to other Genodexito methods if the preferred method fails.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame with columns for the gene symbol and NCBI Entrez Gene ID.
+    """
+
+    symbol_to_entrez = _get_human_symbol_to_entrez_mapping(
+        preferred_method=preferred_method,
+        allow_fallback=allow_fallback,
+    )
+
+    missing_annotations = all_gene_names - set(symbol_to_entrez[ONTOLOGIES.SYMBOL])
+    if missing_annotations:
+        if len(missing_annotations) == len(all_gene_names):
+            raise ValueError("No annotations found for any of the gene names")
+        else:
+            example_gene_names = list(missing_annotations)[:5]
+            logger.info(
+                f"No Entrez gene IDs found for {len(missing_annotations)} of {len(all_gene_names)} gene names, including: {example_gene_names}"
+            )
+
+    return symbol_to_entrez[symbol_to_entrez[ONTOLOGIES.SYMBOL].isin(all_gene_names)]
+
+
+def _get_human_symbol_to_entrez_mapping(
+    preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
+    allow_fallback: bool = True,
+) -> pd.DataFrame:
+    """
+    Get a mapping of human gene symbols to NCBI Entrez Gene IDs.
+
+    Parameters
+    ----------
+    preferred_method: str
+        The preferred method to use for the mapping.
+    allow_fallback: bool
+        Whether to allow fallback to other methods if the preferred method fails.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame with columns for the gene symbol and NCBI Entrez Gene ID.
+    """
+
+    genodexito = Genodexito(
+        species="Homo sapiens",
+        preferred_method=preferred_method,
+        allow_fallback=allow_fallback,
+    )
+
+    genodexito.create_mapping_tables(
+        mappings={ONTOLOGIES.SYMBOL, ONTOLOGIES.NCBI_ENTREZ_GENE}
+    )
+
+    genodexito.merge_mappings([ONTOLOGIES.SYMBOL, ONTOLOGIES.NCBI_ENTREZ_GENE])
+
+    return genodexito.merged_mappings

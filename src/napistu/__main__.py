@@ -457,7 +457,7 @@ def expand_identifiers(
         ontologies (set[str]): ontologies to add or update
 
     Example call:
-    > cpr refine expand_identifiers gs://<uri> ./test.pickle -o ensembl_gene
+    > napistu refine expand_identifiers gs://<uri> ./test.pickle -o ensembl_gene
     """
     sbml_dfs: sbml.SBML_dfs = utils.load_pickle(sbml_dfs_uri)  # type: ignore
     if len(ontologies) == 0:
