@@ -1787,7 +1787,7 @@ def sbml_dfs_from_edgelist(
     interaction_edgelist: pd.DataFrame,
     species_df: pd.DataFrame,
     compartments_df: pd.DataFrame,
-    interaction_source: source.Source,
+    interaction_source: source.Source = source.Source(init=True),
     interaction_edgelist_defaults: dict[str, Any] = INTERACTION_EDGELIST_DEFAULTS,
     keep_species_data: bool | str = False,
     keep_reactions_data: bool | str = False,

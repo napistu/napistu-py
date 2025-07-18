@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import os
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 import pytest
+
 from napistu import identifiers
 from napistu import sbml_dfs_core
 from napistu.sbml_dfs_core import SBML_dfs
@@ -18,14 +20,16 @@ from napistu.constants import (
     BQB_DEFINING_ATTRS,
     BQB_DEFINING_ATTRS_LOOSE,
     IDENTIFIERS,
+    MINI_SBO_FROM_NAME,
     SBML_DFS,
     SBOTERM_NAMES,
     SCHEMA_DEFS,
     ONTOLOGIES,
 )
-from napistu.ingestion.constants import INTERACTION_EDGELIST_DEFS
-
-from unittest.mock import patch
+from napistu.ingestion.constants import (
+    INTERACTION_EDGELIST_DEFS,
+    INTERACTION_EDGELIST_DEFAULTS,
+)
 
 
 @pytest.fixture
@@ -74,11 +78,7 @@ def test_data():
                 SBML_DFS.R_NAME: "TP53_activates_CDKN1A",
                 INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.STIMULATOR,
                 SBML_DFS.R_IDENTIFIERS: blank_id,
-                SBML_DFS.R_ISREVERSIBLE: False,
                 "confidence": 0.95,
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY: -2,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY: 3,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.PRODUCT,
             },
             {
                 INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: "MDM2",
@@ -88,13 +88,12 @@ def test_data():
                 SBML_DFS.R_NAME: "MDM2_inhibits_TP53",
                 INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.INHIBITOR,
                 SBML_DFS.R_IDENTIFIERS: blank_id,
-                SBML_DFS.R_ISREVERSIBLE: False,
                 "confidence": 0.87,
             },
         ]
     )
 
-    return [interaction_edgelist, species_df, compartments_df, Source(init=True)]
+    return [interaction_edgelist, species_df, compartments_df]
 
 
 def test_drop_cofactors(sbml_dfs):
@@ -584,10 +583,10 @@ def test_get_characteristic_species_ids():
 
 def test_sbml_basic_functionality(test_data):
     """Test basic SBML_dfs creation from edgelist."""
-    interaction_edgelist, species_df, compartments_df, interaction_source = test_data
+    interaction_edgelist, species_df, compartments_df = test_data
 
     result = sbml_dfs_core.sbml_dfs_from_edgelist(
-        interaction_edgelist, species_df, compartments_df, interaction_source
+        interaction_edgelist, species_df, compartments_df
     )
 
     assert isinstance(result, SBML_dfs)
@@ -602,13 +601,12 @@ def test_sbml_basic_functionality(test_data):
 
 def test_sbml_extra_data_preservation(test_data):
     """Test that extra columns are preserved when requested."""
-    interaction_edgelist, species_df, compartments_df, interaction_source = test_data
+    interaction_edgelist, species_df, compartments_df = test_data
 
     result = sbml_dfs_core.sbml_dfs_from_edgelist(
         interaction_edgelist,
         species_df,
         compartments_df,
-        interaction_source,
         keep_species_data=True,
         keep_reactions_data="experiment",
     )
@@ -621,10 +619,10 @@ def test_sbml_extra_data_preservation(test_data):
 
 def test_sbml_compartmentalized_naming(test_data):
     """Test compartmentalized species naming convention."""
-    interaction_edgelist, species_df, compartments_df, interaction_source = test_data
+    interaction_edgelist, species_df, compartments_df = test_data
 
     result = sbml_dfs_core.sbml_dfs_from_edgelist(
-        interaction_edgelist, species_df, compartments_df, interaction_source
+        interaction_edgelist, species_df, compartments_df
     )
 
     comp_names = result.compartmentalized_species[SBML_DFS.SC_NAME].tolist()
@@ -633,17 +631,39 @@ def test_sbml_compartmentalized_naming(test_data):
     assert "CDKN1A [nucleus]" in comp_names
 
 
-def test_sbml_custom_stoichiometry(test_data):
+def test_sbml_custom_defaults(test_data):
     """Test custom stoichiometry parameters."""
-    interaction_edgelist, species_df, compartments_df, interaction_source = test_data
+    interaction_edgelist, species_df, compartments_df = test_data
+
+    custom_defaults = INTERACTION_EDGELIST_DEFAULTS.copy()
+    custom_defaults[INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY] = -2
+    custom_defaults[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY] = 3
+    custom_defaults[INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME] = (
+        SBOTERM_NAMES.REACTANT
+    )
+    custom_defaults[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME] = (
+        SBOTERM_NAMES.PRODUCT
+    )
 
     result = sbml_dfs_core.sbml_dfs_from_edgelist(
-        interaction_edgelist, species_df, compartments_df, interaction_source
+        interaction_edgelist,
+        species_df,
+        compartments_df,
+        interaction_edgelist_defaults=custom_defaults,
     )
 
     stoichiometries = result.reaction_species[SBML_DFS.STOICHIOMETRY].unique()
     assert -2 in stoichiometries  # upstream
     assert 3 in stoichiometries  # downstream
+    assert (
+        MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT]
+        in result.reaction_species[SBML_DFS.SBO_TERM].unique()
+    )
+    # upstream sbo terms are provided so the default shouldn't be used
+    assert (
+        MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT]
+        not in result.reaction_species[SBML_DFS.SBO_TERM].unique()
+    )
 
 
 def test_validate_schema_missing(minimal_valid_sbml_dfs):

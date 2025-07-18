@@ -2,6 +2,7 @@ import logging
 import pandas as pd
 
 from napistu import identifiers
+from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
 from napistu import utils
 from napistu.ontologies.genodexito import Genodexito
@@ -59,7 +60,11 @@ def download_reactome_fi(target_uri: str, url: str = REACTOME_FI_URL) -> None:
     return None
 
 
-def format_reactome_fi_edgelist(interactions: pd.DataFrame):
+def convert_reactome_fi_to_sbml_dfs(
+    interactions: pd.DataFrame,
+    preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
+    allow_fallback: bool = True,
+) -> sbml_dfs_core.SBML_dfs:
     """
     Format the Reactome FI interactions DataFrame as an edgelist for network analysis.
 
@@ -67,79 +72,29 @@ def format_reactome_fi_edgelist(interactions: pd.DataFrame):
     ----------
     interactions : pd.DataFrame
         DataFrame containing Reactome FI interactions.
+    preferred_method : str
+        The preferred Genodexito method to use for identifier mapping.
+    allow_fallback : bool
+        Whether to allow fallback to other Genodexito methods for identifier mapping.
 
     Returns
     -------
-    Dictonary of:
-
-    interaction_edgelist : pd.DataFrame
-        Table containing molecular interactions with columns:
-        - upstream_name : str, matches "s_name" from species_df
-        - downstream_name : str, matches "s_name" from species_df
-        - upstream_compartment : str, matches "c_name" from compartments_df
-        - downstream_compartment : str, matches "c_name" from compartments_df
-        - r_name : str, name for the interaction
-        - sbo_term : str, SBO term defining interaction type
-        - r_Identifiers : identifiers.Identifiers, supporting identifiers
-        - r_isreversible : bool, whether reaction is reversible
-    species_df : pd.DataFrame
-        Table defining molecular species with columns:
-        - s_name : str, name of molecular species
-        - s_Identifiers : identifiers.Identifiers, species identifiers
-    compartments_df : pd.DataFrame
-        Table defining compartments with columns:
-        - c_name : str, name of compartment
-        - c_Identifiers : identifiers.Identifiers, compartment identifiers
-
-    Notes
-    -----
-    This function is not yet implemented and will raise NotImplementedError.
+    sbml_dfs_core.SBML_dfs:
+        A SBML_dfs object containing the species, compartments, and reactions data.
     """
 
-    raise NotImplementedError("TO DO - This function is incomplete")
+    species_df = create_species_df(interactions, preferred_method, allow_fallback)
+    interaction_edgelist = create_interaction_edgelist(interactions)
+    compartments_df = sbml_dfs_utils.stub_compartments()
 
-    formatted_annotations = _parse_reactome_fi_annotations(interactions)
-
-    # this join will expand some rows to 2 since the bidirectional relationships are captured as separate edges in Napistu
-    annotated_interactions = interactions.merge(
-        formatted_annotations,
-        on=[REACTOME_FI.ANNOTATION, REACTOME_FI.DIRECTION],
-        how="left",
+    sbml_dfs = sbml_dfs_core.sbml_dfs_from_edgelist(
+        interaction_edgelist=interaction_edgelist,
+        species_df=species_df,
+        compartments_df=compartments_df,
+        keep_reactions_data=REACTOME_FI.FI_REACTION_DATA_NAME,
     )
 
-    # flip reverse entries so all relationships are forward or undirected
-    formatted_interactions = (
-        pd.concat(
-            [
-                annotated_interactions.query("polarity == 'forward'"),
-                (
-                    annotated_interactions.query("polarity == 'reverse'").rename(
-                        columns={
-                            REACTOME_FI.GENE1: REACTOME_FI.GENE2,
-                            REACTOME_FI.GENE2: REACTOME_FI.GENE1,
-                        }
-                    )
-                ),
-            ]
-        )[[REACTOME_FI.GENE1, REACTOME_FI.GENE2, "sbo_term_name", "Score"]]
-        # looks like they were already unique edges
-        .sort_values("Score", ascending=False)
-        .groupby([REACTOME_FI.GENE1, REACTOME_FI.GENE2])
-        .first()
-    )
-
-    fi_edgelist = (
-        formatted_interactions.reset_index()
-        .rename(
-            columns={
-                REACTOME_FI.GENE1: "upstream_name",
-                REACTOME_FI.GENE2: "downstream_name",
-            }
-        )
-        .assign(r_Identifiers=identifiers.Identifiers([]))
-    )
-
-    return fi_edgelist
+    return sbml_dfs
 
 
 def create_species_df(
@@ -228,7 +183,7 @@ def create_interaction_edgelist(interactions: pd.DataFrame) -> pd.DataFrame:
     # this join will expand some rows to 2 since the bidirectional relationships are captured as separate edges in Napistu
     annotated_interactions = interactions.merge(
         formatted_annotations,
-        on=[REACTOME_FI.ANNOTATION, REACTOME_FI.DIRECTION],
+        on=[REACTOME_FI.ANNOTATION, REACTOME_FI.DIRECTION_RAW],
         how="left",
     )
 
@@ -236,9 +191,13 @@ def create_interaction_edgelist(interactions: pd.DataFrame) -> pd.DataFrame:
     formatted_interactions = (
         pd.concat(
             [
-                annotated_interactions.query("polarity == 'forward'"),
+                annotated_interactions.query(
+                    f"{REACTOME_FI.DIRECTION} == '{REACTOME_FI.FORWARD}'"
+                ),
                 (
-                    annotated_interactions.query("polarity == 'reverse'").rename(
+                    annotated_interactions.query(
+                        f"{REACTOME_FI.DIRECTION} == '{REACTOME_FI.REVERSE}'"
+                    ).rename(
                         columns={
                             REACTOME_FI.GENE1: REACTOME_FI.GENE2,
                             REACTOME_FI.GENE2: REACTOME_FI.GENE1,
@@ -252,14 +211,14 @@ def create_interaction_edgelist(interactions: pd.DataFrame) -> pd.DataFrame:
                 REACTOME_FI.GENE2,
                 INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
                 INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME,
-                "Score",
+                REACTOME_FI.SCORE,
             ]
         ]
         # looks like they were already unique edges
-        .sort_values("Score", ascending=False)
+        .sort_values(REACTOME_FI.SCORE, ascending=False)
         .groupby([REACTOME_FI.GENE1, REACTOME_FI.GENE2])
         .first()
-    )
+    ).rename(columns={REACTOME_FI.SCORE: REACTOME_FI.FI_REACTION_DATA_SCORE})
 
     fi_edgelist = (
         formatted_interactions.reset_index()
@@ -304,13 +263,15 @@ def _parse_reactome_fi_annotations(interactions: pd.DataFrame) -> pd.DataFrame:
     """
 
     distinct_annotations = (
-        interactions[[REACTOME_FI.ANNOTATION, REACTOME_FI.DIRECTION]]
+        interactions[[REACTOME_FI.ANNOTATION, REACTOME_FI.DIRECTION_RAW]]
         .drop_duplicates()
         .reset_index(drop=True)
     )
     invalid_directions = distinct_annotations.loc[
-        ~distinct_annotations[REACTOME_FI.DIRECTION].isin(VALID_REACTOME_FI_DIRECTIONS),
-        "Direction",
+        ~distinct_annotations[REACTOME_FI.DIRECTION_RAW].isin(
+            VALID_REACTOME_FI_DIRECTIONS
+        ),
+        REACTOME_FI.DIRECTION_RAW,
     ]
     if len(invalid_directions) > 0:
         raise ValueError(f"Invalid directions: {invalid_directions}")
@@ -340,9 +301,9 @@ def _parse_reactome_fi_annotations(interactions: pd.DataFrame) -> pd.DataFrame:
             annotations.append(
                 {
                     REACTOME_FI.ANNOTATION: annot,
-                    REACTOME_FI.DIRECTION: direction,
+                    REACTOME_FI.DIRECTION_RAW: direction,
                     INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: forward_match,
-                    "polarity": "forward",
+                    REACTOME_FI.DIRECTION: REACTOME_FI.FORWARD,
                 }
             )
 
@@ -350,9 +311,9 @@ def _parse_reactome_fi_annotations(interactions: pd.DataFrame) -> pd.DataFrame:
             annotations.append(
                 {
                     REACTOME_FI.ANNOTATION: annot,
-                    REACTOME_FI.DIRECTION: direction,
+                    REACTOME_FI.DIRECTION_RAW: direction,
                     INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: reverse_match,
-                    "polarity": "reverse",
+                    REACTOME_FI.DIRECTION: REACTOME_FI.REVERSE,
                 }
             )
 

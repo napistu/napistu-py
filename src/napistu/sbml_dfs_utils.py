@@ -710,43 +710,52 @@ def _add_edgelist_defaults(
     Returns
     """
 
+    interaction_edgelist_w_defaults = interaction_edgelist.copy()
+
     missing_vars_with_defaults = INTERACTION_EDGELIST_OPTIONAL_VARS.difference(
-        interaction_edgelist.columns
-    )
-    if len(missing_vars_with_defaults) == 0:
-        return interaction_edgelist
-
-    logger.debug(
-        f"Adding default values to interaction edgelist for {len(missing_vars_with_defaults)} variables: {missing_vars_with_defaults}"
+        interaction_edgelist_w_defaults.columns
     )
 
-    vars_missing_defaults = INTERACTION_EDGELIST_OPTIONAL_VARS.difference(
-        edgelist_defaults.keys()
-    )
-    if len(vars_missing_defaults) > 0:
-        raise ValueError(
-            f"The following variables are missing from interaction_edgelist and are missing defaults: {vars_missing_defaults}"
+    if len(missing_vars_with_defaults) > 0:
+
+        logger.debug(
+            f"Adding default values to interaction edgelist for {len(missing_vars_with_defaults)} variables: {missing_vars_with_defaults}"
         )
 
-    for var_with_default in missing_vars_with_defaults:
-        # pull out the default value for the variable
-        default_value = edgelist_defaults[var_with_default]
-        # add the default value to the interaction edgelist
-        interaction_edgelist[var_with_default] = default_value
+        vars_missing_defaults = INTERACTION_EDGELIST_OPTIONAL_VARS.difference(
+            edgelist_defaults.keys()
+        )
+        if len(vars_missing_defaults) > 0:
+            # replace with global defaults
+            for var in vars_missing_defaults:
+                logger.debug(
+                    f"Adding default value for {var} from INTERACTION_EDGELIST_DEFAULTS: {INTERACTION_EDGELIST_DEFAULTS[var]}"
+                )
+                edgelist_defaults[var] = INTERACTION_EDGELIST_DEFAULTS[var]
+
+        for var_with_default in missing_vars_with_defaults:
+            # pull out the default value for the variable
+            default_value = edgelist_defaults[var_with_default]
+            # add the default value to the interaction edgelist
+            interaction_edgelist_w_defaults[var_with_default] = default_value
 
     # replace missing values with defaults
     for var_with_default in edgelist_defaults:
-        na_values = interaction_edgelist[var_with_default].isna()
+        na_values = interaction_edgelist_w_defaults[var_with_default].isna()
 
         if len(na_values) > 0:
             default_value = edgelist_defaults[var_with_default]
             logger.warning(
                 f"Replacing {len(na_values)} missing values with default value for {var_with_default}: {default_value}"
             )
-            interaction_edgelist.loc[na_values, var_with_default] = default_value
+            interaction_edgelist_w_defaults.loc[na_values, var_with_default] = (
+                default_value
+            )
 
     # are there columns which respect defaults and also have NaNs?
-    columns_with_nans = interaction_edgelist.columns[interaction_edgelist.isna().any()]
+    columns_with_nans = interaction_edgelist_w_defaults.columns[
+        interaction_edgelist_w_defaults.isna().any()
+    ]
     columns_with_nans_and_respecting_defaults = set(columns_with_nans) & set(
         INTERACTION_EDGELIST_OPTIONAL_VARS
     )
@@ -755,7 +764,7 @@ def _add_edgelist_defaults(
             f"The following columns have NaNs and respect defaults: {columns_with_nans_and_respecting_defaults}. Either address the missing values or add a default value to the edgelist_defaults."
         )
 
-    return interaction_edgelist
+    return interaction_edgelist_w_defaults
 
 
 def _add_stoi_to_species_name(stoi: float | int, name: str) -> str:
