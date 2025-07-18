@@ -9,16 +9,21 @@ from napistu import source
 from napistu import identifiers
 from napistu import utils
 from napistu.ontologies.genodexito import Genodexito
-from napistu.constants import BQB
-from napistu.constants import IDENTIFIERS
-from napistu.constants import MINI_SBO_FROM_NAME
-from napistu.constants import ONTOLOGIES
-from napistu.constants import SBML_DFS
-from napistu.ontologies.constants import INTERCONVERTIBLE_GENIC_ONTOLOGIES
-from napistu.ontologies.constants import GENE_ONTOLOGIES  # noqa: F401
-from napistu.ontologies.constants import GENODEXITO_DEFS
-from napistu.ontologies.constants import NAME_ONTOLOGIES
-from napistu.ontologies.constants import PROTEIN_ONTOLOGIES
+from napistu.constants import (
+    BQB,
+    SBOTERM_NAMES,
+    IDENTIFIERS,
+    MINI_SBO_FROM_NAME,
+    ONTOLOGIES,
+    SBML_DFS,
+)
+from napistu.ontologies.constants import (
+    INTERCONVERTIBLE_GENIC_ONTOLOGIES,
+    GENE_ONTOLOGIES,  # noqa: F401
+    GENODEXITO_DEFS,
+    NAME_ONTOLOGIES,
+    PROTEIN_ONTOLOGIES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +89,7 @@ def create_dogmatic_sbml_dfs(
         interaction_source=interaction_source,
         upstream_stoichiometry=-1,
         downstream_stoichiometry=1,
-        downstream_sbo_name="product",
+        downstream_sbo_name=SBOTERM_NAMES.PRODUCT,
     )
 
     # remove all reactions except 1 (so it still passes sbml_dfs.validate())
@@ -115,7 +120,7 @@ def _connect_dogmatic_mappings(
         dict with:
         - s_name_series: a series where the index is distinct molecular species and the values are names.
         - cluster_consensus_identifiers_df: a pd.DataFrame where the index is distinct molecular species
-          and values are identifiers objects.
+        and values are identifiers objects.
     """
 
     genodexito = Genodexito(

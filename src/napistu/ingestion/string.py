@@ -1,31 +1,36 @@
 from __future__ import annotations
-
 import logging
 
 import pandas as pd
+from fs import open_fs
+
 from napistu import identifiers
 from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
 from napistu import source
 from napistu import utils
 from napistu.ingestion import napistu_edgelist
-from napistu.constants import BQB
-from napistu.constants import MINI_SBO_FROM_NAME
-from napistu.constants import ONTOLOGIES
-from napistu.constants import SBML_DFS
-from napistu.ingestion.constants import STRING_DOWNSTREAM_COMPARTMENT
-from napistu.ingestion.constants import STRING_DOWNSTREAM_NAME
-from napistu.ingestion.constants import STRING_PROTEIN_ID
-from napistu.ingestion.constants import STRING_PROTEIN_ID_RAW
-from napistu.ingestion.constants import STRING_SOURCE
-from napistu.ingestion.constants import STRING_TARGET
-from napistu.ingestion.constants import STRING_TAX_IDS
-from napistu.ingestion.constants import STRING_UPSTREAM_COMPARTMENT
-from napistu.ingestion.constants import STRING_UPSTREAM_NAME
-from napistu.ingestion.constants import STRING_URL_EXPRESSIONS
-from napistu.ingestion.constants import STRING_VERSION
-from napistu.ingestion.constants import GENERIC_COMPARTMENT
-from fs import open_fs
+from napistu.constants import (
+    BQB,
+    SBOTERM_NAMES,
+    MINI_SBO_FROM_NAME,
+    ONTOLOGIES,
+    SBML_DFS,
+)
+from napistu.ingestion.constants import (
+    STRING_DOWNSTREAM_COMPARTMENT,
+    STRING_DOWNSTREAM_NAME,
+    STRING_PROTEIN_ID,
+    STRING_PROTEIN_ID_RAW,
+    STRING_SOURCE,
+    STRING_TARGET,
+    STRING_TAX_IDS,
+    STRING_UPSTREAM_COMPARTMENT,
+    STRING_UPSTREAM_NAME,
+    STRING_URL_EXPRESSIONS,
+    STRING_VERSION,
+    GENERIC_COMPARTMENT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +173,7 @@ def convert_string_to_sbml_dfs(
         interaction_source=interaction_source,
         upstream_stoichiometry=0,
         downstream_stoichiometry=0,
-        downstream_sbo_name="interactor",
+        downstream_sbo_name=SBOTERM_NAMES.INTERACTOR,
         keep_reactions_data="string",
     )
     return sbml_dfs
@@ -293,7 +298,7 @@ def _build_interactor_edgelist(
     upstream_col_name: str = STRING_SOURCE,
     downstream_col_name: str = STRING_TARGET,
     add_reverse_interactions: bool = False,
-    sbo_term: str = "interactor",
+    sbo_term: str = SBOTERM_NAMES.INTERACTOR,
     compartment: str = GENERIC_COMPARTMENT,
 ) -> pd.DataFrame:
     """Format STRING interactions as reactions."""
