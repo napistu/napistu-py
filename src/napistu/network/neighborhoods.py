@@ -512,9 +512,10 @@ def find_neighborhoods(
     compartmentalized_species: list[str],
     network_type: str = "downstream",
     order: int = 3,
-    verbose: bool = True,
+    min_pw_size: int = 3,
     precomputed_neighbors: pd.DataFrame | None = None,
     source_total_counts: pd.Series | None = None,
+    verbose: bool = True,
 ) -> dict:
     """
     Find Neighborhood
@@ -536,14 +537,16 @@ def find_neighborhoods(
         locates both upstream and downstream species.
     order: int
         Max steps away from center node
-    verbose: bool
-        Extra reporting
     precomputed_neighbors: pd.DataFrame or None
         If provided, a pre-filtered table of nodes nearby the compartmentalized species
         which will be used to skip on-the-fly neighborhood generation.
+    min_pw_size: int
+        the minimum size of a pathway to be considered
     source_total_counts: pd.Series | None
         Optional, A series of the total counts of each source. As produced by
-        source.get_source_total_counts()
+        source.get_source_total_counts()\
+    verbose: bool
+        Extra reporting
 
     Returns:
     ----------
@@ -580,6 +583,7 @@ def find_neighborhoods(
             neighborhood_df=neighborhood_df,
             sbml_dfs=sbml_dfs,
             napistu_graph=napistu_graph,
+            min_pw_size=min_pw_size,
             source_total_counts=source_total_counts,
             verbose=verbose,
         )
@@ -594,6 +598,7 @@ def create_neighborhood_dict_entry(
     neighborhood_df: pd.DataFrame,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     napistu_graph: ig.Graph,
+    min_pw_size: int = 3,
     source_total_counts: pd.Series | None = None,
     verbose: bool = False,
 ) -> dict[str, Any]:
@@ -612,6 +617,8 @@ def create_neighborhood_dict_entry(
         A mechanistic molecular model
     napistu_graph: igraph.Graph
         A network connecting molecular species and reactions
+    min_pw_size: int
+        the minimum size of a pathway to be considered
     source_total_counts: pd.Series
         Optional, A series of the total counts of each source. As produced by
         source.get_source_total_counts()
@@ -665,8 +672,9 @@ def create_neighborhood_dict_entry(
         edge_sources = ng_utils.get_minimal_sources_edges(
             vertices.rename(columns={"name": "node"}),
             sbml_dfs,
+            min_pw_size=min_pw_size,
             # optional, counts of sources across the whole model
-            source_total_counts,
+            source_total_counts=source_total_counts,
         )
     except Exception:
         edge_sources = None

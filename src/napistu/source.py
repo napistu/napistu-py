@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 
 import numpy as np
 import pandas as pd
@@ -9,6 +10,8 @@ from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
 from napistu.statistics import hypothesis_testing
 from napistu.constants import SBML_DFS_SCHEMA, SCHEMA_DEFS, SOURCE_SPEC
+
+logger = logging.getLogger(__name__)
 
 
 class Source:
@@ -244,7 +247,7 @@ def unnest_sources(source_table: pd.DataFrame, verbose: bool = False) -> pd.Data
 
     for i in range(source_table.shape[0]):
         if verbose:
-            print(f"Processing {source_table_index.index.values[i]}")
+            logger.info(f"Processing {source_table_index.index.values[i]}")
 
         # check that the entries of sourcevar are Source objects
         source_value = source_table[source_var].iloc[i]
@@ -255,7 +258,7 @@ def unnest_sources(source_table: pd.DataFrame, verbose: bool = False) -> pd.Data
             )
 
         if source_value.source is None:
-            print("Some sources were only missing - returning None")
+            logger.warning("Some sources were only missing - returning None")
             return None
 
         source_tbl = pd.DataFrame(source_value.source)
@@ -278,6 +281,7 @@ def source_set_coverage(
     select_sources_df: pd.DataFrame,
     source_total_counts: Optional[pd.Series] = None,
     sbml_dfs: Optional[sbml_dfs_core.SBML_dfs] = None,
+    min_pw_size: int = 3,
 ) -> pd.DataFrame:
     """
     Greedy Set Coverage of Sources
@@ -298,6 +302,8 @@ def source_set_coverage(
     sbml_dfs: sbml_dfs_core.SBML_dfs
         if `source_total_counts` is provided then `sbml_dfs` must be provided
         to calculate the total number of entities in the table.
+    min_pw_size: int
+        the minimum size of a pathway to be considered
 
     Returns
     -------
@@ -325,10 +331,16 @@ def source_set_coverage(
         # find the pathway with the most members
 
         if source_total_counts is None:
-            top_pathway = _select_top_pathway_by_size(unaccounted_for_members)
+            top_pathway = _select_top_pathway_by_size(
+                unaccounted_for_members, min_pw_size=min_pw_size
+            )
         else:
             top_pathway = _select_top_pathway_by_enrichment(
-                unaccounted_for_members, source_total_counts, n_total_entities, pk
+                unaccounted_for_members,
+                source_total_counts,
+                n_total_entities,
+                pk,
+                min_pw_size=min_pw_size,
             )
 
         if top_pathway is None:
@@ -368,6 +380,13 @@ def get_source_total_counts(
     """
 
     all_sources_table = unnest_sources(sbml_dfs.get_table(entity_type))
+
+    if all_sources_table is None:
+        logger.warning(
+            f"No sources found for {entity_type} in sbml_dfs. Returning an empty series."
+        )
+        return pd.Series([], name="total_counts")
+
     source_total_counts = all_sources_table.value_counts(SOURCE_SPEC.PATHWAY_ID).rename(
         "total_counts"
     )
@@ -515,9 +534,15 @@ def _safe_source_merge(member_Sources: Source | list) -> Source:
         raise TypeError("Expecting source.Source or pd.Series")
 
 
-def _select_top_pathway_by_size(unaccounted_for_members: pd.DataFrame) -> str:
+def _select_top_pathway_by_size(
+    unaccounted_for_members: pd.DataFrame, min_pw_size: int = 3
+) -> str:
 
     pathway_members = unaccounted_for_members.value_counts(SOURCE_SPEC.PATHWAY_ID)
+    pathway_members = pathway_members.loc[pathway_members >= min_pw_size]
+    if pathway_members.shape[0] == 0:
+        return None
+
     top_pathway = pathway_members[pathway_members == max(pathway_members)].index[0]
 
     return top_pathway
@@ -528,7 +553,7 @@ def _select_top_pathway_by_enrichment(
     source_total_counts: pd.Series,
     n_total_entities: int,
     table_pk: str,
-    min_pw_size: int = 5,
+    min_pw_size: int = 3,
 ) -> str:
 
     n_observed_entities = len(
