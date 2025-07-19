@@ -7,6 +7,7 @@ from napistu import source
 from napistu.constants import SBML_DFS
 from napistu.network.constants import NEIGHBORHOOD_NETWORK_TYPES
 
+
 def test_neighborhood(sbml_dfs, napistu_graph):
     species = sbml_dfs.species
     source_species = species[species[SBML_DFS.S_NAME] == "NADH"].index.tolist()
