@@ -18,13 +18,21 @@ from napistu import utils
 from napistu.network import ng_utils
 from napistu.network import paths
 
-from napistu.constants import SBML_DFS
-from napistu.constants import MINI_SBO_NAME_TO_POLARITY
-from napistu.constants import MINI_SBO_TO_NAME
+from napistu.constants import (
+    MINI_SBO_NAME_TO_POLARITY,
+    MINI_SBO_TO_NAME,
+    NAPISTU_EDGELIST,
+    SBML_DFS,
+)
 
-from napistu.network.constants import GRAPH_WIRING_APPROACHES
-from napistu.network.constants import NEIGHBORHOOD_NETWORK_TYPES
-from napistu.network.constants import VALID_NEIGHBORHOOD_NETWORK_TYPES
+from napistu.network.constants import (
+    GRAPH_WIRING_APPROACHES,
+    NAPISTU_GRAPH_VERTICES,
+    NEIGHBORHOOD_DICT_KEYS,
+    NEIGHBORHOOD_NETWORK_TYPES,
+    NET_POLARITY,
+    VALID_NEIGHBORHOOD_NETWORK_TYPES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +42,9 @@ def find_and_prune_neighborhoods(
     napistu_graph: ig.Graph,
     compartmentalized_species: str | list[str],
     precomputed_distances: pd.DataFrame | None = None,
+    min_pw_size: int = 3,
     source_total_counts: pd.Series | None = None,
-    network_type: str = NEIGHBORHOOD_NETWORK_TYPES.DOWNSTREAM,
+    network_type: str = NEIGHBORHOOD_NETWORK_TYPES.HOURGLASS,
     order: int = 3,
     verbose: bool = True,
     top_n: int = 10,
@@ -55,6 +64,8 @@ def find_and_prune_neighborhoods(
         Compartmentalized species IDs for neighborhood centers
     precomputed_distances : pd.DataFrame or None
         If provided, an edgelist of origin->destination path weights and lengths
+    min_pw_size: int
+        the minimum size of a pathway to be considered
     source_total_counts: pd.Series | None
         Optional, A series of the total counts of each source. As produced by
         source.get_source_total_counts()
@@ -111,9 +122,10 @@ def find_and_prune_neighborhoods(
         compartmentalized_species=compartmentalized_species,
         network_type=network_type,
         order=order,
-        verbose=verbose,
         precomputed_neighbors=precomputed_neighbors,
+        min_pw_size=min_pw_size,
         source_total_counts=source_total_counts,
+        verbose=verbose,
     )
 
     pruned_neighborhoods = prune_neighborhoods(neighborhoods, top_n=top_n)
@@ -283,7 +295,9 @@ def create_neighborhoods(
 
         neighborhood_entities = pd.concat(
             [
-                neighborhoods[sc_id]["vertices"].assign(focal_sc_id=sc_id)
+                neighborhoods[sc_id][NEIGHBORHOOD_DICT_KEYS.VERTICES].assign(
+                    focal_sc_id=sc_id
+                )
                 for sc_id in neighborhoods.keys()
             ]
         ).assign(focal_s_id=s_id)
@@ -321,6 +335,7 @@ def create_neighborhood_prefix(network_type: str, order: int, top_n: int) -> str
 def load_neighborhoods_by_partition(
     selected_partition: int,
     neighborhood_outdir: str,
+    cache_dir: str,
     wiring_approach: str = GRAPH_WIRING_APPROACHES.REGULATORY,
 ) -> None:
     """
@@ -343,19 +358,18 @@ def load_neighborhoods_by_partition(
 
     """
 
-    consensus_root = "/group/cpr/consensus"
-    consensus_name = "reactome"
-    consensus_outdir = os.path.join(consensus_root, consensus_name)
-
     if not os.path.isdir(neighborhood_outdir):
         raise FileNotFoundError(f"{neighborhood_outdir} does not exist")
+
+    if not os.path.isdir(cache_dir):
+        raise FileNotFoundError(f"{cache_dir} does not exist")
 
     partition_output = os.path.join(
         neighborhood_outdir, f"partition_{selected_partition}"
     )
     # initialize an empty output
     if os.path.isdir(partition_output):
-        print(f"removing existing directory: {partition_output}")
+        logger.warning(f"removing existing directory: {partition_output}")
         shutil.rmtree(partition_output)
     os.makedirs(partition_output)
 
@@ -375,7 +389,7 @@ def load_neighborhoods_by_partition(
 
     # read model containing Calico curations. this is primarily to support search programs
     # to not use these switch to refined.pkl
-    refined_model_pkl_path = os.path.join(consensus_outdir, "curated.pkl")
+    refined_model_pkl_path = os.path.join(cache_dir, "curated.pkl")
     with open(refined_model_pkl_path, "rb") as in_file:
         refined_model = pickle.load(in_file)
     refined_model.validate()
@@ -383,12 +397,12 @@ def load_neighborhoods_by_partition(
     # load the graph
     napistu_graph = ng_utils.read_network_pkl(
         model_prefix="curated",
-        network_dir=consensus_outdir,
+        network_dir=cache_dir,
         directed=True,
         wiring_approach=wiring_approach,
     )
 
-    all_neighborhoods_df, neighborhoods_dict = load_neighborhoods(
+    _, _ = load_neighborhoods(
         s_ids=parition_sids,
         sbml_dfs=refined_model,
         napistu_graph=napistu_graph,
@@ -510,7 +524,7 @@ def find_neighborhoods(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     napistu_graph: ig.Graph,
     compartmentalized_species: list[str],
-    network_type: str = "downstream",
+    network_type: str = NEIGHBORHOOD_NETWORK_TYPES.HOURGLASS,
     order: int = 3,
     min_pw_size: int = 3,
     precomputed_neighbors: pd.DataFrame | None = None,
@@ -557,10 +571,9 @@ def find_neighborhoods(
     if not isinstance(network_type, str):
         raise TypeError(f"network_type was a {type(network_type)} and must be a str")
 
-    valid_network_types = ["downstream", "upstream", "hourglass"]
-    if network_type not in valid_network_types:
+    if network_type not in VALID_NEIGHBORHOOD_NETWORK_TYPES:
         raise ValueError(
-            f"network_type must be one of {', '.join(valid_network_types)}"
+            f"network_type must be one of {', '.join(VALID_NEIGHBORHOOD_NETWORK_TYPES)}"
         )
 
     if not isinstance(order, int):
@@ -634,8 +647,8 @@ def create_neighborhood_dict_entry(
             nodes in the neighborhood
         edges: pd.DataFrame
             edges in the neighborhood
-        edge_sources: pd.DataFrame
-            models that edges were derived from
+        reaction_sources: pd.DataFrame
+            models that reactions were derived from
         neighborhood_path_entities: dict
             upstream and downstream dicts representing entities in paths.
             If the keys are to be included in a neighborhood, the
@@ -669,7 +682,7 @@ def create_neighborhood_dict_entry(
         )
 
     try:
-        edge_sources = ng_utils.get_minimal_sources_edges(
+        reaction_sources = ng_utils.get_minimal_sources_edges(
             vertices.rename(columns={"name": "node"}),
             sbml_dfs,
             min_pw_size=min_pw_size,
@@ -677,7 +690,7 @@ def create_neighborhood_dict_entry(
             source_total_counts=source_total_counts,
         )
     except Exception:
-        edge_sources = None
+        reaction_sources = None
 
     # to add weights to the network solve the shortest path problem
     # from the focal node to each neighbor
@@ -807,7 +820,7 @@ def create_neighborhood_dict_entry(
         "graph": updated_napistu_graph,
         "vertices": vertices,
         "edges": edges,
-        "edge_sources": edge_sources,
+        "reaction_sources": reaction_sources,
         "neighborhood_path_entities": neighborhood_path_entities,
     }
 
@@ -868,8 +881,10 @@ def add_vertices_uri_urls(
     # add uri urls for each node
 
     # add s_ids
-    neighborhood_species = vertices[vertices["node_type"] == "species"].merge(
-        sbml_dfs.compartmentalized_species["s_id"],
+    neighborhood_species = vertices[
+        vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE] == "species"
+    ].merge(
+        sbml_dfs.compartmentalized_species[SBML_DFS.S_ID],
         left_on="name",
         right_index=True,
         how="left",
@@ -877,24 +892,29 @@ def add_vertices_uri_urls(
 
     # add a standard reference identifier
     neighborhood_species_aug = neighborhood_species.merge(
-        sbml_dfs.get_uri_urls("species", neighborhood_species["s_id"]),
-        left_on="s_id",
+        sbml_dfs.get_uri_urls("species", neighborhood_species[SBML_DFS.S_ID]),
+        left_on=SBML_DFS.S_ID,
         right_index=True,
         how="left",
         # add pharos ids where available
     ).merge(
         sbml_dfs.get_uri_urls(
-            "species", neighborhood_species["s_id"], required_ontology="pharos"
+            "species", neighborhood_species[SBML_DFS.S_ID], required_ontology="pharos"
         ).rename("pharos"),
-        left_on="s_id",
+        left_on=SBML_DFS.S_ID,
         right_index=True,
         how="left",
     )
 
-    if sum(vertices["node_type"] == "reaction") > 0:
-        neighborhood_reactions = vertices[vertices["node_type"] == "reaction"].merge(
+    if sum(vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE] == "reaction") > 0:
+        neighborhood_reactions = vertices[
+            vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE] == "reaction"
+        ].merge(
             sbml_dfs.get_uri_urls(
-                "reactions", vertices[vertices["node_type"] == "reaction"]["name"]
+                "reactions",
+                vertices[vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE] == "reaction"][
+                    "name"
+                ],
             ),
             left_on="name",
             right_index=True,
@@ -955,38 +975,54 @@ def prune_neighborhoods(neighborhoods: dict, top_n: int = 100) -> dict:
         pruned_vertices = _prune_vertex_set(one_neighborhood, top_n=top_n)
 
         # reduce neighborhood to this set of high-weight vertices
-        all_neighbors = pd.DataFrame({"name": one_neighborhood["graph"].vs["name"]})
+        all_neighbors = pd.DataFrame(
+            {
+                NAPISTU_GRAPH_VERTICES.NODE_NAME: one_neighborhood[
+                    NEIGHBORHOOD_DICT_KEYS.GRAPH
+                ].vs[NAPISTU_GRAPH_VERTICES.NODE_NAME]
+            }
+        )
         pruned_vertices_indices = all_neighbors[
-            all_neighbors["name"].isin(pruned_vertices["name"])
+            all_neighbors[NAPISTU_GRAPH_VERTICES.NODE_NAME].isin(
+                pruned_vertices[NAPISTU_GRAPH_VERTICES.NODE_NAME]
+            )
         ].index.tolist()
 
-        pruned_neighborhood = one_neighborhood["graph"].subgraph(
-            one_neighborhood["graph"].vs[pruned_vertices_indices],
+        pruned_neighborhood = one_neighborhood[NEIGHBORHOOD_DICT_KEYS.GRAPH].subgraph(
+            one_neighborhood[NEIGHBORHOOD_DICT_KEYS.GRAPH].vs[pruned_vertices_indices],
             implementation="auto",
         )
 
         pruned_edges = pd.DataFrame([e.attributes() for e in pruned_neighborhood.es])
 
-        pruned_reactions = pruned_vertices[pruned_vertices["node_type"] == "reaction"][
-            "name"
-        ]
+        pruned_reactions = pruned_vertices[
+            pruned_vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE] == "reaction"
+        ][NAPISTU_GRAPH_VERTICES.NODE_NAME]
 
         if pruned_reactions.shape[0] != 0:
-            if one_neighborhood["edge_sources"] is None:
+            if one_neighborhood[NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES] is None:
                 # allow for missing source information since this is currently optional
-                pruned_edge_sources = one_neighborhood["edge_sources"]
+                pruned_reaction_sources = one_neighborhood[
+                    NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES
+                ]
             else:
-                pruned_edge_sources = one_neighborhood["edge_sources"][
-                    one_neighborhood["edge_sources"]["r_id"].isin(pruned_reactions)
+                pruned_reaction_sources = one_neighborhood[
+                    NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES
+                ][
+                    one_neighborhood[NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES][
+                        SBML_DFS.R_ID
+                    ].isin(pruned_reactions)
                 ]
         else:
-            pruned_edge_sources = one_neighborhood["edge_sources"]
+            pruned_reaction_sources = one_neighborhood[
+                NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES
+            ]
 
         pruned_neighborhoods_dict[an_sc_id] = {
-            "graph": pruned_neighborhood,
-            "vertices": pruned_vertices,
-            "edges": pruned_edges,
-            "edge_sources": pruned_edge_sources,
+            NEIGHBORHOOD_DICT_KEYS.GRAPH: pruned_neighborhood,
+            NEIGHBORHOOD_DICT_KEYS.VERTICES: pruned_vertices,
+            NEIGHBORHOOD_DICT_KEYS.EDGES: pruned_edges,
+            NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES: pruned_reaction_sources,
         }
 
     return pruned_neighborhoods_dict
@@ -1034,11 +1070,11 @@ def plot_neighborhood(
     }
 
     edge_polarity_colors = {
-        "ambiguous": "dimgray",
-        "activation": "gold",
-        "inhibition": "royalblue",
-        "ambiguous activation": "palegoldenrod",
-        "ambiguous inhibition": "powerblue",
+        NET_POLARITY.AMBIGUOUS: "dimgray",
+        NET_POLARITY.ACTIVATION: "gold",
+        NET_POLARITY.INHIBITION: "royalblue",
+        NET_POLARITY.AMBIGUOUS_ACTIVATION: "palegoldenrod",
+        NET_POLARITY.AMBIGUOUS_INHIBITION: "powerblue",
         np.nan: "dimgray",
     }
 
@@ -1047,17 +1083,19 @@ def plot_neighborhood(
     visual_style["vertex_size"] = 10
     if name_nodes:
         visual_style["vertex_label"] = [
-            textwrap.fill(x, 15) for x in neighborhood_graph.vs["node_name"]
+            textwrap.fill(x, 15)
+            for x in neighborhood_graph.vs[NAPISTU_GRAPH_VERTICES.NODE_NAME]
         ]
     visual_style["vertex_label_color"] = "white"
     visual_style["vertex_label_size"] = 8
     visual_style["vertex_label_angle"] = 90
     visual_style["vertex_label_dist"] = 3
     visual_style["vertex_color"] = [
-        color_dict[x] for x in neighborhood_graph.vs["node_type"]
+        color_dict[x] for x in neighborhood_graph.vs[NAPISTU_GRAPH_VERTICES.NODE_TYPE]
     ]
     visual_style["edge_color"] = [
-        edge_polarity_colors[x] for x in neighborhood_graph.es["net_polarity"]
+        edge_polarity_colors[x]
+        for x in neighborhood_graph.es[NET_POLARITY.NET_POLARITY]
     ]
     visual_style["layout"] = neighborhood_graph_layout
     visual_style["bbox"] = (plot_size, plot_size)
@@ -1089,8 +1127,8 @@ def _precompute_neighbors(
 
     # check that compartmentalized_species are included in precomputed_distances
     all_cspecies = {
-        *precomputed_distances["sc_id_origin"].tolist(),
-        *precomputed_distances["sc_id_dest"].tolist(),
+        *precomputed_distances[NAPISTU_EDGELIST.SC_ID_ORIGIN].tolist(),
+        *precomputed_distances[NAPISTU_EDGELIST.SC_ID_DEST].tolist(),
     }
     missing_cspecies = set(compartmentalized_species).difference(all_cspecies)
     if len(missing_cspecies) > 0:
@@ -1105,14 +1143,16 @@ def _precompute_neighbors(
         NEIGHBORHOOD_NETWORK_TYPES.DOWNSTREAM,
         NEIGHBORHOOD_NETWORK_TYPES.HOURGLASS,
     ]:
-        valid_origin = precomputed_distances["sc_id_origin"].isin(
+        valid_origin = precomputed_distances[NAPISTU_EDGELIST.SC_ID_ORIGIN].isin(
             compartmentalized_species
         )
     if network_type in [
         NEIGHBORHOOD_NETWORK_TYPES.UPSTREAM,
         NEIGHBORHOOD_NETWORK_TYPES.HOURGLASS,
     ]:
-        valid_dest = precomputed_distances["sc_id_dest"].isin(compartmentalized_species)
+        valid_dest = precomputed_distances[NAPISTU_EDGELIST.SC_ID_DEST].isin(
+            compartmentalized_species
+        )
 
     if network_type == NEIGHBORHOOD_NETWORK_TYPES.HOURGLASS:
         cspecies_subset_precomputed_distances = precomputed_distances[
@@ -1149,7 +1189,7 @@ def _precompute_neighbors(
             ]
             # sort by path_weight so we can retain the lowest weight neighbors
             .sort_values("path_weights")
-            .groupby("sc_id_origin")
+            .groupby(NAPISTU_EDGELIST.SC_ID_ORIGIN)
             .head(top_n)
         )
 
@@ -1161,9 +1201,9 @@ def _precompute_neighbors(
     ]:
         top_ancestors = (
             close_cspecies_subset_precomputed_distances[
-                close_cspecies_subset_precomputed_distances["sc_id_dest"].isin(
-                    compartmentalized_species
-                )
+                close_cspecies_subset_precomputed_distances[
+                    NAPISTU_EDGELIST.SC_ID_DEST
+                ].isin(compartmentalized_species)
             ]
             # sort by path_upstream_weights so we can retain the lowest weight neighbors
             # we allow for upstream weights to differ from downstream weights
@@ -1177,7 +1217,7 @@ def _precompute_neighbors(
             # we penalize based on the number of parents of a node when
             # we use it (i.e., the default upstream_weights).
             .sort_values("path_upstream_weights")
-            .groupby("sc_id_dest")
+            .groupby(NAPISTU_EDGELIST.SC_ID_DEST)
             .head(top_n)
         )
 
@@ -1217,8 +1257,8 @@ def _precompute_neighbors(
     # an sc_id_origin-specific subgraph
     identity_df = pd.DataFrame(
         {
-            "sc_id_origin": compartmentalized_species,
-            "sc_id_dest": compartmentalized_species,
+            NAPISTU_EDGELIST.SC_ID_ORIGIN: compartmentalized_species,
+            NAPISTU_EDGELIST.SC_ID_DEST: compartmentalized_species,
         }
     )
 
@@ -1232,14 +1272,16 @@ def _precompute_neighbors(
                 downstream_reactions,  # type: ignore
                 identity_df,
             ]
-        )[["sc_id_origin", "sc_id_dest"]].drop_duplicates()
+        )[
+            [NAPISTU_EDGELIST.SC_ID_ORIGIN, NAPISTU_EDGELIST.SC_ID_DEST]
+        ].drop_duplicates()
     elif network_type == NEIGHBORHOOD_NETWORK_TYPES.DOWNSTREAM:
         precomputed_neighbors = pd.concat([top_descendants, downstream_reactions, identity_df])[  # type: ignore
-            ["sc_id_origin", "sc_id_dest"]
+            [NAPISTU_EDGELIST.SC_ID_ORIGIN, NAPISTU_EDGELIST.SC_ID_DEST]
         ].drop_duplicates()
     elif network_type == NEIGHBORHOOD_NETWORK_TYPES.UPSTREAM:
         precomputed_neighbors = pd.concat([top_ancestors, upstream_reactions, identity_df])[  # type: ignore
-            ["sc_id_origin", "sc_id_dest"]
+            [NAPISTU_EDGELIST.SC_ID_ORIGIN, NAPISTU_EDGELIST.SC_ID_DEST]
         ].drop_duplicates()
     else:
         raise ValueError("This error shouldn't happen")
@@ -1333,11 +1375,11 @@ def _find_neighbors(
         )
 
         if relationship == "descendants":
-            bait_id = "sc_id_origin"
-            target_id = "sc_id_dest"
+            bait_id = NAPISTU_EDGELIST.SC_ID_ORIGIN
+            target_id = NAPISTU_EDGELIST.SC_ID_DEST
         elif relationship == "ancestors":
-            bait_id = "sc_id_dest"
-            target_id = "sc_id_origin"
+            bait_id = NAPISTU_EDGELIST.SC_ID_DEST
+            target_id = NAPISTU_EDGELIST.SC_ID_ORIGIN
         else:
             raise ValueError(
                 f"relationship must be 'descendants' or 'ancestors' but was {relationship}"
@@ -1348,7 +1390,7 @@ def _find_neighbors(
                 precomputed_neighbors[bait_id].isin(compartmentalized_species)
             ]
             .merge(nodes_to_names.rename({"name": target_id}, axis=1))
-            .rename({bait_id: "sc_id"}, axis=1)
+            .rename({bait_id: SBML_DFS.SC_ID}, axis=1)
             .drop([target_id], axis=1)
             .assign(relationship=relationship)
         )
@@ -1371,7 +1413,7 @@ def _find_neighbors(
 
         neighbors_df = pd.concat(
             [
-                pd.DataFrame({"sc_id": c, "neighbor": x}, index=range(0, len(x)))
+                pd.DataFrame({SBML_DFS.SC_ID: c, "neighbor": x}, index=range(0, len(x)))
                 for c, x in zip(compartmentalized_species, neighbors)
             ]
         ).assign(relationship=relationship)
@@ -1402,11 +1444,11 @@ def _find_reactions_by_relationship(
         return None
 
     if relationship == "descendants":
-        bait_id = "sc_id_origin"
-        target_id = "sc_id_dest"
+        bait_id = NAPISTU_EDGELIST.SC_ID_ORIGIN
+        target_id = NAPISTU_EDGELIST.SC_ID_DEST
     elif relationship == "ancestors":
-        bait_id = "sc_id_dest"
-        target_id = "sc_id_origin"
+        bait_id = NAPISTU_EDGELIST.SC_ID_DEST
+        target_id = NAPISTU_EDGELIST.SC_ID_ORIGIN
     else:
         raise ValueError(
             f"relationship must be 'descendants' or 'ancestors' but was {relationship}"
@@ -1437,8 +1479,8 @@ def _find_reactions_by_relationship(
         relatives_cspecies = {*relatives, *[uq]}
         # count the number of relative cspecies including each reaction
         rxn_species_counts = sbml_dfs.reaction_species[
-            sbml_dfs.reaction_species["sc_id"].isin(relatives_cspecies)
-        ].value_counts("r_id")
+            sbml_dfs.reaction_species[SBML_DFS.SC_ID].isin(relatives_cspecies)
+        ].value_counts(SBML_DFS.R_ID)
 
         # retain reactions involving 2+ cspecies.
         # some of these reactions will be irrelevant and will be excluded when
@@ -1486,7 +1528,7 @@ def _prune_vertex_set(one_neighborhood: dict, top_n: int) -> pd.DataFrame:
     neighborhood_vertices = one_neighborhood["vertices"]
 
     indexed_neighborhood_species = neighborhood_vertices[
-        neighborhood_vertices["node_type"] == "species"
+        neighborhood_vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE] == "species"
     ].set_index("node_orientation")
 
     pruned_oriented_neighbors = list()

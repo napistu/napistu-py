@@ -14,7 +14,11 @@ NAPISTU_GRAPH_DIRECTEDNESS = SimpleNamespace(
     DIRECTED="directed", UNDIRECTED="undirected"
 )
 
-NAPISTU_GRAPH_VERTICES = SimpleNamespace(NAME="name")
+NAPISTU_GRAPH_VERTICES = SimpleNamespace(
+    NAME="name",  # internal name
+    NODE_NAME="node_name",  # human readable name
+    NODE_TYPE="node_type",  # type of node (species or reaction)
+)
 
 NAPISTU_GRAPH_EDGES = SimpleNamespace(
     DIRECTED="directed",
@@ -219,4 +223,11 @@ PARAMETRIC_NULL_DEFAULT_DISTRIBUTION = "norm"
 
 MASK_KEYWORDS = SimpleNamespace(
     ATTR="attr",
+)
+
+NEIGHBORHOOD_DICT_KEYS = SimpleNamespace(
+    GRAPH="graph",
+    VERTICES="vertices",
+    EDGES="edges",
+    REACTION_SOURCES="reaction_sources",
 )
