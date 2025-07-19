@@ -96,4 +96,4 @@ def test_source_set_coverage_enrichment(sbml_dfs_metabolism):
         source_df, source_total_counts=source_total_counts, sbml_dfs=sbml_dfs_metabolism
     )
 
-    assert set_coverage.shape == (30, 6)
+    assert set_coverage.shape == (34, 6)

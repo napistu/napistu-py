@@ -114,6 +114,7 @@ def compartmentalize_species_pairs(
 def get_minimal_sources_edges(
     vertices: pd.DataFrame,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
+    min_pw_size: int = 3,
     source_total_counts: Optional[pd.Series] = None,
 ) -> pd.DataFrame | None:
     """
@@ -125,6 +126,8 @@ def get_minimal_sources_edges(
         A table of vertices.
     sbml_dfs: sbml_dfs_core.SBML_dfs
         A pathway model
+    min_pw_size: int
+        the minimum size of a pathway to be considered
     source_total_counts: pd.Series
         A series of the total counts of each source.
 
@@ -146,7 +149,7 @@ def get_minimal_sources_edges(
         return None
     else:
         edge_sources = source.source_set_coverage(
-            source_df, source_total_counts, sbml_dfs
+            source_df, source_total_counts, sbml_dfs, min_pw_size=min_pw_size
         )
         return edge_sources.reset_index()[
             [SBML_DFS.R_ID, SOURCE_SPEC.PATHWAY_ID, SOURCE_SPEC.NAME]

@@ -139,6 +139,16 @@ def napistu_graph_undirected(sbml_dfs):
     )
 
 
+@fixture
+def napistu_graph_metabolism(sbml_dfs_metabolism):
+    """
+    Pytest fixture to create a NapistuGraph from sbml_dfs_glucose_metabolism with directed=True and topology weighting.
+    """
+    return process_napistu_graph(
+        sbml_dfs_metabolism, directed=True, weighting_strategy="topology"
+    )
+
+
 @pytest.fixture
 def reaction_species_examples():
     """
