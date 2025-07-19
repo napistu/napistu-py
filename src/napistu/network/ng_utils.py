@@ -133,8 +133,8 @@ def get_minimal_sources_edges(
 
     Returns
     -------
-    edge_sources: pd.DataFrame
-        A table of edges and the sources they are assigned to.
+    reaction_sources: pd.DataFrame
+        A table of reactions and the sources they are assigned to.
     """
 
     nodes = vertices["node"].tolist()
@@ -148,10 +148,10 @@ def get_minimal_sources_edges(
     if source_df is None:
         return None
     else:
-        edge_sources = source.source_set_coverage(
+        reaction_sources = source.source_set_coverage(
             source_df, source_total_counts, sbml_dfs, min_pw_size=min_pw_size
         )
-        return edge_sources.reset_index()[
+        return reaction_sources.reset_index()[
             [SBML_DFS.R_ID, SOURCE_SPEC.PATHWAY_ID, SOURCE_SPEC.NAME]
         ]
 

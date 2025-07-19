@@ -11,13 +11,19 @@ from napistu import sbml_dfs_core
 from napistu import utils
 from napistu.network.ng_core import NapistuGraph
 from napistu.network.ng_utils import get_minimal_sources_edges
-from napistu.constants import NAPISTU_PATH_REQ_VARS
-from napistu.constants import MINI_SBO_NAME_TO_POLARITY
-from napistu.constants import MINI_SBO_TO_NAME
-from napistu.constants import SBML_DFS
-from napistu.network.constants import NET_POLARITY
-from napistu.network.constants import NAPISTU_GRAPH_EDGES
-from napistu.network.constants import VALID_LINK_POLARITIES
+from napistu.constants import (
+    MINI_SBO_NAME_TO_POLARITY,
+    MINI_SBO_TO_NAME,
+    NAPISTU_EDGELIST,
+    NAPISTU_PATH_REQ_VARS,
+    SBML_DFS,
+)
+from napistu.network.constants import (
+    NAPISTU_GRAPH_EDGES,
+    NAPISTU_GRAPH_VERTICES,
+    NET_POLARITY,
+    VALID_LINK_POLARITIES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -273,8 +279,8 @@ def find_all_shortest_reaction_paths(
         Nodes in all shortest paths
     all_shortest_reaction_path_edges_df : pd.DataFrame
         Edges in all shortest paths
-    edge_sources : pd.DataFrame
-        Sources of edge identifying the models where they originated
+    reaction_sources : pd.DataFrame
+        Sources of reactions identifying the models where they originated
     paths_graph : igraph.Graph
         Network formed by all shortest paths
     """
@@ -297,8 +303,8 @@ def find_all_shortest_reaction_paths(
         paths = find_shortest_reaction_paths(
             napistu_graph,
             sbml_dfs,
-            origin=one_search["sc_id_origin"],
-            dest=one_search["sc_id_dest"],
+            origin=one_search[NAPISTU_EDGELIST.SC_ID_ORIGIN],
+            dest=one_search[NAPISTU_EDGELIST.SC_ID_DEST],
             weight_var=weight_var,
         )
 
@@ -309,12 +315,14 @@ def find_all_shortest_reaction_paths(
 
         all_shortest_reaction_paths.append(
             shortest_paths_df.assign(
-                origin=one_search["sc_id_origin"], dest=one_search["sc_id_dest"]
+                origin=one_search[NAPISTU_EDGELIST.SC_ID_ORIGIN],
+                dest=one_search[NAPISTU_EDGELIST.SC_ID_DEST],
             )
         )
         all_shortest_reaction_path_edges.append(
             shortest_path_edges_df.assign(
-                origin=one_search["sc_id_origin"], dest=one_search["sc_id_dest"]
+                origin=one_search[NAPISTU_EDGELIST.SC_ID_ORIGIN],
+                dest=one_search[NAPISTU_EDGELIST.SC_ID_DEST],
             )
         )
 
@@ -332,7 +340,7 @@ def find_all_shortest_reaction_paths(
     ).reset_index()
 
     # at a minimal set of pathway sources to organize reactions
-    edge_sources = get_minimal_sources_edges(
+    reaction_sources = get_minimal_sources_edges(
         all_shortest_reaction_paths_df,
         sbml_dfs,
         min_pw_size=min_pw_size,
@@ -353,13 +361,13 @@ def find_all_shortest_reaction_paths(
         edges=all_shortest_reaction_path_edges_df.to_dict("records"),
         directed=directed,
         vertex_name_attr="node",
-        edge_foreign_keys=("from", "to"),
+        edge_foreign_keys=(NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO),
     )
 
     return (
         all_shortest_reaction_paths_df,
         all_shortest_reaction_path_edges_df,
-        edge_sources,
+        reaction_sources,
         paths_graph,
     )
 
@@ -387,9 +395,11 @@ def plot_shortest_paths(napistu_graph: NapistuGraph) -> NapistuGraph.plot:
     visual_style["vertex_label_size"] = 8
     visual_style["vertex_label_angle"] = 90
     visual_style["vertex_color"] = [
-        color_dict[x] for x in napistu_graph.vs["node_type"]
+        color_dict[x] for x in napistu_graph.vs[NAPISTU_GRAPH_VERTICES.NODE_TYPE]
     ]
-    visual_style["edge_width"] = [math.sqrt(x) for x in napistu_graph.es["weights"]]
+    visual_style["edge_width"] = [
+        math.sqrt(x) for x in napistu_graph.es[NAPISTU_GRAPH_EDGES.WEIGHTS]
+    ]
     visual_style["edge_color"] = "dimgray"
     visual_style["layout"] = paths_graph_layout
     visual_style["bbox"] = (2000, 2000)

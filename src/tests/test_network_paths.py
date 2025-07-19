@@ -2,12 +2,17 @@ import pandas as pd
 
 from napistu.network import paths
 from napistu.network import ng_utils
+from napistu.constants import SBML_DFS
+from napistu.network.constants import (
+    NAPISTU_GRAPH_EDGES,
+    NET_POLARITY,
+)
 
 
 def test_shortest_paths(sbml_dfs, napistu_graph, napistu_graph_undirected):
     species = sbml_dfs.species
-    source_species = species[species["s_name"] == "NADH"]
-    dest_species = species[species["s_name"] == "NAD+"]
+    source_species = species[species[SBML_DFS.S_NAME] == "NADH"]
+    dest_species = species[species[SBML_DFS.S_NAME] == "NAD+"]
     target_species_paths = ng_utils.compartmentalize_species_pairs(
         sbml_dfs, source_species.index.tolist(), dest_species.index.tolist()
     )
@@ -18,17 +23,23 @@ def test_shortest_paths(sbml_dfs, napistu_graph, napistu_graph_undirected):
         _,
         _,
     ) = paths.find_all_shortest_reaction_paths(
-        napistu_graph, sbml_dfs, target_species_paths, weight_var="weights"
+        napistu_graph,
+        sbml_dfs,
+        target_species_paths,
+        weight_var=NAPISTU_GRAPH_EDGES.WEIGHTS,
     )
 
     # undirected graph
     (
         all_shortest_reaction_paths_df,
-        all_shortest_reaction_path_edges_df,
-        edge_sources,
-        paths_graph,
+        _,
+        _,
+        _,
     ) = paths.find_all_shortest_reaction_paths(
-        napistu_graph_undirected, sbml_dfs, target_species_paths, weight_var="weights"
+        napistu_graph_undirected,
+        sbml_dfs,
+        target_species_paths,
+        weight_var=NAPISTU_GRAPH_EDGES.WEIGHTS,
     )
 
     assert all_shortest_reaction_paths_df.shape[0] == 3
@@ -36,21 +47,34 @@ def test_shortest_paths(sbml_dfs, napistu_graph, napistu_graph_undirected):
 
 def test_net_polarity():
     polarity_series = pd.Series(
-        ["ambiguous", "ambiguous"], index=[0, 1], name="link_polarity"
+        [NET_POLARITY.AMBIGUOUS, NET_POLARITY.AMBIGUOUS],
+        index=[0, 1],
+        name=NET_POLARITY.LINK_POLARITY,
     )
     assert all(
-        [x == "ambiguous" for x in paths._calculate_net_polarity(polarity_series)]
+        [
+            x == NET_POLARITY.AMBIGUOUS
+            for x in paths._calculate_net_polarity(polarity_series)
+        ]
     )
 
     polarity_series = pd.Series(
-        ["activation", "inhibition", "inhibition", "ambiguous"],
+        [
+            NET_POLARITY.ACTIVATION,
+            NET_POLARITY.INHIBITION,
+            NET_POLARITY.INHIBITION,
+            NET_POLARITY.AMBIGUOUS,
+        ],
         index=range(0, 4),
-        name="link_polarity",
+        name=NET_POLARITY.LINK_POLARITY,
     )
     assert paths._calculate_net_polarity(polarity_series) == [
-        "activation",
-        "inhibition",
-        "activation",
-        "ambiguous activation",
+        NET_POLARITY.ACTIVATION,
+        NET_POLARITY.INHIBITION,
+        NET_POLARITY.ACTIVATION,
+        NET_POLARITY.AMBIGUOUS_ACTIVATION,
     ]
-    assert paths._terminal_net_polarity(polarity_series) == "ambiguous activation"
+    assert (
+        paths._terminal_net_polarity(polarity_series)
+        == NET_POLARITY.AMBIGUOUS_ACTIVATION
+    )
