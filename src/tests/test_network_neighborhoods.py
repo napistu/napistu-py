@@ -93,6 +93,7 @@ def test_find_and_prune_neighborhoods_with_source_counts(
             assert isinstance(
                 neighborhood[NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES], pd.DataFrame
             )
+            assert neighborhood[NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES].shape[0] > 0
 
             # Check reaction_sources has expected columns
             expected_columns = [SBML_DFS.R_ID, "pathway_id", "name"]

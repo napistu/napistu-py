@@ -131,7 +131,7 @@ def find_and_prune_neighborhoods(
     else:
         precomputed_neighbors = None
 
-    neighborhoods_dict = find_neighborhoods(
+    neighborhood_dicts = find_neighborhoods(
         sbml_dfs=sbml_dfs,
         napistu_graph=napistu_graph,
         compartmentalized_species=compartmentalized_species,
@@ -143,7 +143,7 @@ def find_and_prune_neighborhoods(
         verbose=verbose,
     )
 
-    pruned_neighborhoods = prune_neighborhoods(neighborhoods_dict, top_n=top_n)
+    pruned_neighborhoods = prune_neighborhoods(neighborhood_dicts, top_n=top_n)
 
     return pruned_neighborhoods
 
@@ -191,7 +191,7 @@ def load_neighborhoods(
     -------
     all_neighborhoods_df: pd.DataFrame
         A table containing all species in each query s_ids neighborhood
-    neighborhoods_dict: dict
+    neighborhood_dicts: dict
         Outputs from find_and_prune_neighborhoods for each s_id
 
     """
@@ -209,12 +209,12 @@ def load_neighborhoods(
 
         all_neighborhoods_df = pd.read_csv(vertices_path, sep="\t")
         with open(networks_path, "rb") as in_file:
-            neighborhoods_dict = pickle.load(in_file)
+            neighborhood_dicts = pickle.load(in_file)
 
     else:
         logger.info(f"creating neighborhoods based on {neighborhood_prefix}")
 
-        all_neighborhoods_df, neighborhoods_dict = create_neighborhoods(
+        all_neighborhoods_df, neighborhood_dicts = create_neighborhoods(
             s_ids=s_ids,
             sbml_dfs=sbml_dfs,
             napistu_graph=napistu_graph,
@@ -229,9 +229,9 @@ def load_neighborhoods(
 
         # pickle neighborhoods
         with open(networks_path, "wb") as fh:
-            pickle.dump(neighborhoods_dict, fh)
+            pickle.dump(neighborhood_dicts, fh)
 
-    return all_neighborhoods_df, neighborhoods_dict
+    return all_neighborhoods_df, neighborhood_dicts
 
 
 def create_neighborhoods(
@@ -269,7 +269,7 @@ def create_neighborhoods(
     -------
     all_neighborhoods_df: pd.DataFrame
         A table containing all species in each query s_ids neighborhood
-    neighborhoods_dict: dict
+    neighborhood_dicts: dict
         Outputs from find_and_prune_neighborhoods for each s_id
     """
 
@@ -290,13 +290,13 @@ def create_neighborhoods(
         raise TypeError(f"top_n was a {type(top_n)} and must be an int")
 
     neighborhoods_list = list()
-    neighborhoods_dict = dict()
+    neighborhood_dicts = dict()
     for s_id in s_ids:
         query_sc_species = ng_utils.compartmentalize_species(sbml_dfs, s_id)
 
         compartmentalized_species = query_sc_species[SBML_DFS.SC_ID].tolist()
 
-        neighborhoods_dict = find_and_prune_neighborhoods(
+        neighborhood_dicts = find_and_prune_neighborhoods(
             sbml_dfs,
             napistu_graph,
             compartmentalized_species=compartmentalized_species,
@@ -310,10 +310,10 @@ def create_neighborhoods(
 
         neighborhood_entities = pd.concat(
             [
-                neighborhoods_dict[sc_id][NEIGHBORHOOD_DICT_KEYS.VERTICES].assign(
+                neighborhood_dicts[sc_id][NEIGHBORHOOD_DICT_KEYS.VERTICES].assign(
                     focal_sc_id=sc_id
                 )
-                for sc_id in neighborhoods_dict.keys()
+                for sc_id in neighborhood_dicts.keys()
             ]
         ).assign(focal_s_id=s_id)
 
@@ -324,11 +324,11 @@ def create_neighborhoods(
         )
 
         neighborhoods_list.append(neighborhood_species)
-        neighborhoods_dict[s_id] = neighborhoods_dict
+        neighborhood_dicts[s_id] = neighborhood_dicts
 
     all_neighborhoods_df = pd.concat(neighborhoods_list).reset_index(drop=True)
 
-    return all_neighborhoods_df, neighborhoods_dict
+    return all_neighborhoods_df, neighborhood_dicts
 
 
 def create_neighborhood_prefix(network_type: str, order: int, top_n: int) -> str:
@@ -458,7 +458,7 @@ def read_paritioned_neighborhoods(
     -------
     all_neighborhoods_df: pd.DataFrame
         A table containing all species in each query s_ids neighborhood
-    neighborhoods_dict: dict
+    neighborhood_dicts: dict
         Outputs from find_and_prune_neighborhoods for each s_id
 
     """
@@ -523,7 +523,7 @@ def read_paritioned_neighborhoods(
 
     # combine all partitions' dfs and dicts
     all_neighborhoods_df = pd.concat(neighborhood_paths_list).reset_index(drop=True)
-    neighborhoods_dict = dict(ChainMap(*path_dict_list))
+    neighborhood_dicts = dict(ChainMap(*path_dict_list))
 
     # TO DO - remove s_id duplication (these are present in the vertices table in the partition outputs)
     if not all(all_neighborhoods_df["s_id_x"] == all_neighborhoods_df["s_id_y"]):
@@ -532,7 +532,7 @@ def read_paritioned_neighborhoods(
         {"s_id_x": "s_id"}, axis=1
     )
 
-    return all_neighborhoods_df, neighborhoods_dict
+    return all_neighborhoods_df, neighborhood_dicts
 
 
 def find_neighborhoods(
@@ -993,7 +993,7 @@ def prune_neighborhoods(neighborhoods: dict, top_n: int = 100) -> dict:
     if not isinstance(top_n, int):
         raise TypeError(f"top_n was a {type(top_n)} and must be an int")
 
-    pruned_neighborhoods_dict = dict()
+    pruned_neighborhood_dicts = dict()
 
     for an_sc_id in neighborhoods.keys():
         one_neighborhood = neighborhoods[an_sc_id]
@@ -1005,14 +1005,14 @@ def prune_neighborhoods(neighborhoods: dict, top_n: int = 100) -> dict:
         # reduce neighborhood to this set of high-weight vertices
         all_neighbors = pd.DataFrame(
             {
-                NAPISTU_GRAPH_VERTICES.NODE_NAME: one_neighborhood[
+                NAPISTU_GRAPH_VERTICES.NAME: one_neighborhood[
                     NEIGHBORHOOD_DICT_KEYS.GRAPH
-                ].vs[NAPISTU_GRAPH_VERTICES.NODE_NAME]
+                ].vs[NAPISTU_GRAPH_VERTICES.NAME]
             }
         )
         pruned_vertices_indices = all_neighbors[
-            all_neighbors[NAPISTU_GRAPH_VERTICES.NODE_NAME].isin(
-                pruned_vertices[NAPISTU_GRAPH_VERTICES.NODE_NAME]
+            all_neighbors[NAPISTU_GRAPH_VERTICES.NAME].isin(
+                pruned_vertices[NAPISTU_GRAPH_VERTICES.NAME]
             )
         ].index.tolist()
 
@@ -1026,7 +1026,7 @@ def prune_neighborhoods(neighborhoods: dict, top_n: int = 100) -> dict:
         pruned_reactions = pruned_vertices[
             pruned_vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE]
             == NAPISTU_GRAPH_NODE_TYPES.REACTION
-        ][NAPISTU_GRAPH_VERTICES.NODE_NAME]
+        ][NAPISTU_GRAPH_VERTICES.NAME]
 
         if pruned_reactions.shape[0] != 0:
             if one_neighborhood[NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES] is None:
@@ -1047,14 +1047,14 @@ def prune_neighborhoods(neighborhoods: dict, top_n: int = 100) -> dict:
                 NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES
             ]
 
-        pruned_neighborhoods_dict[an_sc_id] = {
+        pruned_neighborhood_dicts[an_sc_id] = {
             NEIGHBORHOOD_DICT_KEYS.GRAPH: pruned_neighborhood,
             NEIGHBORHOOD_DICT_KEYS.VERTICES: pruned_vertices,
             NEIGHBORHOOD_DICT_KEYS.EDGES: pruned_edges,
             NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES: pruned_reaction_sources,
         }
 
-    return pruned_neighborhoods_dict
+    return pruned_neighborhood_dicts
 
 
 def plot_neighborhood(
