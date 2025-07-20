@@ -14,6 +14,12 @@ from napistu.network import net_create
 from napistu.network import paths
 from napistu.network import precompute
 
+from napistu.network.constants import (
+    NAPISTU_GRAPH_VERTICES,
+    DISTANCES,
+    NEIGHBORHOOD_NETWORK_TYPES,
+)
+
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 sbml_path = os.path.join(test_path, "test_data", "reactome_glucose_metabolism.sbml")
 if not os.path.isfile(sbml_path):
@@ -138,6 +144,7 @@ def test_precomputed_distances_shortest_paths():
 
 
 def test_precomputed_distances_neighborhoods():
+
     compartmentalized_species = sbml_dfs.compartmentalized_species[
         sbml_dfs.compartmentalized_species["s_id"] == "S00000000"
     ].index.tolist()
@@ -169,8 +176,12 @@ def test_precomputed_distances_neighborhoods():
         pruned_vert_otf = pruned_neighborhoods_otf[key]["vertices"]
         pruned_vert_precomp = pruned_neighborhoods_precomputed[key]["vertices"]
 
-        join_key = ["name", "node_name", "node_orientation"]
-        join_key_w_vars = [*join_key, *["path_weight", "path_length"]]
+        join_key = [
+            NAPISTU_GRAPH_VERTICES.NAME,
+            NAPISTU_GRAPH_VERTICES.NODE_NAME,
+            "node_orientation",
+        ]
+        join_key_w_vars = [*join_key, *[DISTANCES.PATH_WEIGHTS, DISTANCES.PATH_LENGTH]]
         neighbor_comparison = (
             pruned_vert_precomp[join_key_w_vars]
             .assign(in_precompute=True)
@@ -197,23 +208,27 @@ def test_precomputed_distances_neighborhoods():
     # which should be the same if we are pre-selecting the correct neighbors
     # as part of _precompute_neighbors()
     downstream_disagreement_w_precompute = (
-        comparison_df[comparison_df["node_orientation"] == "downstream"]
+        comparison_df[
+            comparison_df["node_orientation"] == NEIGHBORHOOD_NETWORK_TYPES.DOWNSTREAM
+        ]
         .merge(
             precomputed_distances,
-            left_on=["focal_sc_id", "name"],
-            right_on=["sc_id_origin", "sc_id_dest"],
+            left_on=["focal_sc_id", NAPISTU_GRAPH_VERTICES.NAME],
+            right_on=[DISTANCES.SC_ID_ORIGIN, DISTANCES.SC_ID_DEST],
         )
-        .query("abs(path_weight_x - path_weights) > 1e-13")
+        .query("abs(path_weights_x - path_weights) > 1e-13")
     )
 
     upstream_disagreement_w_precompute = (
-        comparison_df[comparison_df["node_orientation"] == "upstream"]
+        comparison_df[
+            comparison_df["node_orientation"] == NEIGHBORHOOD_NETWORK_TYPES.UPSTREAM
+        ]
         .merge(
             precomputed_distances,
-            left_on=["focal_sc_id", "name"],
-            right_on=["sc_id_dest", "sc_id_origin"],
+            left_on=["focal_sc_id", NAPISTU_GRAPH_VERTICES.NAME],
+            right_on=[DISTANCES.SC_ID_DEST, DISTANCES.SC_ID_ORIGIN],
         )
-        .query("abs(path_weight_x - path_upstream_weights) > 1e-13")
+        .query("abs(path_weights_x - path_upstream_weights) > 1e-13")
     )
 
     assert downstream_disagreement_w_precompute.shape[0] == 0

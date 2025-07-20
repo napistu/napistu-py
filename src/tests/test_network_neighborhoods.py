@@ -1,11 +1,17 @@
 import pandas as pd
+import pytest
 
 from napistu.network import ng_utils
 from napistu.network import neighborhoods
 from napistu import source
 
 from napistu.constants import SBML_DFS
-from napistu.network.constants import NEIGHBORHOOD_DICT_KEYS, NEIGHBORHOOD_NETWORK_TYPES
+from napistu.network.constants import (
+    NAPISTU_GRAPH_VERTICES,
+    NAPISTU_GRAPH_NODE_TYPES,
+    NEIGHBORHOOD_DICT_KEYS,
+    NEIGHBORHOOD_NETWORK_TYPES,
+)
 
 
 def test_neighborhood(sbml_dfs, napistu_graph):
@@ -87,6 +93,7 @@ def test_find_and_prune_neighborhoods_with_source_counts(
             assert isinstance(
                 neighborhood[NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES], pd.DataFrame
             )
+            assert neighborhood[NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES].shape[0] > 0
 
             # Check reaction_sources has expected columns
             expected_columns = [SBML_DFS.R_ID, "pathway_id", "name"]
@@ -139,3 +146,85 @@ def test_find_and_prune_neighborhoods_with_source_counts(
         if with_source is not None and without_source is not None:
             assert isinstance(with_source, pd.DataFrame)
             assert isinstance(without_source, pd.DataFrame)
+
+    # Test error handling for invalid parameters
+    # Test invalid network_type
+    with pytest.raises(ValueError):
+        neighborhoods.find_and_prune_neighborhoods(
+            sbml_dfs=sbml_dfs_metabolism,
+            napistu_graph=napistu_graph_metabolism,
+            compartmentalized_species=compartmentalized_species,
+            source_total_counts=source_total_counts,
+            min_pw_size=1,
+            network_type="invalid_network_type",
+            order=3,
+            verbose=False,
+            top_n=10,
+        )
+
+    # Test invalid order (negative)
+    with pytest.raises(ValueError):
+        neighborhoods.find_and_prune_neighborhoods(
+            sbml_dfs=sbml_dfs_metabolism,
+            napistu_graph=napistu_graph_metabolism,
+            compartmentalized_species=compartmentalized_species,
+            source_total_counts=source_total_counts,
+            min_pw_size=1,
+            network_type=NEIGHBORHOOD_NETWORK_TYPES.HOURGLASS,
+            order=-1,
+            verbose=False,
+            top_n=10,
+        )
+
+
+def test_add_vertices_uri_urls(sbml_dfs):
+    """
+    Test add_vertices_uri_urls function.
+
+    This test verifies that the function correctly adds URI URLs to vertices
+    DataFrame for both species and reactions.
+    """
+
+    # Get real species and reaction names from the sbml_dfs fixture
+    real_species = sbml_dfs.compartmentalized_species.index[0]  # Get first species
+    real_reaction = sbml_dfs.reactions.index[0]  # Get first reaction
+
+    # Create a test vertices DataFrame with real species and reactions
+    test_vertices = pd.DataFrame(
+        {
+            NAPISTU_GRAPH_VERTICES.NAME: [real_species, real_reaction],
+            NAPISTU_GRAPH_VERTICES.NODE_TYPE: [
+                NAPISTU_GRAPH_NODE_TYPES.SPECIES,
+                NAPISTU_GRAPH_NODE_TYPES.REACTION,
+            ],
+        }
+    )
+
+    # Test basic functionality
+    result = neighborhoods.add_vertices_uri_urls(test_vertices, sbml_dfs)
+
+    # Verify basic structure
+    assert isinstance(result, pd.DataFrame)
+    assert result.shape[0] == test_vertices.shape[0]  # Same number of rows
+    assert result.shape[1] >= test_vertices.shape[1]  # At least same number of columns
+
+    # Verify original columns are preserved
+    for col in test_vertices.columns:
+        assert col in result.columns
+        assert all(result[col] == test_vertices[col])
+
+    # Verify species vertices have s_id column
+    species_vertices = result[
+        result[NAPISTU_GRAPH_VERTICES.NODE_TYPE] == NAPISTU_GRAPH_NODE_TYPES.SPECIES
+    ]
+    assert SBML_DFS.S_ID in species_vertices.columns
+
+    # Test error handling
+    import pytest
+
+    # Test with empty DataFrame
+    empty_vertices = pd.DataFrame(
+        columns=[NAPISTU_GRAPH_VERTICES.NAME, NAPISTU_GRAPH_VERTICES.NODE_TYPE]
+    )
+    with pytest.raises(ValueError, match="vertices must have at least one row"):
+        neighborhoods.add_vertices_uri_urls(empty_vertices, sbml_dfs)
