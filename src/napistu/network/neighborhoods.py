@@ -22,11 +22,16 @@ from napistu.constants import (
     MINI_SBO_NAME_TO_POLARITY,
     MINI_SBO_TO_NAME,
     NAPISTU_EDGELIST,
+    ONTOLOGIES,
     SBML_DFS,
 )
 
 from napistu.network.constants import (
+    DISTANCES,
+    GRAPH_RELATIONSHIPS,
     GRAPH_WIRING_APPROACHES,
+    NAPISTU_GRAPH_EDGES,
+    NAPISTU_GRAPH_NODE_TYPES,
     NAPISTU_GRAPH_VERTICES,
     NEIGHBORHOOD_DICT_KEYS,
     NEIGHBORHOOD_NETWORK_TYPES,
@@ -102,6 +107,16 @@ def find_and_prune_neighborhoods(
     if not isinstance(compartmentalized_species, list):
         raise TypeError("compartmentalized_species must be a list")
 
+    invalid_cspecies = [
+        x
+        for x in compartmentalized_species
+        if x not in sbml_dfs.compartmentalized_species.index
+    ]
+    if len(invalid_cspecies) > 0:
+        raise ValueError(
+            f"compartmentalized_species contains invalid species: {invalid_cspecies}"
+        )
+
     if isinstance(precomputed_distances, pd.DataFrame):
         logger.info("Pre-computed neighbors based on precomputed_distances")
 
@@ -116,7 +131,7 @@ def find_and_prune_neighborhoods(
     else:
         precomputed_neighbors = None
 
-    neighborhoods = find_neighborhoods(
+    neighborhoods_dict = find_neighborhoods(
         sbml_dfs=sbml_dfs,
         napistu_graph=napistu_graph,
         compartmentalized_species=compartmentalized_species,
@@ -128,7 +143,7 @@ def find_and_prune_neighborhoods(
         verbose=verbose,
     )
 
-    pruned_neighborhoods = prune_neighborhoods(neighborhoods, top_n=top_n)
+    pruned_neighborhoods = prune_neighborhoods(neighborhoods_dict, top_n=top_n)
 
     return pruned_neighborhoods
 
@@ -190,14 +205,14 @@ def load_neighborhoods(
     neighborhood_paths = [vertices_path, networks_path]
 
     if all([os.path.isfile(x) for x in neighborhood_paths]) and overwrite is False:
-        print(f"loading existing neighborhoods for {neighborhood_prefix}")
+        logger.info(f"loading existing neighborhoods for {neighborhood_prefix}")
 
         all_neighborhoods_df = pd.read_csv(vertices_path, sep="\t")
         with open(networks_path, "rb") as in_file:
             neighborhoods_dict = pickle.load(in_file)
 
     else:
-        print(f"creating neighborhoods based on {neighborhood_prefix}")
+        logger.info(f"creating neighborhoods based on {neighborhood_prefix}")
 
         all_neighborhoods_df, neighborhoods_dict = create_neighborhoods(
             s_ids=s_ids,
@@ -281,7 +296,7 @@ def create_neighborhoods(
 
         compartmentalized_species = query_sc_species[SBML_DFS.SC_ID].tolist()
 
-        neighborhoods = find_and_prune_neighborhoods(
+        neighborhoods_dict = find_and_prune_neighborhoods(
             sbml_dfs,
             napistu_graph,
             compartmentalized_species=compartmentalized_species,
@@ -295,21 +310,21 @@ def create_neighborhoods(
 
         neighborhood_entities = pd.concat(
             [
-                neighborhoods[sc_id][NEIGHBORHOOD_DICT_KEYS.VERTICES].assign(
+                neighborhoods_dict[sc_id][NEIGHBORHOOD_DICT_KEYS.VERTICES].assign(
                     focal_sc_id=sc_id
                 )
-                for sc_id in neighborhoods.keys()
+                for sc_id in neighborhoods_dict.keys()
             ]
         ).assign(focal_s_id=s_id)
 
         neighborhood_species = neighborhood_entities.merge(
             sbml_dfs.compartmentalized_species[SBML_DFS.S_ID],
-            left_on="name",
+            left_on=NAPISTU_GRAPH_VERTICES.NAME,
             right_index=True,
         )
 
         neighborhoods_list.append(neighborhood_species)
-        neighborhoods_dict[s_id] = neighborhoods
+        neighborhoods_dict[s_id] = neighborhoods_dict
 
     all_neighborhoods_df = pd.concat(neighborhoods_list).reset_index(drop=True)
 
@@ -383,7 +398,7 @@ def load_neighborhoods_by_partition(
     if parition_sids_df.shape[0] == 0:
         raise ValueError(f"No s_ids associated with partition {selected_partition}")
 
-    parition_sids = parition_sids_df["s_id"].tolist()
+    parition_sids = parition_sids_df[SBML_DFS.S_ID].tolist()
 
     # read pathway and network data
 
@@ -558,7 +573,7 @@ def find_neighborhoods(
         the minimum size of a pathway to be considered
     source_total_counts: pd.Series | None
         Optional, A series of the total counts of each source. As produced by
-        source.get_source_total_counts()\
+        source.get_source_total_counts()
     verbose: bool
         Extra reporting
 
@@ -578,6 +593,16 @@ def find_neighborhoods(
 
     if not isinstance(order, int):
         raise TypeError(f"order was a {type(order)} and must be an int")
+
+    invalid_cspecies = [
+        x
+        for x in compartmentalized_species
+        if x not in sbml_dfs.compartmentalized_species.index
+    ]
+    if len(invalid_cspecies) > 0:
+        raise ValueError(
+            f"compartmentalized_species contains invalid species: {invalid_cspecies}"
+        )
 
     # create a table which includes cspecies and reaction nearby each of the
     # focal compartmentalized_speecies
@@ -656,12 +681,12 @@ def create_neighborhood_dict_entry(
             focal node.
     """
 
-    one_neighborhood_df = neighborhood_df[neighborhood_df["sc_id"] == sc_id]
+    one_neighborhood_df = neighborhood_df[neighborhood_df[SBML_DFS.SC_ID] == sc_id]
 
     if verbose:
         _create_neighborhood_dict_entry_logging(sc_id, one_neighborhood_df, sbml_dfs)
 
-    if not one_neighborhood_df["name"].eq(sc_id).any():
+    if not one_neighborhood_df[NAPISTU_GRAPH_VERTICES.NAME].eq(sc_id).any():
         raise ValueError(
             f"The focal node sc_id = {sc_id} was not in 'one_neighborhood_df'.\
             By convention it should be part of its neighborhood"
@@ -677,19 +702,22 @@ def create_neighborhood_dict_entry(
 
     # add edge polarity: whether edges are activating, inhibiting or unknown
     if edges.shape[0] > 0:
-        edges["link_polarity"] = (
-            edges["sbo_term"].map(MINI_SBO_TO_NAME).map(MINI_SBO_NAME_TO_POLARITY)
+        edges[NET_POLARITY.LINK_POLARITY] = (
+            edges[SBML_DFS.SBO_TERM]
+            .map(MINI_SBO_TO_NAME)
+            .map(MINI_SBO_NAME_TO_POLARITY)
         )
 
     try:
         reaction_sources = ng_utils.get_minimal_sources_edges(
-            vertices.rename(columns={"name": "node"}),
+            vertices.rename(columns={NAPISTU_GRAPH_VERTICES.NAME: "node"}),
             sbml_dfs,
             min_pw_size=min_pw_size,
             # optional, counts of sources across the whole model
             source_total_counts=source_total_counts,
         )
     except Exception:
+        logger.warning(f"Could not get reaction sources for {sc_id}; returning None")
         reaction_sources = None
 
     # to add weights to the network solve the shortest path problem
@@ -697,75 +725,38 @@ def create_neighborhood_dict_entry(
     # solve this problem separately whether a given neighbor is an
     # ancestor or descendant
 
-    # focal node -> descendants
-
-    one_descendants_df = one_neighborhood_df[
-        one_neighborhood_df["relationship"] == "descendants"
-    ]
-    descendants_list = list(set(one_descendants_df["name"].tolist()).union({sc_id}))
-
-    # hide warnings which are mostly just Dijkstra complaining about not finding neighbors
-    with warnings.catch_warnings():
-        # igraph throws warnings for each pair of unconnected species
-        warnings.simplefilter("ignore")
-
-        neighborhood_paths = neighborhood_graph.get_shortest_paths(
-            # focal node
-            v=sc_id,
-            to=descendants_list,
-            weights="weights",
-            mode="out",
-            output="epath",
-        )
-
-    downstream_path_attrs, downstream_entity_dict = _calculate_path_attrs(
-        neighborhood_paths, edges, vertices=descendants_list, weight_var="weights"
-    )
-    downstream_path_attrs = downstream_path_attrs.assign(node_orientation="downstream")
-
-    # ancestors -> focal_node
-
-    one_ancestors_df = one_neighborhood_df[
-        one_neighborhood_df["relationship"] == "ancestors"
-    ]
-    ancestors_list = list(set(one_ancestors_df["name"].tolist()).union({sc_id}))
-
-    with warnings.catch_warnings():
-        # igraph throws warnings for each pair of unconnected species
-        warnings.simplefilter("ignore")
-
-        neighborhood_paths = neighborhood_graph.get_shortest_paths(
-            v=sc_id,
-            to=ancestors_list,
-            weights="upstream_weights",
-            mode="in",
-            output="epath",
-        )
-
-    upstream_path_attrs, upstream_entity_dict = _calculate_path_attrs(
-        neighborhood_paths,
+    (
+        downstream_path_attrs,
+        downstream_entity_dict,
+        upstream_path_attrs,
+        upstream_entity_dict,
+    ) = _find_neighbors_paths(
+        neighborhood_graph,
+        one_neighborhood_df,
+        sc_id,
         edges,
-        vertices=ancestors_list,
-        weight_var="upstream_weights",
     )
-    upstream_path_attrs = upstream_path_attrs.assign(node_orientation="upstream")
 
     # combine upstream and downstream shortest paths
     # in cases a node is upstream and downstream of the focal node
     # by taking the lowest path weight
     vertex_neighborhood_attrs = (
         pd.concat([downstream_path_attrs, upstream_path_attrs])
-        .sort_values("path_weight")
+        .sort_values(DISTANCES.PATH_WEIGHTS)
         .groupby("neighbor")
         .first()
     )
     # label the focal node
-    vertex_neighborhood_attrs.loc[sc_id, "node_orientation"] = "focal"
+    vertex_neighborhood_attrs.loc[sc_id, "node_orientation"] = GRAPH_RELATIONSHIPS.FOCAL
 
     # if the precomputed distances, graph and/or sbml_dfs are inconsistent
     # then the shortest paths search may just return empty lists
     # throw a clearer error message in this case.
-    EXPECTED_VERTEX_ATTRS = {"final_from", "final_to", "net_polarity"}
+    EXPECTED_VERTEX_ATTRS = {
+        DISTANCES.FINAL_FROM,
+        DISTANCES.FINAL_TO,
+        NET_POLARITY.NET_POLARITY,
+    }
     missing_vertex_attrs = EXPECTED_VERTEX_ATTRS.difference(
         set(vertex_neighborhood_attrs.columns.tolist())
     )
@@ -780,22 +771,22 @@ def create_neighborhood_dict_entry(
     # add net_polarity to edges in addition to nodes
     edges = edges.merge(
         vertex_neighborhood_attrs.reset_index()[
-            ["final_from", "final_to", "net_polarity"]
+            [DISTANCES.FINAL_FROM, DISTANCES.FINAL_TO, NET_POLARITY.NET_POLARITY]
         ].dropna(),
-        left_on=["from", "to"],
-        right_on=["final_from", "final_to"],
+        left_on=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO],
+        right_on=[DISTANCES.FINAL_FROM, DISTANCES.FINAL_TO],
         how="left",
     )
 
     vertices = vertices.merge(
-        vertex_neighborhood_attrs, left_on="name", right_index=True
+        vertex_neighborhood_attrs, left_on=NAPISTU_GRAPH_VERTICES.NAME, right_index=True
     )
 
     # drop nodes with a path length / weight of zero
     # which are NOT the focal node
     # these were cases where no path to/from the focal node to the query node was found
     disconnected_neighbors = vertices.query(
-        "(not node_orientation == 'focal') and path_weight == 0"
+        f"(not node_orientation == '{GRAPH_RELATIONSHIPS.FOCAL}') and {DISTANCES.PATH_WEIGHTS} == 0"
     )
     vertices = vertices[~vertices.index.isin(disconnected_neighbors.index.tolist())]
 
@@ -803,8 +794,8 @@ def create_neighborhood_dict_entry(
     vertices = add_vertices_uri_urls(vertices, sbml_dfs)
 
     neighborhood_path_entities = {
-        "downstream": downstream_entity_dict,
-        "upstream": upstream_entity_dict,
+        NEIGHBORHOOD_NETWORK_TYPES.DOWNSTREAM: downstream_entity_dict,
+        NEIGHBORHOOD_NETWORK_TYPES.UPSTREAM: upstream_entity_dict,
     }
 
     # update graph with additional vertex and edge attributes
@@ -812,16 +803,16 @@ def create_neighborhood_dict_entry(
         vertices=vertices.to_dict("records"),
         edges=edges.to_dict("records"),
         directed=napistu_graph.is_directed(),
-        vertex_name_attr="name",
-        edge_foreign_keys=("from", "to"),
+        vertex_name_attr=NAPISTU_GRAPH_VERTICES.NAME,
+        edge_foreign_keys=(NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO),
     )
 
     outdict = {
-        "graph": updated_napistu_graph,
-        "vertices": vertices,
-        "edges": edges,
-        "reaction_sources": reaction_sources,
-        "neighborhood_path_entities": neighborhood_path_entities,
+        NEIGHBORHOOD_DICT_KEYS.GRAPH: updated_napistu_graph,
+        NEIGHBORHOOD_DICT_KEYS.VERTICES: vertices,
+        NEIGHBORHOOD_DICT_KEYS.EDGES: edges,
+        NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES: reaction_sources,
+        NEIGHBORHOOD_DICT_KEYS.NEIGHBORHOOD_PATH_ENTITIES: neighborhood_path_entities,
     }
 
     return outdict
@@ -831,9 +822,11 @@ def _create_neighborhood_dict_entry_logging(
     sc_id: str, one_neighborhood_df: pd.DataFrame, sbml_dfs: sbml_dfs_core.SBML_dfs
 ):
     df_summary = one_neighborhood_df.copy()
-    df_summary["node_type"] = [
-        "species" if x else "reactions"
-        for x in df_summary["name"].isin(sbml_dfs.compartmentalized_species.index)
+    df_summary[NAPISTU_GRAPH_VERTICES.NODE_TYPE] = [
+        NAPISTU_GRAPH_NODE_TYPES.SPECIES if x else NAPISTU_GRAPH_NODE_TYPES.REACTION
+        for x in df_summary[NAPISTU_GRAPH_VERTICES.NAME].isin(
+            sbml_dfs.compartmentalized_species.index
+        )
     ]
     relationship_counts = df_summary.value_counts(
         ["relationship", "node_type"]
@@ -857,22 +850,45 @@ def add_vertices_uri_urls(
     vertices: pd.DataFrame, sbml_dfs: sbml_dfs_core.SBML_dfs
 ) -> pd.DataFrame:
     """
-    Add Vertices URI URLs
+    Add URI URLs to neighborhood vertices DataFrame.
 
-    Add a url variable to the neighborhood vertices pd.DataFrame
+    This function enriches a vertices DataFrame with URI URLs for both species and
+    reactions. For species, it adds standard reference identifiers and Pharos IDs
+    where available. For reactions, it adds reaction-specific URI URLs.
 
     Parameters
     ----------
     vertices: pd.DataFrame
-        table of neighborhood vertices
+        DataFrame containing neighborhood vertices with the following required columns:
+        - NAPISTU_GRAPH_VERTICES.NAME: The name/identifier of each vertex
+        - NAPISTU_GRAPH_VERTICES.NODE_TYPE: The type of node, either
+        NAPISTU_GRAPH_NODE_TYPES.SPECIES or NAPISTU_GRAPH_NODE_TYPES.REACTION
     sbml_dfs: sbml_dfs_core.SBML_dfs
-        consensus network model
+        Pathway model including species, compartmentalized species, reactions and ontologies
 
     Returns
     -------
-    vertices: pd.DataFrame
-        input table with a url field
+    pd.DataFrame
+        Input vertices DataFrame enriched with URI URL columns:
+        - For species: standard reference identifier URLs and Pharos IDs
+        - For reactions: reaction-specific URI URLs
+        - Empty strings for missing URLs
 
+    Raises
+    ------
+    ValueError
+        If vertices DataFrame is empty (no rows)
+    TypeError
+        If the output is not a pandas DataFrame
+    ValueError
+        If the output row count doesn't match the input row count
+
+    Notes
+    -----
+    - Species vertices are merged with compartmentalized_species to get s_id mappings
+    - Reaction vertices are processed directly using their names
+    - Missing URLs are filled with empty strings
+    - The function preserves the original row order and count
     """
 
     if vertices.shape[0] <= 0:
@@ -882,41 +898,53 @@ def add_vertices_uri_urls(
 
     # add s_ids
     neighborhood_species = vertices[
-        vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE] == "species"
+        vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE] == NAPISTU_GRAPH_NODE_TYPES.SPECIES
     ].merge(
         sbml_dfs.compartmentalized_species[SBML_DFS.S_ID],
-        left_on="name",
+        left_on=NAPISTU_GRAPH_VERTICES.NAME,
         right_index=True,
         how="left",
     )
 
     # add a standard reference identifier
     neighborhood_species_aug = neighborhood_species.merge(
-        sbml_dfs.get_uri_urls("species", neighborhood_species[SBML_DFS.S_ID]),
+        sbml_dfs.get_uri_urls(
+            NAPISTU_GRAPH_NODE_TYPES.SPECIES, neighborhood_species[SBML_DFS.S_ID]
+        ),
         left_on=SBML_DFS.S_ID,
         right_index=True,
         how="left",
         # add pharos ids where available
     ).merge(
         sbml_dfs.get_uri_urls(
-            "species", neighborhood_species[SBML_DFS.S_ID], required_ontology="pharos"
-        ).rename("pharos"),
+            NAPISTU_GRAPH_NODE_TYPES.SPECIES,
+            neighborhood_species[SBML_DFS.S_ID],
+            required_ontology=ONTOLOGIES.PHAROS,
+        ).rename(ONTOLOGIES.PHAROS),
         left_on=SBML_DFS.S_ID,
         right_index=True,
         how="left",
     )
 
-    if sum(vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE] == "reaction") > 0:
+    if (
+        sum(
+            vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE]
+            == NAPISTU_GRAPH_NODE_TYPES.REACTION
+        )
+        > 0
+    ):
         neighborhood_reactions = vertices[
-            vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE] == "reaction"
+            vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE]
+            == NAPISTU_GRAPH_NODE_TYPES.REACTION
         ].merge(
             sbml_dfs.get_uri_urls(
-                "reactions",
-                vertices[vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE] == "reaction"][
-                    "name"
-                ],
+                SBML_DFS.REACTIONS,
+                vertices[
+                    vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE]
+                    == NAPISTU_GRAPH_NODE_TYPES.REACTION
+                ][NAPISTU_GRAPH_VERTICES.NAME],
             ),
-            left_on="name",
+            left_on=NAPISTU_GRAPH_VERTICES.NAME,
             right_index=True,
             how="left",
         )
@@ -996,7 +1024,8 @@ def prune_neighborhoods(neighborhoods: dict, top_n: int = 100) -> dict:
         pruned_edges = pd.DataFrame([e.attributes() for e in pruned_neighborhood.es])
 
         pruned_reactions = pruned_vertices[
-            pruned_vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE] == "reaction"
+            pruned_vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE]
+            == NAPISTU_GRAPH_NODE_TYPES.REACTION
         ][NAPISTU_GRAPH_VERTICES.NODE_NAME]
 
         if pruned_reactions.shape[0] != 0:
@@ -1065,8 +1094,8 @@ def plot_neighborhood(
         "focal disease": "lime",
         "disease": "aquamarine",
         "focal": "lightcoral",
-        "species": "firebrick",
-        "reaction": "dodgerblue",
+        NAPISTU_GRAPH_NODE_TYPES.SPECIES: "firebrick",
+        NAPISTU_GRAPH_NODE_TYPES.REACTION: "dodgerblue",
     }
 
     edge_polarity_colors = {
@@ -1173,7 +1202,7 @@ def _precompute_neighbors(
 
     # filter by distance
     close_cspecies_subset_precomputed_distances = cspecies_subset_precomputed_distances[
-        cspecies_subset_precomputed_distances["path_length"] <= order
+        cspecies_subset_precomputed_distances[DISTANCES.PATH_LENGTH] <= order
     ]
 
     # filter to retain top_n
@@ -1183,12 +1212,12 @@ def _precompute_neighbors(
     ]:
         top_descendants = (
             close_cspecies_subset_precomputed_distances[
-                close_cspecies_subset_precomputed_distances["sc_id_origin"].isin(
-                    compartmentalized_species
-                )
+                close_cspecies_subset_precomputed_distances[
+                    DISTANCES.SC_ID_ORIGIN
+                ].isin(compartmentalized_species)
             ]
             # sort by path_weight so we can retain the lowest weight neighbors
-            .sort_values("path_weights")
+            .sort_values(DISTANCES.PATH_WEIGHTS)
             .groupby(NAPISTU_EDGELIST.SC_ID_ORIGIN)
             .head(top_n)
         )
@@ -1216,7 +1245,7 @@ def _precompute_neighbors(
             # the logic is flipped if we are looking for ancestors where
             # we penalize based on the number of parents of a node when
             # we use it (i.e., the default upstream_weights).
-            .sort_values("path_upstream_weights")
+            .sort_values(DISTANCES.PATH_UPSTREAM_WEIGHTS)
             .groupby(NAPISTU_EDGELIST.SC_ID_DEST)
             .head(top_n)
         )
@@ -1233,7 +1262,7 @@ def _precompute_neighbors(
             precomputed_neighbors=top_descendants,
             compartmentalized_species=compartmentalized_species,
             sbml_dfs=sbml_dfs,
-            relationship="descendants",
+            relationship=GRAPH_RELATIONSHIPS.DESCENDANTS,
         )
 
         if downstream_reactions is not None:
@@ -1247,7 +1276,7 @@ def _precompute_neighbors(
             precomputed_neighbors=top_ancestors,
             compartmentalized_species=compartmentalized_species,
             sbml_dfs=sbml_dfs,
-            relationship="ancestors",
+            relationship=GRAPH_RELATIONSHIPS.ANCESTORS,
         )
 
         if upstream_reactions is not None:
@@ -1313,7 +1342,7 @@ def _build_raw_neighborhood_df(
         descendants_df = _find_neighbors(
             napistu_graph=napistu_graph,
             compartmentalized_species=compartmentalized_species,
-            relationship="descendants",
+            relationship=GRAPH_RELATIONSHIPS.DESCENDANTS,
             order=order,
             precomputed_neighbors=precomputed_neighbors,
         )
@@ -1326,7 +1355,7 @@ def _build_raw_neighborhood_df(
         ancestors_df = _find_neighbors(
             napistu_graph=napistu_graph,
             compartmentalized_species=compartmentalized_species,
-            relationship="ancestors",
+            relationship=GRAPH_RELATIONSHIPS.ANCESTORS,
             order=order,
             precomputed_neighbors=precomputed_neighbors,
         )
@@ -1342,8 +1371,9 @@ def _build_raw_neighborhood_df(
         raise NotImplementedError("invalid network_type")
 
     # add name since this is an easy way to lookup igraph vertices
-    neighborhood_df["name"] = [
-        x["name"] for x in napistu_graph.vs[neighborhood_df["neighbor"]]
+    neighborhood_df[NAPISTU_GRAPH_VERTICES.NAME] = [
+        x[NAPISTU_GRAPH_VERTICES.NAME]
+        for x in napistu_graph.vs[neighborhood_df["neighbor"]]
     ]
 
     return neighborhood_df
@@ -1369,15 +1399,21 @@ def _find_neighbors(
     if isinstance(precomputed_neighbors, pd.DataFrame):
         # add graph indices to neighbors
         nodes_to_names = (
-            pd.DataFrame({"name": napistu_graph.vs["name"]})
+            pd.DataFrame(
+                {
+                    NAPISTU_GRAPH_VERTICES.NAME: napistu_graph.vs[
+                        NAPISTU_GRAPH_VERTICES.NAME
+                    ]
+                }
+            )
             .reset_index()
             .rename({"index": "neighbor"}, axis=1)
         )
 
-        if relationship == "descendants":
+        if relationship == GRAPH_RELATIONSHIPS.DESCENDANTS:
             bait_id = NAPISTU_EDGELIST.SC_ID_ORIGIN
             target_id = NAPISTU_EDGELIST.SC_ID_DEST
-        elif relationship == "ancestors":
+        elif relationship == GRAPH_RELATIONSHIPS.ANCESTORS:
             bait_id = NAPISTU_EDGELIST.SC_ID_DEST
             target_id = NAPISTU_EDGELIST.SC_ID_ORIGIN
         else:
@@ -1389,15 +1425,17 @@ def _find_neighbors(
             precomputed_neighbors[
                 precomputed_neighbors[bait_id].isin(compartmentalized_species)
             ]
-            .merge(nodes_to_names.rename({"name": target_id}, axis=1))
+            .merge(
+                nodes_to_names.rename({NAPISTU_GRAPH_VERTICES.NAME: target_id}, axis=1)
+            )
             .rename({bait_id: SBML_DFS.SC_ID}, axis=1)
             .drop([target_id], axis=1)
             .assign(relationship=relationship)
         )
     else:
-        if relationship == "descendants":
+        if relationship == GRAPH_RELATIONSHIPS.DESCENDANTS:
             mode_type = "out"
-        elif relationship == "ancestors":
+        elif relationship == GRAPH_RELATIONSHIPS.ANCESTORS:
             mode_type = "in"
         else:
             raise ValueError(
@@ -1443,10 +1481,10 @@ def _find_reactions_by_relationship(
     if precomputed_neighbors.shape[0] == 0:
         return None
 
-    if relationship == "descendants":
+    if relationship == GRAPH_RELATIONSHIPS.DESCENDANTS:
         bait_id = NAPISTU_EDGELIST.SC_ID_ORIGIN
         target_id = NAPISTU_EDGELIST.SC_ID_DEST
-    elif relationship == "ancestors":
+    elif relationship == GRAPH_RELATIONSHIPS.ANCESTORS:
         bait_id = NAPISTU_EDGELIST.SC_ID_DEST
         target_id = NAPISTU_EDGELIST.SC_ID_ORIGIN
     else:
@@ -1525,10 +1563,11 @@ def _prune_vertex_set(one_neighborhood: dict, top_n: int) -> pd.DataFrame:
 
     """
 
-    neighborhood_vertices = one_neighborhood["vertices"]
+    neighborhood_vertices = one_neighborhood[NEIGHBORHOOD_DICT_KEYS.VERTICES]
 
     indexed_neighborhood_species = neighborhood_vertices[
-        neighborhood_vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE] == "species"
+        neighborhood_vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE]
+        == NAPISTU_GRAPH_NODE_TYPES.SPECIES
     ].set_index("node_orientation")
 
     pruned_oriented_neighbors = list()
@@ -1538,14 +1577,14 @@ def _prune_vertex_set(one_neighborhood: dict, top_n: int) -> pd.DataFrame:
             # handle cases where only one entry exists to DF->series coercion occurs
             vertex_subset = vertex_subset.to_frame().T
 
-        sorted_vertex_set = vertex_subset.sort_values("path_weight")
-        weight_cutoff = sorted_vertex_set["path_weight"].iloc[
+        sorted_vertex_set = vertex_subset.sort_values(DISTANCES.PATH_WEIGHTS)
+        weight_cutoff = sorted_vertex_set[DISTANCES.PATH_WEIGHTS].iloc[
             min(top_n - 1, sorted_vertex_set.shape[0] - 1)
         ]
 
         top_neighbors = sorted_vertex_set[
-            sorted_vertex_set["path_weight"] <= weight_cutoff
-        ]["name"].tolist()
+            sorted_vertex_set[DISTANCES.PATH_WEIGHTS] <= weight_cutoff
+        ][NAPISTU_GRAPH_VERTICES.NAME].tolist()
 
         # include reactions and other species necessary to reach the top neighbors
         # by pulling in the past solutions to weighted shortest paths problems
@@ -1564,7 +1603,7 @@ def _prune_vertex_set(one_neighborhood: dict, top_n: int) -> pd.DataFrame:
     # combine all neighbors
     pruned_neighbors = set().union(*pruned_oriented_neighbors)
     pruned_vertices = neighborhood_vertices[
-        neighborhood_vertices["name"].isin(pruned_neighbors)
+        neighborhood_vertices[NAPISTU_GRAPH_VERTICES.NAME].isin(pruned_neighbors)
     ].reset_index(drop=True)
 
     return pruned_vertices
@@ -1574,7 +1613,7 @@ def _calculate_path_attrs(
     neighborhood_paths: list[list],
     edges: pd.DataFrame,
     vertices: list,
-    weight_var: str = "weights",
+    weight_var: str = NAPISTU_GRAPH_EDGES.WEIGHTS,
 ) -> tuple[pd.DataFrame, dict[Any, set]]:
     """
     Calculate Path Attributes
@@ -1624,15 +1663,15 @@ def _calculate_path_attrs(
         # if all_path_edges.ngroups > 0:
         path_attributes_df = pd.concat(
             [
-                all_path_edges[weight_var].agg("sum").rename("path_weight"),
-                all_path_edges.agg("size").rename("path_length"),
-                all_path_edges["link_polarity"]
+                all_path_edges[weight_var].agg("sum").rename(DISTANCES.PATH_WEIGHTS),
+                all_path_edges.agg("size").rename(DISTANCES.PATH_LENGTH),
+                all_path_edges[NET_POLARITY.LINK_POLARITY]
                 .agg(paths._terminal_net_polarity)
-                .rename("net_polarity"),
+                .rename(NET_POLARITY.NET_POLARITY),
                 # add the final edge since this can be used to add path attributes to edges
                 # i.e., apply net_polarity to an edge
-                all_path_edges["from"].agg("last").rename("final_from"),
-                all_path_edges["to"].agg("last").rename("final_to"),
+                all_path_edges["from"].agg("last").rename(DISTANCES.FINAL_FROM),
+                all_path_edges["to"].agg("last").rename(DISTANCES.FINAL_TO),
             ],
             axis=1,
         ).reset_index()
@@ -1655,7 +1694,11 @@ def _calculate_path_attrs(
         if len(neighborhood_paths[i]) == 0
     ]
     edgeles_nodes_df = pd.DataFrame({"neighbor": edgeless_nodes}).assign(
-        path_length=0, path_weight=0, net_polarity=None
+        **{
+            DISTANCES.PATH_LENGTH: 0,
+            DISTANCES.PATH_WEIGHTS: 0,
+            NET_POLARITY.NET_POLARITY: None,
+        }
     )
 
     # add edgeless entries as entries in the two outputs
@@ -1672,3 +1715,118 @@ def _calculate_path_attrs(
         )
 
     return path_attributes_df, neighborhood_path_entities
+
+
+def _find_neighbors_paths(
+    neighborhood_graph: ig.Graph,
+    one_neighborhood_df: pd.DataFrame,
+    sc_id: str,
+    edges: pd.DataFrame,
+) -> tuple[pd.DataFrame, dict[Any, set], pd.DataFrame, dict[Any, set]]:
+    """
+    Find shortest paths between the focal node and its neighbors in both directions.
+
+    This function calculates shortest paths from the focal node to its descendants
+    (downstream) and ancestors (upstream) using igraph's shortest path algorithms.
+    It uses _calculate_path_attrs to compute path attributes including path weights,
+    lengths, and polarity information.
+
+    Parameters
+    ----------
+    neighborhood_graph: ig.Graph
+        The igraph Graph object representing the neighborhood network
+    one_neighborhood_df: pd.DataFrame
+        DataFrame containing neighborhood information with 'relationship' column
+        indicating 'descendants' or 'ancestors' for each node
+    sc_id: str
+        The compartmentalized species ID of the focal node
+    edges: pd.DataFrame
+        DataFrame containing edge information with columns for 'from', 'to',
+        weights, and link polarity
+
+    Returns
+    -------
+    downstream_path_attrs: pd.DataFrame
+        DataFrame containing path attributes for downstream paths from focal node
+        to descendants. Includes columns: neighbor, path_weight, path_length,
+        net_polarity, final_from, final_to, node_orientation
+    downstream_entity_dict: dict[Any, set]
+        Dictionary mapping each descendant neighbor to the set of entities
+        (nodes) connecting it to the focal node
+    upstream_path_attrs: pd.DataFrame
+        DataFrame containing path attributes for upstream paths from focal node
+        to ancestors. Includes columns: neighbor, path_weight, path_length,
+        net_polarity, final_from, final_to, node_orientation
+    upstream_entity_dict: dict[Any, set]
+        Dictionary mapping each ancestor neighbor to the set of entities
+        (nodes) connecting it to the focal node
+    """
+
+    one_descendants_df = one_neighborhood_df[
+        one_neighborhood_df["relationship"] == GRAPH_RELATIONSHIPS.DESCENDANTS
+    ]
+    descendants_list = list(
+        set(one_descendants_df[NAPISTU_GRAPH_VERTICES.NAME].tolist()).union({sc_id})
+    )
+
+    # hide warnings which are mostly just Dijkstra complaining about not finding neighbors
+    with warnings.catch_warnings():
+        # igraph throws warnings for each pair of unconnected species
+        warnings.simplefilter("ignore")
+
+        neighborhood_paths = neighborhood_graph.get_shortest_paths(
+            # focal node
+            v=sc_id,
+            to=descendants_list,
+            weights=NAPISTU_GRAPH_EDGES.WEIGHTS,
+            mode="out",
+            output="epath",
+        )
+
+    downstream_path_attrs, downstream_entity_dict = _calculate_path_attrs(
+        neighborhood_paths,
+        edges,
+        vertices=descendants_list,
+        weight_var=NAPISTU_GRAPH_EDGES.WEIGHTS,
+    )
+    downstream_path_attrs = downstream_path_attrs.assign(
+        node_orientation=NEIGHBORHOOD_NETWORK_TYPES.DOWNSTREAM
+    )
+
+    # ancestors -> focal_node
+
+    one_ancestors_df = one_neighborhood_df[
+        one_neighborhood_df["relationship"] == GRAPH_RELATIONSHIPS.ANCESTORS
+    ]
+    ancestors_list = list(
+        set(one_ancestors_df[NAPISTU_GRAPH_VERTICES.NAME].tolist()).union({sc_id})
+    )
+
+    with warnings.catch_warnings():
+        # igraph throws warnings for each pair of unconnected species
+        warnings.simplefilter("ignore")
+
+        neighborhood_paths = neighborhood_graph.get_shortest_paths(
+            v=sc_id,
+            to=ancestors_list,
+            weights=NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS,
+            mode="in",
+            output="epath",
+        )
+
+    upstream_path_attrs, upstream_entity_dict = _calculate_path_attrs(
+        neighborhood_paths,
+        edges,
+        vertices=ancestors_list,
+        weight_var=NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS,
+    )
+    upstream_path_attrs = upstream_path_attrs.assign(
+        node_orientation=NEIGHBORHOOD_NETWORK_TYPES.UPSTREAM
+    )
+
+    return (
+        downstream_path_attrs,
+        downstream_entity_dict,
+        upstream_path_attrs,
+        upstream_entity_dict,
+    )

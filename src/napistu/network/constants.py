@@ -10,8 +10,14 @@ from napistu.constants import SBOTERM_NAMES
 
 NAPISTU_GRAPH = SimpleNamespace(VERTICES="vertices", EDGES="edges", METADATA="metadata")
 
-NAPISTU_GRAPH_DIRECTEDNESS = SimpleNamespace(
-    DIRECTED="directed", UNDIRECTED="undirected"
+GRAPH_DIRECTEDNESS = SimpleNamespace(DIRECTED="directed", UNDIRECTED="undirected")
+
+GRAPH_RELATIONSHIPS = SimpleNamespace(
+    ANCESTORS="ancestors",
+    CHILDREN="children",
+    DESCENDANTS="descendants",
+    FOCAL="focal",
+    PARENTS="parents",
 )
 
 NAPISTU_GRAPH_VERTICES = SimpleNamespace(
@@ -230,4 +236,17 @@ NEIGHBORHOOD_DICT_KEYS = SimpleNamespace(
     VERTICES="vertices",
     EDGES="edges",
     REACTION_SOURCES="reaction_sources",
+    NEIGHBORHOOD_PATH_ENTITIES="neighborhood_path_entities",
+)
+
+DISTANCES = SimpleNamespace(
+    # core attributes of precomputed distances
+    SC_ID_ORIGIN="sc_id_origin",
+    SC_ID_DEST="sc_id_dest",
+    PATH_LENGTH="path_length",
+    PATH_UPSTREAM_WEIGHTS="path_upstream_weights",
+    PATH_WEIGHTS="path_weights",
+    # other attributes associated with paths/distances
+    FINAL_FROM="final_from",
+    FINAL_TO="final_to",
 )

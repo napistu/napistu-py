@@ -23,7 +23,7 @@ from napistu.constants import SBML_DFS
 from napistu.constants import SOURCE_SPEC
 from napistu.identifiers import _validate_assets_sbml_ids
 from napistu.network.constants import GRAPH_WIRING_APPROACHES
-from napistu.network.constants import NAPISTU_GRAPH_DIRECTEDNESS
+from napistu.network.constants import GRAPH_DIRECTEDNESS
 
 logger = logging.getLogger(__name__)
 
@@ -406,9 +406,9 @@ def _create_network_save_string(
     model_prefix: str, outdir: str, directed: bool, wiring_approach: str
 ) -> str:
     if directed:
-        directed_str = NAPISTU_GRAPH_DIRECTEDNESS.DIRECTED
+        directed_str = GRAPH_DIRECTEDNESS.DIRECTED
     else:
-        directed_str = NAPISTU_GRAPH_DIRECTEDNESS.UNDIRECTED
+        directed_str = GRAPH_DIRECTEDNESS.UNDIRECTED
 
     export_pkl_path = os.path.join(
         outdir,
