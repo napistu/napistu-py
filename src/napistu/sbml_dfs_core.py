@@ -84,6 +84,8 @@ class SBML_dfs:
         Retrieve a table of identifiers for a specified entity type (e.g., species or reactions).
     get_network_summary()
         Return a dictionary of diagnostic statistics summarizing the network structure.
+    get_source_total_counts(entity_type)
+        Get the total counts of each source for a given entity type.
     get_species_features()
         Compute and return additional features for species, such as species type.
     get_table(entity_type, required_attributes=None)
@@ -319,6 +321,9 @@ class SBML_dfs:
         # filter to identifiers which make sense when mapping from ids -> species
         species_identifiers = self.get_characteristic_species_ids(dogmatic=dogmatic)
 
+        # get reactions' source total counts
+        reactions_source_total_counts = self.get_source_total_counts(SBML_DFS.REACTIONS)
+
         try:
             utils.initialize_dir(outdir, overwrite=overwrite)
         except FileExistsError:
@@ -334,6 +339,13 @@ class SBML_dfs:
                 species_identifiers.drop([SBML_DFS.S_SOURCE], axis=1).to_csv(
                     f, sep="\t", index=False
                 )
+
+            # export reactions' source total counts
+            reactions_source_total_counts_path = (
+                model_prefix + NAPISTU_STANDARD_OUTPUTS.REACTIONS_SOURCE_TOTAL_COUNTS
+            )
+            with fs.openbin(reactions_source_total_counts_path, "w") as f:
+                reactions_source_total_counts.to_csv(f, sep="\t", index=True)
 
             # export jsons
             species_path = model_prefix + NAPISTU_STANDARD_OUTPUTS.SPECIES
@@ -580,6 +592,54 @@ class SBML_dfs:
         )
 
         return stats
+
+    def get_source_total_counts(self, entity_type: str) -> pd.Series:
+        """
+        Get the total counts of each source for a given entity type.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to get the total counts of (e.g., 'species', 'reactions')
+
+        Returns
+        -------
+        pd.Series
+            Series containing the total counts of each source, indexed by pathway_id
+
+        Raises
+        ------
+        ValueError
+            If entity_type is invalid
+        """
+        entity_table = self.get_table(entity_type)
+
+        if entity_type == SBML_DFS.REACTIONS:
+            logger.info(
+                "Excluding reactions which are all interactors from reaction source counts"
+            )
+
+            interactor_sbo_term = MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
+            reaction_species = self.get_table(SBML_DFS.REACTION_SPECIES)
+            valid_reactions = reaction_species[
+                ~reaction_species[SBML_DFS.SBO_TERM].isin([interactor_sbo_term])
+            ][SBML_DFS.R_ID].unique()
+
+            entity_table = entity_table.loc[valid_reactions]
+
+        all_sources_table = source.unnest_sources(entity_table)
+
+        if all_sources_table is None:
+            logger.warning(
+                f"No sources found for {entity_type} in sbml_dfs. Returning an empty series."
+            )
+            return pd.Series([], name="total_counts")
+
+        source_total_counts = all_sources_table.value_counts(
+            source.SOURCE_SPEC.PATHWAY_ID
+        ).rename("total_counts")
+
+        return source_total_counts
 
     def get_species_features(self) -> pd.DataFrame:
         """

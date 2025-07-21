@@ -86,9 +86,7 @@ def test_source_set_coverage(sbml_dfs_metabolism):
 
 def test_source_set_coverage_enrichment(sbml_dfs_metabolism):
 
-    source_total_counts = source.get_source_total_counts(
-        sbml_dfs_metabolism, "reactions"
-    )
+    source_total_counts = sbml_dfs_metabolism.get_source_total_counts("reactions")
 
     source_df = source.unnest_sources(sbml_dfs_metabolism.reactions).head(40)
 

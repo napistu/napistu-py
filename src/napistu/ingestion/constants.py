@@ -4,6 +4,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from napistu.constants import (
+    ONTOLOGIES,
     SBML_DFS,
     SBOTERM_NAMES,
 )
@@ -76,7 +77,6 @@ OBO_GO_BASIC_LOCAL_TMP = "/tmp/go-basic.obo"
 PSI_MI_INTACT_FTP_URL = (
     "https://ftp.ebi.ac.uk/pub/databases/intact/current/psi30/species"
 )
-PSI_MI_INTACT_DEFAULT_OUTPUT_DIR = "/tmp/intact_tmp"
 PSI_MI_INTACT_XML_NAMESPACE = "{http://psi.hupo.org/mi/mif300}"
 
 PSI_MI_INTACT_SPECIES_TO_BASENAME = {
@@ -85,6 +85,29 @@ PSI_MI_INTACT_SPECIES_TO_BASENAME = {
     SPECIES_FULL_NAME_MOUSE: "mouse",
     SPECIES_FULL_NAME_RAT: "rat",
     SPECIES_FULL_NAME_WORM: "caeel",
+}
+
+PSI_MI_DEFS = SimpleNamespace(
+    EXPERIMENT="experiment",
+    INTERACTOR_ID="interactor_id",
+    INTERACTOR_LABEL="interactor_label",
+    INTERACTOR_LIST="interactor_list",
+    INTERACTOR_NAME="interactor_name",
+    INTERACTOR_XREFS="interactor_xrefs",
+    INTERACTION_NAME="interaction_name",
+    INTERACTIONS_LIST="interactions_list",
+    INTERACTORS="interactors",
+)
+
+PSI_MI_REFS = SimpleNamespace(
+    PRIMARY_REF_DB="primary_ref_db",
+    PRIMARY_REF_ID="primary_ref_id",
+)
+
+INTACT_ONTOLOGY_CV_LOOKUP = {
+    "uniprotkb": ONTOLOGIES.UNIPROT,
+    # we actually don't want these GO IDs
+    ONTOLOGIES.GO: "ignored_go",
 }
 
 

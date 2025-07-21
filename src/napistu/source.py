@@ -9,7 +9,11 @@ from napistu import indices
 from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
 from napistu.statistics import hypothesis_testing
-from napistu.constants import SBML_DFS_SCHEMA, SCHEMA_DEFS, SOURCE_SPEC
+from napistu.constants import (
+    SBML_DFS_SCHEMA,
+    SCHEMA_DEFS,
+    SOURCE_SPEC,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -279,7 +283,7 @@ def unnest_sources(source_table: pd.DataFrame, verbose: bool = False) -> pd.Data
 
 def source_set_coverage(
     select_sources_df: pd.DataFrame,
-    source_total_counts: Optional[pd.Series] = None,
+    source_total_counts: Optional[pd.Series | pd.DataFrame] = None,
     sbml_dfs: Optional[sbml_dfs_core.SBML_dfs] = None,
     min_pw_size: int = 3,
 ) -> pd.DataFrame:
@@ -296,9 +300,10 @@ def source_set_coverage(
     select_sources_df: pd.DataFrame
         pd.Dataframe containing the index of source_table but expanded to
         include one row per source. As produced by source.unnest_sources()
-    source_total_counts: pd.Series
+    source_total_counts: pd.Series | pd.DataFrame
         pd.Series containing the total counts of each source. As produced by
-        source.get_source_total_counts()
+        source.get_source_total_counts() or a pd.DataFrame with two columns:
+        pathway_id and total_counts.
     sbml_dfs: sbml_dfs_core.SBML_dfs
         if `source_total_counts` is provided then `sbml_dfs` must be provided
         to calculate the total number of entities in the table.
@@ -316,6 +321,11 @@ def source_set_coverage(
     pk = SBML_DFS_SCHEMA.SCHEMA[table_type][SCHEMA_DEFS.PK]
 
     if source_total_counts is not None:
+
+        # convert from a two column pd.DataFrame to a pd.Series if needed
+        if isinstance(source_total_counts, pd.DataFrame):
+            source_total_counts = source_total_counts[SOURCE_SPEC.PATHWAY_ID]
+
         if sbml_dfs is None:
             raise ValueError(
                 "If `source_total_counts` is provided, `sbml_dfs` must be provided to calculate the total number of entities in the table."
@@ -358,40 +368,6 @@ def source_set_coverage(
     ].sort_index()
 
     return minimial_sources
-
-
-def get_source_total_counts(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, entity_type: str
-) -> pd.Series:
-    """
-    Get the total counts of each source.
-
-    Parameters
-    ----------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
-        sbml_dfs object containing the table to get the total counts of
-    entity_type: str
-        the type of entity to get the total counts of
-
-    Returns
-    -------
-    source_total_counts: pd.Series
-        pd.Series containing the total counts of each source.
-    """
-
-    all_sources_table = unnest_sources(sbml_dfs.get_table(entity_type))
-
-    if all_sources_table is None:
-        logger.warning(
-            f"No sources found for {entity_type} in sbml_dfs. Returning an empty series."
-        )
-        return pd.Series([], name="total_counts")
-
-    source_total_counts = all_sources_table.value_counts(SOURCE_SPEC.PATHWAY_ID).rename(
-        "total_counts"
-    )
-
-    return source_total_counts
 
 
 def _deduplicate_source_df(source_df: pd.DataFrame) -> pd.DataFrame:

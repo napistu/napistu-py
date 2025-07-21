@@ -270,7 +270,7 @@ def find_all_shortest_reaction_paths(
     weight_var: str = NAPISTU_GRAPH_EDGES.WEIGHT,
     precomputed_distances: pd.DataFrame | None = None,
     min_pw_size: int = 3,
-    source_total_counts: pd.Series | None = None,
+    source_total_counts: pd.Series | pd.DataFrame | None = None,
 ):
     """
     Shortest Reaction Paths
@@ -291,9 +291,10 @@ def find_all_shortest_reaction_paths(
         A table containing precalculated path summaries between pairs of compartmentalized species
     min_pw_size : int
         the minimum size of a pathway to be considered
-    source_total_counts : pd.Series | None
-        A series of the total counts of each source. As produced by
-        source.get_source_total_counts()
+    source_total_counts : pd.Series | pd.DataFrame | None
+        A pd.Series of the total counts of each source or a pd.DataFrame with two columns:
+        pathway_id and total_counts. As produced by
+        source.get_source_total_counts(). If None, pathways will be selected by size rather than statistical enrichment.
 
     Returns:
     ----------

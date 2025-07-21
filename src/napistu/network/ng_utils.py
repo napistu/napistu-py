@@ -122,7 +122,7 @@ def get_minimal_sources_edges(
     vertices: pd.DataFrame,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     min_pw_size: int = 3,
-    source_total_counts: Optional[pd.Series] = None,
+    source_total_counts: Optional[pd.Series | pd.DataFrame] = None,
 ) -> pd.DataFrame | None:
     """
     Assign edges to a set of sources.
@@ -135,8 +135,9 @@ def get_minimal_sources_edges(
         A pathway model
     min_pw_size: int
         the minimum size of a pathway to be considered
-    source_total_counts: pd.Series
-        A series of the total counts of each source.
+    source_total_counts: pd.Series | pd.DataFrame
+        A series of the total counts of each source or a pd.DataFrame with two columns:
+        pathway_id and total_counts.
 
     Returns
     -------

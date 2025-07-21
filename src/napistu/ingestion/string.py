@@ -18,15 +18,12 @@ from napistu.constants import (
     SBML_DFS,
 )
 from napistu.ingestion.constants import (
-    STRING_DOWNSTREAM_COMPARTMENT,
-    STRING_DOWNSTREAM_NAME,
+    INTERACTION_EDGELIST_DEFS,
     STRING_PROTEIN_ID,
     STRING_PROTEIN_ID_RAW,
     STRING_SOURCE,
     STRING_TARGET,
     STRING_TAX_IDS,
-    STRING_UPSTREAM_COMPARTMENT,
-    STRING_UPSTREAM_NAME,
     STRING_URL_EXPRESSIONS,
     STRING_VERSION,
     GENERIC_COMPARTMENT,
@@ -306,13 +303,13 @@ def _build_interactor_edgelist(
     sbo_interactor = MINI_SBO_FROM_NAME[sbo_term]
     dat = edgelist.rename(
         columns={
-            upstream_col_name: STRING_UPSTREAM_NAME,
-            downstream_col_name: STRING_DOWNSTREAM_NAME,
+            upstream_col_name: INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
+            downstream_col_name: INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
         }
     ).assign(
         **{
-            STRING_UPSTREAM_COMPARTMENT: compartment,
-            STRING_DOWNSTREAM_COMPARTMENT: compartment,
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT: compartment,
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT: compartment,
             SBML_DFS.SBO_TERM: sbo_interactor,
             SBML_DFS.R_IDENTIFIERS: lambda x: identifiers.Identifiers([]),
         }
@@ -327,8 +324,8 @@ def _build_interactor_edgelist(
                         d,
                         d.rename(
                             columns={
-                                STRING_UPSTREAM_NAME: STRING_DOWNSTREAM_NAME,
-                                STRING_DOWNSTREAM_NAME: STRING_UPSTREAM_NAME,
+                                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
                             }
                         ),
                     ]
@@ -338,7 +335,8 @@ def _build_interactor_edgelist(
 
     interaction_edgelist = dat
     interaction_edgelist[SBML_DFS.R_NAME] = _build_string_reaction_name(
-        dat[STRING_UPSTREAM_NAME], dat[STRING_DOWNSTREAM_NAME]
+        dat[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME],
+        dat[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME],
     )
     interaction_edgelist[SBML_DFS.R_ISREVERSIBLE] = True
 

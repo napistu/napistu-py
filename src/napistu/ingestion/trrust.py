@@ -14,7 +14,7 @@ from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import SBOTERM_NAMES
 from napistu.constants import SBML_DFS
 from napistu.ingestion.constants import SPECIES_FULL_NAME_HUMAN
-from napistu.constants import INTERACTION_EDGELIST_DEFS
+from napistu.ingestion.constants import INTERACTION_EDGELIST_DEFS
 from napistu.ingestion.constants import TRRUST_COMPARTMENT_NUCLEOPLASM
 from napistu.ingestion.constants import TRRUST_COMPARTMENT_NUCLEOPLASM_GO_ID
 from napistu.ingestion.constants import TRRUST_SYMBOL
