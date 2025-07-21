@@ -26,7 +26,7 @@ def test_shortest_paths(sbml_dfs, napistu_graph, napistu_graph_undirected):
         napistu_graph,
         sbml_dfs,
         target_species_paths,
-        weight_var=NAPISTU_GRAPH_EDGES.WEIGHTS,
+        weight_var=NAPISTU_GRAPH_EDGES.WEIGHT,
     )
 
     # undirected graph
@@ -39,7 +39,7 @@ def test_shortest_paths(sbml_dfs, napistu_graph, napistu_graph_undirected):
         napistu_graph_undirected,
         sbml_dfs,
         target_species_paths,
-        weight_var=NAPISTU_GRAPH_EDGES.WEIGHTS,
+        weight_var=NAPISTU_GRAPH_EDGES.WEIGHT,
     )
 
     assert all_shortest_reaction_paths_df.shape[0] == 3

@@ -8,9 +8,15 @@ import pandas as pd
 
 from napistu.network.ng_core import NapistuGraph
 from napistu.network.ig_utils import validate_edge_attributes
-from napistu.constants import NAPISTU_EDGELIST, SBML_DFS
+from napistu.constants import (
+    NAPISTU_EDGELIST,
+    SBML_DFS,
+)
 from napistu.network.constants import (
+    DISTANCES,
     NAPISTU_GRAPH_EDGES,
+    NAPISTU_GRAPH_NODE_TYPES,
+    NAPISTU_GRAPH_VERTICES,
 )
 
 logger = logging.getLogger(__name__)
@@ -21,9 +27,9 @@ def precompute_distances(
     max_steps: int = -1,
     max_score_q: float = float(1),
     partition_size: int = int(5000),
-    weights_vars: list[str] = [
-        NAPISTU_GRAPH_EDGES.WEIGHTS,
-        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS,
+    weight_vars: list[str] = [
+        NAPISTU_GRAPH_EDGES.WEIGHT,
+        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
     ],
 ) -> pd.DataFrame:
     """
@@ -40,7 +46,7 @@ def precompute_distances(
     partition_size: int
         The number of species to process together when computing distances. Decreasing this
         value will lower the overall memory footprint of distance calculation.
-    weights_vars: list
+    weight_vars: list
         One or more variables defining edge weights to use when calculating weighted
         shortest paths. Shortest paths will be separately calculated with each type of
         weights and used to construct path weights named according to 'path_{weight_var}'
@@ -52,7 +58,7 @@ def precompute_distances(
     - sc_id_dest: destination node
     - path_length: minimum path length between from and to
     - path_weight*: minimum path weight between from and to (formed by summing the weights of individual edges).
-      *One variable will exist for each weight specified in 'weights_vars'
+      *One variable will exist for each weight specified in 'weight_vars'
 
     """
 
@@ -67,12 +73,19 @@ def precompute_distances(
         raise ValueError(f"max_score_q must be between 0 and 1 but was {max_score_q}")
 
     # make sure weight vars exist
-    validate_edge_attributes(napistu_graph, weights_vars)
+    validate_edge_attributes(napistu_graph, weight_vars)
 
     # assign molecular species to partitions
     vs_to_partition = pd.DataFrame(
-        {"sc_id": napistu_graph.vs["name"], "node_type": napistu_graph.vs["node_type"]}
-    ).query("node_type == 'species'")
+        {
+            SBML_DFS.SC_ID: napistu_graph.vs[NAPISTU_GRAPH_VERTICES.NAME],
+            NAPISTU_GRAPH_VERTICES.NODE_TYPE: napistu_graph.vs[
+                NAPISTU_GRAPH_VERTICES.NODE_TYPE
+            ],
+        }
+    ).query(
+        f"{NAPISTU_GRAPH_VERTICES.NODE_TYPE} == '{NAPISTU_GRAPH_NODE_TYPES.SPECIES}'"
+    )
 
     n_paritions = math.ceil(vs_to_partition.shape[0] / partition_size)
 
@@ -89,11 +102,11 @@ def precompute_distances(
                 napistu_graph,
                 vs_to_partition,
                 vs_to_partition.loc[uq_part],
-                weights_vars=weights_vars,
+                weight_vars=weight_vars,
             )
             for uq_part in unique_partitions
         ]
-    ).query("sc_id_origin != sc_id_dest")
+    ).query(f"{DISTANCES.SC_ID_ORIGIN} != {DISTANCES.SC_ID_DEST}")
 
     # filter by path length and/or weight
 
@@ -104,7 +117,7 @@ def precompute_distances(
         precomputed_distances=precomputed_distances,
         max_steps=max_steps,
         max_score_q=max_score_q,
-        path_weights_vars=["path_" + w for w in weights_vars],
+        path_weight_vars=["path_" + w for w in weight_vars],
     ).reset_index(drop=True)
 
     return filtered_precomputed_distances
@@ -170,9 +183,9 @@ def _calculate_distances_subset(
     napistu_graph: NapistuGraph,
     vs_to_partition: pd.DataFrame,
     one_partition: pd.DataFrame,
-    weights_vars: list[str] = [
-        NAPISTU_GRAPH_EDGES.WEIGHTS,
-        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS,
+    weight_vars: list[str] = [
+        NAPISTU_GRAPH_EDGES.WEIGHT,
+        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
     ],
 ) -> pd.DataFrame:
     """Calculate distances from a subset of vertices to all vertices."""
@@ -189,13 +202,13 @@ def _calculate_distances_subset(
             columns=vs_to_partition[SBML_DFS.SC_ID].rename(NAPISTU_EDGELIST.SC_ID_DEST),
         )
         .reset_index()
-        .melt(NAPISTU_EDGELIST.SC_ID_ORIGIN, value_name="path_length")
+        .melt(NAPISTU_EDGELIST.SC_ID_ORIGIN, value_name=DISTANCES.PATH_LENGTH)
         .replace([np.inf, -np.inf], np.nan, inplace=False)
         .dropna()
     )
 
     d_weights_list = list()
-    for weight_type in weights_vars:
+    for weight_type in weight_vars:
         d_weights_subset = (
             pd.DataFrame(
                 np.array(
@@ -240,13 +253,16 @@ def _filter_precomputed_distances(
     precomputed_distances: pd.DataFrame,
     max_steps: float | int = np.inf,
     max_score_q: float = 1,
-    path_weights_vars: list[str] = ["path_weights", "path_upstream_weights"],
+    path_weight_vars: list[str] = [
+        DISTANCES.PATH_WEIGHT,
+        DISTANCES.PATH_UPSTREAM_WEIGHT,
+    ],
 ) -> pd.DataFrame:
     """Filter precomputed distances by maximum steps and/or to low scores by quantile."""
 
     # filter by path lengths
     short_precomputed_distances = precomputed_distances[
-        precomputed_distances["path_length"] <= max_steps
+        precomputed_distances[DISTANCES.PATH_LENGTH] <= max_steps
     ]
     n_filtered_by_path_length = (
         precomputed_distances.shape[0] - short_precomputed_distances.shape[0]
@@ -257,14 +273,14 @@ def _filter_precomputed_distances(
         )
 
     # filter by path weights
-    for wt_var in path_weights_vars:
+    for wt_var in path_weight_vars:
         score_q_cutoff = np.quantile(short_precomputed_distances[wt_var], max_score_q)
 
         short_precomputed_distances.loc[
             short_precomputed_distances[wt_var] > score_q_cutoff, wt_var
         ] = np.nan
 
-    valid_weights = short_precomputed_distances[path_weights_vars].dropna(how="all")
+    valid_weights = short_precomputed_distances[path_weight_vars].dropna(how="all")
 
     low_weight_precomputed_distances = short_precomputed_distances[
         short_precomputed_distances.index.isin(valid_weights.index.tolist())

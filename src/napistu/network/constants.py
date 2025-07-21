@@ -40,8 +40,8 @@ NAPISTU_GRAPH_EDGES = SimpleNamespace(
     SPECIES_TYPE="species_type",
     STOICHIOMETRY=SBML_DFS.STOICHIOMETRY,
     TO="to",
-    UPSTREAM_WEIGHTS="upstream_weights",
-    WEIGHTS="weights",
+    UPSTREAM_WEIGHT="upstream_weight",
+    WEIGHT="weight",
 )
 
 NAPISTU_GRAPH_REQUIRED_EDGE_VARS = {
@@ -140,8 +140,8 @@ EDGE_REVERSAL_ATTRIBUTE_MAPPING = {
     NAPISTU_GRAPH_EDGES.TO: NAPISTU_GRAPH_EDGES.FROM,
     NAPISTU_GRAPH_EDGES.SC_PARENTS: NAPISTU_GRAPH_EDGES.SC_CHILDREN,
     NAPISTU_GRAPH_EDGES.SC_CHILDREN: NAPISTU_GRAPH_EDGES.SC_PARENTS,
-    NAPISTU_GRAPH_EDGES.WEIGHTS: NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS,
-    NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS: NAPISTU_GRAPH_EDGES.WEIGHTS,
+    NAPISTU_GRAPH_EDGES.WEIGHT: NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+    NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT: NAPISTU_GRAPH_EDGES.WEIGHT,
     # Note: stoichiometry requires special handling (* -1)
 }
 
@@ -244,8 +244,8 @@ DISTANCES = SimpleNamespace(
     SC_ID_ORIGIN="sc_id_origin",
     SC_ID_DEST="sc_id_dest",
     PATH_LENGTH="path_length",
-    PATH_UPSTREAM_WEIGHTS="path_upstream_weights",
-    PATH_WEIGHTS="path_weights",
+    PATH_UPSTREAM_WEIGHT="path_upstream_weight",
+    PATH_WEIGHT="path_weight",
     # other attributes associated with paths/distances
     FINAL_FROM="final_from",
     FINAL_TO="final_to",

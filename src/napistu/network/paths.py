@@ -91,7 +91,9 @@ def find_shortest_reaction_paths(
         )
 
     # summarize the graph which is being evaluated
-    napistu_graph_names = [v.attributes()["name"] for v in napistu_graph.vs]
+    napistu_graph_names = [
+        v.attributes()[NAPISTU_GRAPH_VERTICES.NAME] for v in napistu_graph.vs
+    ]
 
     napistu_graph_edges = pd.DataFrame(
         {
@@ -101,7 +103,7 @@ def find_shortest_reaction_paths(
             NAPISTU_GRAPH_EDGES.TO: napistu_graph.es.get_attribute_values(
                 NAPISTU_GRAPH_EDGES.TO
             ),
-            NAPISTU_GRAPH_EDGES.WEIGHTS: napistu_graph.es.get_attribute_values(
+            NAPISTU_GRAPH_EDGES.WEIGHT: napistu_graph.es.get_attribute_values(
                 weight_var
             ),
             NAPISTU_GRAPH_EDGES.SBO_TERM: napistu_graph.es.get_attribute_values(
@@ -133,7 +135,10 @@ def find_shortest_reaction_paths(
 
         # reconstruct edges
         path_edges = pd.DataFrame(
-            {"from": path_df["node"][:-1].tolist(), "to": path_df["node"][1:].tolist()}
+            {
+                NAPISTU_GRAPH_EDGES.FROM: path_df["node"][:-1].tolist(),
+                NAPISTU_GRAPH_EDGES.TO: path_df["node"][1:].tolist(),
+            }
         ).assign(path=entry)
 
         # add weights to edges
@@ -141,12 +146,12 @@ def find_shortest_reaction_paths(
         if directed:
             path_edges = path_edges.merge(
                 napistu_graph_edges,
-                left_on=["from", "to"],
-                right_on=["from", "to"],
+                left_on=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO],
+                right_on=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO],
             )
 
             path_edges[NET_POLARITY.LINK_POLARITY] = (
-                path_edges["sbo_term"]
+                path_edges[SBML_DFS.SBO_TERM]
                 .map(MINI_SBO_TO_NAME)
                 .map(MINI_SBO_NAME_TO_POLARITY)
             )
@@ -165,16 +170,21 @@ def find_shortest_reaction_paths(
                 pd.concat(
                     [
                         path_edges,
-                        path_edges.rename(columns={"to": "from", "from": "to"}),
+                        path_edges.rename(
+                            columns={
+                                NAPISTU_GRAPH_EDGES.TO: NAPISTU_GRAPH_EDGES.FROM,
+                                NAPISTU_GRAPH_EDGES.FROM: NAPISTU_GRAPH_EDGES.TO,
+                            }
+                        ),
                     ]
                 )
                 .merge(
                     napistu_graph_edges,
-                    left_on=["from", "to"],
-                    right_on=["from", "to"],
+                    left_on=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO],
+                    right_on=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO],
                     # keep at most 1 entry per step
                 )
-                .sort_values(["step", "weights"])
+                .sort_values(["step", NAPISTU_GRAPH_EDGES.WEIGHT])
                 .groupby("step")
                 .first()
                 .reset_index()
@@ -195,7 +205,9 @@ def find_shortest_reaction_paths(
             path_edges = path_edges.sort_values(["path", "step"]).drop("step", axis=1)
 
         # add weights to nodes
-        path_df["weights"] = [0] + path_edges["weights"].tolist()
+        path_df[NAPISTU_GRAPH_EDGES.WEIGHT] = [0] + path_edges[
+            NAPISTU_GRAPH_EDGES.WEIGHT
+        ].tolist()
 
         path_list.append(path_df)
         edge_list.append(path_edges)
@@ -218,19 +230,29 @@ def find_shortest_reaction_paths(
         )
         .loc[:, paths_df_raw.columns.tolist()]
         .merge(sbml_dfs.compartmentalized_species, left_on="node", right_index=True)[
-            ["step", "node", "path", "sc_name", "node_number", "weights", "s_id"]
+            [
+                "step",
+                "node",
+                "path",
+                SBML_DFS.SC_NAME,
+                "node_number",
+                NAPISTU_GRAPH_EDGES.WEIGHT,
+                SBML_DFS.S_ID,
+            ]
         ]
-        .rename(columns={"sc_name": "label"})
+        .rename(columns={SBML_DFS.SC_NAME: "label"})
         .assign(node_type="species")
     )
 
     # add uri urls
     labelled_species = labelled_species.merge(
-        sbml_dfs.get_uri_urls("species", labelled_species["s_id"].tolist()),
-        left_on="s_id",
+        sbml_dfs.get_uri_urls(
+            SBML_DFS.SPECIES, labelled_species[SBML_DFS.S_ID].tolist()
+        ),
+        left_on=SBML_DFS.S_ID,
         right_index=True,
         how="left",
-    ).drop("s_id", axis=1)
+    ).drop(SBML_DFS.S_ID, axis=1)
 
     paths_df = (
         pd.concat([labelled_reactions, labelled_species])
@@ -245,7 +267,7 @@ def find_all_shortest_reaction_paths(
     napistu_graph: NapistuGraph,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     target_species_paths: pd.DataFrame,
-    weight_var: str = NAPISTU_GRAPH_EDGES.WEIGHTS,
+    weight_var: str = NAPISTU_GRAPH_EDGES.WEIGHT,
     precomputed_distances: pd.DataFrame | None = None,
     min_pw_size: int = 3,
     source_total_counts: pd.Series | None = None,
@@ -398,7 +420,7 @@ def plot_shortest_paths(napistu_graph: NapistuGraph) -> NapistuGraph.plot:
         color_dict[x] for x in napistu_graph.vs[NAPISTU_GRAPH_VERTICES.NODE_TYPE]
     ]
     visual_style["edge_width"] = [
-        math.sqrt(x) for x in napistu_graph.es[NAPISTU_GRAPH_EDGES.WEIGHTS]
+        math.sqrt(x) for x in napistu_graph.es[NAPISTU_GRAPH_EDGES.WEIGHT]
     ]
     visual_style["edge_color"] = "dimgray"
     visual_style["layout"] = paths_graph_layout

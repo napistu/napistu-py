@@ -39,6 +39,7 @@ from napistu.constants import ONTOLOGIES
 from napistu.constants import RESOLVE_MATCHES_AGGREGATORS
 from napistu.ingestion.constants import PROTEINATLAS_SUBCELL_LOC_URL
 from napistu.ingestion.constants import GTEX_RNASEQ_EXPRESSION_URL
+from napistu.network.constants import NAPISTU_GRAPH_EDGES
 from fs import open_fs
 
 logger = logging.getLogger(napistu.__name__)
@@ -717,10 +718,10 @@ def export_igraph(
     help="The number of species to process together when computing distances",
 )
 @click.option(
-    "--weights_vars",
+    "--weight_vars",
     "-w",
     type=str,
-    default=["weights", "upstream_weights"],
+    default=[NAPISTU_GRAPH_EDGES.WEIGHT, NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT],
     help="One or more variables defining edge weights to use when calculating weighted shortest paths.",
 )
 def export_precomputed_distances(
@@ -730,7 +731,7 @@ def export_precomputed_distances(
     max_steps: int,
     max_score_q: float,
     partition_size: int,
-    weights_vars: str,
+    weight_vars: str,
 ):
     """Export precomputed distances for the igraph object"""
 
@@ -747,14 +748,14 @@ def export_precomputed_distances(
                 raise ValueError("Unknown format: %s" % format)
 
     # convert weight vars from a str to list
-    weights_vars_list = utils.click_str_to_list(weights_vars)
+    weight_vars_list = utils.click_str_to_list(weight_vars)
 
     precomputed_distances = precompute.precompute_distances(
         napistu_graph,
         max_steps=max_steps,
         max_score_q=max_score_q,
         partition_size=partition_size,
-        weights_vars=weights_vars_list,
+        weight_vars=weight_vars_list,
     )
 
     utils.save_parquet(precomputed_distances, output_uri)

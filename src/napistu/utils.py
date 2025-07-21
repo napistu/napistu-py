@@ -1102,7 +1102,7 @@ def click_str_to_list(string: str) -> list[str]:
         return var_extract_regex.findall(re_search.group(0))
     else:
         raise ValueError(
-            f"The provided string, {string}, could not be reformatted as a list. An example string which can be formatted is: \"['weights', 'upstream_weights']\""
+            f"The provided string, {string}, could not be reformatted as a list. An example string which can be formatted is: \"['weight', 'upstream_weight']\""
         )
 
 

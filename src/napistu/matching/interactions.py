@@ -6,8 +6,9 @@ import igraph as ig
 import pandas as pd
 
 from napistu import identifiers
-from napistu import utils
+from napistu.network import paths
 from napistu import sbml_dfs_core
+from napistu import utils
 from napistu.matching.species import features_to_pathway_species
 from napistu.constants import (
     NAPISTU_EDGELIST_REQ_VARS,
@@ -16,9 +17,11 @@ from napistu.constants import (
     SBML_DFS,
     IDENTIFIERS,
 )
-from napistu.network.constants import NAPISTU_GRAPH_EDGES
+from napistu.network.constants import (
+    DISTANCES,
+    NAPISTU_GRAPH_EDGES,
+)
 from napistu.matching.constants import FEATURE_ID_VAR_DEFAULT
-from napistu.network import paths
 
 logger = logging.getLogger(__name__)
 
@@ -413,7 +416,7 @@ def filter_to_indirect_mechanistic_interactions(
             origin=an_origin_index,
             # find all unique destinations (as a list for compatibility with igraph dest)
             dest=origin_targets[NAPISTU_EDGELIST.SC_ID_DOWNSTREAM].unique().tolist(),
-            weight_var=NAPISTU_GRAPH_EDGES.WEIGHTS,
+            weight_var=NAPISTU_GRAPH_EDGES.WEIGHT,
         )
 
         if shortest_paths is None:
@@ -462,8 +465,10 @@ def filter_to_indirect_mechanistic_interactions(
                 {
                     NAPISTU_GRAPH_EDGES.FROM: an_origin_index,
                     NAPISTU_GRAPH_EDGES.TO: ending_cspecies,
-                    "weight": sum(one_path[NAPISTU_GRAPH_EDGES.WEIGHTS]),
-                    "path_length": one_path.shape[0],
+                    NAPISTU_GRAPH_EDGES.WEIGHT: sum(
+                        one_path[NAPISTU_GRAPH_EDGES.WEIGHT]
+                    ),
+                    DISTANCES.PATH_LENGTH: one_path.shape[0],
                     "vpath": indexed_vertices.loc[ind],
                     "epath": one_path,
                 }  # type: ignore
