@@ -6,7 +6,7 @@ from napistu.network.net_propagation import (
     net_propagate_attributes,
     uniform_null,
     parametric_null,
-    node_permutation_null,
+    vertex_permutation_null,
     edge_permutation_null,
     NULL_GENERATORS,
     network_propagation_with_null,
@@ -47,7 +47,7 @@ def test_network_propagation_with_null():
     result_permutation = network_propagation_with_null(
         graph,
         attributes,
-        null_strategy=NULL_STRATEGIES.NODE_PERMUTATION,
+        null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
         n_samples=10,  # Small for testing
     )
 
@@ -57,8 +57,12 @@ def test_network_propagation_with_null():
     assert list(result_permutation.columns) == attributes
 
     # Should be quantiles (0 to 1)
-    assert (result_permutation.values >= 0).all(), "Quantiles should be >= 0"
-    assert (result_permutation.values <= 1).all(), "Quantiles should be <= 1"
+    # Drop NaNs before checking value range. NaNs can be introduced if a
+    # nodes PPR values with and without the null are all a constant which
+    # can come up in a small sample # testing situation
+    permutation_values = result_permutation.values[~np.isnan(result_permutation.values)]
+    assert (permutation_values >= 0).all(), "Quantiles should be >= 0"
+    assert (permutation_values <= 1).all(), "Quantiles should be <= 1"
 
     # Test 3: Edge permutation null
     result_edge = network_propagation_with_null(
@@ -73,8 +77,12 @@ def test_network_propagation_with_null():
     # Check structure
     assert isinstance(result_edge, pd.DataFrame)
     assert result_edge.shape == (5, 1)
-    assert (result_edge.values >= 0).all()
-    assert (result_edge.values <= 1).all()
+    # Drop NaNs before checking value range. NaNs can be introduced if a
+    # nodes PPR values with and without the null are all a constant which
+    # can come up in a small sample # testing situation
+    edge_values = result_edge.values[~np.isnan(result_edge.values)]
+    assert (edge_values >= 0).all()
+    assert (edge_values <= 1).all()
 
     # Test 4: Gaussian null
     result_parametric = network_propagation_with_null(
@@ -105,7 +113,7 @@ def test_network_propagation_with_null():
     result_masked = network_propagation_with_null(
         graph,
         attributes,
-        null_strategy=NULL_STRATEGIES.NODE_PERMUTATION,
+        null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
         n_samples=5,
         mask=mask_array,
     )
@@ -206,7 +214,7 @@ def test_all_null_generators_structure():
             result = generator_func(graph, attributes, n_samples=n_samples)
             expected_rows = n_samples * 5  # n_samples rows per node
         else:
-            # Gaussian and node_permutation
+            # Gaussian and vertex_permutation
             result = generator_func(graph, attributes, n_samples=n_samples)
             expected_rows = n_samples * 5  # n_samples rows per node
 
@@ -295,7 +303,7 @@ def test_mask_application():
             assert result.shape[0] == 12  # 2 samples * 6 nodes
 
         else:
-            # Gaussian and node_permutation with mask
+            # Gaussian and vertex_permutation with mask
             result = generator_func(graph, attributes, mask=mask_array, n_samples=2)
 
             # Check that structure is maintained
@@ -318,7 +326,7 @@ def test_edge_cases_and_errors():
         parametric_null(graph, ["bad_attr"])
 
     with pytest.raises(ValueError):
-        node_permutation_null(graph, ["bad_attr"])
+        vertex_permutation_null(graph, ["bad_attr"])
 
     with pytest.raises(ValueError):
         edge_permutation_null(graph, ["bad_attr"])
@@ -334,10 +342,12 @@ def test_edge_cases_and_errors():
     assert result.shape == (3, 1)  # Should work
 
     # Test 4: Replace parameter in node permutation
-    result_no_replace = node_permutation_null(
+    result_no_replace = vertex_permutation_null(
         graph, ["attr1"], replace=False, n_samples=2
     )
-    result_replace = node_permutation_null(graph, ["attr1"], replace=True, n_samples=2)
+    result_replace = vertex_permutation_null(
+        graph, ["attr1"], replace=True, n_samples=2
+    )
 
     # Both should have same structure
     assert result_no_replace.shape == result_replace.shape

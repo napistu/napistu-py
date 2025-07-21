@@ -34,12 +34,13 @@ class PropagationMethod:
 def network_propagation_with_null(
     graph: ig.Graph,
     attributes: List[str],
-    null_strategy: str = NULL_STRATEGIES.NODE_PERMUTATION,
+    null_strategy: str = NULL_STRATEGIES.VERTEX_PERMUTATION,
     propagation_method: Union[
         str, PropagationMethod
     ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
     additional_propagation_args: Optional[dict] = None,
     n_samples: int = 100,
+    verbose: bool = False,
     **null_kwargs,
 ) -> pd.DataFrame:
     """
@@ -50,6 +51,43 @@ def network_propagation_with_null(
     2. Generates null distribution using specified strategy
     3. Compares observed vs null using quantiles (for sampled nulls) or ratios (for uniform)
 
+    Null Strategy Selection
+    ----------------------
+    Two main approaches are used in network biology:
+
+    **Vertex permutation** ('vertex_permutation'): Permutes node labels/attributes while
+    preserving network topology. This tests whether individual nodes are significant
+    given the network structure. Standard approach for gene prioritization and
+    network-based gene set enrichment analysis.
+    Reference: Schulte-Sasse et al. (2019) BMC Bioinformatics 20:587
+
+    **Edge permutation** ('edge_permutation'): Rewires network edges while preserving
+    degree distribution. This tests whether network topology itself is significant.
+    Used when testing subnetwork patterns or connectivity significance.
+    Reference: Leiserson et al. (2015) Nature Genetics (HotNet2 methodology)
+
+    For vertex-level significance testing (gene prioritization), node permutation
+    is the appropriate null model as it preserves network structure while
+    randomizing signal assignment.
+
+    Other supported null strategies:
+
+    **Uniform ('uniform'):** A quick, qualitative readout. Generates a uniform null distribution over masked nodes and
+    takes the ratio of observed network propagation score.
+
+    **Parametric ('parametric'):** Similar to node permutation but rather than sampling observed values sample
+    draws from a distribution fit to the observed values. First fits a parametric distribution to the observed scores
+    and then samples `n_samples` null samples for each vertex to compare observed to null quantiles.
+
+    Creating Masks
+    --------------
+    Most null strategies benefit from including a mask which indicates which nodes are being tested.
+    For vertex permutation the parametric null only masked nodes will be considered for sampling.
+    Using a mask with uniform null strategy means that numeric reset probabilities will be compared to
+    constant ones by default. Masking is an important consideration for mitigating ascertainment bias.
+    If we are only sampling a subset of vertices like metabolites, we'll only consider those as sources
+    of signals in the null.
+
     Parameters
     ----------
     graph : ig.Graph
@@ -57,13 +95,15 @@ def network_propagation_with_null(
     attributes : List[str]
         Attribute names to propagate and test.
     null_strategy : str
-        Null distribution strategy. One of: 'uniform', 'parametric', 'node_permutation', 'edge_permutation'.
+        Null distribution strategy. One of: 'uniform', 'parametric', 'vertex_permutation', 'edge_permutation'.
     propagation_method : str or PropagationMethod
         Network propagation method to apply.
     additional_propagation_args : dict, optional
         Additional arguments to pass to the network propagation method.
     n_samples : int
         Number of null samples to generate (ignored for uniform null).
+    verbose : bool, optional
+        Extra reporting. Default is False.
     **null_kwargs
         Additional arguments to pass to the null generator (e.g., mask, burn_in_ratio, etc.).
 
@@ -79,7 +119,7 @@ def network_propagation_with_null(
     >>> # Node permutation test with custom mask
     >>> result = network_propagation_with_null(
     ...     graph, ['gene_score'],
-    ...     null_strategy='node_permutation',
+    ...     null_strategy='vertex_permutation',
     ...     n_samples=1000,
     ...     mask='measured_genes'
     ... )
@@ -126,6 +166,7 @@ def network_propagation_with_null(
             propagation_method=propagation_method,
             additional_propagation_args=additional_propagation_args,
             n_samples=n_samples,
+            verbose=verbose,
             **null_kwargs,
         )
 
@@ -199,6 +240,7 @@ def uniform_null(
     ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
     additional_propagation_args: Optional[dict] = None,
     mask: Optional[Union[str, np.ndarray, List, Dict]] = MASK_KEYWORDS.ATTR,
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
     Generate uniform null distribution over masked nodes and apply propagation method.
@@ -215,6 +257,8 @@ def uniform_null(
         Additional arguments to pass to the network propagation method.
     mask : str, np.ndarray, List, Dict, or None
         Mask specification. Default is "attr" (use each attribute as its own mask).
+    verbose : bool, optional
+        Extra reporting. Default is False.
 
     Returns
     -------
@@ -228,7 +272,7 @@ def uniform_null(
     _validate_vertex_attributes(graph, attributes, propagation_method)
 
     # Parse mask input
-    mask_specs = _parse_mask_input(mask, attributes)
+    mask_specs = _parse_mask_input(mask, attributes, verbose=verbose)
     masks = _get_attribute_masks(graph, mask_specs)
 
     # Create null graph with uniform attributes
@@ -273,6 +317,7 @@ def parametric_null(
     mask: Optional[Union[str, np.ndarray, List, Dict]] = MASK_KEYWORDS.ATTR,
     n_samples: int = 100,
     fit_kwargs: Optional[dict] = None,
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
     Generate parametric null distribution by fitting scipy.stats distribution to observed values.
@@ -300,6 +345,8 @@ def parametric_null(
         Common examples:
         - For gamma: {'floc': 0} to fix location at 0
         - For beta: {'floc': 0, 'fscale': 1} to fix support to [0,1]
+    verbose : bool, optional
+        Extra reporting. Default is False.
 
     Returns
     -------
@@ -335,7 +382,7 @@ def parametric_null(
     _validate_vertex_attributes(graph, attributes, propagation_method)
 
     # Parse mask input and get masks
-    mask_specs = _parse_mask_input(mask, attributes)
+    mask_specs = _parse_mask_input(mask, attributes, verbose=verbose)
     masks = _get_attribute_masks(graph, mask_specs)
 
     # Fit distribution parameters for each attribute
@@ -375,7 +422,7 @@ def parametric_null(
     return pd.DataFrame(all_data, index=full_index, columns=attributes)
 
 
-def node_permutation_null(
+def vertex_permutation_null(
     graph: ig.Graph,
     attributes: List[str],
     propagation_method: Union[
@@ -385,9 +432,10 @@ def node_permutation_null(
     mask: Optional[Union[str, np.ndarray, List, Dict]] = MASK_KEYWORDS.ATTR,
     replace: bool = False,
     n_samples: int = 100,
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
-    Generate null distribution by permuting node attribute values and apply propagation method.
+    Generate null distribution by permuting vertex attribute values and apply propagation method.
 
     Parameters
     ----------
@@ -405,6 +453,8 @@ def node_permutation_null(
         Whether to sample with replacement.
     n_samples : int
         Number of null samples to generate.
+    verbose : bool, optional
+        Extra reporting. Default is False.
 
     Returns
     -------
@@ -417,7 +467,7 @@ def node_permutation_null(
     _validate_vertex_attributes(graph, attributes, propagation_method)
 
     # Parse mask input
-    mask_specs = _parse_mask_input(mask, attributes)
+    mask_specs = _parse_mask_input(mask, attributes, verbose=verbose)
     masks = _get_attribute_masks(graph, mask_specs)
 
     # Get original attribute values
@@ -485,6 +535,7 @@ def edge_permutation_null(
     burn_in_ratio: float = 10,
     sampling_ratio: float = 0.1,
     n_samples: int = 100,
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
     Generate null distribution by edge rewiring and apply propagation method.
@@ -505,6 +556,8 @@ def edge_permutation_null(
         Proportion of edges to rewire between samples.
     n_samples : int
         Number of null samples to generate.
+    verbose : bool, optional
+        Extra reporting. Default is False.
 
     Returns
     -------
@@ -556,7 +609,7 @@ def edge_permutation_null(
 NULL_GENERATORS = {
     NULL_STRATEGIES.UNIFORM: uniform_null,
     NULL_STRATEGIES.PARAMETRIC: parametric_null,
-    NULL_STRATEGIES.NODE_PERMUTATION: node_permutation_null,
+    NULL_STRATEGIES.VERTEX_PERMUTATION: vertex_permutation_null,
     NULL_STRATEGIES.EDGE_PERMUTATION: edge_permutation_null,
 }
 

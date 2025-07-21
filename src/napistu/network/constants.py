@@ -217,7 +217,7 @@ NET_PROPAGATION_DEFS = SimpleNamespace(PERSONALIZED_PAGERANK="personalized_pager
 NULL_STRATEGIES = SimpleNamespace(
     UNIFORM="uniform",
     PARAMETRIC="parametric",
-    NODE_PERMUTATION="node_permutation",
+    VERTEX_PERMUTATION="vertex_permutation",
     EDGE_PERMUTATION="edge_permutation",
 )
 

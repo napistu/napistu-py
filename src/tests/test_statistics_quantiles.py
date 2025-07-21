@@ -49,8 +49,8 @@ def test_calculate_quantiles_valid_inputs():
     assert result.loc["gene3", "attr3"] == 0.0
 
     # gene4, attr1: observed=0.1, nulls=[0.0, 0.1]
-    # With ≤: 0.0 ≤ 0.1 (True), 0.1 ≤ 0.1 (True) → 2/2 = 1.0
-    assert result.loc["gene4", "attr1"] == 1.0
+    # with midrank; 0.5 + 0.5/2 (because 0.1 is equal to 0.1)
+    assert result.loc["gene4", "attr1"] == 0.75
 
 
 def test_calculate_quantiles_error_cases():
@@ -131,3 +131,51 @@ def test_calculate_quantiles_error_cases():
 
     with pytest.raises(ValueError, match="NaN values found in null data"):
         quantiles.calculate_quantiles(observed, null_with_nan)
+
+
+def test_midrank_tie_handling():
+    """Test midrank method handles ties correctly."""
+    observed = pd.DataFrame([[0.0, 0.5]], index=["gene1"], columns=["attr1", "attr2"])
+
+    null_data = pd.DataFrame(
+        [
+            [0.0, 0.2],  # gene1: 0.0 ties, 0.2 < 0.5
+            [0.0, 0.5],  # gene1: 0.0 ties, 0.5 ties
+            [0.1, 0.8],  # gene1: 0.1 > 0.0, 0.8 > 0.5
+        ],
+        index=["gene1", "gene1", "gene1"],
+        columns=["attr1", "attr2"],
+    )
+
+    result = quantiles.calculate_quantiles(observed, null_data)
+
+    # attr1: observed=0.0, nulls=[0.0, 0.0, 0.1] -> (0 + 2/2)/3 = 1/3
+    assert result.loc["gene1", "attr1"] == pytest.approx(1 / 3)
+
+    # attr2: observed=0.5, nulls=[0.2, 0.5, 0.8] -> (1 + 1/2)/3 = 0.5
+    assert result.loc["gene1", "attr2"] == pytest.approx(0.5)
+
+
+def test_all_identical_returns_nan():
+    """Test that NaN is returned when all values are identical."""
+    observed = pd.DataFrame([[0.5]], index=["gene1"], columns=["attr1"])
+    null_data = pd.DataFrame(
+        [[0.5], [0.5], [0.5]], index=["gene1", "gene1", "gene1"], columns=["attr1"]
+    )
+
+    result = quantiles.calculate_quantiles(observed, null_data)
+    assert pd.isna(result.loc["gene1", "attr1"])
+
+
+def test_basic_functionality():
+    """Test basic quantile calculation without ties."""
+    observed = pd.DataFrame([[0.5]], index=["gene1"], columns=["attr1"])
+    null_data = pd.DataFrame(
+        [[0.1], [0.3], [0.7], [0.9]],
+        index=["gene1", "gene1", "gene1", "gene1"],
+        columns=["attr1"],
+    )
+
+    result = quantiles.calculate_quantiles(observed, null_data)
+    # 2 values < 0.5, so quantile = 2/4 = 0.5
+    assert result.loc["gene1", "attr1"] == 0.5
