@@ -4,8 +4,7 @@ import copy
 
 import logging
 import re
-from typing import Any
-from typing import Iterable
+from typing import Any, Optional, Iterable
 from fs import open_fs
 
 import numpy as np
@@ -22,19 +21,24 @@ from napistu.constants import (
     SBML_DFS_SCHEMA,
     SCHEMA_DEFS,
     IDENTIFIERS,
-    INTERACTION_EDGELIST_EXPECTED_VARS,
     ONTOLOGIES,
     MINI_SBO_FROM_NAME,
+    MINI_SBO_NAME_TO_POLARITY,
     MINI_SBO_TO_NAME,
-    REQUIRED_REACTION_FROMEDGELIST_COLUMNS,
+    POLARITY_TO_SYMBOL,
     SBO_ROLES_DEFS,
     SBO_NAME_TO_ROLE,
+    SBOTERM_NAMES,
     VALID_SBO_TERM_NAMES,
     VALID_SBO_TERMS,
 )
 from napistu.ingestion.constants import (
     COMPARTMENTS_GO_TERMS,
     GENERIC_COMPARTMENT,
+    INTERACTION_EDGELIST_DEFAULTS,
+    INTERACTION_EDGELIST_DEFS,
+    INTERACTION_EDGELIST_EXPECTED_VARS,
+    INTERACTION_EDGELIST_OPTIONAL_VARS,
     VALID_COMPARTMENTS,
 )
 
@@ -689,6 +693,80 @@ def validate_sbml_dfs_table(table_data: pd.DataFrame, table_name: str) -> None:
 # =============================================================================
 
 
+def _add_edgelist_defaults(
+    interaction_edgelist: pd.DataFrame,
+    edgelist_defaults: Optional[dict[str, Any]] = INTERACTION_EDGELIST_DEFAULTS,
+) -> pd.DataFrame:
+    """
+    Add default values to the interaction edgelist
+
+    Parameters
+    ----------
+    interaction_edgelist : pd.DataFrame
+        The interaction edgelist to add defaults to
+    edgelist_defaults : dict[str, Any]
+        The defaults to add to the interaction edgelist
+
+    Returns
+    """
+
+    interaction_edgelist_w_defaults = interaction_edgelist.copy()
+
+    missing_vars_with_defaults = INTERACTION_EDGELIST_OPTIONAL_VARS.difference(
+        interaction_edgelist_w_defaults.columns
+    )
+
+    if len(missing_vars_with_defaults) > 0:
+
+        logger.debug(
+            f"Adding default values to interaction edgelist for {len(missing_vars_with_defaults)} variables: {missing_vars_with_defaults}"
+        )
+
+        vars_missing_defaults = INTERACTION_EDGELIST_OPTIONAL_VARS.difference(
+            edgelist_defaults.keys()
+        )
+        if len(vars_missing_defaults) > 0:
+            # replace with global defaults
+            for var in vars_missing_defaults:
+                logger.debug(
+                    f"Adding default value for {var} from INTERACTION_EDGELIST_DEFAULTS: {INTERACTION_EDGELIST_DEFAULTS[var]}"
+                )
+                edgelist_defaults[var] = INTERACTION_EDGELIST_DEFAULTS[var]
+
+        for var_with_default in missing_vars_with_defaults:
+            # pull out the default value for the variable
+            default_value = edgelist_defaults[var_with_default]
+            # add the default value to the interaction edgelist
+            interaction_edgelist_w_defaults[var_with_default] = default_value
+
+    # replace missing values with defaults
+    for var_with_default in edgelist_defaults:
+        na_values = interaction_edgelist_w_defaults[var_with_default].isna()
+
+        if len(na_values) > 0:
+            default_value = edgelist_defaults[var_with_default]
+            logger.warning(
+                f"Replacing {len(na_values)} missing values with default value for {var_with_default}: {default_value}"
+            )
+            interaction_edgelist_w_defaults.loc[na_values, var_with_default] = (
+                default_value
+            )
+
+    # are there columns which respect defaults and also have NaNs?
+    columns_with_nans = interaction_edgelist_w_defaults.columns[
+        interaction_edgelist_w_defaults.isna().any()
+    ]
+    columns_with_nans_and_respecting_defaults = set(columns_with_nans) & set(
+        INTERACTION_EDGELIST_OPTIONAL_VARS
+    )
+    if len(columns_with_nans_and_respecting_defaults) > 0:
+        raise ValueError(
+            f"The following columns have NaNs and respect defaults: {columns_with_nans_and_respecting_defaults}. Either address the missing values or add a default value to the edgelist_defaults."
+        )
+
+    return interaction_edgelist_w_defaults
+
+
 def _add_stoi_to_species_name(stoi: float | int, name: str) -> str:
     """
     Add Stoi To Species Name
@@ -808,12 +886,9 @@ def _edgelist_create_compartmentalized_species(
 def _edgelist_create_reactions_and_species(
     interaction_edgelist,
     comp_species,
-    species_df,
-    compartments_df,
+    processed_species,
+    processed_compartments,
     interaction_source,
-    upstream_stoichiometry,
-    downstream_stoichiometry,
-    downstream_sbo_name,
     extra_reactions_columns,
 ):
     """
@@ -825,18 +900,12 @@ def _edgelist_create_reactions_and_species(
         Original interaction data
     comp_species : pd.DataFrame
         Compartmentalized species with IDs
-    species_df : pd.DataFrame
+    processed_species : pd.DataFrame
         Processed species data with IDs
-    compartments_df : pd.DataFrame
+    processed_compartments : pd.DataFrame
         Processed compartments data with IDs
     interaction_source : source.Source
         Source object for reactions
-    upstream_stoichiometry : int
-        Stoichiometry for upstream species
-    downstream_stoichiometry : int
-        Stoichiometry for downstream species
-    downstream_sbo_name : str
-        SBO term name for downstream species
     extra_reactions_columns : list
         Names of extra columns to preserve
 
@@ -846,18 +915,19 @@ def _edgelist_create_reactions_and_species(
         (reactions_df, reaction_species_df, reactions_data)
     """
     # Add compartmentalized species IDs to interactions
+
     comp_species_w_names = (
         comp_species.reset_index()
-        .merge(species_df[SBML_DFS.S_NAME].reset_index())
-        .merge(compartments_df[SBML_DFS.C_NAME].reset_index())
+        .merge(processed_species[SBML_DFS.S_NAME].reset_index())
+        .merge(processed_compartments[SBML_DFS.C_NAME].reset_index())
     )
 
     interaction_w_cspecies = interaction_edgelist.merge(
         comp_species_w_names[[SBML_DFS.SC_ID, SBML_DFS.S_NAME, SBML_DFS.C_NAME]].rename(
             {
                 SBML_DFS.SC_ID: "sc_id_up",
-                SBML_DFS.S_NAME: "upstream_name",
-                SBML_DFS.C_NAME: "upstream_compartment",
+                SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
+                SBML_DFS.C_NAME: INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT,
             },
             axis=1,
         ),
@@ -866,14 +936,33 @@ def _edgelist_create_reactions_and_species(
         comp_species_w_names[[SBML_DFS.SC_ID, SBML_DFS.S_NAME, SBML_DFS.C_NAME]].rename(
             {
                 SBML_DFS.SC_ID: "sc_id_down",
-                SBML_DFS.S_NAME: "downstream_name",
-                SBML_DFS.C_NAME: "downstream_compartment",
+                SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                SBML_DFS.C_NAME: INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT,
             },
             axis=1,
         ),
         how="left",
-    )[
-        REQUIRED_REACTION_FROMEDGELIST_COLUMNS + extra_reactions_columns
+    )
+
+    expected_interaction_w_cspecies_columns = (
+        set(INTERACTION_EDGELIST_EXPECTED_VARS)
+        - {
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+        }
+        | {"sc_id_up", "sc_id_down"}
+        | set(extra_reactions_columns)
+    )
+    missing_interaction_w_cspecies_columns = (
+        expected_interaction_w_cspecies_columns - set(interaction_w_cspecies.columns)
+    )
+    if len(missing_interaction_w_cspecies_columns) > 0:
+        raise ValueError(
+            f"The following columns are missing from interaction_w_cspecies: {missing_interaction_w_cspecies_columns}"
+        )
+
+    interaction_w_cspecies = interaction_w_cspecies[
+        list(expected_interaction_w_cspecies_columns)
     ]
 
     # Validate merge didn't create duplicates
@@ -892,13 +981,7 @@ def _edgelist_create_reactions_and_species(
     interactions_copy = interaction_w_cspecies.copy()
     interactions_copy[SBML_DFS.R_SOURCE] = interaction_source
 
-    reactions_columns = [
-        SBML_DFS.R_NAME,
-        SBML_DFS.R_IDENTIFIERS,
-        SBML_DFS.R_SOURCE,
-        SBML_DFS.R_ISREVERSIBLE,
-    ]
-
+    reactions_columns = SBML_DFS_SCHEMA.SCHEMA[SBML_DFS.REACTIONS][SCHEMA_DEFS.VARS]
     reactions_df = interactions_copy.set_index(SBML_DFS.R_ID)[
         reactions_columns + extra_reactions_columns
     ]
@@ -910,25 +993,51 @@ def _edgelist_create_reactions_and_species(
     # Create reaction species relationships - NOW r_id exists
     reaction_species_df = pd.concat(
         [
-            # Upstream species (modifiers/stimulators/inhibitors)
-            interaction_w_cspecies[["sc_id_up", "sbo_term", SBML_DFS.R_ID]]
-            .assign(stoichiometry=upstream_stoichiometry)
-            .rename({"sc_id_up": "sc_id"}, axis=1),
-            # Downstream species (products)
-            interaction_w_cspecies[["sc_id_down", SBML_DFS.R_ID]]
-            .assign(
-                stoichiometry=downstream_stoichiometry,
-                sbo_term=MINI_SBO_FROM_NAME[downstream_sbo_name],
-            )
-            .rename({"sc_id_down": "sc_id"}, axis=1),
+            # upstream
+            interaction_w_cspecies[
+                [
+                    SBML_DFS.R_ID,
+                    "sc_id_up",
+                    INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY,
+                    INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
+                ]
+            ].rename(
+                {
+                    "sc_id_up": SBML_DFS.SC_ID,
+                    INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY: SBML_DFS.STOICHIOMETRY,
+                    INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBML_DFS.SBO_TERM,
+                },
+                axis=1,
+            ),
+            # downstream
+            interaction_w_cspecies[
+                [
+                    SBML_DFS.R_ID,
+                    "sc_id_down",
+                    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY,
+                    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME,
+                ]
+            ].rename(
+                {
+                    "sc_id_down": SBML_DFS.SC_ID,
+                    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY: SBML_DFS.STOICHIOMETRY,
+                    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: SBML_DFS.SBO_TERM,
+                },
+                axis=1,
+            ),
         ]
     )
 
-    reaction_species_df["rsc_id"] = id_formatter(
-        range(reaction_species_df.shape[0]), "rsc_id"
+    # switch from sbo_term_name to sbo_term
+    reaction_species_df[SBML_DFS.SBO_TERM] = reaction_species_df[SBML_DFS.SBO_TERM].map(
+        MINI_SBO_FROM_NAME
+    )
+    # add a unique id to each reaction species
+    reaction_species_df[SBML_DFS.RSC_ID] = id_formatter(
+        range(reaction_species_df.shape[0]), SBML_DFS.RSC_ID
     )
 
-    reaction_species_df = reaction_species_df.set_index("rsc_id")
+    reaction_species_df = reaction_species_df.set_index(SBML_DFS.RSC_ID)
 
     return reactions_df, reaction_species_df, reactions_data
 
@@ -965,6 +1074,10 @@ def _edgelist_identify_extra_columns(
             if c not in INTERACTION_EDGELIST_EXPECTED_VARS
         ]
 
+        logger.info(
+            f"Saving {len(extra_reactions_columns)} extra reaction columns as reaction_data: {extra_reactions_columns}"
+        )
+
     if keep_species_data is not False:
         extra_species_columns = [
             c
@@ -972,7 +1085,14 @@ def _edgelist_identify_extra_columns(
             if c not in {SBML_DFS.S_NAME, SBML_DFS.S_IDENTIFIERS}
         ]
 
-    return {"reactions": extra_reactions_columns, "species": extra_species_columns}
+        logger.info(
+            f"Saving {len(extra_species_columns)} extra species columns as species_data: {extra_species_columns}"
+        )
+
+    return {
+        SBML_DFS.REACTIONS: extra_reactions_columns,
+        SBML_DFS.SPECIES: extra_species_columns,
+    }
 
 
 def _edgelist_process_compartments(compartments_df, interaction_source):
@@ -1088,6 +1208,31 @@ def _edgelist_validate_inputs(
             "present in the input file."
         )
 
+    # sbo term names should be in controlled vocabulary (excluding NaN values which will be filled by defaults)
+    upstream_sbo_terms = set(
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME].dropna()
+    )
+    downstream_sbo_terms = set(
+        interaction_edgelist[
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME
+        ].dropna()
+    )
+    sbo_term_names = upstream_sbo_terms | downstream_sbo_terms
+    invalid_sbo_term_names = sbo_term_names - set(MINI_SBO_FROM_NAME.keys())
+    if len(invalid_sbo_term_names) > 0:
+        raise ValueError(
+            f"The following SBO term names are not in the controlled vocabulary: {invalid_sbo_term_names}"
+        )
+
+    # Check for non-null values in all required columns for each table
+    _validate_non_null_values(
+        compartments_df, compartments_df_expected_vars, "compartments_df"
+    )
+    _validate_non_null_values(species_df, species_df_expected_vars, "species_df")
+    _validate_non_null_values(
+        interaction_edgelist, INTERACTION_EDGELIST_EXPECTED_VARS, "interaction_edgelist"
+    )
+
     return None
 
 
@@ -1187,6 +1332,19 @@ def _find_underspecified_reactions(
     return underspecified_reactions
 
 
+def _get_interaction_symbol(sbo_term_or_name: str) -> str:
+
+    if sbo_term_or_name in MINI_SBO_TO_NAME.keys():
+        sbo_term_name = MINI_SBO_TO_NAME[sbo_term_or_name]
+    else:
+        sbo_term_name = sbo_term_or_name
+
+    if sbo_term_name not in MINI_SBO_NAME_TO_POLARITY.keys():
+        raise ValueError(f"Invalid SBO term: {sbo_term_or_name}")
+
+    return POLARITY_TO_SYMBOL[MINI_SBO_NAME_TO_POLARITY[sbo_term_name]]
+
+
 def _id_dict_to_df(ids):
     if len(ids) == 0:
         return pd.DataFrame(
@@ -1199,6 +1357,33 @@ def _id_dict_to_df(ids):
         )
     else:
         return pd.DataFrame(ids)
+
+
+def _name_interaction(
+    upstream_name: str,
+    downstream_name: str,
+    sbo_term_upstream: Optional[str] = SBOTERM_NAMES.INTERACTOR,
+):
+    """
+    Name an interaction
+
+    Parameters
+    ----------
+    upstream_name : str
+        The name of the upstream species
+    downstream_name : str
+        The name of the downstream species
+    sbo_term_upstream : str, optional
+        The SBO term of the upstream species. If not provided, the interaction will be named "interactor"
+
+    Returns
+    -------
+    str
+        The name of the interaction
+    """
+
+    interaction_symbol = _get_interaction_symbol(sbo_term_upstream)
+    return f"{upstream_name} {interaction_symbol} {downstream_name}"
 
 
 def _perform_sbml_dfs_table_validation(
@@ -1314,6 +1499,36 @@ def _sbml_dfs_from_edgelist_check_cspecies_merge(
         )
 
     return None
+
+
+def _validate_non_null_values(
+    df: pd.DataFrame, expected_columns: set, table_name: str
+) -> None:
+    """
+    Validate that all required columns in a DataFrame have non-null values.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The DataFrame to validate
+    expected_columns : set
+        Set of column names that should have non-null values
+    table_name : str
+        Name of the table for error messages
+
+    Raises
+    ------
+    ValueError
+        If any required column contains null values
+    """
+    for column in expected_columns:
+        if column in df.columns:
+            null_count = df[column].isnull().sum()
+            if null_count > 0:
+                raise ValueError(
+                    f"Column '{column}' in {table_name} contains {null_count} null values. "
+                    f"All required columns must have non-null values."
+                )
 
 
 def _validate_matching_data(data_table: pd.DataFrame, ref_table: pd.DataFrame):

@@ -65,9 +65,7 @@ def rename_species_ontologies(
         IDENTIFIERS.ONTOLOGY
     ].map(lambda x: alias_mapping.get(x, x))
 
-    species_identifiers = identifiers.df_to_identifiers(
-        species_identifiers, SBML_DFS.SPECIES
-    )
+    species_identifiers = identifiers.df_to_identifiers(species_identifiers)
 
     updated_species = sbml_dfs.species.drop(SBML_DFS.S_IDENTIFIERS, axis=1).join(
         pd.DataFrame(species_identifiers)

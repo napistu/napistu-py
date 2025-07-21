@@ -14,10 +14,7 @@ from napistu.constants import MINI_SBO_FROM_NAME
 from napistu.constants import SBOTERM_NAMES
 from napistu.constants import SBML_DFS
 from napistu.ingestion.constants import SPECIES_FULL_NAME_HUMAN
-from napistu.ingestion.constants import STRING_DOWNSTREAM_COMPARTMENT
-from napistu.ingestion.constants import STRING_DOWNSTREAM_NAME
-from napistu.ingestion.constants import STRING_UPSTREAM_COMPARTMENT
-from napistu.ingestion.constants import STRING_UPSTREAM_NAME
+from napistu.constants import INTERACTION_EDGELIST_DEFS
 from napistu.ingestion.constants import TRRUST_COMPARTMENT_NUCLEOPLASM
 from napistu.ingestion.constants import TRRUST_COMPARTMENT_NUCLEOPLASM_GO_ID
 from napistu.ingestion.constants import TRRUST_SYMBOL
@@ -149,7 +146,11 @@ def convert_trrust_to_sbml_dfs(
     )
 
     gene_gene_identifier_edgelist = edge_summaries_df.rename(
-        {"from": STRING_UPSTREAM_NAME, "to": STRING_DOWNSTREAM_NAME}, axis=1
+        {
+            "from": INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
+            "to": INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+        },
+        axis=1,
     ).assign(
         upstream_compartment=TRRUST_COMPARTMENT_NUCLEOPLASM,
         downstream_compartment=TRRUST_COMPARTMENT_NUCLEOPLASM,
@@ -157,16 +158,16 @@ def convert_trrust_to_sbml_dfs(
     gene_gene_identifier_edgelist[SBML_DFS.R_NAME] = [
         f"{x} {y} of {z}"
         for x, y, z in zip(
-            gene_gene_identifier_edgelist[STRING_UPSTREAM_NAME],
+            gene_gene_identifier_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME],
             gene_gene_identifier_edgelist["sign"],
-            gene_gene_identifier_edgelist[STRING_DOWNSTREAM_NAME],
+            gene_gene_identifier_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME],
         )
     ]
 
     # convert relationships to SBO terms
     interaction_edgelist = gene_gene_identifier_edgelist.replace(
         {"sign": MINI_SBO_FROM_NAME}
-    ).rename({"sign": SBML_DFS.SBO_TERM}, axis=1)
+    ).rename({"sign": INTERACTION_EDGELIST_DEFS.SBO_TERM_UPSTREAM}, axis=1)
 
     # format pubmed identifiers of interactions
     interaction_edgelist[SBML_DFS.R_IDENTIFIERS] = [
@@ -179,12 +180,12 @@ def convert_trrust_to_sbml_dfs(
     # reduce to essential variables
     interaction_edgelist = interaction_edgelist[
         [
-            STRING_UPSTREAM_NAME,
-            STRING_DOWNSTREAM_NAME,
-            STRING_UPSTREAM_COMPARTMENT,
-            STRING_DOWNSTREAM_COMPARTMENT,
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT,
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT,
             SBML_DFS.R_NAME,
-            SBML_DFS.SBO_TERM,
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM,
             SBML_DFS.R_IDENTIFIERS,
             SBML_DFS.R_ISREVERSIBLE,
         ]

@@ -36,6 +36,7 @@ from napistu.constants import (
     SBOTERM_NAMES,
     SCHEMA_DEFS,
 )
+from napistu.ingestion.constants import INTERACTION_EDGELIST_DEFAULTS
 
 logger = logging.getLogger(__name__)
 
@@ -1786,10 +1787,8 @@ def sbml_dfs_from_edgelist(
     interaction_edgelist: pd.DataFrame,
     species_df: pd.DataFrame,
     compartments_df: pd.DataFrame,
-    interaction_source: source.Source,
-    upstream_stoichiometry: int = 0,
-    downstream_stoichiometry: int = 1,
-    downstream_sbo_name: str = SBOTERM_NAMES.PRODUCT,
+    interaction_source: source.Source = source.Source(init=True),
+    interaction_edgelist_defaults: dict[str, Any] = INTERACTION_EDGELIST_DEFAULTS,
     keep_species_data: bool | str = False,
     keep_reactions_data: bool | str = False,
 ) -> SBML_dfs:
@@ -1805,11 +1804,11 @@ def sbml_dfs_from_edgelist(
         Table containing molecular interactions with columns:
         - upstream_name : str, matches "s_name" from species_df
         - downstream_name : str, matches "s_name" from species_df
+        - r_name : str, name for the interaction
+        - r_Identifiers : identifiers.Identifiers, supporting identifiers
         - upstream_compartment : str, matches "c_name" from compartments_df
         - downstream_compartment : str, matches "c_name" from compartments_df
-        - r_name : str, name for the interaction
-        - sbo_term : str, SBO term defining interaction type
-        - r_Identifiers : identifiers.Identifiers, supporting identifiers
+        - sbo_term_upstream : str, SBO term defining interaction type
         - r_isreversible : bool, whether reaction is reversible
     species_df : pd.DataFrame
         Table defining molecular species with columns:
@@ -1821,12 +1820,8 @@ def sbml_dfs_from_edgelist(
         - c_Identifiers : identifiers.Identifiers, compartment identifiers
     interaction_source : source.Source
         Source object linking model entities to interaction source
-    upstream_stoichiometry : int, default 0
-        Stoichiometry of upstream species in reactions
-    downstream_stoichiometry : int, default 1
-        Stoichiometry of downstream species in reactions
-    downstream_sbo_name : str, default SBOTERM_NAMES.PRODUCT
-        SBO term for downstream reactant type
+    interaction_edgelist_defaults : dict[str, Any], default INTERACTION_EDGELIST_DEFAULTS
+        Default values for interaction edgelist columns
     keep_species_data : bool or str, default False
         Whether to preserve extra species columns. If True, saves as 'source' label.
         If string, uses as custom label. If False, discards extra data.
@@ -1840,14 +1835,23 @@ def sbml_dfs_from_edgelist(
         Validated SBML data structure containing compartments, species,
         compartmentalized species, reactions, and reaction species tables.
     """
+
+    # 0. Add defaults to interaction edgelist
+    interaction_edgelist_with_defaults = sbml_dfs_utils._add_edgelist_defaults(
+        interaction_edgelist, interaction_edgelist_defaults
+    )
+
     # 1. Validate inputs
     sbml_dfs_utils._edgelist_validate_inputs(
-        interaction_edgelist, species_df, compartments_df
+        interaction_edgelist_with_defaults, species_df, compartments_df
     )
 
     # 2. Identify which extra columns to preserve
     extra_columns = sbml_dfs_utils._edgelist_identify_extra_columns(
-        interaction_edgelist, species_df, keep_reactions_data, keep_species_data
+        interaction_edgelist_with_defaults,
+        species_df,
+        keep_reactions_data,
+        keep_species_data,
     )
 
     # 3. Process compartments and species tables
@@ -1855,12 +1859,12 @@ def sbml_dfs_from_edgelist(
         compartments_df, interaction_source
     )
     processed_species, species_data = sbml_dfs_utils._edgelist_process_species(
-        species_df, interaction_source, extra_columns["species"]
+        species_df, interaction_source, extra_columns[SBML_DFS.SPECIES]
     )
 
     # 4. Create compartmentalized species
     comp_species = sbml_dfs_utils._edgelist_create_compartmentalized_species(
-        interaction_edgelist,
+        interaction_edgelist_with_defaults,
         processed_species,
         processed_compartments,
         interaction_source,
@@ -1869,15 +1873,12 @@ def sbml_dfs_from_edgelist(
     # 5. Create reactions and reaction species
     reactions, reaction_species, reactions_data = (
         sbml_dfs_utils._edgelist_create_reactions_and_species(
-            interaction_edgelist,
+            interaction_edgelist_with_defaults,
             comp_species,
             processed_species,
             processed_compartments,
             interaction_source,
-            upstream_stoichiometry,
-            downstream_stoichiometry,
-            downstream_sbo_name,
-            extra_columns["reactions"],
+            extra_columns[SBML_DFS.REACTIONS],
         )
     )
 
@@ -1942,25 +1943,25 @@ def _edgelist_assemble_sbml_model(
         Validated SBML data structure
     """
     sbml_tbl_dict = {
-        "compartments": compartments,
-        "species": species,
-        "compartmentalized_species": comp_species,
-        "reactions": reactions,
-        "reaction_species": reaction_species,
+        SBML_DFS.COMPARTMENTS: compartments,
+        SBML_DFS.SPECIES: species,
+        SBML_DFS.COMPARTMENTALIZED_SPECIES: comp_species,
+        SBML_DFS.REACTIONS: reactions,
+        SBML_DFS.REACTION_SPECIES: reaction_species,
     }
 
     # Add extra data if requested
-    if len(extra_columns["reactions"]) > 0:
+    if len(extra_columns[SBML_DFS.REACTIONS]) > 0:
         data_label = (
             keep_reactions_data if isinstance(keep_reactions_data, str) else "source"
         )
-        sbml_tbl_dict["reactions_data"] = {data_label: reactions_data}
+        sbml_tbl_dict[SBML_DFS.REACTIONS_DATA] = {data_label: reactions_data}
 
-    if len(extra_columns["species"]) > 0:
+    if len(extra_columns[SBML_DFS.SPECIES]) > 0:
         data_label = (
             keep_species_data if isinstance(keep_species_data, str) else "source"
         )
-        sbml_tbl_dict["species_data"] = {data_label: species_data}
+        sbml_tbl_dict[SBML_DFS.SPECIES_DATA] = {data_label: species_data}
 
     sbml_model = SBML_dfs(sbml_tbl_dict)
     sbml_model.validate()

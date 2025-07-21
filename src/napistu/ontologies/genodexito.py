@@ -600,9 +600,7 @@ class Genodexito:
             ]
         )
 
-        output = identifiers.df_to_identifiers(
-            expanded_identifiers_df, SBML_DFS.SPECIES
-        )
+        output = identifiers.df_to_identifiers(expanded_identifiers_df)
 
         return output
 

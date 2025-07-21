@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import os
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 import pytest
+
 from napistu import identifiers
 from napistu import sbml_dfs_core
+from napistu.sbml_dfs_core import SBML_dfs
 from napistu.source import Source
 from napistu.ingestion import sbml
 from napistu.modify import pathwayannot
@@ -16,12 +19,17 @@ from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS,
     BQB_DEFINING_ATTRS_LOOSE,
+    IDENTIFIERS,
+    MINI_SBO_FROM_NAME,
     SBML_DFS,
+    SBOTERM_NAMES,
     SCHEMA_DEFS,
     ONTOLOGIES,
 )
-from napistu.sbml_dfs_core import SBML_dfs
-from unittest.mock import patch
+from napistu.ingestion.constants import (
+    INTERACTION_EDGELIST_DEFS,
+    INTERACTION_EDGELIST_DEFAULTS,
+)
 
 
 @pytest.fixture
@@ -63,31 +71,29 @@ def test_data():
     interaction_edgelist = pd.DataFrame(
         [
             {
-                "upstream_name": "TP53",
-                "downstream_name": "CDKN1A",
-                "upstream_compartment": "nucleus",
-                "downstream_compartment": "nucleus",
+                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: "TP53",
+                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: "CDKN1A",
+                INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT: "nucleus",
+                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT: "nucleus",
                 SBML_DFS.R_NAME: "TP53_activates_CDKN1A",
-                SBML_DFS.SBO_TERM: "SBO:0000459",
+                INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.STIMULATOR,
                 SBML_DFS.R_IDENTIFIERS: blank_id,
-                SBML_DFS.R_ISREVERSIBLE: False,
                 "confidence": 0.95,
             },
             {
-                "upstream_name": "MDM2",
-                "downstream_name": "TP53",
-                "upstream_compartment": "cytoplasm",
-                "downstream_compartment": "nucleus",
+                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: "MDM2",
+                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: "TP53",
+                INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT: "cytoplasm",
+                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT: "nucleus",
                 SBML_DFS.R_NAME: "MDM2_inhibits_TP53",
-                SBML_DFS.SBO_TERM: "SBO:0000020",
+                INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.INHIBITOR,
                 SBML_DFS.R_IDENTIFIERS: blank_id,
-                SBML_DFS.R_ISREVERSIBLE: False,
                 "confidence": 0.87,
             },
         ]
     )
 
-    return [interaction_edgelist, species_df, compartments_df, Source(init=True)]
+    return [interaction_edgelist, species_df, compartments_df]
 
 
 def test_drop_cofactors(sbml_dfs):
@@ -134,7 +140,7 @@ def test_sbml_dfs_species_data_missing_idx(sbml_dfs):
 
 def test_sbml_dfs_species_data_duplicated_idx(sbml_dfs):
     an_s_id = sbml_dfs.species.iloc[0].index[0]
-    dup_idx = pd.Series([an_s_id, an_s_id], name="s_id")
+    dup_idx = pd.Series([an_s_id, an_s_id], name=SBML_DFS.S_ID)
     data = pd.DataFrame({"bla": [1, 2]}, index=dup_idx)
 
     with pytest.raises(ValueError):
@@ -143,7 +149,8 @@ def test_sbml_dfs_species_data_duplicated_idx(sbml_dfs):
 
 def test_sbml_dfs_species_data_wrong_idx(sbml_dfs):
     data = pd.DataFrame(
-        {"bla": [1, 2, 3]}, index=pd.Series(["bla1", "bla2", "bla3"], name="s_id")
+        {"bla": [1, 2, 3]},
+        index=pd.Series(["bla1", "bla2", "bla3"], name=SBML_DFS.S_ID),
     )
     with pytest.raises(ValueError):
         sbml_dfs.add_species_data("test", data)
@@ -181,7 +188,7 @@ def test_sbml_dfs_reactions_data_missing_idx(sbml_dfs):
 
 def test_sbml_dfs_reactions_data_duplicated_idx(sbml_dfs):
     an_r_id = sbml_dfs.reactions.iloc[0].index[0]
-    dup_idx = pd.Series([an_r_id, an_r_id], name="r_id")
+    dup_idx = pd.Series([an_r_id, an_r_id], name=SBML_DFS.R_ID)
     data = pd.DataFrame({"bla": [1, 2]}, index=dup_idx)
     with pytest.raises(ValueError):
         sbml_dfs.add_reactions_data("test", data)
@@ -189,7 +196,8 @@ def test_sbml_dfs_reactions_data_duplicated_idx(sbml_dfs):
 
 def test_sbml_dfs_reactions_data_wrong_idx(sbml_dfs):
     data = pd.DataFrame(
-        {"bla": [1, 2, 3]}, index=pd.Series(["bla1", "bla2", "bla3"], name="r_id")
+        {"bla": [1, 2, 3]},
+        index=pd.Series(["bla1", "bla2", "bla3"], name=SBML_DFS.R_ID),
     )
     with pytest.raises(ValueError):
         sbml_dfs.add_reactions_data("test", data)
@@ -203,7 +211,7 @@ def test_sbml_dfs_remove_species_check_species(sbml_dfs):
 
 
 def test_sbml_dfs_remove_species_check_cspecies(sbml_dfs):
-    s_id = [sbml_dfs.compartmentalized_species["s_id"].iloc[0]]
+    s_id = [sbml_dfs.compartmentalized_species[SBML_DFS.S_ID].iloc[0]]
     sbml_dfs._remove_species(s_id)
     assert s_id[0] not in sbml_dfs.compartmentalized_species.index
     sbml_dfs.validate()
@@ -239,9 +247,9 @@ def test_sbml_dfs_remove_cspecies_check_cspecies(sbml_dfs):
 
 
 def test_sbml_dfs_remove_cspecies_check_reaction_species(sbml_dfs):
-    sc_id = [sbml_dfs.reaction_species["sc_id"].iloc[0]]
+    sc_id = [sbml_dfs.reaction_species[SBML_DFS.SC_ID].iloc[0]]
     sbml_dfs._remove_compartmentalized_species(sc_id)
-    assert sc_id[0] not in sbml_dfs.reaction_species["sc_id"]
+    assert sc_id[0] not in sbml_dfs.reaction_species[SBML_DFS.SC_ID]
     sbml_dfs.validate()
 
 
@@ -253,9 +261,9 @@ def test_sbml_dfs_remove_reactions_check_reactions(sbml_dfs):
 
 
 def test_sbml_dfs_remove_reactions_check_reaction_species(sbml_dfs):
-    r_id = [sbml_dfs.reaction_species["r_id"].iloc[0]]
+    r_id = [sbml_dfs.reaction_species[SBML_DFS.R_ID].iloc[0]]
     sbml_dfs.remove_reactions(r_id)
-    assert r_id[0] not in sbml_dfs.reaction_species["r_id"]
+    assert r_id[0] not in sbml_dfs.reaction_species[SBML_DFS.R_ID]
     sbml_dfs.validate()
 
 
@@ -273,9 +281,9 @@ def test_sbml_dfs_remove_reactions_check_species(sbml_dfs):
     # removing all these reactions also removes the species
     s_id = sbml_dfs.species.index[0]
     dat = sbml_dfs.compartmentalized_species.query("s_id == @s_id").merge(
-        sbml_dfs.reaction_species, left_index=True, right_on="sc_id"
+        sbml_dfs.reaction_species, left_index=True, right_on=SBML_DFS.SC_ID
     )
-    r_ids = dat["r_id"].unique()
+    r_ids = dat[SBML_DFS.R_ID].unique()
     sbml_dfs.remove_reactions(r_ids, remove_species=True)
     assert s_id not in sbml_dfs.species.index
     sbml_dfs.validate()
@@ -481,65 +489,76 @@ def test_get_characteristic_species_ids():
     # Create mock species identifiers data
     mock_species_ids = pd.DataFrame(
         {
-            "s_id": ["s1", "s2", "s3", "s4", "s5"],
-            "identifier": ["P12345", "CHEBI:15377", "GO:12345", "P67890", "P67890"],
-            "ontology": ["uniprot", "chebi", "go", "uniprot", "chebi"],
-            "bqb": [
-                "BQB_IS",
-                "BQB_IS",
-                "BQB_HAS_PART",
-                "BQB_HAS_VERSION",
-                "BQB_ENCODES",
+            SBML_DFS.S_ID: ["s1", "s2", "s3", "s4", "s5"],
+            IDENTIFIERS.IDENTIFIER: [
+                "P12345",
+                "CHEBI:15377",
+                "GO:12345",
+                "P67890",
+                "P67890",
+            ],
+            IDENTIFIERS.ONTOLOGY: ["uniprot", "chebi", "go", "uniprot", "chebi"],
+            IDENTIFIERS.BQB: [
+                BQB.IS,
+                BQB.IS,
+                BQB.HAS_PART,
+                BQB.HAS_VERSION,
+                BQB.ENCODES,
             ],
         }
     )
 
     # Create minimal required tables for SBML_dfs
     compartments = pd.DataFrame(
-        {"c_name": ["cytosol"], "c_Identifiers": [None]}, index=["C1"]
+        {SBML_DFS.C_NAME: ["cytosol"], SBML_DFS.C_IDENTIFIERS: [None]}, index=["C1"]
     )
-    compartments.index.name = "c_id"
+    compartments.index.name = SBML_DFS.C_ID
     species = pd.DataFrame(
-        {"s_name": ["A"], "s_Identifiers": [None], "s_source": [None]}, index=["s1"]
+        {
+            SBML_DFS.S_NAME: ["A"],
+            SBML_DFS.S_IDENTIFIERS: [None],
+            SBML_DFS.S_SOURCE: [None],
+        },
+        index=["s1"],
     )
-    species.index.name = "s_id"
+    species.index.name = SBML_DFS.S_ID
     compartmentalized_species = pd.DataFrame(
         {
-            "sc_name": ["A [cytosol]"],
-            "s_id": ["s1"],
-            "c_id": ["C1"],
-            "sc_source": [None],
+            SBML_DFS.SC_NAME: ["A [cytosol]"],
+            SBML_DFS.S_ID: ["s1"],
+            SBML_DFS.C_ID: ["C1"],
+            SBML_DFS.SC_SOURCE: [None],
         },
         index=["SC1"],
     )
-    compartmentalized_species.index.name = "sc_id"
+    compartmentalized_species.index.name = SBML_DFS.SC_ID
     reactions = pd.DataFrame(
         {
-            "r_name": ["rxn1"],
-            "r_Identifiers": [None],
-            "r_source": [None],
-            "r_isreversible": [False],
+            SBML_DFS.R_NAME: ["rxn1"],
+            SBML_DFS.R_IDENTIFIERS: [None],
+            SBML_DFS.R_SOURCE: [None],
+            SBML_DFS.R_ISREVERSIBLE: [False],
         },
         index=["R1"],
     )
-    reactions.index.name = "r_id"
+    reactions.index.name = SBML_DFS.R_ID
     reaction_species = pd.DataFrame(
         {
-            "r_id": ["R1"],
-            "sc_id": ["SC1"],
-            "stoichiometry": [1],
-            "sbo_term": ["SBO:0000459"],
+            SBML_DFS.R_ID: ["R1"],
+            SBML_DFS.SC_ID: ["SC1"],
+            SBML_DFS.STOICHIOMETRY: [1],
+            SBML_DFS.SBO_TERM: ["SBO:0000459"],
         },
         index=["RSC1"],
     )
-    reaction_species.index.name = "rsc_id"
+    reaction_species.index.name = SBML_DFS.RSC_ID
 
     sbml_dict = {
-        "compartments": compartments,
-        "species": species,
-        "compartmentalized_species": compartmentalized_species,
-        "reactions": reactions,
-        "reaction_species": reaction_species,
+        SBML_DFS.COMPARTMENTS: compartments,
+        SBML_DFS.SPECIES: species,
+        SBML_DFS.COMPARTMENTALIZED_SPECIES: compartmentalized_species,
+        SBML_DFS.REACTIONS: reactions,
+        SBML_DFS.REACTION_SPECIES: reaction_species,
     }
     sbml_dfs = SBML_dfs(sbml_dict, validate=False, resolve=False)
 
@@ -564,10 +583,10 @@ def test_get_characteristic_species_ids():
 
 def test_sbml_basic_functionality(test_data):
     """Test basic SBML_dfs creation from edgelist."""
-    interaction_edgelist, species_df, compartments_df, interaction_source = test_data
+    interaction_edgelist, species_df, compartments_df = test_data
 
     result = sbml_dfs_core.sbml_dfs_from_edgelist(
-        interaction_edgelist, species_df, compartments_df, interaction_source
+        interaction_edgelist, species_df, compartments_df
     )
 
     assert isinstance(result, SBML_dfs)
@@ -582,53 +601,69 @@ def test_sbml_basic_functionality(test_data):
 
 def test_sbml_extra_data_preservation(test_data):
     """Test that extra columns are preserved when requested."""
-    interaction_edgelist, species_df, compartments_df, interaction_source = test_data
+    interaction_edgelist, species_df, compartments_df = test_data
 
     result = sbml_dfs_core.sbml_dfs_from_edgelist(
         interaction_edgelist,
         species_df,
         compartments_df,
-        interaction_source,
         keep_species_data=True,
         keep_reactions_data="experiment",
     )
 
-    assert hasattr(result, "species_data")
-    assert hasattr(result, "reactions_data")
+    assert hasattr(result, SBML_DFS.SPECIES_DATA)
+    assert hasattr(result, SBML_DFS.REACTIONS_DATA)
     assert "gene_type" in result.species_data["source"].columns
     assert "confidence" in result.reactions_data["experiment"].columns
 
 
 def test_sbml_compartmentalized_naming(test_data):
     """Test compartmentalized species naming convention."""
-    interaction_edgelist, species_df, compartments_df, interaction_source = test_data
+    interaction_edgelist, species_df, compartments_df = test_data
 
     result = sbml_dfs_core.sbml_dfs_from_edgelist(
-        interaction_edgelist, species_df, compartments_df, interaction_source
+        interaction_edgelist, species_df, compartments_df
     )
 
-    comp_names = result.compartmentalized_species["sc_name"].tolist()
+    comp_names = result.compartmentalized_species[SBML_DFS.SC_NAME].tolist()
     assert "TP53 [nucleus]" in comp_names
     assert "MDM2 [cytoplasm]" in comp_names
     assert "CDKN1A [nucleus]" in comp_names
 
 
-def test_sbml_custom_stoichiometry(test_data):
+def test_sbml_custom_defaults(test_data):
     """Test custom stoichiometry parameters."""
-    interaction_edgelist, species_df, compartments_df, interaction_source = test_data
+    interaction_edgelist, species_df, compartments_df = test_data
+
+    custom_defaults = INTERACTION_EDGELIST_DEFAULTS.copy()
+    custom_defaults[INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY] = -2
+    custom_defaults[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY] = 3
+    custom_defaults[INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME] = (
+        SBOTERM_NAMES.REACTANT
+    )
+    custom_defaults[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME] = (
+        SBOTERM_NAMES.PRODUCT
+    )
 
     result = sbml_dfs_core.sbml_dfs_from_edgelist(
         interaction_edgelist,
         species_df,
         compartments_df,
-        interaction_source,
-        upstream_stoichiometry=2,
-        downstream_stoichiometry=3,
+        interaction_edgelist_defaults=custom_defaults,
     )
 
-    stoichiometries = result.reaction_species["stoichiometry"].unique()
-    assert 2 in stoichiometries  # upstream
+    stoichiometries = result.reaction_species[SBML_DFS.STOICHIOMETRY].unique()
+    assert -2 in stoichiometries  # upstream
     assert 3 in stoichiometries  # downstream
+    assert (
+        MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT]
+        in result.reaction_species[SBML_DFS.SBO_TERM].unique()
+    )
+    # upstream sbo terms are provided so the default shouldn't be used
+    assert (
+        MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT]
+        not in result.reaction_species[SBML_DFS.SBO_TERM].unique()
+    )
 
 
 def test_validate_schema_missing(minimal_valid_sbml_dfs):

@@ -12,6 +12,7 @@ import pandas as pd
 from pydantic import BaseModel
 
 from napistu import sbml_dfs_core
+from napistu import sbml_dfs_utils
 from napistu import utils
 
 from napistu.constants import IDENTIFIERS
@@ -173,7 +174,7 @@ def merge_identifiers(identifier_series: pd.Series) -> Identifiers:
         return Identifiers(merged_ids)
 
 
-def df_to_identifiers(df: pd.DataFrame, entity_type: str) -> pd.Series:
+def df_to_identifiers(df: pd.DataFrame) -> pd.Series:
     """
     Convert a DataFrame of identifier information to a Series of Identifiers objects.
 
@@ -182,8 +183,6 @@ def df_to_identifiers(df: pd.DataFrame, entity_type: str) -> pd.Series:
     df : pd.DataFrame
         DataFrame containing identifier information with required columns:
         ontology, identifier, url, bqb
-    index_col : str
-        Name of the column to use as index for the output Series
 
     Returns
     -------
@@ -191,9 +190,7 @@ def df_to_identifiers(df: pd.DataFrame, entity_type: str) -> pd.Series:
         Series indexed by index_col containing Identifiers objects
     """
 
-    if entity_type not in SBML_DFS_SCHEMA.SCHEMA:
-        raise ValueError(f"Invalid entity type: {entity_type}")
-
+    entity_type = sbml_dfs_utils.infer_entity_type(df)
     table_schema = SBML_DFS_SCHEMA.SCHEMA[entity_type]
     if "id" not in table_schema:
         raise ValueError(f"The entity type {entity_type} does not have an id column")

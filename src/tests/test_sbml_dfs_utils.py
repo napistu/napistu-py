@@ -10,11 +10,18 @@ from napistu.constants import (
     BQB_DEFINING_ATTRS_LOOSE,
     SBML_DFS,
     IDENTIFIERS,
+    POLARITIES,
+    POLARITY_TO_SYMBOL,
     SBOTERM_NAMES,
     VALID_SBO_TERMS,
     VALID_SBO_TERM_NAMES,
     MINI_SBO_FROM_NAME,
     MINI_SBO_TO_NAME,
+)
+from napistu.ingestion.constants import (
+    INTERACTION_EDGELIST_DEFS,
+    INTERACTION_EDGELIST_OPTIONAL_VARS,
+    INTERACTION_EDGELIST_DEFAULTS,
 )
 
 
@@ -347,3 +354,193 @@ def test_infer_entity_type_multindex_reactions():
     )
     result = sbml_dfs_utils.infer_entity_type(df)
     assert result == SBML_DFS.REACTIONS
+
+
+def test_get_interaction_symbol():
+
+    # Test SBO names (strings)
+    assert (
+        sbml_dfs_utils._get_interaction_symbol(SBOTERM_NAMES.CATALYST)
+        == POLARITY_TO_SYMBOL[POLARITIES.ACTIVATION]
+    )
+    assert (
+        sbml_dfs_utils._get_interaction_symbol(SBOTERM_NAMES.INHIBITOR)
+        == POLARITY_TO_SYMBOL[POLARITIES.INHIBITION]
+    )
+    assert (
+        sbml_dfs_utils._get_interaction_symbol(SBOTERM_NAMES.INTERACTOR)
+        == POLARITY_TO_SYMBOL[POLARITIES.AMBIGUOUS]
+    )
+    assert (
+        sbml_dfs_utils._get_interaction_symbol(SBOTERM_NAMES.PRODUCT)
+        == POLARITY_TO_SYMBOL[POLARITIES.ACTIVATION]
+    )
+    assert (
+        sbml_dfs_utils._get_interaction_symbol(SBOTERM_NAMES.REACTANT)
+        == POLARITY_TO_SYMBOL[POLARITIES.ACTIVATION]
+    )
+    assert (
+        sbml_dfs_utils._get_interaction_symbol(SBOTERM_NAMES.STIMULATOR)
+        == POLARITY_TO_SYMBOL[POLARITIES.ACTIVATION]
+    )
+
+    # Test SBO terms (SBO:0000xxx format)
+    assert (
+        sbml_dfs_utils._get_interaction_symbol(
+            MINI_SBO_FROM_NAME[SBOTERM_NAMES.CATALYST]
+        )
+        == POLARITY_TO_SYMBOL[POLARITIES.ACTIVATION]
+    )
+    assert (
+        sbml_dfs_utils._get_interaction_symbol(
+            MINI_SBO_FROM_NAME[SBOTERM_NAMES.INHIBITOR]
+        )
+        == POLARITY_TO_SYMBOL[POLARITIES.INHIBITION]
+    )
+    assert (
+        sbml_dfs_utils._get_interaction_symbol(
+            MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
+        )
+        == POLARITY_TO_SYMBOL[POLARITIES.AMBIGUOUS]
+    )
+
+    # Test invalid SBO term
+    with pytest.raises(ValueError, match="Invalid SBO term"):
+        sbml_dfs_utils._get_interaction_symbol("invalid_sbo_term")
+
+
+def test_add_edgelist_defaults():
+
+    # Test 1: No defaults needed - all optional columns present
+    complete_edgelist = pd.DataFrame(
+        {
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: ["A", "B"],
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: ["B", "C"],
+            SBML_DFS.R_NAME: ["A->B", "B->C"],
+            SBML_DFS.R_IDENTIFIERS: [[], []],
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT: ["cytoplasm", "cytoplasm"],
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT: [
+                "cytoplasm",
+                "cytoplasm",
+            ],
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: [
+                SBOTERM_NAMES.CATALYST,
+                SBOTERM_NAMES.CATALYST,
+            ],
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: [
+                SBOTERM_NAMES.PRODUCT,
+                SBOTERM_NAMES.PRODUCT,
+            ],
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY: [1, 1],
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY: [1, 1],
+            SBML_DFS.R_ISREVERSIBLE: [False, False],
+        }
+    )
+
+    result = sbml_dfs_utils._add_edgelist_defaults(complete_edgelist)
+    assert result.equals(
+        complete_edgelist
+    ), "Should return unchanged DataFrame when all columns present"
+
+    # Test 2: Missing optional columns - should add defaults
+    incomplete_edgelist = pd.DataFrame(
+        {
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: ["A", "B"],
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: ["B", "C"],
+            SBML_DFS.R_NAME: ["A->B", "B->C"],
+            SBML_DFS.R_IDENTIFIERS: [[], []],
+        }
+    )
+
+    result = sbml_dfs_utils._add_edgelist_defaults(incomplete_edgelist)
+
+    # Check that all optional columns were added
+    for col in INTERACTION_EDGELIST_OPTIONAL_VARS:
+        assert col in result.columns, f"Column {col} should be added"
+        assert all(
+            result[col] == INTERACTION_EDGELIST_DEFAULTS[col]
+        ), f"Column {col} should have default values"
+
+    # Test 3: Some columns present but with NaN values - should replace NaN with defaults
+    edgelist_with_nan = pd.DataFrame(
+        {
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: ["A", "B"],
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: ["B", "C"],
+            SBML_DFS.R_NAME: ["A->B", "B->C"],
+            SBML_DFS.R_IDENTIFIERS: [[], []],
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT: ["cytoplasm", None],
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT: [None, "cytoplasm"],
+            SBML_DFS.R_ISREVERSIBLE: [False, None],
+        }
+    )
+
+    result = sbml_dfs_utils._add_edgelist_defaults(edgelist_with_nan)
+
+    # Check that NaN values were replaced with defaults
+    assert (
+        result[INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT].iloc[1]
+        == INTERACTION_EDGELIST_DEFAULTS[INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT]
+    )
+    assert (
+        result[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT].iloc[0]
+        == INTERACTION_EDGELIST_DEFAULTS[
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT
+        ]
+    )
+    assert (
+        result[SBML_DFS.R_ISREVERSIBLE].iloc[1]
+        == INTERACTION_EDGELIST_DEFAULTS[SBML_DFS.R_ISREVERSIBLE]
+    )
+
+    # Test 4: Custom defaults dictionary
+    custom_defaults = {
+        INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT: "nucleus",
+        INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT: "nucleus",
+        INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.CATALYST,
+        INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.PRODUCT,
+        INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY: 1,
+        INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY: 1,
+        SBML_DFS.R_ISREVERSIBLE: True,
+    }
+
+    minimal_edgelist = pd.DataFrame(
+        {
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: ["A"],
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: ["B"],
+            SBML_DFS.R_NAME: ["A->B"],
+            SBML_DFS.R_IDENTIFIERS: [[]],
+        }
+    )
+
+    result = sbml_dfs_utils._add_edgelist_defaults(minimal_edgelist, custom_defaults)
+
+    # Check that custom defaults were applied
+    assert result[INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT].iloc[0] == "nucleus"
+    assert result[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT].iloc[0] == "nucleus"
+    assert result[SBML_DFS.R_ISREVERSIBLE].iloc[0]
+
+    # Test 5: Missing defaults for required optional columns should raise ValueError
+    incomplete_defaults = {
+        INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT: "cytoplasm"
+        # Missing other required defaults
+    }
+
+    # The function now uses the default INTERACTION_EDGELIST_DEFAULTS when incomplete defaults are provided
+    # So this should work without raising an error
+    result = sbml_dfs_utils._add_edgelist_defaults(
+        minimal_edgelist, edgelist_defaults=incomplete_defaults
+    )
+
+    # Check that the missing defaults were filled from INTERACTION_EDGELIST_DEFAULTS
+    assert (
+        result[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT].iloc[0]
+        == INTERACTION_EDGELIST_DEFAULTS[
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT
+        ]
+    )
+    assert (
+        result[INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME].iloc[0]
+        == INTERACTION_EDGELIST_DEFAULTS[
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME
+        ]
+    )

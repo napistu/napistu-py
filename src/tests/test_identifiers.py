@@ -5,7 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 from napistu import identifiers
-from napistu.constants import IDENTIFIERS, SBML_DFS
+from napistu.constants import IDENTIFIERS
 import pytest
 
 # logger = logging.getLogger()
@@ -159,7 +159,7 @@ def test_df_to_identifiers_basic():
     )
 
     # Convert to Identifiers objects
-    result = identifiers.df_to_identifiers(df, SBML_DFS.SPECIES)
+    result = identifiers.df_to_identifiers(df)
 
     # Check basic properties
     assert isinstance(result, pd.Series)
@@ -194,7 +194,7 @@ def test_df_to_identifiers_duplicates():
         }
     )
 
-    result = identifiers.df_to_identifiers(df, SBML_DFS.SPECIES)
+    result = identifiers.df_to_identifiers(df)
 
     # Should collapse duplicates
     assert len(result) == 1  # One unique s_id
@@ -216,36 +216,4 @@ def test_df_to_identifiers_missing_columns():
     with pytest.raises(
         ValueError, match="The DataFrame does not contain the required columns"
     ):
-        identifiers.df_to_identifiers(df, SBML_DFS.SPECIES)
-
-
-def test_df_to_identifiers_invalid_entity_type():
-    """Test that invalid entity type raises an error."""
-    df = pd.DataFrame(
-        {
-            "s_id": ["s1"],
-            IDENTIFIERS.ONTOLOGY: ["ncbi_entrez_gene"],
-            IDENTIFIERS.IDENTIFIER: ["123"],
-            IDENTIFIERS.URL: ["http://ncbi/123"],
-            IDENTIFIERS.BQB: ["is"],
-        }
-    )
-
-    with pytest.raises(ValueError, match="Invalid entity type"):
-        identifiers.df_to_identifiers(df, "invalid_type")
-
-
-################################################
-# __main__
-################################################
-
-if __name__ == "__main__":
-    test_identifiers()
-    test_identifiers_from_urls()
-    test_url_from_identifiers()
-    test_parsing_ensembl_ids()
-    test_reciprocal_ensembl_dicts()
-    test_df_to_identifiers_basic()
-    test_df_to_identifiers_duplicates()
-    test_df_to_identifiers_missing_columns()
-    test_df_to_identifiers_invalid_entity_type()
+        identifiers.df_to_identifiers(df)
