@@ -6,6 +6,7 @@ import pytest
 
 from napistu.network import ig_utils
 from napistu.network import net_create
+from napistu.network.constants import NAPISTU_GRAPH_EDGES
 
 
 @pytest.fixture
@@ -25,7 +26,8 @@ def test_validate_graph_attributes(sbml_dfs):
 
     assert (
         ig_utils.validate_edge_attributes(
-            napistu_graph, ["weights", "upstream_weights"]
+            napistu_graph,
+            [NAPISTU_GRAPH_EDGES.WEIGHT, NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT],
         )
         is None
     )

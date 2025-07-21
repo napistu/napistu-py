@@ -309,7 +309,7 @@ def _apply_edge_reversal_mapping(edges_df: pd.DataFrame) -> pd.DataFrame:
     Apply systematic attribute mapping for edge reversal.
 
     This function swaps paired attributes according to EDGE_REVERSAL_ATTRIBUTE_MAPPING.
-    For example, 'from' becomes 'to', 'weights' becomes 'upstream_weights', etc.
+    For example, 'from' becomes 'to', 'weight' becomes 'upstream_weight', etc.
 
     Parameters
     ----------

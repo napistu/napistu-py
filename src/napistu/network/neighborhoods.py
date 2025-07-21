@@ -742,7 +742,7 @@ def create_neighborhood_dict_entry(
     # by taking the lowest path weight
     vertex_neighborhood_attrs = (
         pd.concat([downstream_path_attrs, upstream_path_attrs])
-        .sort_values(DISTANCES.PATH_WEIGHTS)
+        .sort_values(DISTANCES.PATH_WEIGHT)
         .groupby("neighbor")
         .first()
     )
@@ -786,7 +786,7 @@ def create_neighborhood_dict_entry(
     # which are NOT the focal node
     # these were cases where no path to/from the focal node to the query node was found
     disconnected_neighbors = vertices.query(
-        f"(not node_orientation == '{GRAPH_RELATIONSHIPS.FOCAL}') and {DISTANCES.PATH_WEIGHTS} == 0"
+        f"(not node_orientation == '{GRAPH_RELATIONSHIPS.FOCAL}') and {DISTANCES.PATH_WEIGHT} == 0"
     )
     vertices = vertices[~vertices.index.isin(disconnected_neighbors.index.tolist())]
 
@@ -1217,7 +1217,7 @@ def _precompute_neighbors(
                 ].isin(compartmentalized_species)
             ]
             # sort by path_weight so we can retain the lowest weight neighbors
-            .sort_values(DISTANCES.PATH_WEIGHTS)
+            .sort_values(DISTANCES.PATH_WEIGHT)
             .groupby(NAPISTU_EDGELIST.SC_ID_ORIGIN)
             .head(top_n)
         )
@@ -1234,7 +1234,7 @@ def _precompute_neighbors(
                     NAPISTU_EDGELIST.SC_ID_DEST
                 ].isin(compartmentalized_species)
             ]
-            # sort by path_upstream_weights so we can retain the lowest weight neighbors
+            # sort by path_upstream_weight so we can retain the lowest weight neighbors
             # we allow for upstream weights to differ from downstream weights
             # when creating a network in process_napistu_graph.
             #
@@ -1244,8 +1244,8 @@ def _precompute_neighbors(
             # of them is less likely to transduct an effect.
             # the logic is flipped if we are looking for ancestors where
             # we penalize based on the number of parents of a node when
-            # we use it (i.e., the default upstream_weights).
-            .sort_values(DISTANCES.PATH_UPSTREAM_WEIGHTS)
+            # we use it (i.e., the default upstream_weight).
+            .sort_values(DISTANCES.PATH_UPSTREAM_WEIGHT)
             .groupby(NAPISTU_EDGELIST.SC_ID_DEST)
             .head(top_n)
         )
@@ -1577,13 +1577,13 @@ def _prune_vertex_set(one_neighborhood: dict, top_n: int) -> pd.DataFrame:
             # handle cases where only one entry exists to DF->series coercion occurs
             vertex_subset = vertex_subset.to_frame().T
 
-        sorted_vertex_set = vertex_subset.sort_values(DISTANCES.PATH_WEIGHTS)
-        weight_cutoff = sorted_vertex_set[DISTANCES.PATH_WEIGHTS].iloc[
+        sorted_vertex_set = vertex_subset.sort_values(DISTANCES.PATH_WEIGHT)
+        weight_cutoff = sorted_vertex_set[DISTANCES.PATH_WEIGHT].iloc[
             min(top_n - 1, sorted_vertex_set.shape[0] - 1)
         ]
 
         top_neighbors = sorted_vertex_set[
-            sorted_vertex_set[DISTANCES.PATH_WEIGHTS] <= weight_cutoff
+            sorted_vertex_set[DISTANCES.PATH_WEIGHT] <= weight_cutoff
         ][NAPISTU_GRAPH_VERTICES.NAME].tolist()
 
         # include reactions and other species necessary to reach the top neighbors
@@ -1613,7 +1613,7 @@ def _calculate_path_attrs(
     neighborhood_paths: list[list],
     edges: pd.DataFrame,
     vertices: list,
-    weight_var: str = NAPISTU_GRAPH_EDGES.WEIGHTS,
+    weight_var: str = NAPISTU_GRAPH_EDGES.WEIGHT,
 ) -> tuple[pd.DataFrame, dict[Any, set]]:
     """
     Calculate Path Attributes
@@ -1663,7 +1663,7 @@ def _calculate_path_attrs(
         # if all_path_edges.ngroups > 0:
         path_attributes_df = pd.concat(
             [
-                all_path_edges[weight_var].agg("sum").rename(DISTANCES.PATH_WEIGHTS),
+                all_path_edges[weight_var].agg("sum").rename(DISTANCES.PATH_WEIGHT),
                 all_path_edges.agg("size").rename(DISTANCES.PATH_LENGTH),
                 all_path_edges[NET_POLARITY.LINK_POLARITY]
                 .agg(paths._terminal_net_polarity)
@@ -1696,7 +1696,7 @@ def _calculate_path_attrs(
     edgeles_nodes_df = pd.DataFrame({"neighbor": edgeless_nodes}).assign(
         **{
             DISTANCES.PATH_LENGTH: 0,
-            DISTANCES.PATH_WEIGHTS: 0,
+            DISTANCES.PATH_WEIGHT: 0,
             NET_POLARITY.NET_POLARITY: None,
         }
     )
@@ -1778,7 +1778,7 @@ def _find_neighbors_paths(
             # focal node
             v=sc_id,
             to=descendants_list,
-            weights=NAPISTU_GRAPH_EDGES.WEIGHTS,
+            weights=NAPISTU_GRAPH_EDGES.WEIGHT,
             mode="out",
             output="epath",
         )
@@ -1787,7 +1787,7 @@ def _find_neighbors_paths(
         neighborhood_paths,
         edges,
         vertices=descendants_list,
-        weight_var=NAPISTU_GRAPH_EDGES.WEIGHTS,
+        weight_var=NAPISTU_GRAPH_EDGES.WEIGHT,
     )
     downstream_path_attrs = downstream_path_attrs.assign(
         node_orientation=NEIGHBORHOOD_NETWORK_TYPES.DOWNSTREAM
@@ -1809,7 +1809,7 @@ def _find_neighbors_paths(
         neighborhood_paths = neighborhood_graph.get_shortest_paths(
             v=sc_id,
             to=ancestors_list,
-            weights=NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS,
+            weights=NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
             mode="in",
             output="epath",
         )
@@ -1818,7 +1818,7 @@ def _find_neighbors_paths(
         neighborhood_paths,
         edges,
         vertices=ancestors_list,
-        weight_var=NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS,
+        weight_var=NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
     )
     upstream_path_attrs = upstream_path_attrs.assign(
         node_orientation=NEIGHBORHOOD_NETWORK_TYPES.UPSTREAM

@@ -18,6 +18,7 @@ from testcontainers.core.container import DockerContainer
 
 from napistu import utils
 from napistu.utils import drop_extra_cols
+from napistu.network.constants import DISTANCES
 
 
 @fixture(scope="session")
@@ -713,10 +714,10 @@ def test_parquet_save_load():
     # Create test DataFrame
     original_df = pd.DataFrame(
         {
-            "sc_id_origin": ["A", "B", "C"],
-            "sc_id_dest": ["B", "C", "A"],
-            "path_length": [1, 2, 3],
-            "path_weights": [0.1, 0.5, 0.8],
+            DISTANCES.SC_ID_ORIGIN: ["A", "B", "C"],
+            DISTANCES.SC_ID_DEST: ["B", "C", "A"],
+            DISTANCES.PATH_LENGTH: [1, 2, 3],
+            DISTANCES.PATH_WEIGHT: [0.1, 0.5, 0.8],
             "has_connection": [True, False, True],
         }
     )

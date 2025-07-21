@@ -22,8 +22,15 @@ from napistu.network.ng_core import NapistuGraph
 from napistu.constants import SBML_DFS
 from napistu.constants import SOURCE_SPEC
 from napistu.identifiers import _validate_assets_sbml_ids
-from napistu.network.constants import GRAPH_WIRING_APPROACHES
-from napistu.network.constants import GRAPH_DIRECTEDNESS
+from napistu.network.constants import (
+    DISTANCES,
+    GRAPH_WIRING_APPROACHES,
+    GRAPH_DIRECTEDNESS,
+    NAPISTU_GRAPH_EDGES,
+    NAPISTU_GRAPH_NODE_TYPES,
+    NAPISTU_GRAPH_VERTICES,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -382,7 +389,7 @@ def read_graph_attrs_spec(graph_attrs_spec_uri: str) -> dict:
     with open(graph_attrs_spec_uri) as f:
         graph_attrs_spec = yaml.safe_load(f)
 
-    VALID_SPEC_SECTIONS = ["species", "reactions"]
+    VALID_SPEC_SECTIONS = [SBML_DFS.SPECIES, SBML_DFS.REACTIONS]
     defined_spec_sections = set(graph_attrs_spec.keys()).intersection(
         VALID_SPEC_SECTIONS
     )
@@ -392,10 +399,10 @@ def read_graph_attrs_spec(graph_attrs_spec_uri: str) -> dict:
             f"The provided graph attributes spec did not contain either of the expected sections: {', '.join(VALID_SPEC_SECTIONS)}"
         )
 
-    if "reactions" in defined_spec_sections:
-        net_create._validate_entity_attrs(graph_attrs_spec["reactions"])
+    if SBML_DFS.REACTIONS in defined_spec_sections:
+        net_create._validate_entity_attrs(graph_attrs_spec[SBML_DFS.REACTIONS])
 
-    if "species" in defined_spec_sections:
+    if SBML_DFS.SPECIES in defined_spec_sections:
         net_create._validate_entity_attrs(graph_attrs_spec["reactions"])
 
     return graph_attrs_spec
@@ -444,15 +451,20 @@ def _validate_assets_sbml_graph(
         [{**{"index": v.index}, **v.attributes()} for v in napistu_graph.vs]
     )
     matched_cspecies = sbml_dfs.compartmentalized_species.reset_index()[
-        ["sc_id", "sc_name"]
+        [SBML_DFS.SC_ID, SBML_DFS.SC_NAME]
     ].merge(
-        vertices.query("node_type == 'species'"),
-        left_on=["sc_id"],
-        right_on=["name"],
+        vertices.query(
+            f"{NAPISTU_GRAPH_VERTICES.NODE_TYPE} == '{NAPISTU_GRAPH_NODE_TYPES.SPECIES}'"
+        ),
+        left_on=[SBML_DFS.SC_ID],
+        right_on=[NAPISTU_GRAPH_VERTICES.NAME],
     )
     mismatched_names = [
         f"{x} != {y}"
-        for x, y in zip(matched_cspecies["sc_name"], matched_cspecies["node_name"])
+        for x, y in zip(
+            matched_cspecies[SBML_DFS.SC_NAME],
+            matched_cspecies[NAPISTU_GRAPH_VERTICES.NODE_NAME],
+        )
         if x != y
     ]
     if len(mismatched_names) > 0:
@@ -489,11 +501,20 @@ def _validate_assets_graph_dist(
     )
     direct_interactions = precomputed_distances.query("path_length == 1")
     edges_with_distances = direct_interactions.merge(
-        edges[["from", "to", "weights", "upstream_weights"]],
-        left_on=["sc_id_origin", "sc_id_dest"],
-        right_on=["from", "to"],
+        edges[
+            [
+                NAPISTU_GRAPH_EDGES.FROM,
+                NAPISTU_GRAPH_EDGES.TO,
+                NAPISTU_GRAPH_EDGES.WEIGHT,
+                NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+            ]
+        ],
+        left_on=[DISTANCES.SC_ID_ORIGIN, DISTANCES.SC_ID_DEST],
+        right_on=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO],
     )
-    inconsistent_weights = edges_with_distances.query("path_weights != weights")
+    inconsistent_weights = edges_with_distances.query(
+        f"{DISTANCES.PATH_WEIGHT} != {NAPISTU_GRAPH_EDGES.WEIGHT}"
+    )
     if inconsistent_weights.shape[0] > 0:
         logger.warning(
             f"{inconsistent_weights.shape[0]} edges' weights are inconsistent between",

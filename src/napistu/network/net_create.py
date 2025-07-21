@@ -284,7 +284,7 @@ def process_napistu_graph(
         Type of graph to create. See `create_napistu_graph` for valid values.
     weighting_strategy : str, optional
         A network weighting strategy. Options:
-            - 'unweighted': all weights (and upstream_weights for directed graphs) are set to 1.
+            - 'unweighted': all weights (and upstream_weight for directed graphs) are set to 1.
             - 'topology': weight edges by the degree of the source nodes favoring nodes with few connections.
             - 'mixed': transform edges with a quantitative score based on reaction_attrs; and set edges without quantitative score as a source-specific weight.
             - 'calibrated': transform edges with a quantitative score based on reaction_attrs and combine them with topology scores to generate a consensus.
@@ -680,7 +680,7 @@ def add_graph_weights(
         An optional dict of reaction attributes.
     weighting_strategy : str, optional
         A network weighting strategy. Options:
-            - 'unweighted': all weights (and upstream_weights for directed graphs) are set to 1.
+            - 'unweighted': all weights (and upstream_weight for directed graphs) are set to 1.
             - 'topology': weight edges by the degree of the source nodes favoring nodes emerging from nodes with few connections.
             - 'mixed': transform edges with a quantitative score based on reaction_attrs; and set edges without quantitative score as a source-specific weight.
             - 'calibrated': transform edges with a quantitative score based on reaction_attrs and combine them with topology scores to generate a consensus.
@@ -710,11 +710,11 @@ def add_graph_weights(
     topology_weighted_graph = _create_topology_weights(napistu_graph_updated)
 
     if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY:
-        topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.WEIGHTS] = (
+        topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.WEIGHT] = (
             topology_weighted_graph.es["topo_weights"]
         )
         if napistu_graph_updated.is_directed():
-            topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS] = (
+            topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = (
                 topology_weighted_graph.es["upstream_topo_weights"]
             )
 
@@ -722,9 +722,9 @@ def add_graph_weights(
 
     if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED:
         # set weights as a constant
-        topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.WEIGHTS] = 1
+        topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.WEIGHT] = 1
         if napistu_graph_updated.is_directed():
-            topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS] = 1
+            topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = 1
         return topology_weighted_graph
 
     if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.MIXED:
@@ -828,14 +828,16 @@ def _add_graph_weights_mixed(
 
     logger.info(f"Creating mixed scores based on {', '.join(score_vars)}")
 
-    calibrated_edges["weights"] = calibrated_edges[score_vars].min(axis=1)
+    calibrated_edges[NAPISTU_GRAPH_EDGES.WEIGHT] = calibrated_edges[score_vars].min(
+        axis=1
+    )
 
-    napistu_graph.es[NAPISTU_GRAPH_EDGES.WEIGHTS] = calibrated_edges[
-        NAPISTU_GRAPH_EDGES.WEIGHTS
+    napistu_graph.es[NAPISTU_GRAPH_EDGES.WEIGHT] = calibrated_edges[
+        NAPISTU_GRAPH_EDGES.WEIGHT
     ]
     if napistu_graph.is_directed():
-        napistu_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHTS] = calibrated_edges[
-            NAPISTU_GRAPH_EDGES.WEIGHTS
+        napistu_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = calibrated_edges[
+            NAPISTU_GRAPH_EDGES.WEIGHT
         ]
 
     # add other attributes and update transformed attributes
@@ -873,12 +875,16 @@ def _add_graph_weights_calibration(
     score_vars.append("topo_weights")
 
     logger.info(f"Creating calibrated scores based on {', '.join(score_vars)}")
-    napistu_graph.es["weights"] = calibrated_edges[score_vars].min(axis=1)
+    napistu_graph.es[NAPISTU_GRAPH_EDGES.WEIGHT] = calibrated_edges[score_vars].min(
+        axis=1
+    )
 
     if napistu_graph.is_directed():
         score_vars = list(reaction_attrs.keys())
         score_vars.append("upstream_topo_weights")
-        napistu_graph.es["upstream_weights"] = calibrated_edges[score_vars].min(axis=1)
+        napistu_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = calibrated_edges[
+            score_vars
+        ].min(axis=1)
 
     # add other attributes and update transformed attributes
     for k in reaction_attrs.keys():

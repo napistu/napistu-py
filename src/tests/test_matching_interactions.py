@@ -1,6 +1,6 @@
 import pandas as pd
-from napistu.network import net_create
 
+from napistu.network import net_create
 from napistu.network import precompute
 from napistu.matching.interactions import (
     edgelist_to_pathway_species,
@@ -8,6 +8,7 @@ from napistu.matching.interactions import (
     filter_to_direct_mechanistic_interactions,
     filter_to_indirect_mechanistic_interactions,
 )
+from napistu.network.constants import NAPISTU_GRAPH_EDGES
 
 
 def test_edgelist_to_pathway_species(sbml_dfs):
@@ -90,7 +91,7 @@ def test_direct_and_indirect_mechanism_matching(sbml_dfs_glucose_metabolism):
 
     # confirm that we get the same thing even when using precomputed distances
     precomputed_distances = precompute.precompute_distances(
-        napistu_graph, weights_vars=["weights"]
+        napistu_graph, weight_vars=[NAPISTU_GRAPH_EDGES.WEIGHT]
     )
 
     indirect_interactions_w_precompute = filter_to_indirect_mechanistic_interactions(

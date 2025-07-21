@@ -13,10 +13,13 @@ from napistu.network import neighborhoods
 from napistu.network import net_create
 from napistu.network import paths
 from napistu.network import precompute
+from napistu.network.constants import SBML_DFS
 
 from napistu.network.constants import (
-    NAPISTU_GRAPH_VERTICES,
     DISTANCES,
+    NAPISTU_GRAPH_EDGES,
+    NAPISTU_GRAPH_VERTICES,
+    NEIGHBORHOOD_DICT_KEYS,
     NEIGHBORHOOD_NETWORK_TYPES,
 )
 
@@ -56,7 +59,7 @@ def test_precomputed_distances_shortest_paths():
     # we should get the same answer for shortest paths whether or not we use pre-computed distances
     all_species_pairs = pd.DataFrame(
         np.array([(x, y) for x in cspecies_subset for y in cspecies_subset]),
-        columns=["sc_id_origin", "sc_id_dest"],
+        columns=[DISTANCES.SC_ID_ORIGIN, DISTANCES.SC_ID_DEST],
     )
 
     (
@@ -69,10 +72,10 @@ def test_precomputed_distances_shortest_paths():
     )
 
     shortest_path_weights = (
-        path_vertices.groupby(["origin", "dest", "path"])["weights"]
+        path_vertices.groupby(["origin", "dest", "path"])[NAPISTU_GRAPH_EDGES.WEIGHT]
         .sum()
         .reset_index()
-        .sort_values("weights")
+        .sort_values(NAPISTU_GRAPH_EDGES.WEIGHT)
         .groupby(["origin", "dest"])
         .first()
         .reset_index()
@@ -81,8 +84,10 @@ def test_precomputed_distances_shortest_paths():
     precomputed_distance_subset_mask = [
         True if x and y else False
         for x, y in zip(
-            precomputed_distances["sc_id_origin"].isin(cspecies_subset).tolist(),
-            precomputed_distances["sc_id_dest"].isin(cspecies_subset).tolist(),
+            precomputed_distances[DISTANCES.SC_ID_ORIGIN]
+            .isin(cspecies_subset)
+            .tolist(),
+            precomputed_distances[DISTANCES.SC_ID_DEST].isin(cspecies_subset).tolist(),
         )
     ]
     precomputed_distance_subset = precomputed_distances[
@@ -92,7 +97,7 @@ def test_precomputed_distances_shortest_paths():
     path_method_comparison_full_merge = shortest_path_weights.merge(
         precomputed_distance_subset,
         left_on=["origin", "dest"],
-        right_on=["sc_id_origin", "sc_id_dest"],
+        right_on=[DISTANCES.SC_ID_ORIGIN, DISTANCES.SC_ID_DEST],
         how="outer",
     )
 
@@ -104,8 +109,8 @@ def test_precomputed_distances_shortest_paths():
     assert path_method_comparison_full_merge.shape[0] == shortest_path_weights.shape[0]
     assert all(
         abs(
-            path_method_comparison_full_merge["weights"]
-            - path_method_comparison_full_merge["path_weights"]
+            path_method_comparison_full_merge[NAPISTU_GRAPH_EDGES.WEIGHT]
+            - path_method_comparison_full_merge[DISTANCES.PATH_WEIGHT]
         )
         < 1e-13
     )
@@ -119,10 +124,12 @@ def test_precomputed_distances_shortest_paths():
     )
 
     precompute_shortest_path_weights = (
-        precompute_path_vertices.groupby(["origin", "dest", "path"])["weights"]
+        precompute_path_vertices.groupby(["origin", "dest", "path"])[
+            NAPISTU_GRAPH_EDGES.WEIGHT
+        ]
         .sum()
         .reset_index()
-        .sort_values("weights")
+        .sort_values(NAPISTU_GRAPH_EDGES.WEIGHT)
         .groupby(["origin", "dest"])
         .first()
         .reset_index()
@@ -138,7 +145,7 @@ def test_precomputed_distances_shortest_paths():
     assert precompute_full_merge.shape[0] == precompute_shortest_path_weights.shape[0]
     assert precompute_full_merge.shape[0] == shortest_path_weights.shape[0]
     assert all(
-        abs(precompute_full_merge["weights_x"] - precompute_full_merge["weights_y"])
+        abs(precompute_full_merge["weight_x"] - precompute_full_merge["weight_y"])
         < 1e-13
     )
 
@@ -146,7 +153,7 @@ def test_precomputed_distances_shortest_paths():
 def test_precomputed_distances_neighborhoods():
 
     compartmentalized_species = sbml_dfs.compartmentalized_species[
-        sbml_dfs.compartmentalized_species["s_id"] == "S00000000"
+        sbml_dfs.compartmentalized_species[SBML_DFS.S_ID] == "S00000000"
     ].index.tolist()
 
     pruned_neighborhoods_precomputed = neighborhoods.find_and_prune_neighborhoods(
@@ -173,15 +180,17 @@ def test_precomputed_distances_neighborhoods():
 
     comparison_l = list()
     for key in pruned_neighborhoods_precomputed.keys():
-        pruned_vert_otf = pruned_neighborhoods_otf[key]["vertices"]
-        pruned_vert_precomp = pruned_neighborhoods_precomputed[key]["vertices"]
+        pruned_vert_otf = pruned_neighborhoods_otf[key][NEIGHBORHOOD_DICT_KEYS.VERTICES]
+        pruned_vert_precomp = pruned_neighborhoods_precomputed[key][
+            NEIGHBORHOOD_DICT_KEYS.VERTICES
+        ]
 
         join_key = [
             NAPISTU_GRAPH_VERTICES.NAME,
             NAPISTU_GRAPH_VERTICES.NODE_NAME,
             "node_orientation",
         ]
-        join_key_w_vars = [*join_key, *[DISTANCES.PATH_WEIGHTS, DISTANCES.PATH_LENGTH]]
+        join_key_w_vars = [*join_key, *[DISTANCES.PATH_WEIGHT, DISTANCES.PATH_LENGTH]]
         neighbor_comparison = (
             pruned_vert_precomp[join_key_w_vars]
             .assign(in_precompute=True)
@@ -216,7 +225,7 @@ def test_precomputed_distances_neighborhoods():
             left_on=["focal_sc_id", NAPISTU_GRAPH_VERTICES.NAME],
             right_on=[DISTANCES.SC_ID_ORIGIN, DISTANCES.SC_ID_DEST],
         )
-        .query("abs(path_weights_x - path_weights) > 1e-13")
+        .query("abs(path_weight_x - path_weight) > 1e-13")
     )
 
     upstream_disagreement_w_precompute = (
@@ -228,7 +237,7 @@ def test_precomputed_distances_neighborhoods():
             left_on=["focal_sc_id", NAPISTU_GRAPH_VERTICES.NAME],
             right_on=[DISTANCES.SC_ID_DEST, DISTANCES.SC_ID_ORIGIN],
         )
-        .query("abs(path_weights_x - path_upstream_weights) > 1e-13")
+        .query("abs(path_weight_x - path_upstream_weight) > 1e-13")
     )
 
     assert downstream_disagreement_w_precompute.shape[0] == 0
@@ -264,8 +273,8 @@ def test_precomputed_distances_serialization():
             6: "SC00000001",
         },
         "path_length": {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
-        "path_upstream_weights": {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
-        "path_weights": {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
+        "path_upstream_weight": {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
+        "path_weight": {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
     }
 
     # Create original DataFrame
