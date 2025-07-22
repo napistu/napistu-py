@@ -87,16 +87,45 @@ PSI_MI_INTACT_SPECIES_TO_BASENAME = {
     SPECIES_FULL_NAME_WORM: "caeel",
 }
 
+PSI_MI_RAW_ATTRS = SimpleNamespace(
+    ABSTRACT_INTERACTION="abstractInteraction",
+    DB="db",
+    ENTRY="entry",
+    ID="id",
+    INTERACTION="interaction",
+    INTERACTIONS_LIST="interactionList",
+    INTERACTOR="interactor",
+    PARTICIPANT="participant",
+    PARTICIPANT_LIST="participantList",
+    PRIMARY_REF="primaryRef",
+    SECONDARY_REF="secondaryRef",
+    TAG="tag",
+)
+
 PSI_MI_DEFS = SimpleNamespace(
+    BIOLOGICAL_ROLE="biological_role",
     EXPERIMENT="experiment",
+    EXPERIMENT_NAME="experiment_name",
+    EXPERIMENTAL_ROLE="experimental_role",
+    FULL_NAME="full_name",
+    INTERACTOR_ALIASES="interactor_aliases",
     INTERACTOR_ID="interactor_id",
     INTERACTOR_LABEL="interactor_label",
     INTERACTOR_LIST="interactor_list",
     INTERACTOR_NAME="interactor_name",
     INTERACTOR_XREFS="interactor_xrefs",
+    INTERACTION_METHOD="interaction_method",
     INTERACTION_NAME="interaction_name",
+    INTERACTION_TYPE="interaction_type",
     INTERACTIONS_LIST="interactions_list",
     INTERACTORS="interactors",
+    PARTICIPANT_ID="participant_id",
+    PRIMARY="primary",
+    REF_TYPE="ref_type",
+    SECONDARY="secondary",
+    SOURCE="source",
+    SHORT_LABEL="short_label",
+    STUDY_ID="study_id",
 )
 
 PSI_MI_REFS = SimpleNamespace(
@@ -110,6 +139,7 @@ INTACT_ONTOLOGY_CV_LOOKUP = {
     ONTOLOGIES.GO: "ignored_go",
 }
 
+INTACT_ONTOLOGY_ENSEMBL_VAGUE = "ensembl"
 
 # REACTOME
 REACTOME_SMBL_URL = "https://reactome.org/download/current/all_species.3.1.sbml.tgz"

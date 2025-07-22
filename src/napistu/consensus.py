@@ -312,7 +312,9 @@ def build_consensus_identifiers(
         DataFrame mapping clusters to consensus identifiers (Identifiers objects).
     """
     # Step 1: Extract and validate identifiers
-    meta_identifiers = sbml_dfs_utils.unnest_identifiers(sbml_df, table_schema["id"])
+    meta_identifiers = sbml_dfs_utils.unnest_identifiers(
+        sbml_df, table_schema[SCHEMA_DEFS.ID]
+    )
     _validate_meta_identifiers(meta_identifiers)
 
     # Step 2: Filter identifiers by biological qualifier type
@@ -581,29 +583,31 @@ def construct_meta_entities_fk(
 
     # add nameness_score as a measure of how-readable a possible name would be
     # (this will help to select names which are more human readable after the merge)
-    agg_tbl = utils._add_nameness_score_wrapper(agg_tbl, "label", table_schema)
+    agg_tbl = utils._add_nameness_score_wrapper(
+        agg_tbl, SCHEMA_DEFS.LABEL, table_schema
+    )
 
     # reduce to unique elements
     induced_entities = (
         agg_tbl.reset_index(drop=True)
         .sort_values(["nameness_score"])
-        .groupby(table_schema["fk"] + extra_defining_attrs)
+        .groupby(table_schema[SCHEMA_DEFS.FK] + extra_defining_attrs)
         .first()
         .drop("nameness_score", axis=1)
     )
     induced_entities["new_id"] = sbml_dfs_utils.id_formatter(
-        range(induced_entities.shape[0]), table_schema["pk"]
+        range(induced_entities.shape[0]), table_schema[SCHEMA_DEFS.PK]
     )
 
     new_id_table = (
         induced_entities.reset_index()
-        .rename(columns={"new_id": table_schema["pk"]})
-        .set_index(table_schema["pk"])[table_schema["vars"]]
+        .rename(columns={"new_id": table_schema[SCHEMA_DEFS.PK]})
+        .set_index(table_schema[SCHEMA_DEFS.PK])[table_schema[SCHEMA_DEFS.VARS]]
     )
 
-    lookup_table = agg_tbl[table_schema["fk"] + extra_defining_attrs].merge(
+    lookup_table = agg_tbl[table_schema[SCHEMA_DEFS.FK] + extra_defining_attrs].merge(
         induced_entities,
-        left_on=table_schema["fk"] + extra_defining_attrs,
+        left_on=table_schema[SCHEMA_DEFS.FK] + extra_defining_attrs,
         right_index=True,
     )["new_id"]
 
@@ -612,7 +616,7 @@ def construct_meta_entities_fk(
         lookup_table, table_schema, agg_tbl=agg_tbl, n_example_merges=5
     )
 
-    if "source" in table_schema.keys():
+    if SCHEMA_DEFS.SOURCE in table_schema.keys():
         # track the model(s) that each entity came from
         new_sources = create_consensus_sources(
             agg_tbl.merge(lookup_table, left_index=True, right_index=True),
@@ -622,9 +626,9 @@ def construct_meta_entities_fk(
         )
         assert isinstance(new_sources, pd.Series)
 
-        new_id_table = new_id_table.drop(table_schema["source"], axis=1).merge(
-            new_sources, left_index=True, right_index=True
-        )
+        new_id_table = new_id_table.drop(
+            table_schema[SCHEMA_DEFS.SOURCE], axis=1
+        ).merge(new_sources, left_index=True, right_index=True)
 
     return new_id_table, lookup_table
 

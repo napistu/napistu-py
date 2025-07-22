@@ -3,10 +3,13 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from napistu.constants import NAPISTU_STANDARD_OUTPUTS
+
 GCS_SUBASSET_NAMES = SimpleNamespace(
     SBML_DFS="sbml_dfs",
     NAPISTU_GRAPH="napistu_graph",
     SPECIES_IDENTIFIERS="species_identifiers",
+    REACTIONS_SOURCE_TOTAL_COUNTS="reactions_source_total_counts",
     PRECOMPUTED_DISTANCES="precomputed_distances",
 )
 
@@ -14,7 +17,8 @@ GCS_SUBASSET_NAMES = SimpleNamespace(
 GCS_FILETYPES = SimpleNamespace(
     SBML_DFS="sbml_dfs.pkl",
     NAPISTU_GRAPH="napistu_graph.pkl",
-    SPECIES_IDENTIFIERS="species_identifiers.tsv",
+    SPECIES_IDENTIFIERS=NAPISTU_STANDARD_OUTPUTS.SPECIES_IDENTIFIERS,
+    REACTIONS_SOURCE_TOTAL_COUNTS=NAPISTU_STANDARD_OUTPUTS.REACTIONS_SOURCE_TOTAL_COUNTS,
     PRECOMPUTED_DISTANCES="precomputed_distances.parquet",
 )
 
