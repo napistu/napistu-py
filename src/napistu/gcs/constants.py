@@ -3,10 +3,13 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from napistu.constants import NAPISTU_STANDARD_OUTPUTS
+
 GCS_SUBASSET_NAMES = SimpleNamespace(
     SBML_DFS="sbml_dfs",
     NAPISTU_GRAPH="napistu_graph",
     SPECIES_IDENTIFIERS="species_identifiers",
+    REACTIONS_SOURCE_TOTAL_COUNTS="reactions_source_total_counts",
     PRECOMPUTED_DISTANCES="precomputed_distances",
 )
 
@@ -14,7 +17,8 @@ GCS_SUBASSET_NAMES = SimpleNamespace(
 GCS_FILETYPES = SimpleNamespace(
     SBML_DFS="sbml_dfs.pkl",
     NAPISTU_GRAPH="napistu_graph.pkl",
-    SPECIES_IDENTIFIERS="species_identifiers.tsv",
+    SPECIES_IDENTIFIERS=NAPISTU_STANDARD_OUTPUTS.SPECIES_IDENTIFIERS,
+    REACTIONS_SOURCE_TOTAL_COUNTS=NAPISTU_STANDARD_OUTPUTS.REACTIONS_SOURCE_TOTAL_COUNTS,
     PRECOMPUTED_DISTANCES="precomputed_distances.parquet",
 )
 
@@ -30,6 +34,7 @@ GCS_ASSETS = SimpleNamespace(
                 GCS_SUBASSET_NAMES.NAPISTU_GRAPH: GCS_FILETYPES.NAPISTU_GRAPH,
                 GCS_SUBASSET_NAMES.SPECIES_IDENTIFIERS: GCS_FILETYPES.SPECIES_IDENTIFIERS,
                 GCS_SUBASSET_NAMES.PRECOMPUTED_DISTANCES: GCS_FILETYPES.PRECOMPUTED_DISTANCES,
+                GCS_SUBASSET_NAMES.REACTIONS_SOURCE_TOTAL_COUNTS: GCS_FILETYPES.REACTIONS_SOURCE_TOTAL_COUNTS,
             },
             "public_url": "https://storage.googleapis.com/shackett-napistu-public/test_pathway.tar.gz",
         },
@@ -39,6 +44,7 @@ GCS_ASSETS = SimpleNamespace(
                 GCS_SUBASSET_NAMES.SBML_DFS: GCS_FILETYPES.SBML_DFS,
                 GCS_SUBASSET_NAMES.NAPISTU_GRAPH: GCS_FILETYPES.NAPISTU_GRAPH,
                 GCS_SUBASSET_NAMES.SPECIES_IDENTIFIERS: GCS_FILETYPES.SPECIES_IDENTIFIERS,
+                GCS_SUBASSET_NAMES.REACTIONS_SOURCE_TOTAL_COUNTS: GCS_FILETYPES.REACTIONS_SOURCE_TOTAL_COUNTS,
             },
             "public_url": "https://storage.googleapis.com/shackett-napistu-public/human_consensus.tar.gz",
         },
@@ -49,6 +55,7 @@ GCS_ASSETS = SimpleNamespace(
                 GCS_SUBASSET_NAMES.NAPISTU_GRAPH: GCS_FILETYPES.NAPISTU_GRAPH,
                 GCS_SUBASSET_NAMES.SPECIES_IDENTIFIERS: GCS_FILETYPES.SPECIES_IDENTIFIERS,
                 GCS_SUBASSET_NAMES.PRECOMPUTED_DISTANCES: GCS_FILETYPES.PRECOMPUTED_DISTANCES,
+                GCS_SUBASSET_NAMES.REACTIONS_SOURCE_TOTAL_COUNTS: GCS_FILETYPES.REACTIONS_SOURCE_TOTAL_COUNTS,
             },
             "public_url": "https://storage.googleapis.com/shackett-napistu-public/human_consensus_w_distances.tar.gz",
         },

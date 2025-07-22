@@ -15,15 +15,18 @@ from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
 from napistu import utils
 
-from napistu.constants import IDENTIFIERS
-from napistu.constants import BIOLOGICAL_QUALIFIER_CODES
-from napistu.constants import ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY
-from napistu.constants import ENSEMBL_MOLECULE_TYPES_FROM_ONTOLOGY
-from napistu.constants import ENSEMBL_SPECIES_FROM_CODE
-from napistu.constants import ENSEMBL_SPECIES_TO_CODE
-from napistu.constants import SPECIES_IDENTIFIERS_REQUIRED_VARS
-from napistu.constants import SBML_DFS_SCHEMA
-from napistu.constants import IDENTIFIERS_REQUIRED_VARS
+from napistu.constants import (
+    IDENTIFIERS,
+    BIOLOGICAL_QUALIFIER_CODES,
+    ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY,
+    ENSEMBL_MOLECULE_TYPES_FROM_ONTOLOGY,
+    ENSEMBL_SPECIES_FROM_CODE,
+    ENSEMBL_SPECIES_TO_CODE,
+    SBML_DFS_SCHEMA,
+    SCHEMA_DEFS,
+    SPECIES_IDENTIFIERS_REQUIRED_VARS,
+    IDENTIFIERS_REQUIRED_VARS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -192,10 +195,10 @@ def df_to_identifiers(df: pd.DataFrame) -> pd.Series:
 
     entity_type = sbml_dfs_utils.infer_entity_type(df)
     table_schema = SBML_DFS_SCHEMA.SCHEMA[entity_type]
-    if "id" not in table_schema:
+    if SCHEMA_DEFS.ID not in table_schema:
         raise ValueError(f"The entity type {entity_type} does not have an id column")
 
-    table_pk_var = table_schema["pk"]
+    table_pk_var = table_schema[SCHEMA_DEFS.PK]
     expected_columns = set([table_pk_var]) | IDENTIFIERS_REQUIRED_VARS
     missing_columns = expected_columns - set(df.columns)
     if missing_columns:
@@ -219,7 +222,7 @@ def df_to_identifiers(df: pd.DataFrame) -> pd.Series:
         for i in indexed_df.index.unique()
     }
 
-    output = pd.Series(expanded_identifiers_dict).rename(table_schema["id"])
+    output = pd.Series(expanded_identifiers_dict).rename(table_schema[SCHEMA_DEFS.ID])
     output.index.name = table_pk_var
 
     return output

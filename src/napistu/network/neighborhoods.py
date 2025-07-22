@@ -48,7 +48,7 @@ def find_and_prune_neighborhoods(
     compartmentalized_species: str | list[str],
     precomputed_distances: pd.DataFrame | None = None,
     min_pw_size: int = 3,
-    source_total_counts: pd.Series | None = None,
+    source_total_counts: pd.Series | pd.DataFrame | None = None,
     network_type: str = NEIGHBORHOOD_NETWORK_TYPES.HOURGLASS,
     order: int = 3,
     verbose: bool = True,
@@ -71,9 +71,10 @@ def find_and_prune_neighborhoods(
         If provided, an edgelist of origin->destination path weights and lengths
     min_pw_size: int
         the minimum size of a pathway to be considered
-    source_total_counts: pd.Series | None
-        Optional, A series of the total counts of each source. As produced by
-        source.get_source_total_counts()
+    source_total_counts: pd.Series | pd.DataFrame | None
+        Optional, A series of the total counts of each source or a pd.DataFrame with two columns:
+        pathway_id and total_counts. As produced by sbml_dfs.get_source_total_counts().
+        If None, pathways will be selected by size rather than statistical enrichment.
     network_type: str
         If the network is directed should neighbors be located "downstream",
         or "upstream" of each compartmentalized species. The "hourglass" option
@@ -543,7 +544,7 @@ def find_neighborhoods(
     order: int = 3,
     min_pw_size: int = 3,
     precomputed_neighbors: pd.DataFrame | None = None,
-    source_total_counts: pd.Series | None = None,
+    source_total_counts: pd.Series | pd.DataFrame | None = None,
     verbose: bool = True,
 ) -> dict:
     """
@@ -571,9 +572,10 @@ def find_neighborhoods(
         which will be used to skip on-the-fly neighborhood generation.
     min_pw_size: int
         the minimum size of a pathway to be considered
-    source_total_counts: pd.Series | None
-        Optional, A series of the total counts of each source. As produced by
-        source.get_source_total_counts()
+    source_total_counts: pd.Series | pd.DataFrame | None
+        Optional, A series of the total counts of each source or a pd.DataFrame with two columns:
+        pathway_id and total_counts. As produced by sbml_dfs.get_source_total_counts().
+        If None, pathways will be selected by size rather than statistical enrichment.
     verbose: bool
         Extra reporting
 
@@ -603,6 +605,25 @@ def find_neighborhoods(
         raise ValueError(
             f"compartmentalized_species contains invalid species: {invalid_cspecies}"
         )
+
+    # cspecies missing from napistu_graph
+    missing_cspecies = [
+        x
+        for x in compartmentalized_species
+        if x not in napistu_graph.vs[NAPISTU_GRAPH_VERTICES.NAME]
+    ]
+    if len(missing_cspecies) > 0:
+        logger.warning(
+            f"{len(missing_cspecies)} compartmentalized_species are present in the `sbml_dfs` but missing from the `napistu_graph`: {missing_cspecies}. This can occur if either these are species which are involved in no reactions or it could point to an incompatibility between the `sbml_dfs` and `napistu_graph` which could be further explored with `ng_utils.validate_assets()`."
+        )
+        compartmentalized_species = [
+            x for x in compartmentalized_species if x not in missing_cspecies
+        ]
+
+        if len(compartmentalized_species) == 0:
+            raise ValueError(
+                "No compartmentalized species remain after removing those missing from the `napistu_graph`."
+            )
 
     # create a table which includes cspecies and reaction nearby each of the
     # focal compartmentalized_speecies
@@ -637,7 +658,7 @@ def create_neighborhood_dict_entry(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     napistu_graph: ig.Graph,
     min_pw_size: int = 3,
-    source_total_counts: pd.Series | None = None,
+    source_total_counts: pd.Series | pd.DataFrame | None = None,
     verbose: bool = False,
 ) -> dict[str, Any]:
     """
@@ -657,9 +678,9 @@ def create_neighborhood_dict_entry(
         A network connecting molecular species and reactions
     min_pw_size: int
         the minimum size of a pathway to be considered
-    source_total_counts: pd.Series
-        Optional, A series of the total counts of each source. As produced by
-        source.get_source_total_counts()
+    source_total_counts: pd.Series | pd.DataFrame
+        Optional, A series of the total counts of each source or a pd.DataFrame with two columns:
+        pathway_id and total_counts. As produced by sbml_dfs.get_source_total_counts()
     verbose: bool
         Extra reporting?
 
@@ -715,9 +736,12 @@ def create_neighborhood_dict_entry(
             min_pw_size=min_pw_size,
             # optional, counts of sources across the whole model
             source_total_counts=source_total_counts,
+            verbose=verbose,
         )
-    except Exception:
-        logger.warning(f"Could not get reaction sources for {sc_id}; returning None")
+    except Exception as e:
+        logger.warning(
+            f"Could not get reaction sources for {sc_id}; returning None. Error: {e}"
+        )
         reaction_sources = None
 
     # to add weights to the network solve the shortest path problem

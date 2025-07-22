@@ -9,7 +9,12 @@ from napistu import indices
 from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
 from napistu.statistics import hypothesis_testing
-from napistu.constants import SBML_DFS_SCHEMA, SCHEMA_DEFS, SOURCE_SPEC
+from napistu.constants import (
+    SBML_DFS_SCHEMA,
+    SCHEMA_DEFS,
+    SOURCE_SPEC,
+)
+from napistu.statistics.constants import CONTINGENCY_TABLE
 
 logger = logging.getLogger(__name__)
 
@@ -279,9 +284,10 @@ def unnest_sources(source_table: pd.DataFrame, verbose: bool = False) -> pd.Data
 
 def source_set_coverage(
     select_sources_df: pd.DataFrame,
-    source_total_counts: Optional[pd.Series] = None,
+    source_total_counts: Optional[pd.Series | pd.DataFrame] = None,
     sbml_dfs: Optional[sbml_dfs_core.SBML_dfs] = None,
     min_pw_size: int = 3,
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
     Greedy Set Coverage of Sources
@@ -296,14 +302,17 @@ def source_set_coverage(
     select_sources_df: pd.DataFrame
         pd.Dataframe containing the index of source_table but expanded to
         include one row per source. As produced by source.unnest_sources()
-    source_total_counts: pd.Series
+    source_total_counts: pd.Series | pd.DataFrame
         pd.Series containing the total counts of each source. As produced by
-        source.get_source_total_counts()
+        source.get_source_total_counts() or a pd.DataFrame with two columns:
+        pathway_id and total_counts.
     sbml_dfs: sbml_dfs_core.SBML_dfs
         if `source_total_counts` is provided then `sbml_dfs` must be provided
         to calculate the total number of entities in the table.
     min_pw_size: int
         the minimum size of a pathway to be considered
+    verbose: bool
+        Whether to print verbose output
 
     Returns
     -------
@@ -316,11 +325,36 @@ def source_set_coverage(
     pk = SBML_DFS_SCHEMA.SCHEMA[table_type][SCHEMA_DEFS.PK]
 
     if source_total_counts is not None:
+        source_total_counts = _ensure_source_total_counts(
+            source_total_counts, verbose=verbose
+        )
+        if source_total_counts is None:
+            raise ValueError("`source_total_counts` is empty or invalid.")
+
         if sbml_dfs is None:
             raise ValueError(
                 "If `source_total_counts` is provided, `sbml_dfs` must be provided to calculate the total number of entities in the table."
             )
         n_total_entities = sbml_dfs.get_table(table_type).shape[0]
+
+        # Filter out pathways that aren't in source_total_counts before processing
+        pathways_without_totals = set(select_sources_df[SOURCE_SPEC.PATHWAY_ID]) - set(
+            source_total_counts.index
+        )
+        if len(pathways_without_totals) > 0:
+            raise ValueError(
+                f"The following pathways are present in `select_sources_df` but not in `source_total_counts`: {', '.join(sorted(pathways_without_totals))}"
+            )
+
+        if verbose:
+            logger.info(
+                f"Finding a minimal sources set based on enrichment of {SOURCE_SPEC.PATHWAY_ID}."
+            )
+    else:
+        if verbose:
+            logger.info(
+                f"Finding a minimal sources set based on size of {SOURCE_SPEC.PATHWAY_ID}."
+            )
 
     # rollup pathways with identical membership
     deduplicated_sources = _deduplicate_source_df(select_sources_df)
@@ -358,40 +392,6 @@ def source_set_coverage(
     ].sort_index()
 
     return minimial_sources
-
-
-def get_source_total_counts(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, entity_type: str
-) -> pd.Series:
-    """
-    Get the total counts of each source.
-
-    Parameters
-    ----------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
-        sbml_dfs object containing the table to get the total counts of
-    entity_type: str
-        the type of entity to get the total counts of
-
-    Returns
-    -------
-    source_total_counts: pd.Series
-        pd.Series containing the total counts of each source.
-    """
-
-    all_sources_table = unnest_sources(sbml_dfs.get_table(entity_type))
-
-    if all_sources_table is None:
-        logger.warning(
-            f"No sources found for {entity_type} in sbml_dfs. Returning an empty series."
-        )
-        return pd.Series([], name="total_counts")
-
-    source_total_counts = all_sources_table.value_counts(SOURCE_SPEC.PATHWAY_ID).rename(
-        "total_counts"
-    )
-
-    return source_total_counts
 
 
 def _deduplicate_source_df(source_df: pd.DataFrame) -> pd.DataFrame:
@@ -561,7 +561,7 @@ def _select_top_pathway_by_enrichment(
     )
     pathway_members = unaccounted_for_members.value_counts(
         SOURCE_SPEC.PATHWAY_ID
-    ).rename("observed_members")
+    ).rename(CONTINGENCY_TABLE.OBSERVED_MEMBERS)
 
     pathway_members = pathway_members.loc[pathway_members >= min_pw_size]
     if pathway_members.shape[0] == 0:
@@ -571,14 +571,16 @@ def _select_top_pathway_by_enrichment(
         pathway_members.to_frame()
         .join(source_total_counts)
         .assign(
-            missing_members=lambda x: x["total_counts"] - x["observed_members"],
-            observed_nonmembers=lambda x: n_observed_entities - x["observed_members"],
+            missing_members=lambda x: x[CONTINGENCY_TABLE.TOTAL_COUNTS]
+            - x[CONTINGENCY_TABLE.OBSERVED_MEMBERS],
+            observed_nonmembers=lambda x: n_observed_entities
+            - x[CONTINGENCY_TABLE.OBSERVED_MEMBERS],
             nonobserved_nonmembers=lambda x: n_total_entities
-            - x["observed_nonmembers"]
-            - x["missing_members"]
-            - x["observed_members"],
+            - x[CONTINGENCY_TABLE.OBSERVED_NONMEMBERS]
+            - x[CONTINGENCY_TABLE.MISSING_MEMBERS]
+            - x[CONTINGENCY_TABLE.OBSERVED_MEMBERS],
         )
-        .drop(columns=["total_counts"])
+        .drop(columns=[CONTINGENCY_TABLE.TOTAL_COUNTS])
     )
 
     # calculate enrichments using a fast vectorized normal approximation
@@ -626,3 +628,35 @@ def _update_unaccounted_for_members(
     return unaccounted_for_members[
         ~unaccounted_for_members.index.get_level_values(pk).isin(members_captured)
     ]
+
+
+def _ensure_source_total_counts(
+    source_total_counts: Optional[pd.Series | pd.DataFrame], verbose: bool = False
+) -> Optional[pd.Series]:
+    if source_total_counts is None:
+        return None
+
+    if isinstance(source_total_counts, pd.DataFrame):
+        if SOURCE_SPEC.PATHWAY_ID not in source_total_counts.columns:
+            raise ValueError(
+                f"`source_total_counts` must have a `{SOURCE_SPEC.PATHWAY_ID}` column. Observed columns are: {source_total_counts.columns.tolist()}"
+            )
+        if CONTINGENCY_TABLE.TOTAL_COUNTS not in source_total_counts.columns:
+            raise ValueError(
+                f"`source_total_counts` must have a `{CONTINGENCY_TABLE.TOTAL_COUNTS}` column. Observed columns are: {source_total_counts.columns.tolist()}"
+            )
+        if source_total_counts.shape[1] > 2:
+            raise ValueError(
+                f"`source_total_counts` must have only two columns: `{SOURCE_SPEC.PATHWAY_ID}` and `{CONTINGENCY_TABLE.TOTAL_COUNTS}`."
+            )
+        # convert to a pd.Series
+        source_total_counts = source_total_counts.set_index(SOURCE_SPEC.PATHWAY_ID)[
+            CONTINGENCY_TABLE.TOTAL_COUNTS
+        ]
+
+    if source_total_counts.shape[0] == 0:
+        if verbose:
+            logger.warning("`source_total_counts` is empty; returning None.")
+        return None
+
+    return source_total_counts

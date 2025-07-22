@@ -3,7 +3,6 @@ import pytest
 
 from napistu.network import ng_utils
 from napistu.network import neighborhoods
-from napistu import source
 
 from napistu.constants import SBML_DFS
 from napistu.network.constants import (
@@ -41,8 +40,8 @@ def test_find_and_prune_neighborhoods_with_source_counts(
     is provided, which enables source-based reaction assignment in neighborhoods.
     """
     # Create source_total_counts using the source module
-    source_total_counts = source.get_source_total_counts(
-        sbml_dfs_metabolism, SBML_DFS.REACTIONS
+    source_total_counts = sbml_dfs_metabolism.get_source_total_counts(
+        SBML_DFS.REACTIONS
     )
 
     # Verify source_total_counts is created correctly
