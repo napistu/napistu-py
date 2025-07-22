@@ -606,6 +606,25 @@ def find_neighborhoods(
             f"compartmentalized_species contains invalid species: {invalid_cspecies}"
         )
 
+    # cspecies missing from napistu_graph
+    missing_cspecies = [
+        x
+        for x in compartmentalized_species
+        if x not in napistu_graph.vs[NAPISTU_GRAPH_VERTICES.NAME]
+    ]
+    if len(missing_cspecies) > 0:
+        logger.warning(
+            f"{len(missing_cspecies)} compartmentalized_species are present in the `sbml_dfs` but missing from the `napistu_graph`: {missing_cspecies}. This can occur if either these are species which are involved in no reactions or it could point to an incompatibility between the `sbml_dfs` and `napistu_graph` which could be further explored with `ng_utils.validate_assets()`."
+        )
+        compartmentalized_species = [
+            x for x in compartmentalized_species if x not in missing_cspecies
+        ]
+
+        if len(compartmentalized_species) == 0:
+            raise ValueError(
+                "No compartmentalized species remain after removing those missing from the `napistu_graph`."
+            )
+
     # create a table which includes cspecies and reaction nearby each of the
     # focal compartmentalized_speecies
     neighborhood_df = _build_raw_neighborhood_df(
@@ -717,9 +736,12 @@ def create_neighborhood_dict_entry(
             min_pw_size=min_pw_size,
             # optional, counts of sources across the whole model
             source_total_counts=source_total_counts,
+            verbose=verbose,
         )
-    except Exception:
-        logger.warning(f"Could not get reaction sources for {sc_id}; returning None")
+    except Exception as e:
+        logger.warning(
+            f"Could not get reaction sources for {sc_id}; returning None. Error: {e}"
+        )
         reaction_sources = None
 
     # to add weights to the network solve the shortest path problem

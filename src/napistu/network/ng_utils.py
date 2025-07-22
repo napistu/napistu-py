@@ -123,6 +123,7 @@ def get_minimal_sources_edges(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     min_pw_size: int = 3,
     source_total_counts: Optional[pd.Series | pd.DataFrame] = None,
+    verbose: bool = False,
 ) -> pd.DataFrame | None:
     """
     Assign edges to a set of sources.
@@ -138,6 +139,8 @@ def get_minimal_sources_edges(
     source_total_counts: pd.Series | pd.DataFrame
         A series of the total counts of each source or a pd.DataFrame with two columns:
         pathway_id and total_counts.
+    verbose: bool
+        Whether to print verbose output
 
     Returns
     -------
@@ -156,8 +159,41 @@ def get_minimal_sources_edges(
     if source_df is None:
         return None
     else:
+        if source_total_counts is not None:
+
+            source_total_counts = source._ensure_source_total_counts(
+                source_total_counts, verbose=verbose
+            )
+            defined_source_totals = source_total_counts.index.tolist()
+
+            source_mask = source_df[SOURCE_SPEC.PATHWAY_ID].isin(defined_source_totals)
+
+            if sum(~source_mask) > 0:
+                if verbose:
+                    dropped_pathways = (
+                        source_df[~source_mask][SOURCE_SPEC.PATHWAY_ID]
+                        .unique()
+                        .tolist()
+                    )
+                    logger.warning(
+                        f"Some pathways in `source_df` are not present in `source_total_counts` ({sum(~source_mask)} entries). Dropping these pathways: {dropped_pathways}."
+                    )
+                source_df = source_df[source_mask]
+
+            if source_df.shape[0] == 0:
+                select_source_total_pathways = defined_source_totals[:5]
+                if verbose:
+                    logger.warning(
+                        f"None of the pathways in `source_df` are present in `source_total_counts ({source_df[SOURCE_SPEC.PATHWAY_ID].unique().tolist()})`. Example pathways in `source_total_counts` are: {select_source_total_pathways}; returning None."
+                    )
+                return None
+
         reaction_sources = source.source_set_coverage(
-            source_df, source_total_counts, sbml_dfs, min_pw_size=min_pw_size
+            source_df,
+            source_total_counts,
+            sbml_dfs,
+            min_pw_size=min_pw_size,
+            verbose=verbose,
         )
         return reaction_sources.reset_index()[
             [SBML_DFS.R_ID, SOURCE_SPEC.PATHWAY_ID, SOURCE_SPEC.NAME]

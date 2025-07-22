@@ -271,6 +271,7 @@ def find_all_shortest_reaction_paths(
     precomputed_distances: pd.DataFrame | None = None,
     min_pw_size: int = 3,
     source_total_counts: pd.Series | pd.DataFrame | None = None,
+    verbose: bool = False,
 ):
     """
     Shortest Reaction Paths
@@ -295,6 +296,8 @@ def find_all_shortest_reaction_paths(
         A pd.Series of the total counts of each source or a pd.DataFrame with two columns:
         pathway_id and total_counts. As produced by
         source.get_source_total_counts(). If None, pathways will be selected by size rather than statistical enrichment.
+    verbose: bool
+        Whether to print verbose output
 
     Returns:
     ----------
@@ -368,6 +371,7 @@ def find_all_shortest_reaction_paths(
         sbml_dfs,
         min_pw_size=min_pw_size,
         source_total_counts=source_total_counts,
+        verbose=verbose,
     )
 
     # create a new small network of shortest paths
