@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import pytest
 
 import pandas as pd
 from napistu import indices
@@ -125,27 +126,13 @@ def test_source_set_coverage_missing_pathway_ids(sbml_dfs_metabolism):
         len(missing_pathway_ids) > 0
     ), "Test setup failed: no pathway_ids are missing from source_total_counts"
 
-    # Test that the function handles this gracefully
-    # It should either raise an error or handle the missing pathway_ids appropriately
-    try:
-        set_coverage = source.source_set_coverage(
+    # Test that the function raises a ValueError when pathway_ids are missing
+    with pytest.raises(
+        ValueError,
+        match="The following pathways are present in `select_sources_df` but not in `source_total_counts`",
+    ):
+        source.source_set_coverage(
             source_df,
             source_total_counts=modified_source_total_counts,
             sbml_dfs=sbml_dfs_metabolism,
         )
-
-        # If it doesn't raise an error, verify the result
-        assert set_coverage.shape[0] > 0, "set_coverage should not be empty"
-
-        # Check that the result only contains pathway_ids that were in the modified_source_total_counts
-        result_pathway_ids = set(set_coverage[SOURCE_SPEC.PATHWAY_ID].unique())
-        assert result_pathway_ids.issubset(
-            set(modified_source_total_counts.index)
-        ), "Result should only contain pathway_ids that were in source_total_counts"
-
-    except Exception as e:
-        # If it raises an error, that's also acceptable behavior
-        # but we should document what type of error is expected
-        assert isinstance(
-            e, (ValueError, KeyError, IndexError)
-        ), f"Expected ValueError, KeyError, or IndexError, but got {type(e).__name__}: {e}"
