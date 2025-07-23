@@ -8,6 +8,7 @@ from napistu import indices
 from napistu import source
 from napistu.network import ng_utils
 from napistu.constants import SBML_DFS, SOURCE_SPEC
+from napistu.statistics.constants import CONTINGENCY_TABLE
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")
@@ -16,10 +17,10 @@ test_data = os.path.join(test_path, "test_data")
 def test_source():
     source_example_df = pd.DataFrame(
         [
-            {"model": "fun", "id": "baz", "pathway_id": "fun"},
-            {"model": "fun", "id": "bot", "pathway_id": "fun"},
-            {"model": "time", "id": "boof", "pathway_id": "time"},
-            {"model": "time", "id": "bor", "pathway_id": "time"},
+            {SOURCE_SPEC.MODEL: "fun", "id": "baz", SOURCE_SPEC.PATHWAY_ID: "fun"},
+            {SOURCE_SPEC.MODEL: "fun", "id": "bot", SOURCE_SPEC.PATHWAY_ID: "fun"},
+            {SOURCE_SPEC.MODEL: "time", "id": "boof", SOURCE_SPEC.PATHWAY_ID: "time"},
+            {SOURCE_SPEC.MODEL: "time", "id": "bor", SOURCE_SPEC.PATHWAY_ID: "time"},
         ]
     )
 
@@ -36,8 +37,8 @@ def test_source():
 
     alt_source_df = pd.DataFrame(
         [
-            {"model": "fun", "identifier": "baz", "pathway_id": "fun"},
-            {"model": "fun", "identifier": "baz", "pathway_id": "fun"},
+            {SOURCE_SPEC.MODEL: "fun", "identifier": "baz", SOURCE_SPEC.PATHWAY_ID: "fun"},
+            {SOURCE_SPEC.MODEL: "fun", "identifier": "baz", SOURCE_SPEC.PATHWAY_ID: "fun"},
         ]
     )
     alt_source_obj = source.Source(alt_source_df)
@@ -50,8 +51,8 @@ def test_source_w_pwindex():
     # in pw_index.tsv
     source_example_df = pd.DataFrame(
         [
-            {"model": "R-HSA-1237044", "id": "baz"},
-            {"model": "R-HSA-1237044", "id": "bot"},
+            {SOURCE_SPEC.MODEL: "R-HSA-1237044", "id": "baz"},
+            {SOURCE_SPEC.MODEL: "R-HSA-1237044", "id": "bot"},
         ]
     )
 
@@ -87,7 +88,7 @@ def test_source_set_coverage(sbml_dfs_metabolism):
 
 def test_source_set_coverage_enrichment(sbml_dfs_metabolism):
 
-    source_total_counts = sbml_dfs_metabolism.get_source_total_counts("reactions")
+    source_total_counts = sbml_dfs_metabolism.get_source_total_counts(SBML_DFS.REACTIONS)
 
     source_df = source.unnest_sources(sbml_dfs_metabolism.reactions).head(40)
 
@@ -107,7 +108,7 @@ def test_source_set_coverage_missing_pathway_ids(sbml_dfs_metabolism):
     source_df = source.unnest_sources(sbml_dfs_metabolism.reactions)
 
     # Get the source_total_counts
-    source_total_counts = sbml_dfs_metabolism.get_source_total_counts("reactions")
+    source_total_counts = sbml_dfs_metabolism.get_source_total_counts(SBML_DFS.REACTIONS)
 
     # Create a modified source_total_counts that's missing some pathway_ids
     # that are present in source_df
@@ -136,3 +137,20 @@ def test_source_set_coverage_missing_pathway_ids(sbml_dfs_metabolism):
             source_total_counts=modified_source_total_counts,
             sbml_dfs=sbml_dfs_metabolism,
         )
+
+
+def test_ensure_source_total_counts():
+    """
+    Test that _ensure_source_total_counts properly validates and fixes source_total_counts structure.
+    """
+    # Test with a malformed Series
+    malformed_series = pd.Series([10, 20], index=['path1', 'path2'], name='wrong_name')
+    
+    # Test that this gets fixed by _ensure_source_total_counts
+    fixed_series = source._ensure_source_total_counts(malformed_series)
+    
+    # Verify the Series is properly formatted
+    assert fixed_series.name == CONTINGENCY_TABLE.TOTAL_COUNTS
+    assert fixed_series.index.name == SOURCE_SPEC.PATHWAY_ID
+    assert list(fixed_series.index) == ['path1', 'path2']
+    assert list(fixed_series.values) == [10, 20]
