@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import xml.etree.ElementTree as ET
-from typing import Any
+from typing import Any, Dict, List, Tuple
 
 import pandas as pd
 
@@ -33,20 +33,28 @@ def format_psi_mis(
 
     Parameters
     ----------
-    intact_xml_dir (str):
+    intact_xml_dir : str
         Path to the directory containing the PSI-MI XML files
-    xml_namespace (str):
-        Namespace for the xml file
-    verbose (bool):
-        Whether to print verbose output
+    xml_namespace : str, optional
+        Namespace for the xml file, by default PSI_MI_INTACT_XML_NAMESPACE
+    verbose : bool, optional
+        Whether to print verbose output, by default False
+    files_to_process : int, optional
+        Number of files to process (-1 for all files), by default -1
 
     Returns
     -------
-    formatted_psi_mis (list): a list containing molecular interaction entry dicts of the format:
+    formatted_psi_mis : list[dict[str, Any]]
+        A list containing molecular interaction entry dicts of the format:
         - source : dict containing the database that interactions were drawn from.
         - experiment : a simple summary of the experimental design and the publication.
         - interactor_list : list containing dictionaries annotating the molecules
         (defined by their "interactor_id") involved in interactions.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the directory does not exist or contains no files
     """
 
     if not os.path.isdir(intact_xml_dir):
@@ -72,7 +80,9 @@ def format_psi_mis(
     return formatted_psi_mis
 
 
-def aggregate_psi_mis(formatted_psi_mis: dict[str, Any]) -> dict[str, pd.DataFrame]:
+def aggregate_psi_mis(
+    formatted_psi_mis: List[Dict[str, Any]],
+) -> Dict[str, pd.DataFrame]:
     """
     Aggregate PSI-MI molecular interactions and study metadata and format results as a dictionary of dataframes.
 
@@ -89,7 +99,6 @@ def aggregate_psi_mis(formatted_psi_mis: dict[str, Any]) -> dict[str, pd.DataFra
         - `species` : A dataframe of species, where the columns are the species and the rows are the study IDs.
         - `species_identifiers` : A dataframe of species identifiers, where the columns are the species identifiers and the rows are the study IDs.
         - `study_level_data` : A dataframe of study level data, where the columns are the study level data and the rows are the study IDs.
-
     """
     # reaction sources get the pubmed id of the study
     all_studies = list()
@@ -138,22 +147,30 @@ def format_psi_mi(
 
     Parameters
     ----------
-    xml_path (str):
-        path to a .xml file
-    xml_namespace (str):
-        Namespace for the xml file
-    verbose (bool):
-        Whether to print verbose output
+    xml_path : str
+        Path to a .xml file
+    xml_namespace : str, optional
+        Namespace for the xml file, by default PSI_MI_INTACT_XML_NAMESPACE
+    verbose : bool, optional
+        Whether to print verbose output, by default False
 
     Returns
     -------
-        entry_list (list): a list containing molecular interaction entry dicts of the format:
-            - source : dict containing the database that interactions were drawn from.
-            - experiment : a simple summary of the experimental design and the publication.
-            - interactor_list : list containing dictionaries annotating the molecules
-            (defined by their "interactor_id") involved in interactions.
-            - interactions_list : list containing dictionaries annotating molecular
-            interactions involving a set of "interactor_id"s.
+    entry_list : list[dict[str, Any]]
+        A list containing molecular interaction entry dicts of the format:
+        - source : dict containing the database that interactions were drawn from.
+        - experiment : a simple summary of the experimental design and the publication.
+        - interactor_list : list containing dictionaries annotating the molecules
+        (defined by their "interactor_id") involved in interactions.
+        - interactions_list : list containing dictionaries annotating molecular
+        interactions involving a set of "interactor_id"s.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the XML file does not exist
+    ValueError
+        If the XML file does not have the expected root tag
     """
 
     if not os.path.isfile(xml_path):
@@ -180,8 +197,27 @@ def format_psi_mi(
     return formatted_entries
 
 
-def _format_entry(an_entry, xml_namespace: str) -> dict[str, Any]:
-    """Extract a single XML entry of interactors and interactions."""
+def _format_entry(an_entry: ET.Element, xml_namespace: str) -> Dict[str, Any]:
+    """
+    Extract a single XML entry of interactors and interactions.
+
+    Parameters
+    ----------
+    an_entry : xml.etree.ElementTree.Element
+        XML entry element to format
+    xml_namespace : str
+        XML namespace to use for parsing
+
+    Returns
+    -------
+    dict[str, Any]
+        Dictionary containing formatted entry data with keys: source, experiment, interactor_list, interactions_list
+
+    Raises
+    ------
+    ValueError
+        If the entry tag is not as expected
+    """
 
     if an_entry.tag != xml_namespace + "entry":
         raise ValueError(
@@ -202,8 +238,22 @@ def _format_entry(an_entry, xml_namespace: str) -> dict[str, Any]:
     return entry_dict
 
 
-def _format_entry_source(an_entry, xml_namespace: str) -> dict[str, str]:
-    """Format the source describing the provenance of an XML entry."""
+def _format_entry_source(an_entry: ET.Element, xml_namespace: str) -> Dict[str, str]:
+    """
+    Format the source describing the provenance of an XML entry.
+
+    Parameters
+    ----------
+    an_entry : xml.etree.ElementTree.Element
+        XML entry element to format
+    xml_namespace : str
+        XML namespace to use for parsing
+
+    Returns
+    -------
+    dict[str, str]
+        Dictionary containing source information with keys: shortLabel, fullName
+    """
 
     assert an_entry.tag == xml_namespace + "entry"
 
@@ -221,8 +271,24 @@ def _format_entry_source(an_entry, xml_namespace: str) -> dict[str, str]:
     return out
 
 
-def _format_entry_experiment(an_entry, xml_namespace: str) -> dict[str, str]:
-    """Format experiment-level information in an XML entry."""
+def _format_entry_experiment(
+    an_entry: ET.Element, xml_namespace: str
+) -> Dict[str, str]:
+    """
+    Format experiment-level information in an XML entry.
+
+    Parameters
+    ----------
+    an_entry : xml.etree.ElementTree.Element
+        XML entry element to format
+    xml_namespace : str
+        XML namespace to use for parsing
+
+    Returns
+    -------
+    dict[str, str]
+        Dictionary containing experiment information with keys: experiment_name, interaction_method, ontology, identifier
+    """
 
     assert an_entry.tag == xml_namespace + "entry"
 
@@ -253,8 +319,24 @@ def _format_entry_experiment(an_entry, xml_namespace: str) -> dict[str, str]:
     return out
 
 
-def _format_entry_interactor_list(an_entry, xml_namespace: str) -> list[dict[str, Any]]:
-    """Format the molecular interactors in an XML entry."""
+def _format_entry_interactor_list(
+    an_entry: ET.Element, xml_namespace: str
+) -> List[Dict[str, Any]]:
+    """
+    Format the molecular interactors in an XML entry.
+
+    Parameters
+    ----------
+    an_entry : xml.etree.ElementTree.Element
+        XML entry element to format
+    xml_namespace : str
+        XML namespace to use for parsing
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        List of dictionaries containing formatted interactor data
+    """
 
     assert an_entry.tag == xml_namespace + "entry"
 
@@ -263,8 +345,29 @@ def _format_entry_interactor_list(an_entry, xml_namespace: str) -> list[dict[str
     return [_format_entry_interactor(x, xml_namespace) for x in interactor_list]
 
 
-def _format_entry_interactor(interactor, xml_namespace: str) -> dict[str, Any]:
-    """Format a single molecular interactor in an interaction list XML node."""
+def _format_entry_interactor(
+    interactor: ET.Element, xml_namespace: str
+) -> Dict[str, Any]:
+    """
+    Format a single molecular interactor in an interaction list XML node.
+
+    Parameters
+    ----------
+    interactor : xml.etree.ElementTree.Element
+        XML interactor element to format
+    xml_namespace : str
+        XML namespace to use for parsing
+
+    Returns
+    -------
+    dict[str, Any]
+        Dictionary containing formatted interactor data with keys: interactor_id, interactor_label, interactor_name, interactor_aliases, interactor_xrefs
+
+    Raises
+    ------
+    ValueError
+        If the interactor tag is not as expected
+    """
 
     if interactor.tag != xml_namespace + "interactor":
         raise ValueError(
@@ -301,9 +404,23 @@ def _format_entry_interactor(interactor, xml_namespace: str) -> dict[str, Any]:
 
 
 def _format_entry_interactor_xrefs(
-    interactor, xml_namespace: str
-) -> list[dict[str, str]]:
-    """Format the cross-references of a single interactor."""
+    interactor: ET.Element, xml_namespace: str
+) -> List[Dict[str, str]]:
+    """
+    Format the cross-references of a single interactor.
+
+    Parameters
+    ----------
+    interactor : xml.etree.ElementTree.Element
+        XML interactor element to format
+    xml_namespace : str
+        XML namespace to use for parsing
+
+    Returns
+    -------
+    list[dict[str, str]]
+        List of dictionaries containing cross-reference data with keys: ref_type, ontology, identifier
+    """
 
     assert interactor.tag == xml_namespace + PSI_MI_RAW_ATTRS.INTERACTOR
 
@@ -332,8 +449,24 @@ def _format_entry_interactor_xrefs(
     return out
 
 
-def _format_entry_interactions(an_entry, xml_namespace: str) -> list[dict[str, Any]]:
-    """Format the molecular interaction in an XML entry."""
+def _format_entry_interactions(
+    an_entry: ET.Element, xml_namespace: str
+) -> List[Dict[str, Any]]:
+    """
+    Format the molecular interaction in an XML entry.
+
+    Parameters
+    ----------
+    an_entry : xml.etree.ElementTree.Element
+        XML entry element to format
+    xml_namespace : str
+        XML namespace to use for parsing
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        List of dictionaries containing formatted interaction data
+    """
 
     assert an_entry.tag == xml_namespace + PSI_MI_RAW_ATTRS.ENTRY
 
@@ -348,8 +481,24 @@ def _format_entry_interactions(an_entry, xml_namespace: str) -> list[dict[str, A
     return interaction_dicts
 
 
-def _format_entry_interaction(interaction, xml_namespace: str) -> dict[str, Any]:
-    """Format a single interaction in an XML interaction list."""
+def _format_entry_interaction(
+    interaction: ET.Element, xml_namespace: str
+) -> Dict[str, Any]:
+    """
+    Format a single interaction in an XML interaction list.
+
+    Parameters
+    ----------
+    interaction : xml.etree.ElementTree.Element
+        XML interaction element to format
+    xml_namespace : str
+        XML namespace to use for parsing
+
+    Returns
+    -------
+    dict[str, Any]
+        Dictionary containing formatted interaction data with keys: interaction_name, interaction_type, interactors
+    """
 
     VALID_TAGS = [
         xml_namespace + PSI_MI_RAW_ATTRS.INTERACTION,
@@ -385,9 +534,28 @@ def _format_entry_interaction(interaction, xml_namespace: str) -> dict[str, Any]
 
 
 def _format_entry_interaction_participants(
-    interaction_participant, xml_namespace: str
-) -> dict[str, str]:
-    """Format the participants in an XML interaction."""
+    interaction_participant: ET.Element, xml_namespace: str
+) -> Dict[str, str]:
+    """
+    Format the participants in an XML interaction.
+
+    Parameters
+    ----------
+    interaction_participant : xml.etree.ElementTree.Element
+        XML participant element to format
+    xml_namespace : str
+        XML namespace to use for parsing
+
+    Returns
+    -------
+    dict[str, str]
+        Dictionary containing formatted participant data with keys: participant_id, interactor_id, biological_role, experimental_role
+
+    Raises
+    ------
+    ValueError
+        If the participant tag is not as expected
+    """
 
     if interaction_participant.tag != xml_namespace + "participant":
         raise ValueError(
@@ -415,13 +583,36 @@ def _format_entry_interaction_participants(
     return out
 
 
-def _format_study_level_data(one_study):
+def _format_study_level_data(one_study: Dict[str, Any]) -> pd.DataFrame:
+    """
+    Format study-level data into a DataFrame.
+
+    Parameters
+    ----------
+    one_study : dict[str, Any]
+        Study data dictionary
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing study-level data
+    """
     return pd.DataFrame(one_study[PSI_MI_DEFS.EXPERIMENT], index=[0])
 
 
-def _create_reaction_species_df(one_study):
+def _create_reaction_species_df(one_study: Dict[str, Any]) -> pd.DataFrame:
     """
     Format the interactions in the study into a dataframe of reaction species.
+
+    Parameters
+    ----------
+    one_study : dict[str, Any]
+        Study data dictionary
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing reaction species data
     """
 
     reaction_species = list()
@@ -438,7 +629,22 @@ def _create_reaction_species_df(one_study):
     return pd.DataFrame(reaction_species)
 
 
-def _create_species_df(one_study: dict[str, Any]) -> pd.DataFrame:
+def _create_species_df(one_study: Dict[str, Any]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Create species and species identifiers DataFrames from study data.
+
+    Parameters
+    ----------
+    one_study : dict[str, Any]
+        Study data dictionary
+
+    Returns
+    -------
+    species_df : pd.DataFrame
+        DataFrame containing species data
+    species_identifiers : pd.DataFrame
+        DataFrame containing species identifiers data
+    """
 
     species = list()
     species_identifiers = list()
@@ -467,7 +673,7 @@ def _create_species_df(one_study: dict[str, Any]) -> pd.DataFrame:
 
 
 def _get_optional_text(
-    element, xpath: str, default: str = PSI_MI_MISSING_VALUE_STR
+    element: ET.Element, xpath: str, default: str = PSI_MI_MISSING_VALUE_STR
 ) -> str:
     """
     Safely extract text from an optional XML element.
@@ -479,7 +685,7 @@ def _get_optional_text(
     xpath : str
         The xpath expression to find the child element
     default : str, optional
-        Default value to return if element is not found, by default ""
+        Default value to return if element is not found, by default PSI_MI_MISSING_VALUE_STR
 
     Returns
     -------
@@ -493,7 +699,10 @@ def _get_optional_text(
 
 
 def _get_optional_attribute(
-    element, xpath: str, attribute: str, default: str = PSI_MI_MISSING_VALUE_STR
+    element: ET.Element,
+    xpath: str,
+    attribute: str,
+    default: str = PSI_MI_MISSING_VALUE_STR,
 ) -> str:
     """
     Safely extract an attribute from an optional XML element.
@@ -507,7 +716,7 @@ def _get_optional_attribute(
     attribute : str
         The attribute name to extract
     default : str, optional
-        Default value to return if element or attribute is not found, by default ""
+        Default value to return if element or attribute is not found, by default PSI_MI_MISSING_VALUE_STR
 
     Returns
     -------

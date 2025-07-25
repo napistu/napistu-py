@@ -177,6 +177,8 @@ DEFAULT_INTACT_RELATIVE_WEIGHTS = {
 
 INTACT_PUBLICATION_SCORE_THRESHOLD = 7
 
+INTACT_REACTIONS_DATA_TBL_NAME = "intact"
+
 PSI_MI_ONTOLOGY_URL = "https://raw.githubusercontent.com/MICommunity/miscore/refs/heads/master/miscore/src/main/resources/psimiOntology.json"
 
 PSI_MI_SCORED_TERMS = SimpleNamespace(
@@ -193,6 +195,7 @@ PSI_MI_SCORED_TERMS = SimpleNamespace(
     POST_TRANSCRIPTIONAL_INTERFERENCE="post transcriptional interference",
     BIOCHEMICAL="biochemical",
     IMAGING_TECHNIQUE="imagining technique",
+    # other
     UNKNOWN="unknown",
 )
 
@@ -209,7 +212,6 @@ INTACT_TERM_SCORES = {
     PSI_MI_SCORED_TERMS.POST_TRANSCRIPTIONAL_INTERFERENCE: 0.10,
     PSI_MI_SCORED_TERMS.BIOCHEMICAL: 1.00,
     PSI_MI_SCORED_TERMS.IMAGING_TECHNIQUE: 0.33,
-    # other
     PSI_MI_SCORED_TERMS.UNKNOWN: 0.05,
 }
 
