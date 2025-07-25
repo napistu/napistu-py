@@ -133,13 +133,87 @@ PSI_MI_REFS = SimpleNamespace(
     PRIMARY_REF_ID="primary_ref_id",
 )
 
-INTACT_ONTOLOGY_CV_LOOKUP = {
-    "uniprotkb": ONTOLOGIES.UNIPROT,
-    # we actually don't want these GO IDs
-    ONTOLOGIES.GO: "ignored_go",
+PSI_MI_STUDY_TABLES = SimpleNamespace(
+    REACTION_SPECIES="reaction_species",
+    SPECIES="species",
+    SPECIES_IDENTIFIERS="species_identifiers",
+    STUDY_LEVEL_DATA="study_level_data",
+)
+
+PSI_MI_STUDY_TABLES_LIST = PSI_MI_STUDY_TABLES.__dict__.values()
+
+PSI_MI_MISSING_VALUE_STR = ""
+
+INTACT_ONTOLOGY_ALIASES = {ONTOLOGIES.UNIPROT: {"uniprotkb"}}
+
+VALID_INTACT_SECONDARY_ONTOLOGIES = {ONTOLOGIES.INTACT}
+
+INTACT_EXPERIMENTAL_ROLES = SimpleNamespace(BAIT="bait", PREY="prey")
+
+VALID_INTACT_EXPERIMENTAL_ROLES = {
+    INTACT_EXPERIMENTAL_ROLES.BAIT,
+    INTACT_EXPERIMENTAL_ROLES.PREY,
 }
 
-INTACT_ONTOLOGY_ENSEMBL_VAGUE = "ensembl"
+# adding scores and consolidating terms for IntAct
+
+INTACT_SCORES = SimpleNamespace(
+    ATTRIBUTE_TYPE="attribute_type",
+    ATTRIBUTE_VALUE="attribute_value",
+    SCORED_TERM="scored_term",
+    RAW_SCORE="raw_score",
+    N_PUBLICATIONS="n_publications",
+    PUBLICATION_SCORE="publication_score",
+    INTERACTION_METHOD_SCORE="interaction_method_score",
+    INTERACTION_TYPE_SCORE="interaction_type_score",
+    MI_SCORE="miscore",
+)
+
+DEFAULT_INTACT_RELATIVE_WEIGHTS = {
+    INTACT_SCORES.PUBLICATION_SCORE: 1.0,
+    INTACT_SCORES.INTERACTION_METHOD_SCORE: 1.0,
+    INTACT_SCORES.INTERACTION_TYPE_SCORE: 1.0,
+}
+
+INTACT_PUBLICATION_SCORE_THRESHOLD = 7
+
+INTACT_REACTIONS_DATA_TBL_NAME = "intact"
+
+PSI_MI_ONTOLOGY_URL = "https://raw.githubusercontent.com/MICommunity/miscore/refs/heads/master/miscore/src/main/resources/psimiOntology.json"
+
+PSI_MI_SCORED_TERMS = SimpleNamespace(
+    # Interaction types
+    GENETIC_INTERACTION="genetic interaction",
+    COLOCALIZATION="colocalization",
+    ASSOCIATION="association",
+    PHYSICAL_ASSOCIATION="physical association",
+    DIRECT_INTERACTION="direct interaction",
+    # Detection methods
+    BIOPHYSICAL="biophysical",
+    PROTEIN_COMPLEMENTATION_ASSAY="protein complementation assay",
+    GENETIC_INTERFERENCE="genetic interference",
+    POST_TRANSCRIPTIONAL_INTERFERENCE="post transcriptional interference",
+    BIOCHEMICAL="biochemical",
+    IMAGING_TECHNIQUE="imaging technique",
+    # other
+    UNKNOWN="unknown",
+)
+
+# from https://github.com/MICommunity/miscore/blob/master/miscore/src/main/resources/scoreCategories.properties
+INTACT_TERM_SCORES = {
+    PSI_MI_SCORED_TERMS.GENETIC_INTERACTION: 0.10,
+    PSI_MI_SCORED_TERMS.COLOCALIZATION: 0.33,
+    PSI_MI_SCORED_TERMS.ASSOCIATION: 0.33,
+    PSI_MI_SCORED_TERMS.PHYSICAL_ASSOCIATION: 0.66,
+    PSI_MI_SCORED_TERMS.DIRECT_INTERACTION: 1.00,
+    PSI_MI_SCORED_TERMS.BIOPHYSICAL: 1.00,
+    PSI_MI_SCORED_TERMS.PROTEIN_COMPLEMENTATION_ASSAY: 0.66,
+    PSI_MI_SCORED_TERMS.GENETIC_INTERFERENCE: 0.10,
+    PSI_MI_SCORED_TERMS.POST_TRANSCRIPTIONAL_INTERFERENCE: 0.10,
+    PSI_MI_SCORED_TERMS.BIOCHEMICAL: 1.00,
+    PSI_MI_SCORED_TERMS.IMAGING_TECHNIQUE: 0.33,
+    PSI_MI_SCORED_TERMS.UNKNOWN: 0.05,
+}
 
 # REACTOME
 REACTOME_SMBL_URL = "https://reactome.org/download/current/all_species.3.1.sbml.tgz"

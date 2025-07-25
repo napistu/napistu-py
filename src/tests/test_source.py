@@ -37,8 +37,16 @@ def test_source():
 
     alt_source_df = pd.DataFrame(
         [
-            {SOURCE_SPEC.MODEL: "fun", "identifier": "baz", SOURCE_SPEC.PATHWAY_ID: "fun"},
-            {SOURCE_SPEC.MODEL: "fun", "identifier": "baz", SOURCE_SPEC.PATHWAY_ID: "fun"},
+            {
+                SOURCE_SPEC.MODEL: "fun",
+                "identifier": "baz",
+                SOURCE_SPEC.PATHWAY_ID: "fun",
+            },
+            {
+                SOURCE_SPEC.MODEL: "fun",
+                "identifier": "baz",
+                SOURCE_SPEC.PATHWAY_ID: "fun",
+            },
         ]
     )
     alt_source_obj = source.Source(alt_source_df)
@@ -88,7 +96,9 @@ def test_source_set_coverage(sbml_dfs_metabolism):
 
 def test_source_set_coverage_enrichment(sbml_dfs_metabolism):
 
-    source_total_counts = sbml_dfs_metabolism.get_source_total_counts(SBML_DFS.REACTIONS)
+    source_total_counts = sbml_dfs_metabolism.get_source_total_counts(
+        SBML_DFS.REACTIONS
+    )
 
     source_df = source.unnest_sources(sbml_dfs_metabolism.reactions).head(40)
 
@@ -108,7 +118,9 @@ def test_source_set_coverage_missing_pathway_ids(sbml_dfs_metabolism):
     source_df = source.unnest_sources(sbml_dfs_metabolism.reactions)
 
     # Get the source_total_counts
-    source_total_counts = sbml_dfs_metabolism.get_source_total_counts(SBML_DFS.REACTIONS)
+    source_total_counts = sbml_dfs_metabolism.get_source_total_counts(
+        SBML_DFS.REACTIONS
+    )
 
     # Create a modified source_total_counts that's missing some pathway_ids
     # that are present in source_df
@@ -144,13 +156,13 @@ def test_ensure_source_total_counts():
     Test that _ensure_source_total_counts properly validates and fixes source_total_counts structure.
     """
     # Test with a malformed Series
-    malformed_series = pd.Series([10, 20], index=['path1', 'path2'], name='wrong_name')
-    
+    malformed_series = pd.Series([10, 20], index=["path1", "path2"], name="wrong_name")
+
     # Test that this gets fixed by _ensure_source_total_counts
     fixed_series = source._ensure_source_total_counts(malformed_series)
-    
+
     # Verify the Series is properly formatted
     assert fixed_series.name == CONTINGENCY_TABLE.TOTAL_COUNTS
     assert fixed_series.index.name == SOURCE_SPEC.PATHWAY_ID
-    assert list(fixed_series.index) == ['path1', 'path2']
+    assert list(fixed_series.index) == ["path1", "path2"]
     assert list(fixed_series.values) == [10, 20]
