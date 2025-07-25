@@ -162,10 +162,10 @@ def test_ontology_term_scoring():
     )
 
     # Test case 1: Term with explicit score
-    explicit_term = "direct interaction"
+    explicit_term = PSI_MI_SCORED_TERMS.DIRECT_INTERACTION
     explicit_result = intact._get_intact_scored_term(explicit_term, intact_term_lookup)
     assert (
-        explicit_result == "direct interaction"
+        explicit_result == PSI_MI_SCORED_TERMS.DIRECT_INTERACTION
     ), f"Explicit term should map to itself: {explicit_result}"
 
     # Test case 2: Term that inherits score by propagation
@@ -175,12 +175,50 @@ def test_ontology_term_scoring():
         inherited_term, intact_term_lookup
     )
     assert (
-        inherited_result == "direct interaction"
+        inherited_result == PSI_MI_SCORED_TERMS.DIRECT_INTERACTION
     ), f"Child term should inherit parent score: {inherited_result}"
 
     # Test case 3: Missing/unknown term
     missing_term = "foo"
     missing_result = intact._get_intact_scored_term(missing_term, intact_term_lookup)
     assert (
-        missing_result == "unknown"
+        missing_result == PSI_MI_SCORED_TERMS.UNKNOWN
     ), f"Missing term should default to unknown: {missing_result}"
+
+    # Test case 4: Verify all scored terms are present in ontology
+    # Get all scored terms except "unknown"
+    expected_scored_terms = [
+        term
+        for term in PSI_MI_SCORED_TERMS.__dict__.values()
+        if term != PSI_MI_SCORED_TERMS.UNKNOWN
+    ]
+
+    missing_terms = []
+    for term in expected_scored_terms:
+        if term not in intact_term_lookup:
+            missing_terms.append(term)
+
+    assert (
+        len(missing_terms) == 0
+    ), f"The following scored terms are missing from the ontology: {missing_terms}"
+
+    # Test case 5: Verify all scored terms map to themselves (explicit scores)
+    for term in expected_scored_terms:
+        result = intact._get_intact_scored_term(term, intact_term_lookup)
+        assert (
+            result == term
+        ), f"Scored term '{term}' should map to itself, but maps to '{result}'"
+
+    # Additional validation: Check that lookup contains expected entries
+    assert len(intact_term_lookup) > 0, "Term lookup should not be empty"
+
+    # Test that all lookup values are either scored terms or "unknown"
+    valid_values = set(INTACT_TERM_SCORES.keys()) | {PSI_MI_SCORED_TERMS.UNKNOWN}
+    invalid_mappings = []
+    for term, mapped_term in intact_term_lookup.items():
+        if mapped_term not in valid_values:
+            invalid_mappings.append((term, mapped_term))
+
+    assert (
+        len(invalid_mappings) == 0
+    ), f"Found invalid term mappings: {invalid_mappings[:5]}..."  # Show first 5 if any

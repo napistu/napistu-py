@@ -194,7 +194,7 @@ PSI_MI_SCORED_TERMS = SimpleNamespace(
     GENETIC_INTERFERENCE="genetic interference",
     POST_TRANSCRIPTIONAL_INTERFERENCE="post transcriptional interference",
     BIOCHEMICAL="biochemical",
-    IMAGING_TECHNIQUE="imagining technique",
+    IMAGING_TECHNIQUE="imaging technique",
     # other
     UNKNOWN="unknown",
 )
