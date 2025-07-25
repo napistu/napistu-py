@@ -5,29 +5,128 @@ import os
 import xml.etree.ElementTree as ET
 from typing import Any
 
-from napistu.constants import (
-    BQB,
-    IDENTIFIERS,
-    ONTOLOGIES,
-    ONTOLOGIES_LIST,
-)
-from napistu.identifiers import Identifiers
-from napistu.identifiers import parse_ensembl_id
-from napistu.constants import SBML_DFS
 import pandas as pd
+
+from napistu.constants import IDENTIFIERS
 from napistu.ingestion.constants import (
-    INTACT_ONTOLOGY_CV_LOOKUP,
-    INTACT_ONTOLOGY_ENSEMBL_VAGUE,
     PSI_MI_INTACT_XML_NAMESPACE,
     PSI_MI_DEFS,
+    PSI_MI_MISSING_VALUE_STR,
     PSI_MI_RAW_ATTRS,
-    PSI_MI_REFS,
+    PSI_MI_STUDY_TABLES,
+    PSI_MI_STUDY_TABLES_LIST,
 )
 
 logger = logging.getLogger(__name__)
 
 
-def format_psi(
+def format_psi_mis(
+    intact_xml_dir: str,
+    xml_namespace: str = PSI_MI_INTACT_XML_NAMESPACE,
+    verbose: bool = False,
+    files_to_process: int = -1,
+) -> list[dict[str, Any]]:
+    """
+    Format PSI-MI XML files
+
+    Format PSI-MI XML files into a list of dictionaries.
+
+    Parameters
+    ----------
+    intact_xml_dir (str):
+        Path to the directory containing the PSI-MI XML files
+    xml_namespace (str):
+        Namespace for the xml file
+    verbose (bool):
+        Whether to print verbose output
+
+    Returns
+    -------
+    formatted_psi_mis (list): a list containing molecular interaction entry dicts of the format:
+        - source : dict containing the database that interactions were drawn from.
+        - experiment : a simple summary of the experimental design and the publication.
+        - interactor_list : list containing dictionaries annotating the molecules
+        (defined by their "interactor_id") involved in interactions.
+    """
+
+    if not os.path.isdir(intact_xml_dir):
+        raise FileNotFoundError(f"The directory {intact_xml_dir} does not exist")
+
+    xml_files = os.listdir(intact_xml_dir)
+    if len(xml_files) == 0:
+        raise FileNotFoundError(f"No files found in {intact_xml_dir}")
+
+    if files_to_process > 0:
+        logger.info(f"Processing only the first {files_to_process} files")
+        xml_files = xml_files[:files_to_process]
+
+    logger.info(f"Formatting {len(xml_files)} PSI-MI XML files")
+
+    formatted_psi_mis = []
+    for xml_file in xml_files:
+        if verbose:
+            logger.info(f"Formatting {xml_file}")
+        xml_path = os.path.join(intact_xml_dir, xml_file)
+        formatted_psi_mis.append(format_psi_mi(xml_path, xml_namespace, verbose))
+
+    return formatted_psi_mis
+
+
+def aggregate_psi_mis(formatted_psi_mis: dict[str, Any]) -> dict[str, pd.DataFrame]:
+    """
+    Aggregate PSI-MI molecular interactions and study metadata and format results as a dictionary of dataframes.
+
+    Parameters
+    ----------
+    formatted_psi_mis : dict[str, Any]
+        A dictionary of PSI-MI files, where the keys are the study IDs and the values are the PSI-MI files. As returned by `napistu.ingestion.psi_mi.format_psi_mis`.
+
+    Returns
+    -------
+    dict[str, pd.DataFrame]
+        A dictionary of dataframes, where the keys are the study IDs and the values are:
+        - `reaction_species` : A dataframe of reaction species, where the columns are the reaction species and the rows are the study IDs.
+        - `species` : A dataframe of species, where the columns are the species and the rows are the study IDs.
+        - `species_identifiers` : A dataframe of species identifiers, where the columns are the species identifiers and the rows are the study IDs.
+        - `study_level_data` : A dataframe of study level data, where the columns are the study level data and the rows are the study IDs.
+
+    """
+    # reaction sources get the pubmed id of the study
+    all_studies = list()
+    for file in formatted_psi_mis:
+
+        for study in file:
+            # autoincrement study id
+            study_id = len(all_studies) + 100000
+
+            species_df, species_ids = _create_species_df(study)
+
+            study_tables = {
+                PSI_MI_STUDY_TABLES.REACTION_SPECIES: _create_reaction_species_df(
+                    study
+                ).assign(study_id=study_id),
+                PSI_MI_STUDY_TABLES.SPECIES: species_df.assign(study_id=study_id),
+                PSI_MI_STUDY_TABLES.SPECIES_IDENTIFIERS: species_ids.assign(
+                    study_id=study_id
+                ),
+                PSI_MI_STUDY_TABLES.STUDY_LEVEL_DATA: _format_study_level_data(
+                    study
+                ).assign(study_id=study_id),
+            }
+
+            all_studies.append(study_tables)
+
+    # transpose results so a list of dicts of tables becomes a dict of tables
+    all_study_tables = dict()
+    for tbl in PSI_MI_STUDY_TABLES_LIST:
+        all_study_tables[tbl] = pd.concat([x[tbl] for x in all_studies]).reset_index(
+            drop=True
+        )
+
+    return all_study_tables
+
+
+def format_psi_mi(
     xml_path: str,
     xml_namespace: str = PSI_MI_INTACT_XML_NAMESPACE,
     verbose: bool = False,
@@ -79,58 +178,6 @@ def format_psi(
     ]
 
     return formatted_entries
-
-
-def format_psi_mis(
-    intact_xml_dir: str,
-    xml_namespace: str = PSI_MI_INTACT_XML_NAMESPACE,
-    verbose: bool = False,
-    files_to_process: int = -1,
-) -> list[dict[str, Any]]:
-    """
-    Format PSI-MI XML files
-
-    Format PSI-MI XML files into a list of dictionaries.
-
-    Parameters
-    ----------
-    intact_xml_dir (str):
-        Path to the directory containing the PSI-MI XML files
-    xml_namespace (str):
-        Namespace for the xml file
-    verbose (bool):
-        Whether to print verbose output
-
-    Returns
-    -------
-    formatted_psi_mis (list): a list containing molecular interaction entry dicts of the format:
-        - source : dict containing the database that interactions were drawn from.
-        - experiment : a simple summary of the experimental design and the publication.
-        - interactor_list : list containing dictionaries annotating the molecules
-        (defined by their "interactor_id") involved in interactions.
-    """
-
-    if not os.path.isdir(intact_xml_dir):
-        raise FileNotFoundError(f"The directory {intact_xml_dir} does not exist")
-
-    xml_files = os.listdir(intact_xml_dir)
-    if len(xml_files) == 0:
-        raise FileNotFoundError(f"No files found in {intact_xml_dir}")
-
-    if files_to_process > 0:
-        logger.info(f"Processing only the first {files_to_process} files")
-        xml_files = xml_files[:files_to_process]
-
-    logger.info(f"Formatting {len(xml_files)} PSI-MI XML files")
-
-    formatted_psi_mis = []
-    for xml_file in xml_files:
-        if verbose:
-            logger.info(f"Formatting {xml_file}")
-        xml_path = os.path.join(intact_xml_dir, xml_file)
-        formatted_psi_mis.append(format_psi(xml_path, xml_namespace, verbose))
-
-    return formatted_psi_mis
 
 
 def _format_entry(an_entry, xml_namespace: str) -> dict[str, Any]:
@@ -191,12 +238,12 @@ def _format_entry_experiment(an_entry, xml_namespace: str) -> dict[str, str]:
             experiment_info,
             f".{xml_namespace}interactionDetectionMethod/{xml_namespace}names/{xml_namespace}fullName",
         ),
-        PSI_MI_REFS.PRIMARY_REF_DB: _get_optional_attribute(
+        IDENTIFIERS.ONTOLOGY: _get_optional_attribute(
             experiment_info,
             f".{xml_namespace}bibref/{xml_namespace}xref/{xml_namespace}primaryRef",
             PSI_MI_RAW_ATTRS.DB,
         ),
-        PSI_MI_REFS.PRIMARY_REF_ID: _get_optional_attribute(
+        IDENTIFIERS.IDENTIFIER: _get_optional_attribute(
             experiment_info,
             f".{xml_namespace}bibref/{xml_namespace}xref/{xml_namespace}primaryRef",
             PSI_MI_RAW_ATTRS.ID,
@@ -276,9 +323,8 @@ def _format_entry_interactor_xrefs(
             PSI_MI_DEFS.REF_TYPE: x.tag.endswith(PSI_MI_RAW_ATTRS.PRIMARY_REF)
             and PSI_MI_DEFS.PRIMARY
             or PSI_MI_DEFS.SECONDARY,
-            PSI_MI_RAW_ATTRS.TAG: x.tag,
-            PSI_MI_RAW_ATTRS.DB: x.attrib.get(PSI_MI_RAW_ATTRS.DB, ""),
-            PSI_MI_RAW_ATTRS.ID: x.attrib.get(PSI_MI_RAW_ATTRS.ID, ""),
+            IDENTIFIERS.ONTOLOGY: x.attrib.get(PSI_MI_RAW_ATTRS.DB, ""),
+            IDENTIFIERS.IDENTIFIER: x.attrib.get(PSI_MI_RAW_ATTRS.ID, ""),
         }
         for x in xref_nodes
     ]
@@ -369,76 +415,8 @@ def _format_entry_interaction_participants(
     return out
 
 
-def _sanitize_intact_identifiers(
-    identifier: str,
-    ontology: str,
-    include_unmatched: bool = False,
-    ensembl_vague: str = INTACT_ONTOLOGY_ENSEMBL_VAGUE,
-    ontology_cv_lookup: dict = INTACT_ONTOLOGY_CV_LOOKUP,
-) -> dict:
-    """
-    Sanitize an IntAct identifier.
-
-    Parameters
-    ----------
-    identifier (str):
-        The identifier to sanitize
-    ontology (str):
-        The ontology of the identifier
-    include_unmatched (bool):
-        Whether to include ontologies that are not in ONTOLOGIES_LIST
-    ensembl_vague (str):
-        The vague ontology to use for Ensembl identifiers. This will be used to distinguish
-        ENSG, ENST and ENSP identifiers.
-    ontology_cv_lookup (dict):
-        A dictionary mapping IntAct ontologies to entries in the Napistu ONTOLOGIES CV.
-
-    Returns
-    -------
-    dict:
-        A dictionary containing the sanitized identifier, ontology, and URL.
-    """
-
-    if ontology in ontology_cv_lookup.keys():
-        ontology = ontology_cv_lookup[ontology]
-
-    if ontology == ensembl_vague:
-        try:
-            identifier, ontology, _ = parse_ensembl_id(identifier)
-        except Exception:
-            # these are mostly obscure orthologues
-            return {}
-
-    if ontology not in ONTOLOGIES_LIST:
-        if not include_unmatched:
-            return {}
-        else:
-            logger.warning(f"Ontology {ontology} not in ONTOLOGIES_LIST")
-
-    return {
-        IDENTIFIERS.ONTOLOGY: ontology,
-        IDENTIFIERS.IDENTIFIER: identifier,
-        IDENTIFIERS.BQB: BQB.IS,
-    }
-
-
 def _format_study_level_data(one_study):
-
-    study_data = one_study[PSI_MI_DEFS.EXPERIMENT]
-    reaction_id = _sanitize_intact_identifiers(
-        ontology=study_data[PSI_MI_REFS.PRIMARY_REF_DB],
-        identifier=study_data[PSI_MI_REFS.PRIMARY_REF_ID],
-    )
-
-    out = {
-        PSI_MI_DEFS.EXPERIMENT_NAME: study_data[PSI_MI_DEFS.EXPERIMENT_NAME],
-        PSI_MI_DEFS.INTERACTION_METHOD: study_data[PSI_MI_DEFS.INTERACTION_METHOD],
-        SBML_DFS.R_IDENTIFIERS: Identifiers(
-            [reaction_id] if reaction_id is not None else []
-        ),
-    }
-
-    return pd.DataFrame(out, index=[0])
+    return pd.DataFrame(one_study[PSI_MI_DEFS.EXPERIMENT], index=[0])
 
 
 def _create_reaction_species_df(one_study):
@@ -466,27 +444,12 @@ def _create_species_df(one_study: dict[str, Any]) -> pd.DataFrame:
     species_identifiers = list()
     for spec in one_study[PSI_MI_DEFS.INTERACTOR_LIST]:
 
-        valid_xrefs = [
-            x
-            for x in spec[PSI_MI_DEFS.INTERACTOR_XREFS]
-            if x[PSI_MI_DEFS.REF_TYPE] == PSI_MI_DEFS.PRIMARY
-            or x[PSI_MI_RAW_ATTRS.DB] == ONTOLOGIES.INTACT
+        # Add interactor_id to each cross-reference
+        spec_identifiers = [
+            {**xref, PSI_MI_DEFS.INTERACTOR_ID: spec[PSI_MI_DEFS.INTERACTOR_ID]}
+            for xref in spec[PSI_MI_DEFS.INTERACTOR_XREFS]
         ]
-
-        # new ids dict entries
-        ids = [
-            {
-                **_sanitize_intact_identifiers(
-                    x[PSI_MI_RAW_ATTRS.ID],
-                    x[PSI_MI_RAW_ATTRS.DB],
-                    include_unmatched=False,
-                ),
-                PSI_MI_DEFS.INTERACTOR_ID: spec[PSI_MI_DEFS.INTERACTOR_ID],
-            }
-            for x in valid_xrefs
-        ]
-
-        species_identifiers.append(ids)
+        species_identifiers.append(spec_identifiers)
 
         spec_summary = {
             PSI_MI_DEFS.INTERACTOR_ID: spec[PSI_MI_DEFS.INTERACTOR_ID],
@@ -503,7 +466,9 @@ def _create_species_df(one_study: dict[str, Any]) -> pd.DataFrame:
     return species_df, species_identifiers
 
 
-def _get_optional_text(element, xpath: str, default: str = "") -> str:
+def _get_optional_text(
+    element, xpath: str, default: str = PSI_MI_MISSING_VALUE_STR
+) -> str:
     """
     Safely extract text from an optional XML element.
 
@@ -528,7 +493,7 @@ def _get_optional_text(element, xpath: str, default: str = "") -> str:
 
 
 def _get_optional_attribute(
-    element, xpath: str, attribute: str, default: str = ""
+    element, xpath: str, attribute: str, default: str = PSI_MI_MISSING_VALUE_STR
 ) -> str:
     """
     Safely extract an attribute from an optional XML element.

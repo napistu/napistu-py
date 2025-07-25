@@ -566,7 +566,7 @@ def _select_top_pathway_by_enrichment(
     pathway_members = pathway_members.loc[pathway_members >= min_pw_size]
     if pathway_members.shape[0] == 0:
         return None
-    
+
     source_total_counts = _ensure_source_total_counts(source_total_counts)
     if source_total_counts is None:
         raise ValueError("`source_total_counts` is empty or invalid.")
@@ -637,7 +637,7 @@ def _update_unaccounted_for_members(
 def _ensure_source_total_counts(
     source_total_counts: Optional[pd.Series | pd.DataFrame], verbose: bool = False
 ) -> Optional[pd.Series]:
-    
+
     if source_total_counts is None:
         return None
 
@@ -667,18 +667,26 @@ def _ensure_source_total_counts(
     # Ensure the Series has the correct name and index name
     if source_total_counts.name != CONTINGENCY_TABLE.TOTAL_COUNTS:
         if verbose:
-            logger.warning(f"source_total_counts has name '{source_total_counts.name}' but expected '{CONTINGENCY_TABLE.TOTAL_COUNTS}'. Renaming to '{CONTINGENCY_TABLE.TOTAL_COUNTS}'.")
+            logger.warning(
+                f"source_total_counts has name '{source_total_counts.name}' but expected '{CONTINGENCY_TABLE.TOTAL_COUNTS}'. Renaming to '{CONTINGENCY_TABLE.TOTAL_COUNTS}'."
+            )
         source_total_counts = source_total_counts.rename(CONTINGENCY_TABLE.TOTAL_COUNTS)
 
     if source_total_counts.index.name != SOURCE_SPEC.PATHWAY_ID:
         if verbose:
-            logger.warning(f"source_total_counts has index name '{source_total_counts.index.name}' but expected '{SOURCE_SPEC.PATHWAY_ID}'. Renaming to '{SOURCE_SPEC.PATHWAY_ID}'.")
+            logger.warning(
+                f"source_total_counts has index name '{source_total_counts.index.name}' but expected '{SOURCE_SPEC.PATHWAY_ID}'. Renaming to '{SOURCE_SPEC.PATHWAY_ID}'."
+            )
         source_total_counts.index.name = SOURCE_SPEC.PATHWAY_ID
 
     # index should be character and values should be integerish
-    if not source_total_counts.index.dtype == 'object':
-        raise ValueError(f"source_total_counts index must be a string, but got {source_total_counts.index.dtype}")
+    if not source_total_counts.index.dtype == "object":
+        raise ValueError(
+            f"source_total_counts index must be a string, but got {source_total_counts.index.dtype}"
+        )
     if not np.issubdtype(source_total_counts.values.dtype, np.number):
-        raise ValueError(f"source_total_counts values must be numeric, but got {source_total_counts.values.dtype}")
+        raise ValueError(
+            f"source_total_counts values must be numeric, but got {source_total_counts.values.dtype}"
+        )
 
     return source_total_counts
