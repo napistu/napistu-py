@@ -11,9 +11,7 @@ from napistu.consensus import construct_sbml_dfs_dict
 from napistu.ontologies.renaming import rename_species_ontologies
 from napistu.ingestion.constants import BIGG_MODEL_KEYS
 from napistu.ingestion.constants import BIGG_MODEL_URLS
-from napistu.ingestion.constants import SPECIES_FULL_NAME_HUMAN
-from napistu.ingestion.constants import SPECIES_FULL_NAME_MOUSE
-from napistu.ingestion.constants import SPECIES_FULL_NAME_YEAST
+from napistu.ingestion.constants import LATIN_SPECIES_NAMES
 from fs import open_fs
 
 logger = logging.getLogger(__name__)
@@ -39,9 +37,9 @@ def bigg_sbml_download(bg_pathway_root: str, overwrite: bool = False) -> None:
         model_keys=BIGG_MODEL_KEYS,
         model_urls=BIGG_MODEL_URLS,
         model_species={
-            SPECIES_FULL_NAME_HUMAN: SPECIES_FULL_NAME_HUMAN,
-            SPECIES_FULL_NAME_MOUSE: SPECIES_FULL_NAME_MOUSE,
-            SPECIES_FULL_NAME_YEAST: SPECIES_FULL_NAME_YEAST,
+            LATIN_SPECIES_NAMES.HOMO_SAPIENS: LATIN_SPECIES_NAMES.HOMO_SAPIENS,
+            LATIN_SPECIES_NAMES.MUS_MUSCULUS: LATIN_SPECIES_NAMES.MUS_MUSCULUS,
+            LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE: LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE,
         },
         base_path=bg_pathway_root,
         source_name="BiGG",

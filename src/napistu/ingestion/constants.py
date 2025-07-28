@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Dict
 
 from napistu.constants import (
     ONTOLOGIES,
@@ -9,11 +10,25 @@ from napistu.constants import (
     SBOTERM_NAMES,
 )
 
-SPECIES_FULL_NAME_HUMAN = "Homo sapiens"
-SPECIES_FULL_NAME_MOUSE = "Mus musculus"
-SPECIES_FULL_NAME_YEAST = "Saccharomyces cerevisiae"
-SPECIES_FULL_NAME_RAT = "Rattus norvegicus"
-SPECIES_FULL_NAME_WORM = "Caenorhabditis elegans"
+
+LATIN_SPECIES_NAMES = SimpleNamespace(
+    HOMO_SAPIENS="Homo sapiens",
+    MUS_MUSCULUS="Mus musculus",
+    SACCHAROMYCES_CEREVISIAE="Saccharomyces cerevisiae",
+    RATTUS_NORVEGICUS="Rattus norvegicus",
+    CAENORHABDITIS_ELEGANS="Caenorhabditis elegans",
+    DROSOPHILIA_MELANOGASTER="Drosophila melanogaster",
+)
+
+LATIN_TO_COMMON_SPECIES_NAMES: Dict[str, str] = {
+    # Latin name -> common name
+    LATIN_SPECIES_NAMES.HOMO_SAPIENS: "human",
+    LATIN_SPECIES_NAMES.MUS_MUSCULUS: "mouse",
+    LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE: "yeast",
+    LATIN_SPECIES_NAMES.RATTUS_NORVEGICUS: "rat",
+    LATIN_SPECIES_NAMES.CAENORHABDITIS_ELEGANS: "worm",
+    LATIN_SPECIES_NAMES.DROSOPHILIA_MELANOGASTER: "fly",
+}
 
 PROTEINATLAS_SUBCELL_LOC_URL = (
     "https://www.proteinatlas.org/download/tsv/subcellular_location.tsv.zip"
@@ -34,18 +49,18 @@ GTEX_DEFS = SimpleNamespace(
 
 # BIGG
 BIGG_MODEL_URLS = {
-    SPECIES_FULL_NAME_HUMAN: "http://bigg.ucsd.edu/static/models/Recon3D.xml",
-    SPECIES_FULL_NAME_MOUSE: "http://bigg.ucsd.edu/static/models/iMM1415.xml",
-    SPECIES_FULL_NAME_YEAST: "http://bigg.ucsd.edu/static/models/iMM904.xml",
+    LATIN_SPECIES_NAMES.HOMO_SAPIENS: "http://bigg.ucsd.edu/static/models/Recon3D.xml",
+    LATIN_SPECIES_NAMES.MUS_MUSCULUS: "http://bigg.ucsd.edu/static/models/iMM1415.xml",
+    LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE: "http://bigg.ucsd.edu/static/models/iMM904.xml",
 }
 
 BIGG_MODEL_FIELD_URL = "url"
 BIGG_MODEL_FIELD_SPECIES = "species"
 
 BIGG_MODEL_KEYS = {
-    SPECIES_FULL_NAME_HUMAN: "recon3D",
-    SPECIES_FULL_NAME_MOUSE: "iMM1415",
-    SPECIES_FULL_NAME_YEAST: "iMM904",
+    LATIN_SPECIES_NAMES.HOMO_SAPIENS: "recon3D",
+    LATIN_SPECIES_NAMES.MUS_MUSCULUS: "iMM1415",
+    LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE: "iMM904",
 }
 BIGG_RECON3D_FIELD_ID = "id"
 BIGG_RECON3D_FIELD_TYPE = "type"
@@ -80,11 +95,11 @@ PSI_MI_INTACT_FTP_URL = (
 PSI_MI_INTACT_XML_NAMESPACE = "{http://psi.hupo.org/mi/mif300}"
 
 PSI_MI_INTACT_SPECIES_TO_BASENAME = {
-    SPECIES_FULL_NAME_YEAST: "yeast",
-    SPECIES_FULL_NAME_HUMAN: "human",
-    SPECIES_FULL_NAME_MOUSE: "mouse",
-    SPECIES_FULL_NAME_RAT: "rat",
-    SPECIES_FULL_NAME_WORM: "caeel",
+    LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE: "yeast",
+    LATIN_SPECIES_NAMES.HOMO_SAPIENS: "human",
+    LATIN_SPECIES_NAMES.MUS_MUSCULUS: "mouse",
+    LATIN_SPECIES_NAMES.RATTUS_NORVEGICUS: "rat",
+    LATIN_SPECIES_NAMES.CAENORHABDITIS_ELEGANS: "caeel",
 }
 
 PSI_MI_RAW_ATTRS = SimpleNamespace(
@@ -215,6 +230,14 @@ INTACT_TERM_SCORES = {
     PSI_MI_SCORED_TERMS.UNKNOWN: 0.05,
 }
 
+# omnipath
+
+VALID_OMNIPATH_SPECIES = {
+    LATIN_SPECIES_NAMES.HOMO_SAPIENS,
+    LATIN_SPECIES_NAMES.MUS_MUSCULUS,
+    LATIN_SPECIES_NAMES.RATTUS_NORVEGICUS,
+}
+
 # REACTOME
 REACTOME_SMBL_URL = "https://reactome.org/download/current/all_species.3.1.sbml.tgz"
 REACTOME_PATHWAYS_URL = "https://reactome.org/download/current/ReactomePathways.txt"
@@ -306,11 +329,11 @@ STRING_TARGET = "protein2"
 STRING_VERSION = 11.5
 
 STRING_TAX_IDS = {
-    SPECIES_FULL_NAME_WORM: 6239,
-    SPECIES_FULL_NAME_HUMAN: 9606,
-    SPECIES_FULL_NAME_MOUSE: 10090,
-    SPECIES_FULL_NAME_RAT: 10116,
-    SPECIES_FULL_NAME_YEAST: 4932,
+    LATIN_SPECIES_NAMES.CAENORHABDITIS_ELEGANS: 6239,
+    LATIN_SPECIES_NAMES.HOMO_SAPIENS: 9606,
+    LATIN_SPECIES_NAMES.MUS_MUSCULUS: 10090,
+    LATIN_SPECIES_NAMES.RATTUS_NORVEGICUS: 10116,
+    LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE: 4932,
 }
 
 # TRRUST
