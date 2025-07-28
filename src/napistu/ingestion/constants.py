@@ -10,6 +10,7 @@ from napistu.constants import (
     SBOTERM_NAMES,
 )
 
+# standardization - species
 
 LATIN_SPECIES_NAMES = SimpleNamespace(
     HOMO_SAPIENS="Homo sapiens",
@@ -29,6 +30,152 @@ LATIN_TO_COMMON_SPECIES_NAMES: Dict[str, str] = {
     LATIN_SPECIES_NAMES.CAENORHABDITIS_ELEGANS: "worm",
     LATIN_SPECIES_NAMES.DROSOPHILIA_MELANOGASTER: "fly",
 }
+
+# standardization - compartments
+
+COMPARTMENTS = SimpleNamespace(
+    NUCLEOPLASM="nucleoplasm",
+    CYTOPLASM="cytoplasm",
+    CELLULAR_COMPONENT="cellular_component",
+    CYTOSOL="cytosol",
+    MITOCHONDRIA="mitochondria",
+    MITOMEMBRANE="mitochondrial membrane",
+    INNERMITOCHONDRIA="inner mitochondria",
+    MITOMATRIX="mitochondrial matrix",
+    ENDOPLASMICRETICULUM="endoplasmic reticulum",
+    ERMEMBRANE="endoplasmic reticulum membrane",
+    ERLUMEN="endoplasmic reticulum lumen",
+    GOLGIAPPARATUS="golgi apparatus",
+    GOLGIMEMBRANE="golgi membrane",
+    NUCLEUS="nucleus",
+    NUCLEARLUMEN="nuclear lumen",
+    NUCLEOLUS="nucleolus",
+    LYSOSOME="lysosome",
+    PEROXISOME="peroxisome",
+    EXTRACELLULAR="extracellular",
+)
+
+GENERIC_COMPARTMENT = COMPARTMENTS.CELLULAR_COMPONENT
+EXCHANGE_COMPARTMENT = COMPARTMENTS.CYTOSOL
+VALID_COMPARTMENTS = list(COMPARTMENTS.__dict__.values())
+
+COMPARTMENT_ALIASES = {
+    COMPARTMENTS.NUCLEOPLASM: ["nucleoplasm", "Nucleoplasm"],
+    COMPARTMENTS.CYTOPLASM: ["cytoplasm", "Cytoplasm"],
+    COMPARTMENTS.CELLULAR_COMPONENT: ["cellular_component", "Cellular_component"],
+    COMPARTMENTS.CYTOSOL: ["cytosol", "Cytosol"],
+    COMPARTMENTS.MITOCHONDRIA: ["mitochondria", "Mitochondria"],
+    COMPARTMENTS.MITOMEMBRANE: ["mitochondrial membrane", "Mitochondrial membrane"],
+    COMPARTMENTS.INNERMITOCHONDRIA: [
+        "inner mitochondria",
+        "Inner mitochondria",
+        "inner mitochondrial compartment",
+    ],
+    COMPARTMENTS.MITOMATRIX: [
+        "mitochondrial matrix",
+        "Mitochondrial matrix",
+        "mitochondrial lumen",
+        "Mitochondrial lumen",
+    ],
+    COMPARTMENTS.ENDOPLASMICRETICULUM: [
+        "endoplasmic reticulum",
+        "Endoplasmic reticulum",
+    ],
+    COMPARTMENTS.ERMEMBRANE: [
+        "endoplasmic reticulum membrane",
+        "Endoplasmic reticulum membrane",
+    ],
+    COMPARTMENTS.ERLUMEN: [
+        "endoplasmic reticulum lumen",
+        "Endoplasmic reticulum lumen",
+    ],
+    COMPARTMENTS.GOLGIAPPARATUS: ["golgi apparatus", "Golgi apparatus"],
+    COMPARTMENTS.GOLGIMEMBRANE: ["Golgi membrane", "golgi membrane"],
+    COMPARTMENTS.NUCLEUS: ["nucleus", "Nucleus"],
+    COMPARTMENTS.NUCLEARLUMEN: ["nuclear lumen", "Nuclear lumen"],
+    COMPARTMENTS.NUCLEOLUS: ["nucleolus", "Nucleolus"],
+    COMPARTMENTS.LYSOSOME: ["lysosome", "Lysosome"],
+    COMPARTMENTS.PEROXISOME: ["peroxisome", "Peroxisome", "peroxisome/glyoxysome"],
+    COMPARTMENTS.EXTRACELLULAR: [
+        "extracellular",
+        "Extracellular",
+        "extracellular space",
+        "Extracellular space",
+    ],
+}
+
+COMPARTMENTS_GO_TERMS = {
+    COMPARTMENTS.NUCLEOPLASM: "GO:0005654",
+    COMPARTMENTS.CELLULAR_COMPONENT: "GO:0005575",
+    COMPARTMENTS.CYTOPLASM: "GO:0005737",
+    COMPARTMENTS.CYTOSOL: "GO:0005829",
+    COMPARTMENTS.MITOCHONDRIA: "GO:0005739",
+    COMPARTMENTS.MITOMEMBRANE: "GO:0031966",
+    COMPARTMENTS.INNERMITOCHONDRIA: "GO:0005743",
+    COMPARTMENTS.MITOMATRIX: "GO:0005759",
+    COMPARTMENTS.ENDOPLASMICRETICULUM: "GO:0005783",
+    COMPARTMENTS.ERMEMBRANE: "GO:0005789",
+    COMPARTMENTS.ERLUMEN: "GO:0005788",
+    COMPARTMENTS.GOLGIAPPARATUS: "GO:0005794",
+    COMPARTMENTS.GOLGIMEMBRANE: "GO:0000139",
+    COMPARTMENTS.NUCLEUS: "GO:0005634",
+    COMPARTMENTS.NUCLEARLUMEN: "GO:0031981",
+    COMPARTMENTS.NUCLEOLUS: "GO:0005730",
+    COMPARTMENTS.LYSOSOME: "GO:0005764",
+    COMPARTMENTS.PEROXISOME: "GO:0005777",
+    COMPARTMENTS.EXTRACELLULAR: "GO:0005615",
+}
+
+# ingesting interaction edgelists to sbml_dfs
+
+INTERACTION_EDGELIST_DEFS = SimpleNamespace(
+    UPSTREAM_NAME="upstream_name",
+    DOWNSTREAM_NAME="downstream_name",
+    UPSTREAM_COMPARTMENT="upstream_compartment",
+    DOWNSTREAM_COMPARTMENT="downstream_compartment",
+    UPSTREAM_SBO_TERM_NAME="upstream_sbo_term_name",
+    DOWNSTREAM_SBO_TERM_NAME="downstream_sbo_term_name",
+    UPSTREAM_STOICHIOMETRY="upstream_stoichiometry",
+    DOWNSTREAM_STOICHIOMETRY="downstream_stoichiometry",
+)
+
+# terms which should be defined for every interaction either as a default or an explicit value
+INTERACTION_EDGELIST_EXPECTED_VARS = {
+    INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
+    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+    SBML_DFS.R_NAME,
+    SBML_DFS.R_IDENTIFIERS,
+    SBML_DFS.R_ISREVERSIBLE,
+    INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT,
+    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT,
+    INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
+    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME,
+    INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY,
+    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY,
+}
+
+# terms which can be defined at the interaction-level or globally
+INTERACTION_EDGELIST_OPTIONAL_VARS = {
+    INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT,
+    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT,
+    INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
+    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME,
+    INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY,
+    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY,
+    SBML_DFS.R_ISREVERSIBLE,
+}
+
+INTERACTION_EDGELIST_DEFAULTS = {
+    INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT: GENERIC_COMPARTMENT,
+    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT: GENERIC_COMPARTMENT,
+    INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.MODIFIER,
+    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.MODIFIED,
+    INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY: 0,
+    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY: 0,
+    SBML_DFS.R_ISREVERSIBLE: False,
+}
+
+# ETLing specific sources
 
 PROTEINATLAS_SUBCELL_LOC_URL = (
     "https://www.proteinatlas.org/download/tsv/subcellular_location.tsv.zip"
@@ -86,7 +233,6 @@ IDENTIFIERS_ETL_YEAST_FIELDS = (
 # OBO
 OBO_GO_BASIC_URL = "http://purl.obolibrary.org/obo/go/go-basic.obo"
 OBO_GO_BASIC_LOCAL_TMP = "/tmp/go-basic.obo"
-
 
 # PSI MI
 PSI_MI_INTACT_FTP_URL = (
@@ -171,7 +317,6 @@ VALID_INTACT_EXPERIMENTAL_ROLES = {
 }
 
 # adding scores and consolidating terms for IntAct
-
 INTACT_SCORES = SimpleNamespace(
     ATTRIBUTE_TYPE="attribute_type",
     ATTRIBUTE_VALUE="attribute_value",
@@ -237,6 +382,31 @@ VALID_OMNIPATH_SPECIES = {
     LATIN_SPECIES_NAMES.MUS_MUSCULUS,
     LATIN_SPECIES_NAMES.RATTUS_NORVEGICUS,
 }
+
+OMNIPATH_ANNOTATIONS = SimpleNamespace(
+    NAME="name",
+    ANNOTATION="annotation",
+    ANNOTATION_STR="annotation_str",
+)
+
+OMNIPATH_INTERACTIONS = SimpleNamespace(
+    INTERACTOR_ID="interactor_id",
+    SOURCE="source",
+    TARGET="target",
+    IS_DIRECTED="is_directed",
+    IS_STIMULATION="is_stimulation",
+    IS_INHIBITION="is_inhibition",
+    CONSENSUS_DIRECTION="consensus_direction",
+    CONSENSUS_STIMULATION="consensus_stimulation",
+    CONSENSUS_INHIBITION="consensus_inhibition",
+    CURATION_EFFORT="curation_effort",
+    REFERENCES="references",
+    SOURCES="sources",
+    N_SOURCES="n_sources",
+    N_PRIMARY_SOURCES="n_primary_sources",
+    N_REFERENCES="n_references",
+    REFERENCES_STRIPPED="references_stripped",
+)
 
 # REACTOME
 REACTOME_SMBL_URL = "https://reactome.org/download/current/all_species.3.1.sbml.tgz"
@@ -359,143 +529,3 @@ YEAST_IDEA_PUBMED_ID = "32181581"  # ids are characters by convention
 # Identifiers ETL
 
 IDENTIFIERS_ETL_YEAST_HEADER_REGEX = "__________"
-
-COMPARTMENTS = SimpleNamespace(
-    NUCLEOPLASM="nucleoplasm",
-    CYTOPLASM="cytoplasm",
-    CELLULAR_COMPONENT="cellular_component",
-    CYTOSOL="cytosol",
-    MITOCHONDRIA="mitochondria",
-    MITOMEMBRANE="mitochondrial membrane",
-    INNERMITOCHONDRIA="inner mitochondria",
-    MITOMATRIX="mitochondrial matrix",
-    ENDOPLASMICRETICULUM="endoplasmic reticulum",
-    ERMEMBRANE="endoplasmic reticulum membrane",
-    ERLUMEN="endoplasmic reticulum lumen",
-    GOLGIAPPARATUS="golgi apparatus",
-    GOLGIMEMBRANE="golgi membrane",
-    NUCLEUS="nucleus",
-    NUCLEARLUMEN="nuclear lumen",
-    NUCLEOLUS="nucleolus",
-    LYSOSOME="lysosome",
-    PEROXISOME="peroxisome",
-    EXTRACELLULAR="extracellular",
-)
-
-GENERIC_COMPARTMENT = COMPARTMENTS.CELLULAR_COMPONENT
-EXCHANGE_COMPARTMENT = COMPARTMENTS.CYTOSOL
-VALID_COMPARTMENTS = list(COMPARTMENTS.__dict__.values())
-
-COMPARTMENT_ALIASES = {
-    COMPARTMENTS.NUCLEOPLASM: ["nucleoplasm", "Nucleoplasm"],
-    COMPARTMENTS.CYTOPLASM: ["cytoplasm", "Cytoplasm"],
-    COMPARTMENTS.CELLULAR_COMPONENT: ["cellular_component", "Cellular_component"],
-    COMPARTMENTS.CYTOSOL: ["cytosol", "Cytosol"],
-    COMPARTMENTS.MITOCHONDRIA: ["mitochondria", "Mitochondria"],
-    COMPARTMENTS.MITOMEMBRANE: ["mitochondrial membrane", "Mitochondrial membrane"],
-    COMPARTMENTS.INNERMITOCHONDRIA: [
-        "inner mitochondria",
-        "Inner mitochondria",
-        "inner mitochondrial compartment",
-    ],
-    COMPARTMENTS.MITOMATRIX: [
-        "mitochondrial matrix",
-        "Mitochondrial matrix",
-        "mitochondrial lumen",
-        "Mitochondrial lumen",
-    ],
-    COMPARTMENTS.ENDOPLASMICRETICULUM: [
-        "endoplasmic reticulum",
-        "Endoplasmic reticulum",
-    ],
-    COMPARTMENTS.ERMEMBRANE: [
-        "endoplasmic reticulum membrane",
-        "Endoplasmic reticulum membrane",
-    ],
-    COMPARTMENTS.ERLUMEN: [
-        "endoplasmic reticulum lumen",
-        "Endoplasmic reticulum lumen",
-    ],
-    COMPARTMENTS.GOLGIAPPARATUS: ["golgi apparatus", "Golgi apparatus"],
-    COMPARTMENTS.GOLGIMEMBRANE: ["Golgi membrane", "golgi membrane"],
-    COMPARTMENTS.NUCLEUS: ["nucleus", "Nucleus"],
-    COMPARTMENTS.NUCLEARLUMEN: ["nuclear lumen", "Nuclear lumen"],
-    COMPARTMENTS.NUCLEOLUS: ["nucleolus", "Nucleolus"],
-    COMPARTMENTS.LYSOSOME: ["lysosome", "Lysosome"],
-    COMPARTMENTS.PEROXISOME: ["peroxisome", "Peroxisome", "peroxisome/glyoxysome"],
-    COMPARTMENTS.EXTRACELLULAR: [
-        "extracellular",
-        "Extracellular",
-        "extracellular space",
-        "Extracellular space",
-    ],
-}
-
-COMPARTMENTS_GO_TERMS = {
-    COMPARTMENTS.NUCLEOPLASM: "GO:0005654",
-    COMPARTMENTS.CELLULAR_COMPONENT: "GO:0005575",
-    COMPARTMENTS.CYTOPLASM: "GO:0005737",
-    COMPARTMENTS.CYTOSOL: "GO:0005829",
-    COMPARTMENTS.MITOCHONDRIA: "GO:0005739",
-    COMPARTMENTS.MITOMEMBRANE: "GO:0031966",
-    COMPARTMENTS.INNERMITOCHONDRIA: "GO:0005743",
-    COMPARTMENTS.MITOMATRIX: "GO:0005759",
-    COMPARTMENTS.ENDOPLASMICRETICULUM: "GO:0005783",
-    COMPARTMENTS.ERMEMBRANE: "GO:0005789",
-    COMPARTMENTS.ERLUMEN: "GO:0005788",
-    COMPARTMENTS.GOLGIAPPARATUS: "GO:0005794",
-    COMPARTMENTS.GOLGIMEMBRANE: "GO:0000139",
-    COMPARTMENTS.NUCLEUS: "GO:0005634",
-    COMPARTMENTS.NUCLEARLUMEN: "GO:0031981",
-    COMPARTMENTS.NUCLEOLUS: "GO:0005730",
-    COMPARTMENTS.LYSOSOME: "GO:0005764",
-    COMPARTMENTS.PEROXISOME: "GO:0005777",
-    COMPARTMENTS.EXTRACELLULAR: "GO:0005615",
-}
-
-INTERACTION_EDGELIST_DEFS = SimpleNamespace(
-    UPSTREAM_NAME="upstream_name",
-    DOWNSTREAM_NAME="downstream_name",
-    UPSTREAM_COMPARTMENT="upstream_compartment",
-    DOWNSTREAM_COMPARTMENT="downstream_compartment",
-    UPSTREAM_SBO_TERM_NAME="upstream_sbo_term_name",
-    DOWNSTREAM_SBO_TERM_NAME="downstream_sbo_term_name",
-    UPSTREAM_STOICHIOMETRY="upstream_stoichiometry",
-    DOWNSTREAM_STOICHIOMETRY="downstream_stoichiometry",
-)
-
-# terms which should be defined for every interaction either as a default or an explicit value
-INTERACTION_EDGELIST_EXPECTED_VARS = {
-    INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
-    SBML_DFS.R_NAME,
-    SBML_DFS.R_IDENTIFIERS,
-    SBML_DFS.R_ISREVERSIBLE,
-    INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT,
-    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT,
-    INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
-    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME,
-    INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY,
-    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY,
-}
-
-# terms which can be defined at the interaction-level or globally
-INTERACTION_EDGELIST_OPTIONAL_VARS = {
-    INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT,
-    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT,
-    INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
-    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME,
-    INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY,
-    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY,
-    SBML_DFS.R_ISREVERSIBLE,
-}
-
-INTERACTION_EDGELIST_DEFAULTS = {
-    INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT: GENERIC_COMPARTMENT,
-    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT: GENERIC_COMPARTMENT,
-    INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.MODIFIER,
-    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.MODIFIED,
-    INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY: 0,
-    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY: 0,
-    SBML_DFS.R_ISREVERSIBLE: False,
-}

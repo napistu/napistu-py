@@ -1,10 +1,23 @@
+import logging
 from typing import Union
 import pandas as pd
 
 from omnipath import interactions
-from napistu.ingestion.species import SpeciesValidator
-from napistu.ingestion.constants import VALID_OMNIPATH_SPECIES
 
+from napistu.identifiers import Identifiers
+from napistu.ontologies.genodexito import Genodexito
+from napistu.ingestion.species import SpeciesValidator
+from napistu.ontologies.pubchem import map_pubchem_ids
+from napistu.ontologies.mirbase import load_mirbase_xrefs
+from napistu.constants import SBML_DFS, IDENTIFIERS, BQB, ONTOLOGIES
+from napistu.ingestion.constants import (
+    OMNIPATH_ANNOTATIONS,
+    OMNIPATH_INTERACTIONS,
+    VALID_OMNIPATH_SPECIES,
+)
+from napistu.ontologies.constants import GENODEXITO_DEFS, PUBCHEM_DEFS, MIRBASE_TABLES
+
+logger = logging.getLogger(__name__)
 
 # Map dataset names to interaction classes
 OMNIPATH_FXN_MAP = {
@@ -25,7 +38,9 @@ OMNIPATH_FXN_MAP = {
 
 
 def get_interactions(
-    dataset: Union[str, object] = "all", organismal_species: str = "human", **kwargs
+    dataset: Union[str, object] = "all",
+    organismal_species: Union[str, SpeciesValidator] = "human",
+    **kwargs,
 ) -> pd.DataFrame:
     """
     Retrieve interaction data from Omnipath with corrected evidence processing.
@@ -149,7 +164,8 @@ def get_interactions(
             "Please don't specify 'organism' directly. Use the 'organismal_species' argument instead."
         )
 
-    species = SpeciesValidator(organismal_species)
+    if isinstance(organismal_species, str):
+        species = SpeciesValidator(organismal_species)
     species.assert_supported(VALID_OMNIPATH_SPECIES)
 
     # Get the interaction class
@@ -188,7 +204,216 @@ def _fix_consensus_logic(df: pd.DataFrame) -> pd.DataFrame:
 
     if problematic.sum() > 0:
         # Fix the problematic records
-        df.loc[problematic, "consensus_stimulation"] = False
-        df.loc[problematic, "consensus_inhibition"] = False
+        df.loc[problematic, OMNIPATH_INTERACTIONS.CONSENSUS_STIMULATION] = False
+        df.loc[problematic, OMNIPATH_INTERACTIONS.CONSENSUS_INHIBITION] = False
+
+    return df
+
+
+def _prepare_integer_based_ids(interactor_int_ids: list[str]) -> pd.DataFrame:
+
+    logger.info(f"Searching PubChem for {len(interactor_int_ids)} integer-based IDs")
+
+    pubchem_ids = map_pubchem_ids(interactor_int_ids, verbose=False)
+
+    pubchem_species = (
+        pd.DataFrame(pubchem_ids)
+        .T.rename_axis(OMNIPATH_INTERACTIONS.INTERACTOR_ID)
+        .reset_index()
+        .rename(columns={PUBCHEM_DEFS.NAME: SBML_DFS.S_NAME})
+    )
+
+    pubchem_species[SBML_DFS.S_IDENTIFIERS] = [
+        Identifiers(
+            [
+                {
+                    IDENTIFIERS.ONTOLOGY: ONTOLOGIES.PUBCHEM,
+                    IDENTIFIERS.IDENTIFIER: row[OMNIPATH_INTERACTIONS.INTERACTOR_ID],
+                    IDENTIFIERS.BQB: BQB.IS,
+                },
+                {
+                    IDENTIFIERS.ONTOLOGY: ONTOLOGIES.SMILES,
+                    IDENTIFIERS.IDENTIFIER: row[PUBCHEM_DEFS.SMILES],
+                    IDENTIFIERS.BQB: BQB.IS,
+                },
+            ]
+        )
+        for _, row in pubchem_species.iterrows()
+    ]
+
+    return pubchem_species.drop(columns=PUBCHEM_DEFS.SMILES)
+
+
+def _prepare_omnipath_ids_uniprot(
+    interactor_string_ids: list[str],
+    organismal_species: Union[str, SpeciesValidator],
+    preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
+    allow_fallback: bool = True,
+) -> pd.DataFrame:
+
+    if isinstance(organismal_species, str):
+        species = SpeciesValidator(organismal_species)
+
+    logger.info(
+        f"Searching Genodexito for {species.common_name} ({species.latin_name}) Uniprot annotations"
+    )
+
+    genodexito = Genodexito(
+        species=species.latin_name,
+        preferred_method=preferred_method,
+        allow_fallback=allow_fallback,
+    )
+
+    genodexito.create_mapping_tables({ONTOLOGIES.UNIPROT, ONTOLOGIES.GENE_NAME})
+    genodexito.merge_mappings()
+
+    # remove entries missing Uniprot IDs
+    uniprot_species = (
+        genodexito.merged_mappings.dropna(subset=[ONTOLOGIES.UNIPROT])
+        .drop(columns=[ONTOLOGIES.NCBI_ENTREZ_GENE])
+        .reset_index(drop=True)
+        .rename(
+            columns={
+                ONTOLOGIES.GENE_NAME: SBML_DFS.S_NAME,
+                ONTOLOGIES.UNIPROT: OMNIPATH_INTERACTIONS.INTERACTOR_ID,
+            }
+        )
+        .query(f"{OMNIPATH_INTERACTIONS.INTERACTOR_ID} in @interactor_string_ids")
+    )
+
+    logger.info(f"Found {len(uniprot_species)} Uniprot species")
+
+    uniprot_species[SBML_DFS.S_IDENTIFIERS] = [
+        Identifiers(
+            [
+                {
+                    IDENTIFIERS.ONTOLOGY: ONTOLOGIES.UNIPROT,
+                    IDENTIFIERS.IDENTIFIER: x,
+                    IDENTIFIERS.BQB: BQB.IS,
+                }
+            ]
+        )
+        for x in uniprot_species[OMNIPATH_INTERACTIONS.INTERACTOR_ID]
+    ]
+
+    return uniprot_species
+
+
+def _prepare_omnipath_ids_mirbase(
+    interactor_string_ids: list[str],  # noqa: F401
+) -> pd.DataFrame:
+
+    logger.info("Loading miRBase for cross references")
+
+    mirbase_xrefs = load_mirbase_xrefs()
+
+    mirbase_species = (
+        mirbase_xrefs.query(f"{MIRBASE_TABLES.PRIMARY_ID} in @interactor_string_ids")[
+            [MIRBASE_TABLES.PRIMARY_ID, MIRBASE_TABLES.SECONDARY_ID]
+        ]
+        .drop_duplicates()
+        .rename(
+            columns={
+                MIRBASE_TABLES.PRIMARY_ID: OMNIPATH_INTERACTIONS.INTERACTOR_ID,
+                MIRBASE_TABLES.SECONDARY_ID: SBML_DFS.S_NAME,
+            }
+        )
+    )
+
+    logger.info(f"Found {len(mirbase_species)} miRBase species")
+
+    mirbase_species[SBML_DFS.S_IDENTIFIERS] = [
+        Identifiers(
+            [
+                {
+                    IDENTIFIERS.ONTOLOGY: ONTOLOGIES.MIRBASE,
+                    IDENTIFIERS.IDENTIFIER: x,
+                    IDENTIFIERS.BQB: BQB.IS,
+                }
+            ]
+        )
+        for x in mirbase_species[OMNIPATH_INTERACTIONS.INTERACTOR_ID]
+    ]
+
+    return mirbase_species
+
+
+def _parse_omnipath_named_annotation(annotation_str: str) -> pd.DataFrame:
+    """
+    Convert a semicolon-separated named annotation string to a pandas DataFrame.
+
+    Parses strings in the format 'name:annotation;name:annotation;...' into a DataFrame
+    with columns for name, annotation, and the original annotation string.
+
+    Parameters
+    ----------
+    annotation_str : str
+        String containing named annotations separated by semicolons,
+        with each annotation in the format 'name:annotation'.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with columns 'name', 'annotation', and 'annotation_str'.
+
+    Examples
+    --------
+    >>> s = 'CORUM:4478;Compleat:HC1449;PDB:4awl'
+    >>> df = parse_omnipath_named_annotation(s)
+    >>> print(df)
+         name annotation                    annotation_str
+    0   CORUM       4478  CORUM:4478;Compleat:HC1449;PDB:4awl
+    1 Compleat    HC1449  CORUM:4478;Compleat:HC1449;PDB:4awl
+    2      PDB       4awl  CORUM:4478;Compleat:HC1449;PDB:4awl
+    """
+    # Split by semicolon and then by colon
+    pairs = [item.split(":", 1) for item in annotation_str.split(";") if item.strip()]
+
+    # Create DataFrame
+    df = pd.DataFrame(
+        pairs, columns=[OMNIPATH_ANNOTATIONS.NAME, OMNIPATH_ANNOTATIONS.ANNOTATION]
+    )
+
+    # Add the original annotation string as a column
+    df[OMNIPATH_ANNOTATIONS.ANNOTATION_STR] = annotation_str
+
+    return df
+
+
+def _parse_omnipath_annotation(annotation_str: str) -> pd.DataFrame:
+    """
+    Convert a semicolon-separated annotation string to a pandas DataFrame.
+
+    Parses strings in the format 'annotation;annotation;...' into a DataFrame
+    with columns for annotation and the original annotation string.
+
+    Parameters
+    ----------
+    annotation_str : str
+        String containing annotations separated by semicolons.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with columns 'annotation' and 'annotation_str'.
+
+    Examples
+    --------
+    >>> s = '11290752;11983166;12601176'
+    >>> df = parse_omnipath_annotation(s)
+    >>> print(df)
+      annotation            annotation_str
+    0   11290752  11290752;11983166;12601176
+    1   11983166  11290752;11983166;12601176
+    2   12601176  11290752;11983166;12601176
+    """
+    # Split by semicolon and filter out empty strings
+    annotations = [item.strip() for item in annotation_str.split(";") if item.strip()]
+
+    # Create DataFrame
+    df = pd.DataFrame(annotations, columns=[OMNIPATH_ANNOTATIONS.ANNOTATION])
+
+    # Add the original annotation string as a column
+    df[OMNIPATH_ANNOTATIONS.ANNOTATION_STR] = annotation_str
 
     return df
