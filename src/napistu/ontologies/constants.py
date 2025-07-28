@@ -127,3 +127,18 @@ NAME_ONTOLOGIES = {
     ONTOLOGIES.UNIPROT: 2,
     ONTOLOGIES.ENSEMBL_PROTEIN: 3,
 }
+
+# PubChem constants
+PUBCHEM_ID_ENTRYPOINT = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cids_str}/property/IUPACName,Title,IsomericSMILES,SMILES/JSON"
+
+PUBCHEM_DEFS = SimpleNamespace(NAME="name", SMILES="smiles", PUBCHEM_ID="pubchem_id")
+
+PUBCHEM_PROPERTIES = SimpleNamespace(
+    CID="CID",
+    IUPAC_NAME="IUPACName",
+    TITLE="Title",
+    ISOMERIC_SMILES="IsomericSMILES",
+    SMILES="SMILES",
+    PROPERTY_TABLE="PropertyTable",
+    PROPERTIES="Properties",
+)
