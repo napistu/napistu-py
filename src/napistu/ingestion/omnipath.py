@@ -1,18 +1,35 @@
+import itertools
 import logging
 from typing import Union
-import pandas as pd
 
+import pandas as pd
+import omnipath as op
 from omnipath import interactions
 
+from napistu import sbml_dfs_core
+from napistu import sbml_dfs_utils
 from napistu.identifiers import Identifiers
+from napistu.ontologies import renaming
 from napistu.ontologies.genodexito import Genodexito
-from napistu.ingestion.species import SpeciesValidator
 from napistu.ontologies.pubchem import map_pubchem_ids
 from napistu.ontologies.mirbase import load_mirbase_xrefs
-from napistu.constants import SBML_DFS, IDENTIFIERS, BQB, ONTOLOGIES
+from napistu.ingestion.species import SpeciesValidator
+
+from napistu.constants import (
+    BQB,
+    SBML_DFS,
+    IDENTIFIERS,
+    ONTOLOGIES,
+    ONTOLOGIES_LIST,  # noqa: F401
+    SBOTERM_NAMES,
+)
 from napistu.ingestion.constants import (
+    INTERACTION_EDGELIST_DEFS,
     OMNIPATH_ANNOTATIONS,
+    OMNIPATH_COMPLEXES,
     OMNIPATH_INTERACTIONS,
+    OMNIPATH_ONTOLOGY_ALIASES,
+    REACTOME_FI,
     VALID_OMNIPATH_SPECIES,
 )
 from napistu.ontologies.constants import GENODEXITO_DEFS, PUBCHEM_DEFS, MIRBASE_TABLES
@@ -35,6 +52,110 @@ OMNIPATH_FXN_MAP = {
     "mirna": interactions.miRNA,
     "lncrna_mrna": interactions.lncRNAmRNA,
 }
+
+
+def format_omnipath_as_sbml_dfs(
+    organismal_species: str,
+    preferred_method: str,
+    allow_fallback: bool,
+    **kwargs,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+
+    organismal_species = SpeciesValidator(organismal_species)
+    organismal_species.assert_supported(VALID_OMNIPATH_SPECIES)
+
+    interactions = get_interactions(organismal_species=organismal_species, **kwargs)
+
+    interactor_ids = set(interactions[OMNIPATH_INTERACTIONS.SOURCE]) | set(
+        interactions[OMNIPATH_INTERACTIONS.TARGET]
+    )
+    interactor_int_ids = [x for x in interactor_ids if x.isdigit()]
+    interactor_string_ids = [x for x in interactor_ids if not x.isdigit()]
+
+    # connect interactors to systematic identifeirs and create readable names
+    if len(interactor_int_ids) > 0:
+        pubchem_species = _prepare_integer_based_ids(interactor_int_ids).assign(
+            species_type="small_molecule"
+        )
+    else:
+        logger.info("No integger-based IDs from pubchem found")
+        pubchem_species = pd.DataFrame()
+
+    uniprot_species = _prepare_omnipath_ids_uniprot(
+        interactor_string_ids,
+        organismal_species=organismal_species,
+        preferred_method=preferred_method,
+        allow_fallback=allow_fallback,
+    )
+
+    mirbase_species = _prepare_omnipath_ids_mirbase(interactor_string_ids)
+
+    complex_species, complex_formation_edgelist = _prepare_omnipath_ids_complexes(
+        interactor_string_ids
+    )
+
+    # aggregate all the different sources of interactors
+    interactor_df = pd.concat(
+        [
+            pubchem_species,
+            uniprot_species.assign(species_type="protein"),
+            mirbase_species.assign(species_type="miRNA"),
+            complex_species.assign(species_type="complex"),
+        ]
+    ).reset_index(drop=True)
+
+    unmapped_ids = interactor_ids - set(
+        interactor_df[OMNIPATH_INTERACTIONS.INTERACTOR_ID]
+    )
+    sample_unmapped_ids = (
+        pd.Series(list(unmapped_ids)).sample(n=min(10, len(unmapped_ids))).tolist()
+    )
+    logger.info(
+        f"{len(unmapped_ids)} interactor ids could not be matched to an ontology and will be dropped. Example unmapped ids: {sample_unmapped_ids}"
+    )
+
+    # ensure that s_names are unique
+    nondegenerate_species_df = _patch_degenerate_s_names(interactor_df)
+
+    if len(nondegenerate_species_df[SBML_DFS.S_NAME].unique()) != len(
+        nondegenerate_species_df
+    ):
+        raise ValueError(
+            "Duplicated s_names found following `_patch_degenerate_s_names`"
+        )
+
+    # format all distinct interactions into a single edgelist
+    interaction_edgelist = pd.concat(
+        [
+            _format_edgelist_interactions(
+                interactions=interactions,
+                nondegenerate_species_df=nondegenerate_species_df,
+            ),
+            _format_complex_interactions(
+                complex_formation_edgelist=complex_formation_edgelist,
+                nondegenerate_species_df=nondegenerate_species_df,
+            ),
+        ]
+    ).reset_index(drop=True)
+
+    interaction_edgelist[SBML_DFS.R_NAME] = interaction_edgelist.apply(
+        lambda row: sbml_dfs_utils._name_interaction(
+            row[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME],
+            row[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME],
+            row[INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME],
+        ),
+        axis=1,
+    )
+
+    # create an SBML_dfs object
+    sbml_dfs = sbml_dfs_core.sbml_dfs_from_edgelist(
+        interaction_edgelist,
+        nondegenerate_species_df.drop(columns=[OMNIPATH_INTERACTIONS.INTERACTOR_ID]),
+        compartments_df=sbml_dfs_utils.stub_compartments(),
+        keep_reactions_data=True,
+    )
+
+    return sbml_dfs
 
 
 def get_interactions(
@@ -165,8 +286,10 @@ def get_interactions(
         )
 
     if isinstance(organismal_species, str):
-        species = SpeciesValidator(organismal_species)
-    species.assert_supported(VALID_OMNIPATH_SPECIES)
+        organismal_species = SpeciesValidator(organismal_species)
+    if not isinstance(organismal_species, SpeciesValidator):
+        raise ValueError(f"Invalid organismal_species: {organismal_species}")
+    organismal_species.assert_supported(VALID_OMNIPATH_SPECIES)
 
     # Get the interaction class
     if isinstance(dataset, str):
@@ -180,7 +303,7 @@ def get_interactions(
 
     # Get the data with strict evidence processing
     df = interaction_class.get(
-        organism=species.common_name, strict_evidences=True, **kwargs
+        organism=organismal_species.common_name, strict_evidences=True, **kwargs
     )
 
     # Fix consensus logic bug
@@ -245,21 +368,23 @@ def _prepare_integer_based_ids(interactor_int_ids: list[str]) -> pd.DataFrame:
 
 
 def _prepare_omnipath_ids_uniprot(
-    interactor_string_ids: list[str],
+    interactor_string_ids: list[str],  # noqa: F401
     organismal_species: Union[str, SpeciesValidator],
     preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
     allow_fallback: bool = True,
 ) -> pd.DataFrame:
 
     if isinstance(organismal_species, str):
-        species = SpeciesValidator(organismal_species)
+        organismal_species = SpeciesValidator(organismal_species)
+    if not isinstance(organismal_species, SpeciesValidator):
+        raise ValueError(f"Invalid organismal_species: {organismal_species}")
 
     logger.info(
-        f"Searching Genodexito for {species.common_name} ({species.latin_name}) Uniprot annotations"
+        f"Searching Genodexito for {organismal_species.common_name} ({organismal_species.latin_name}) Uniprot annotations"
     )
 
     genodexito = Genodexito(
-        species=species.latin_name,
+        species=organismal_species.latin_name,
         preferred_method=preferred_method,
         allow_fallback=allow_fallback,
     )
@@ -279,6 +404,9 @@ def _prepare_omnipath_ids_uniprot(
             }
         )
         .query(f"{OMNIPATH_INTERACTIONS.INTERACTOR_ID} in @interactor_string_ids")
+        # just retain one name
+        .groupby(OMNIPATH_INTERACTIONS.INTERACTOR_ID)
+        .head(1)
     )
 
     logger.info(f"Found {len(uniprot_species)} Uniprot species")
@@ -336,6 +464,259 @@ def _prepare_omnipath_ids_mirbase(
     ]
 
     return mirbase_species
+
+
+def _prepare_omnipath_ids_complexes(
+    interactor_string_ids: list[str],  # noqa: F401
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+
+    complexes = op.requests.Complexes().get()
+    complexes[OMNIPATH_INTERACTIONS.INTERACTOR_ID] = [
+        OMNIPATH_COMPLEXES.COMPLEX_FSTRING.format(x=x)
+        for x in complexes[OMNIPATH_COMPLEXES.COMPONENTS]
+    ]
+    observed_complexes = complexes.query(
+        f"{OMNIPATH_INTERACTIONS.INTERACTOR_ID} in @interactor_string_ids"
+    )
+
+    # add a default name
+    missing_names_mask = [
+        x is None for x in observed_complexes[OMNIPATH_COMPLEXES.NAME]
+    ]
+    observed_complexes.loc[missing_names_mask, OMNIPATH_COMPLEXES.NAME] = (
+        observed_complexes.loc[missing_names_mask, OMNIPATH_INTERACTIONS.INTERACTOR_ID]
+    )
+
+    # create a species table
+    complex_identifiers = _extract_omnipath_identifiers(
+        observed_complexes[OMNIPATH_COMPLEXES.IDENTIFIERS],
+        OMNIPATH_COMPLEXES.IDENTIFIERS,
+    )
+
+    complex_species = (
+        observed_complexes.merge(
+            complex_identifiers, on=OMNIPATH_COMPLEXES.IDENTIFIERS, how="left"
+        )
+        .fillna({SBML_DFS.S_IDENTIFIERS: Identifiers([])})
+        .rename(columns={OMNIPATH_COMPLEXES.NAME: SBML_DFS.S_NAME})[
+            [
+                OMNIPATH_INTERACTIONS.INTERACTOR_ID,
+                SBML_DFS.S_NAME,
+                SBML_DFS.S_IDENTIFIERS,
+            ]
+        ]
+    )
+
+    # complex formation reactions
+    complex_formation_edgelist = list()
+    for _, row in observed_complexes.iterrows():
+        members = row[OMNIPATH_COMPLEXES.COMPONENTS].split("_")
+        upstream_stoi = [
+            0 if float(x) == 0 else -1 * float(x)
+            for x in row[OMNIPATH_COMPLEXES.STOICHIOMETRY].split(":")
+        ]
+
+        if all([x == 0 for x in upstream_stoi]):
+            downstream_stoi = 0
+        else:
+            downstream_stoi = 1
+
+        complex_formation_edgelist.append(
+            pd.DataFrame(
+                {
+                    OMNIPATH_INTERACTIONS.SOURCE: members,
+                    OMNIPATH_INTERACTIONS.TARGET: [
+                        row[OMNIPATH_INTERACTIONS.INTERACTOR_ID]
+                    ]
+                    * len(members),
+                    INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY: upstream_stoi,
+                    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY: [
+                        downstream_stoi
+                    ]
+                    * len(members),
+                }
+            )
+        )
+
+    complex_formation_edgelist = pd.concat(complex_formation_edgelist)
+
+    return complex_species, complex_formation_edgelist
+
+
+def _extract_omnipath_identifiers(
+    identifier_series: pd.Series,
+    entity_name: str,
+    ontology_aliases: dict[str, list[str]] = OMNIPATH_ONTOLOGY_ALIASES,
+):
+
+    # map from omnipath controlled vocabulary to Napistu controlled vocabulary
+    aliases = renaming.OntologySet(ontologies=ontology_aliases).ontologies
+    alias_mapping = renaming._create_alias_mapping(aliases)
+
+    # pull out identifiers, rename them based on the Napistu CV and remove unrecognized ontologies
+    complex_identifiers = pd.concat(
+        [
+            _parse_omnipath_named_annotation(x)
+            for x in identifier_series
+            if x is not None
+        ]
+    )
+    complex_identifiers[IDENTIFIERS.ONTOLOGY] = complex_identifiers[
+        OMNIPATH_ANNOTATIONS.NAME
+    ].replace(alias_mapping)
+    valid_complex_identifiers = complex_identifiers.query(
+        f"{IDENTIFIERS.ONTOLOGY} in @ONTOLOGIES_LIST"
+    )
+
+    # create Identifiers objects
+    identifiers_map = {}
+    for annotation_str, group in valid_complex_identifiers.groupby(
+        OMNIPATH_ANNOTATIONS.ANNOTATION_STR
+    ):
+        identifier_dicts = []
+        for _, row in group.iterrows():
+            identifier_dict = {
+                IDENTIFIERS.ONTOLOGY: row[IDENTIFIERS.ONTOLOGY],
+                IDENTIFIERS.IDENTIFIER: row[OMNIPATH_ANNOTATIONS.ANNOTATION],
+                IDENTIFIERS.BQB: BQB.IS,
+            }
+            identifier_dicts.append(identifier_dict)
+
+        identifiers_map[annotation_str] = Identifiers(identifier_dicts)
+
+    return (
+        pd.DataFrame(identifiers_map, index=[SBML_DFS.S_IDENTIFIERS])
+        .T.rename_axis(entity_name)
+        .reset_index()
+    )
+
+
+def _load_omnipath_attribute_mapper():
+    """
+    Based on Omnipath interaction's consensus reversibility, stimulation, and inhibition,
+    assign them to SBO terms and expand based on reversibility to forward and reverse directions.
+    """
+
+    combinations = list(itertools.product([True, False], repeat=4))
+    df = pd.DataFrame(
+        combinations,
+        columns=[
+            OMNIPATH_INTERACTIONS.CONSENSUS_DIRECTION,
+            OMNIPATH_INTERACTIONS.CONSENSUS_STIMULATION,
+            OMNIPATH_INTERACTIONS.CONSENSUS_INHIBITION,
+            REACTOME_FI.DIRECTION,
+        ],
+    )
+    df[REACTOME_FI.DIRECTION] = df[REACTOME_FI.DIRECTION].replace(
+        {True: REACTOME_FI.FORWARD, False: REACTOME_FI.REVERSE}
+    )
+
+    df[INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME] = None
+    df[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME] = None
+    df[SBML_DFS.R_ISREVERSIBLE] = None
+    df["is_valid"] = True
+
+    for i, row in df.iterrows():
+
+        direction = row[OMNIPATH_INTERACTIONS.CONSENSUS_DIRECTION]
+        stimulation = row[OMNIPATH_INTERACTIONS.CONSENSUS_STIMULATION]
+        inhibition = row[OMNIPATH_INTERACTIONS.CONSENSUS_INHIBITION]
+        rxn_direction = row[REACTOME_FI.DIRECTION]
+
+        if (not direction) and (rxn_direction == REACTOME_FI.REVERSE):
+            df.loc[i, "is_valid"] = False
+            continue
+
+        # interactors
+        if (not stimulation) and (not inhibition) and (not direction):
+            df.loc[i, INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME] = (
+                SBOTERM_NAMES.INTERACTOR
+            )
+            df.loc[i, INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME] = (
+                SBOTERM_NAMES.INTERACTOR
+            )
+            df.loc[i, SBML_DFS.R_ISREVERSIBLE] = True
+            continue
+
+        if (not stimulation) and (not inhibition):
+            df.loc[i, INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME] = (
+                SBOTERM_NAMES.MODIFIER
+            )
+            df.loc[i, INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME] = (
+                SBOTERM_NAMES.MODIFIED
+            )
+
+        if inhibition and (not stimulation):
+            df.loc[i, INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME] = (
+                SBOTERM_NAMES.INHIBITOR
+            )
+            df.loc[i, INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME] = (
+                SBOTERM_NAMES.MODIFIED
+            )
+
+        if stimulation and (not inhibition):
+            df.loc[i, INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME] = (
+                SBOTERM_NAMES.STIMULATOR
+            )
+            df.loc[i, INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME] = (
+                SBOTERM_NAMES.MODIFIED
+            )
+
+        if stimulation and inhibition:
+            df.loc[i, INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME] = (
+                SBOTERM_NAMES.MODIFIER
+            )
+            df.loc[i, INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME] = (
+                SBOTERM_NAMES.MODIFIED
+            )
+
+        df.loc[i, SBML_DFS.R_ISREVERSIBLE] = False
+
+    df = df.query("is_valid")
+
+    # flip attributes for reverse direction
+    return pd.concat(
+        [
+            df.query(f"{REACTOME_FI.DIRECTION} == '{REACTOME_FI.FORWARD}'"),
+            df.query(f"{REACTOME_FI.DIRECTION} == '{REACTOME_FI.REVERSE}'").rename(
+                {
+                    INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME,
+                    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
+                },
+                axis=1,
+            ),
+        ]
+    )
+
+
+def _format_reaction_references(reference_series: pd.Series) -> pd.DataFrame:
+
+    references_df = pd.concat(
+        [_parse_omnipath_annotation(x) for x in reference_series.unique()]
+    )
+
+    identifiers_map = {}
+    for annotation_str, group in references_df.groupby(
+        OMNIPATH_ANNOTATIONS.ANNOTATION_STR
+    ):
+        identifier_dicts = []
+        for _, row in group.iterrows():
+            identifier_dict = {
+                IDENTIFIERS.ONTOLOGY: ONTOLOGIES.PUBMED,
+                IDENTIFIERS.IDENTIFIER: row[OMNIPATH_ANNOTATIONS.ANNOTATION],
+                IDENTIFIERS.BQB: BQB.IS_DESCRIBED_BY,
+            }
+            identifier_dicts.append(identifier_dict)
+
+        identifiers_map[annotation_str] = Identifiers(identifier_dicts)
+
+    reaction_identifiers = (
+        pd.DataFrame(identifiers_map, index=[SBML_DFS.R_IDENTIFIERS])
+        .T.rename_axis(OMNIPATH_INTERACTIONS.REFERENCES_STRIPPED)
+        .reset_index()
+    )
+
+    return reaction_identifiers
 
 
 def _parse_omnipath_named_annotation(annotation_str: str) -> pd.DataFrame:
@@ -417,3 +798,143 @@ def _parse_omnipath_annotation(annotation_str: str) -> pd.DataFrame:
     df[OMNIPATH_ANNOTATIONS.ANNOTATION_STR] = annotation_str
 
     return df
+
+
+def _patch_degenerate_s_names(
+    df,
+    id_col: str = OMNIPATH_INTERACTIONS.INTERACTOR_ID,
+    name_col: str = SBML_DFS.S_NAME,
+):
+
+    working_df = df.copy()
+    name_counts = working_df[name_col].value_counts()
+
+    # Find non-unique names (count > 1)
+    non_unique_names = name_counts[name_counts > 1].index
+
+    # Update s_name for non-unique entries
+    mask = working_df[name_col].isin(non_unique_names)
+    working_df.loc[mask, name_col] = (
+        working_df.loc[mask, id_col].astype(str)
+        + ":"
+        + working_df.loc[mask, name_col].astype(str)
+    )
+
+    return working_df
+
+
+def _format_edgelist_interactions(
+    interactions: pd.DataFrame, nondegenerate_species_df: pd.DataFrame
+) -> pd.DataFrame:
+
+    # format reaction references as Identifiers objects
+    reaction_references_df = _format_reaction_references(
+        interactions[OMNIPATH_INTERACTIONS.REFERENCES_STRIPPED]
+    )
+
+    # interaction attributes to SBO terms and half reactions (reversibile reactions go to forward
+    # and reverese irreversible unless it is an "interactor" reaction)
+    omnipath_attribute_mapper = _load_omnipath_attribute_mapper()
+
+    edgelist_interactions_df = (
+        _name_interactions(interactions, nondegenerate_species_df)
+        .merge(reaction_references_df, how="left")
+        .fillna({SBML_DFS.R_IDENTIFIERS: Identifiers([])})
+        .merge(
+            omnipath_attribute_mapper,
+            on=[
+                OMNIPATH_INTERACTIONS.CONSENSUS_DIRECTION,
+                OMNIPATH_INTERACTIONS.CONSENSUS_STIMULATION,
+                OMNIPATH_INTERACTIONS.CONSENSUS_INHIBITION,
+            ],
+            how="left",
+        )
+        .assign(
+            **{
+                INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY: 0,
+                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY: 0,
+            }
+        )[
+            [
+                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
+                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME,
+                SBML_DFS.R_ISREVERSIBLE,
+                INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY,
+                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY,
+                SBML_DFS.R_IDENTIFIERS,
+                OMNIPATH_INTERACTIONS.IS_DIRECTED,
+                OMNIPATH_INTERACTIONS.IS_STIMULATION,
+                OMNIPATH_INTERACTIONS.IS_INHIBITION,
+                OMNIPATH_INTERACTIONS.CONSENSUS_DIRECTION,
+                OMNIPATH_INTERACTIONS.CONSENSUS_STIMULATION,
+                OMNIPATH_INTERACTIONS.CONSENSUS_INHIBITION,
+                OMNIPATH_INTERACTIONS.N_PRIMARY_SOURCES,
+                OMNIPATH_INTERACTIONS.N_REFERENCES,
+                OMNIPATH_INTERACTIONS.N_SOURCES,
+            ]
+        ]
+    )
+
+    return edgelist_interactions_df
+
+
+def _format_complex_interactions(
+    complex_formation_edgelist: pd.DataFrame, nondegenerate_species_df: pd.DataFrame
+) -> pd.DataFrame:
+
+    return _name_interactions(
+        complex_formation_edgelist, nondegenerate_species_df
+    ).assign(
+        **{
+            SBML_DFS.R_ISREVERSIBLE: False,
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.REACTANT,
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.PRODUCT,
+            SBML_DFS.R_IDENTIFIERS: Identifiers([]),
+        }
+    )[
+        [
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME,
+            SBML_DFS.R_ISREVERSIBLE,
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY,
+            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY,
+            SBML_DFS.R_IDENTIFIERS,
+        ]
+    ]
+
+
+def _name_interactions(
+    interactions: pd.DataFrame, nondegenerate_species_df: pd.DataFrame
+) -> pd.DataFrame:
+
+    return interactions.merge(
+        (
+            nondegenerate_species_df[
+                [OMNIPATH_INTERACTIONS.INTERACTOR_ID, SBML_DFS.S_NAME]
+            ].rename(
+                columns={
+                    OMNIPATH_INTERACTIONS.INTERACTOR_ID: OMNIPATH_INTERACTIONS.SOURCE,
+                    SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
+                }
+            )
+        ),
+        on=OMNIPATH_INTERACTIONS.SOURCE,
+        how="inner",
+    ).merge(
+        (
+            nondegenerate_species_df[
+                [OMNIPATH_INTERACTIONS.INTERACTOR_ID, SBML_DFS.S_NAME]
+            ].rename(
+                columns={
+                    OMNIPATH_INTERACTIONS.INTERACTOR_ID: OMNIPATH_INTERACTIONS.TARGET,
+                    SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                }
+            )
+        ),
+        on=OMNIPATH_INTERACTIONS.TARGET,
+        how="inner",
+    )

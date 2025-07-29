@@ -387,6 +387,7 @@ EXPECTED_PW_INDEX_COLUMNS = {
 
 ONTOLOGIES = SimpleNamespace(
     CHEBI="chebi",
+    CORUM="corum",
     ENSEMBL_GENE="ensembl_gene",
     ENSEMBL_GENE_VERSION="ensembl_gene_version",
     ENSEMBL_TRANSCRIPT="ensembl_transcript",
@@ -403,6 +404,7 @@ ONTOLOGIES = SimpleNamespace(
     PUBCHEM="pubchem",
     PUBMED="pubmed",
     REACTOME="reactome",
+    SIGNOR="signor",
     SMILES="smiles",
     SYMBOL="symbol",
     UNIPROT="uniprot",
@@ -415,6 +417,8 @@ ONTOLOGY_SPECIES_ALIASES = {
     ONTOLOGIES.NCBI_ENTREZ_GENE: {"ncbigene", "ncbi_gene"},
     ONTOLOGIES.ENSEMBL_GENE: {"ensembl_gene_id"},
     ONTOLOGIES.UNIPROT: {"Uniprot"},
+    ONTOLOGIES.CORUM: {"CORUM"},
+    ONTOLOGIES.SIGNOR: {"SIGNOR"},
 }
 
 ONTOLOGY_PRIORITIES = pd.DataFrame(

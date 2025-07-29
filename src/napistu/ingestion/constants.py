@@ -389,6 +389,14 @@ OMNIPATH_ANNOTATIONS = SimpleNamespace(
     ANNOTATION_STR="annotation_str",
 )
 
+OMNIPATH_COMPLEXES = SimpleNamespace(
+    COMPONENTS="components",
+    NAME="name",
+    STOICHIOMETRY="stoichiometry",
+    IDENTIFIERS="identifiers",
+    COMPLEX_FSTRING="COMPLEX:{x}",
+)
+
 OMNIPATH_INTERACTIONS = SimpleNamespace(
     INTERACTOR_ID="interactor_id",
     SOURCE="source",
@@ -407,6 +415,8 @@ OMNIPATH_INTERACTIONS = SimpleNamespace(
     N_REFERENCES="n_references",
     REFERENCES_STRIPPED="references_stripped",
 )
+
+OMNIPATH_ONTOLOGY_ALIASES = {ONTOLOGIES.CORUM: {"CORUM"}, ONTOLOGIES.SIGNOR: {"SIGNOR"}}
 
 # REACTOME
 REACTOME_SMBL_URL = "https://reactome.org/download/current/all_species.3.1.sbml.tgz"
