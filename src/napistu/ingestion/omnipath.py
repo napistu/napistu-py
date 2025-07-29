@@ -1,6 +1,6 @@
 import itertools
 import logging
-from typing import Union
+from typing import Any, Dict, List, Tuple, Union
 
 import pandas as pd
 import omnipath as op
@@ -58,8 +58,64 @@ def format_omnipath_as_sbml_dfs(
     organismal_species: str,
     preferred_method: str,
     allow_fallback: bool,
-    **kwargs,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+    **kwargs: Any,
+) -> sbml_dfs_core.SBML_dfs:
+    """
+    Format OmniPath interaction data as SBML_dfs object.
+
+    This function processes OmniPath interaction data and converts it into a structured
+    SBML_dfs format suitable for network analysis and modeling. It handles various
+    types of molecular interactions including proteins, small molecules, miRNAs, and complexes.
+
+    Parameters
+    ----------
+    organismal_species : str
+        The species name (e.g., "human", "mouse", "rat") for which to retrieve interactions.
+    preferred_method : str
+        Preferred method for identifier mapping (e.g., "bioconductor", "ensembl").
+    allow_fallback : bool
+        Whether to allow fallback to alternative mapping methods if preferred method fails.
+    **kwargs : Any
+        Additional keyword arguments passed to `get_interactions()`.
+
+    Returns
+    -------
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        SBML_dfs object containing the formatted interaction data with species and reactions.
+
+    Raises
+    ------
+    ValueError
+        If organismal_species is not supported by OmniPath.
+        If duplicated s_names are found after processing.
+    ConnectionError
+        If unable to connect to OmniPath or external databases.
+
+    Notes
+    -----
+    This function performs the following steps:
+    1. Retrieves interactions from OmniPath
+    2. Maps interactor IDs to systematic identifiers using multiple databases
+        - PubChem
+        - UniProt
+        - miRBase
+        - Complexes
+    3. Aggregates molecular species across all sources
+    4. Creates complex formation reactions where applicable
+    5. Formats all interactions into a standardized edgelist
+    6. Creates an SBML_dfs object with proper structure
+
+    Examples
+    --------
+    >>> # Format human interactions using bioconductor mapping
+    >>> sbml_dfs = format_omnipath_as_sbml_dfs(
+    ...     organismal_species="human",
+    ...     preferred_method="bioconductor",
+    ...     allow_fallback=True
+    ... )
+    >>> print(f"Species: {len(sbml_dfs.species)}")
+    >>> print(f"Reactions: {len(sbml_dfs.reactions)}")
+    """
 
     organismal_species = SpeciesValidator(organismal_species)
     organismal_species.assert_supported(VALID_OMNIPATH_SPECIES)
@@ -321,6 +377,25 @@ def _fix_consensus_logic(df: pd.DataFrame) -> pd.DataFrame:
     When strict_evidences=True, interactions with no stimulation or inhibition
     evidence incorrectly get consensus_stimulation=True and consensus_inhibition=True
     due to the 0>=0 and 0<=0 comparisons both being True.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing OmniPath interaction data with consensus flags.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with corrected consensus logic flags.
+
+    Notes
+    -----
+    This function identifies interactions where:
+    - No stimulation evidence exists (is_stimulation=False)
+    - No inhibition evidence exists (is_inhibition=False)
+    - Both consensus flags are True (consensus_stimulation=True, consensus_inhibition=True)
+
+    For such interactions, both consensus flags are set to False.
     """
     # Identify problematic records: no evidence but consensus for both
     no_evidence = (~df.is_stimulation) & (~df.is_inhibition)
@@ -335,7 +410,23 @@ def _fix_consensus_logic(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _prepare_integer_based_ids(interactor_int_ids: list[str]) -> pd.DataFrame:
+def _prepare_integer_based_ids(interactor_int_ids: List[str]) -> pd.DataFrame:
+    """
+    Prepare PubChem identifiers for integer-based interactor IDs.
+
+    Parameters
+    ----------
+    interactor_int_ids : List[str]
+        List of integer-based interactor IDs to map to PubChem.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing PubChem species data with columns:
+        - interactor_id: Original interactor ID
+        - s_name: PubChem compound name
+        - s_Identifiers: Identifiers object with PubChem and SMILES identifiers
+    """
 
     logger.info(f"Searching PubChem for {len(interactor_int_ids)} integer-based IDs")
 
@@ -370,11 +461,38 @@ def _prepare_integer_based_ids(interactor_int_ids: list[str]) -> pd.DataFrame:
 
 
 def _prepare_omnipath_ids_uniprot(
-    interactor_string_ids: list[str],  # noqa: F401
+    interactor_string_ids: List[str],
     organismal_species: Union[str, SpeciesValidator],
     preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
     allow_fallback: bool = True,
 ) -> pd.DataFrame:
+    """
+    Prepare UniProt identifiers for string-based interactor IDs.
+
+    Parameters
+    ----------
+    interactor_string_ids : List[str]
+        List of string-based interactor IDs to cross-reference with UniProt.
+    organismal_species : Union[str, SpeciesValidator]
+        The species for which to retrieve UniProt annotations.
+    preferred_method : str, optional
+        Preferred method for identifier mapping, by default GENODEXITO_DEFS.BIOCONDUCTOR.
+    allow_fallback : bool, optional
+        Whether to allow fallback to alternative mapping methods, by default True.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing UniProt species data with columns:
+        - interactor_id: Original interactor ID
+        - s_name: Gene name
+        - s_Identifiers: Identifiers object with UniProt identifiers
+
+    Raises
+    ------
+    ValueError
+        If organismal_species is invalid or not supported.
+    """
 
     if isinstance(organismal_species, str):
         organismal_species = SpeciesValidator(organismal_species)
@@ -430,8 +548,24 @@ def _prepare_omnipath_ids_uniprot(
 
 
 def _prepare_omnipath_ids_mirbase(
-    interactor_string_ids: list[str],  # noqa: F401
+    interactor_string_ids: List[str],
 ) -> pd.DataFrame:
+    """
+    Prepare miRBase identifiers for string-based interactor IDs.
+
+    Parameters
+    ----------
+    interactor_string_ids : List[str]
+        List of string-based interactor IDs to map to miRBase.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing miRBase species data with columns:
+        - interactor_id: Original interactor ID
+        - s_name: miRNA name
+        - s_Identifiers: Identifiers object with miRBase identifiers
+    """
 
     logger.info("Loading miRBase for cross references")
 
@@ -469,8 +603,30 @@ def _prepare_omnipath_ids_mirbase(
 
 
 def _prepare_omnipath_ids_complexes(
-    interactor_string_ids: list[str],  # noqa: F401
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+    interactor_string_ids: List[str],
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Prepare complex identifiers and formation reactions for string-based interactor IDs.
+
+    Parameters
+    ----------
+    interactor_string_ids : List[str]
+        List of string-based interactor IDs to check for complexes.
+
+    Returns
+    -------
+    complex_species : pd.DataFrame
+        DataFrame containing complex species data with columns:
+        - interactor_id: Complex identifier
+        - s_name: Complex name
+        - s_Identifiers: Identifiers object with complex identifiers
+    complex_formation_edgelist : pd.DataFrame
+        DataFrame containing complex formation reactions with columns:
+        - source: Component interactor ID
+        - target: Complex interactor ID
+        - upstream_stoichiometry: Stoichiometry of component
+        - downstream_stoichiometry: Stoichiometry of complex (typically 1)
+    """
 
     complexes = op.requests.Complexes().get()
     complexes[OMNIPATH_INTERACTIONS.INTERACTOR_ID] = [
@@ -552,8 +708,26 @@ def _prepare_omnipath_ids_complexes(
 def _extract_omnipath_identifiers(
     identifier_series: pd.Series,
     entity_name: str,
-    ontology_aliases: dict[str, list[str]] = OMNIPATH_ONTOLOGY_ALIASES,
-):
+    ontology_aliases: Dict[str, List[str]] = OMNIPATH_ONTOLOGY_ALIASES,
+) -> pd.DataFrame:
+    """
+    Extract and standardize OmniPath identifiers from a series of annotation strings.
+
+    Parameters
+    ----------
+    identifier_series : pd.Series
+        Series containing OmniPath annotation strings.
+    entity_name : str
+        Name of the entity column in the output DataFrame.
+    ontology_aliases : Dict[str, List[str]], optional
+        Mapping from OmniPath ontology names to Napistu ontology names, by default OMNIPATH_ONTOLOGY_ALIASES.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with entity_name as index and s_identifiers as column containing
+        Identifiers objects for each entity.
+    """
 
     # map from omnipath controlled vocabulary to Napistu controlled vocabulary
     aliases = renaming.OntologySet(ontologies=ontology_aliases).ontologies
@@ -597,10 +771,18 @@ def _extract_omnipath_identifiers(
     )
 
 
-def _load_omnipath_attribute_mapper():
+def _load_omnipath_attribute_mapper() -> pd.DataFrame:
     """
-    Based on Omnipath interaction's consensus reversibility, stimulation, and inhibition,
+    Create a mapping table for OmniPath interaction attributes to SBO terms.
+
+    Based on OmniPath interaction's consensus reversibility, stimulation, and inhibition,
     assign them to SBO terms and expand based on reversibility to forward and reverse directions.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing all valid combinations of OmniPath attributes mapped to
+        SBO terms, with columns for consensus flags, SBO terms, and reversibility.
     """
 
     combinations = list(itertools.product([True, False], repeat=4))
@@ -696,6 +878,20 @@ def _load_omnipath_attribute_mapper():
 
 
 def _format_reaction_references(reference_series: pd.Series) -> pd.DataFrame:
+    """
+    Format reaction references as Identifiers objects.
+
+    Parameters
+    ----------
+    reference_series : pd.Series
+        Series containing reference strings for reactions.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with reference strings as index and r_Identifiers as column containing
+        Identifiers objects for each reference.
+    """
 
     references_df = pd.concat(
         [_parse_omnipath_annotation(x) for x in reference_series.unique()]
@@ -746,7 +942,7 @@ def _parse_omnipath_named_annotation(annotation_str: str) -> pd.DataFrame:
     Examples
     --------
     >>> s = 'CORUM:4478;Compleat:HC1449;PDB:4awl'
-    >>> df = parse_omnipath_named_annotation(s)
+    >>> df = _parse_omnipath_named_annotation(s)
     >>> print(df)
          name annotation                    annotation_str
     0   CORUM       4478  CORUM:4478;Compleat:HC1449;PDB:4awl
@@ -787,7 +983,7 @@ def _parse_omnipath_annotation(annotation_str: str) -> pd.DataFrame:
     Examples
     --------
     >>> s = '11290752;11983166;12601176'
-    >>> df = parse_omnipath_annotation(s)
+    >>> df = _parse_omnipath_annotation(s)
     >>> print(df)
       annotation            annotation_str
     0   11290752  11290752;11983166;12601176
@@ -807,10 +1003,33 @@ def _parse_omnipath_annotation(annotation_str: str) -> pd.DataFrame:
 
 
 def _patch_degenerate_s_names(
-    df,
+    df: pd.DataFrame,
     id_col: str = OMNIPATH_INTERACTIONS.INTERACTOR_ID,
     name_col: str = SBML_DFS.S_NAME,
-):
+) -> pd.DataFrame:
+    """
+    Patch degenerate s_names by appending interactor IDs to non-unique names.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing species data.
+    id_col : str, optional
+        Column name containing interactor IDs, by default OMNIPATH_INTERACTIONS.INTERACTOR_ID.
+    name_col : str, optional
+        Column name containing species names, by default SBML_DFS.S_NAME.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with patched s_names where non-unique names have been made unique
+        by appending the interactor ID.
+
+    Notes
+    -----
+    This function ensures that all s_names are unique by appending the interactor ID
+    to any name that appears multiple times in the dataset.
+    """
 
     working_df = df.copy()
     name_counts = working_df[name_col].value_counts()
@@ -832,6 +1051,22 @@ def _patch_degenerate_s_names(
 def _format_edgelist_interactions(
     interactions: pd.DataFrame, nondegenerate_species_df: pd.DataFrame
 ) -> pd.DataFrame:
+    """
+    Format OmniPath interactions into a standardized edgelist format.
+
+    Parameters
+    ----------
+    interactions : pd.DataFrame
+        DataFrame containing OmniPath interaction data.
+    nondegenerate_species_df : pd.DataFrame
+        DataFrame containing species data with unique s_names.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing formatted interactions in edgelist format with columns
+        for upstream/downstream names, SBO terms, stoichiometry, and metadata.
+    """
 
     # format reaction references as Identifiers objects
     reaction_references_df = _format_reaction_references(
@@ -889,6 +1124,21 @@ def _format_edgelist_interactions(
 def _format_complex_interactions(
     complex_formation_edgelist: pd.DataFrame, nondegenerate_species_df: pd.DataFrame
 ) -> pd.DataFrame:
+    """
+    Format complex formation interactions into a standardized edgelist format.
+
+    Parameters
+    ----------
+    complex_formation_edgelist : pd.DataFrame
+        DataFrame containing complex formation reactions.
+    nondegenerate_species_df : pd.DataFrame
+        DataFrame containing species data with unique s_names.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing formatted complex formation reactions in edgelist format.
+    """
 
     return _name_interactions(
         complex_formation_edgelist, nondegenerate_species_df
@@ -916,6 +1166,22 @@ def _format_complex_interactions(
 def _name_interactions(
     interactions: pd.DataFrame, nondegenerate_species_df: pd.DataFrame
 ) -> pd.DataFrame:
+    """
+    Add systematic names to interactions by merging with species data.
+
+    Parameters
+    ----------
+    interactions : pd.DataFrame
+        DataFrame containing interactions with source and target interactor IDs.
+    nondegenerate_species_df : pd.DataFrame
+        DataFrame containing species data with interactor IDs and s_names.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing interactions with upstream_name and downstream_name
+        columns added by merging with species data.
+    """
 
     return interactions.merge(
         (
