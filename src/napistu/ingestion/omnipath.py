@@ -74,9 +74,7 @@ def format_omnipath_as_sbml_dfs(
 
     # connect interactors to systematic identifeirs and create readable names
     if len(interactor_int_ids) > 0:
-        pubchem_species = _prepare_integer_based_ids(interactor_int_ids).assign(
-            species_type="small_molecule"
-        )
+        pubchem_species = _prepare_integer_based_ids(interactor_int_ids)
     else:
         logger.info("No integger-based IDs from pubchem found")
         pubchem_species = pd.DataFrame()
@@ -97,7 +95,7 @@ def format_omnipath_as_sbml_dfs(
     # aggregate all the different sources of interactors
     interactor_df = pd.concat(
         [
-            pubchem_species,
+            pubchem_species.assign(species_type="small_molecule"),
             uniprot_species.assign(species_type="protein"),
             mirbase_species.assign(species_type="miRNA"),
             complex_species.assign(species_type="complex"),
@@ -125,18 +123,21 @@ def format_omnipath_as_sbml_dfs(
         )
 
     # format all distinct interactions into a single edgelist
-    interaction_edgelist = pd.concat(
-        [
-            _format_edgelist_interactions(
-                interactions=interactions,
-                nondegenerate_species_df=nondegenerate_species_df,
-            ),
+    interaction_edgelist_list = [
+        _format_edgelist_interactions(
+            interactions=interactions, nondegenerate_species_df=nondegenerate_species_df
+        )
+    ]
+
+    if complex_formation_edgelist.shape[0] > 0:
+        interaction_edgelist_list.append(
             _format_complex_interactions(
                 complex_formation_edgelist=complex_formation_edgelist,
                 nondegenerate_species_df=nondegenerate_species_df,
-            ),
-        ]
-    ).reset_index(drop=True)
+            )
+        )
+
+    interaction_edgelist = pd.concat(interaction_edgelist_list).reset_index(drop=True)
 
     interaction_edgelist[SBML_DFS.R_NAME] = interaction_edgelist.apply(
         lambda row: sbml_dfs_utils._name_interaction(
@@ -153,6 +154,7 @@ def format_omnipath_as_sbml_dfs(
         nondegenerate_species_df.drop(columns=[OMNIPATH_INTERACTIONS.INTERACTOR_ID]),
         compartments_df=sbml_dfs_utils.stub_compartments(),
         keep_reactions_data=True,
+        keep_species_data=True,
     )
 
     return sbml_dfs
@@ -478,6 +480,10 @@ def _prepare_omnipath_ids_complexes(
     observed_complexes = complexes.query(
         f"{OMNIPATH_INTERACTIONS.INTERACTOR_ID} in @interactor_string_ids"
     )
+
+    if observed_complexes.shape[0] == 0:
+        logger.info("No complexes present")
+        return pd.DataFrame(), pd.DataFrame()
 
     # add a default name
     missing_names_mask = [
