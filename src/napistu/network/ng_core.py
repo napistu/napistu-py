@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import copy
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import igraph as ig
 import pandas as pd
 
+from napistu.network import ng_utils
 from napistu.network.constants import (
-    NAPISTU_GRAPH_EDGES,
     EDGE_REVERSAL_ATTRIBUTE_MAPPING,
     EDGE_DIRECTION_MAPPING,
+    ENTITIES_TO_ATTRS,
+    NAPISTU_GRAPH_EDGES,
 )
 
 logger = logging.getLogger(__name__)
@@ -104,6 +106,8 @@ class NapistuGraph(ig.Graph):
             "wiring_approach": None,
             "weighting_strategy": None,
             "creation_params": {},
+            "species_attrs": {},
+            "reaction_attrs": {},
         }
 
     @classmethod
@@ -162,39 +166,78 @@ class NapistuGraph(ig.Graph):
         """Get the weighting strategy used."""
         return self._metadata["weighting_strategy"]
 
-    def reverse_edges(self) -> None:
+    def copy(self) -> "NapistuGraph":
         """
-        Reverse all edges in the graph.
-
-        This swaps edge directions and updates all associated attributes
-        according to the edge reversal mapping utilities. Modifies the graph in-place.
+        Create a deep copy of the NapistuGraph.
 
         Returns
         -------
-        None
+        NapistuGraph
+            A deep copy of this graph including metadata
         """
-        # Get current edge dataframe
-        edges_df = self.get_edge_dataframe()
+        # Use igraph's copy method to get the graph structure and attributes
+        new_graph = super().copy()
 
-        # Apply systematic attribute swapping using utilities
-        reversed_edges_df = _apply_edge_reversal_mapping(edges_df)
+        # Convert to NapistuGraph and copy metadata
+        napistu_copy = NapistuGraph.from_igraph(new_graph)
+        napistu_copy._metadata = copy.deepcopy(self._metadata)
 
-        # Handle special cases using utilities
-        reversed_edges_df = _handle_special_reversal_cases(reversed_edges_df)
+        return napistu_copy
 
-        # Update edge attributes
-        for attr in reversed_edges_df.columns:
-            if attr in self.es.attributes():
-                self.es[attr] = reversed_edges_df[attr].values
+    def get_metadata(self, key: Optional[str] = None) -> Any:
+        """
+        Get metadata from the graph.
 
-        # Update metadata
-        self._metadata["is_reversed"] = not self._metadata["is_reversed"]
+        Parameters
+        ----------
+        key : str, optional
+            Specific metadata key to retrieve. If None, returns all metadata.
 
-        logger.info(
-            f"Reversed graph edges. Current state: reversed={self._metadata['is_reversed']}"
-        )
+        Returns
+        -------
+        Any
+            The requested metadata value, or all metadata if key is None
+        """
+        if key is None:
+            return self._metadata.copy()
+        return self._metadata.get(key)
 
-        return None
+    def set_graph_attrs(
+        self,
+        graph_attrs: Union[str, dict],
+        mode: str = "fresh",
+        overwrite: bool = False,
+    ) -> None:
+        """
+        Set graph attributes from YAML file or dictionary.
+
+        Parameters
+        ----------
+        graph_attrs : str or dict
+            Either path to YAML file or dictionary with 'species' and/or 'reactions' keys
+        mode : str
+            Either "fresh" (replace existing) or "extend" (add new keys)
+        overwrite : bool
+            Whether to allow overwriting existing data when conflicts arise
+        """
+
+        # Load from YAML if string path provided
+        if isinstance(graph_attrs, str):
+            graph_attrs = ng_utils.read_graph_attrs_spec(graph_attrs)
+
+        # Process species attributes if present
+        if "species" in graph_attrs:
+            merged_species = self._compare_and_merge_attrs(
+                graph_attrs["species"], "species_attrs", mode, overwrite
+            )
+            self.set_metadata(species_attrs=merged_species)
+
+        # Process reaction attributes if present
+        if "reactions" in graph_attrs:
+            merged_reactions = self._compare_and_merge_attrs(
+                graph_attrs["reactions"], "reaction_attrs", mode, overwrite
+            )
+            self.set_metadata(reaction_attrs=merged_reactions)
 
     def remove_isolated_vertices(self):
         """
@@ -238,6 +281,40 @@ class NapistuGraph(ig.Graph):
         # Remove the isolated vertices
         self.delete_vertices(isolated_vertices)
 
+    def reverse_edges(self) -> None:
+        """
+        Reverse all edges in the graph.
+
+        This swaps edge directions and updates all associated attributes
+        according to the edge reversal mapping utilities. Modifies the graph in-place.
+
+        Returns
+        -------
+        None
+        """
+        # Get current edge dataframe
+        edges_df = self.get_edge_dataframe()
+
+        # Apply systematic attribute swapping using utilities
+        reversed_edges_df = _apply_edge_reversal_mapping(edges_df)
+
+        # Handle special cases using utilities
+        reversed_edges_df = _handle_special_reversal_cases(reversed_edges_df)
+
+        # Update edge attributes
+        for attr in reversed_edges_df.columns:
+            if attr in self.es.attributes():
+                self.es[attr] = reversed_edges_df[attr].values
+
+        # Update metadata
+        self._metadata["is_reversed"] = not self._metadata["is_reversed"]
+
+        logger.info(
+            f"Reversed graph edges. Current state: reversed={self._metadata['is_reversed']}"
+        )
+
+        return None
+
     def set_metadata(self, **kwargs) -> None:
         """
         Set metadata for the graph.
@@ -253,41 +330,27 @@ class NapistuGraph(ig.Graph):
 
         return None
 
-    def get_metadata(self, key: Optional[str] = None) -> Any:
+    def to_pandas_dfs(self) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Get metadata from the graph.
-
-        Parameters
-        ----------
-        key : str, optional
-            Specific metadata key to retrieve. If None, returns all metadata.
+        Convert this NapistuGraph to Pandas DataFrames for vertices and edges.
 
         Returns
         -------
-        Any
-            The requested metadata value, or all metadata if key is None
+        vertices : pandas.DataFrame
+            A table with one row per vertex.
+        edges : pandas.DataFrame
+            A table with one row per edge.
         """
-        if key is None:
-            return self._metadata.copy()
-        return self._metadata.get(key)
-
-    def copy(self) -> "NapistuGraph":
-        """
-        Create a deep copy of the NapistuGraph.
-
-        Returns
-        -------
-        NapistuGraph
-            A deep copy of this graph including metadata
-        """
-        # Use igraph's copy method to get the graph structure and attributes
-        new_graph = super().copy()
-
-        # Convert to NapistuGraph and copy metadata
-        napistu_copy = NapistuGraph.from_igraph(new_graph)
-        napistu_copy._metadata = copy.deepcopy(self._metadata)
-
-        return napistu_copy
+        vertices = pd.DataFrame(
+            [{**{"index": v.index}, **v.attributes()} for v in self.vs]
+        )
+        edges = pd.DataFrame(
+            [
+                {**{"source": e.source, "target": e.target}, **e.attributes()}
+                for e in self.es
+            ]
+        )
+        return vertices, edges
 
     def __str__(self) -> str:
         """String representation including metadata."""
@@ -302,6 +365,92 @@ class NapistuGraph(ig.Graph):
     def __repr__(self) -> str:
         """Detailed representation."""
         return self.__str__()
+
+    def _compare_and_merge_attrs(
+        self,
+        new_attrs: dict,
+        attr_type: str,
+        mode: str = "fresh",
+        overwrite: bool = False,
+    ) -> dict:
+        """
+        Compare and merge new attributes with existing ones.
+
+        Parameters
+        ----------
+        new_attrs : dict
+            New attributes to add/merge
+        attr_type : str
+            Type of attributes ("species_attrs" or "reaction_attrs")
+        mode : str
+            Either "fresh" (replace) or "extend" (add new keys)
+        overwrite : bool
+            Whether to allow overwriting existing data
+
+        Returns
+        -------
+        dict
+            Merged attributes dictionary
+        """
+        existing_attrs = self.get_metadata(attr_type) or {}
+
+        if mode == "fresh":
+            if existing_attrs and not overwrite:
+                raise ValueError(
+                    f"Existing {attr_type} found. Use overwrite=True to replace or mode='extend' to add new keys. "
+                    f"Existing keys: {list(existing_attrs.keys())}"
+                )
+            return new_attrs.copy()
+
+        elif mode == "extend":
+            overlapping_keys = set(existing_attrs.keys()) & set(new_attrs.keys())
+            if overlapping_keys and not overwrite:
+                raise ValueError(
+                    f"Overlapping keys found in {attr_type}: {overlapping_keys}. "
+                    f"Use overwrite=True to allow key replacement"
+                )
+
+            # Merge dictionaries
+            merged_attrs = existing_attrs.copy()
+            merged_attrs.update(new_attrs)
+            return merged_attrs
+
+        else:
+            raise ValueError(f"Unknown mode: {mode}. Must be 'fresh' or 'extend'")
+
+    def _get_entity_attrs(self, entity_type: str) -> Optional[dict]:
+        """
+        Get entity attributes (species or reactions) from graph metadata.
+
+        Parameters
+        ----------
+        entity_type : str
+            Either "species" or "reactions"
+
+        Returns
+        -------
+        dict or None
+            Valid entity_attrs dictionary, or None if none available
+        """
+
+        if entity_type not in ENTITIES_TO_ATTRS.keys():
+            raise ValueError(
+                f"Unknown entity_type: '{entity_type}'. Must be one of: {list(ENTITIES_TO_ATTRS.keys())}"
+            )
+
+        attr_key = ENTITIES_TO_ATTRS[entity_type]
+        entity_attrs = self.get_metadata(attr_key)
+
+        if entity_attrs is None:  # Key doesn't exist
+            logger.warning(f"No {entity_type}_attrs found in graph metadata")
+            return None
+        elif not entity_attrs:  # Empty dict
+            logger.warning(f"{entity_type}_attrs is empty")
+            return None
+
+        # Validate and let any exceptions propagate
+        ng_utils._validate_entity_attrs(entity_attrs)
+        return entity_attrs
 
 
 def _apply_edge_reversal_mapping(edges_df: pd.DataFrame) -> pd.DataFrame:

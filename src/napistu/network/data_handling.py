@@ -5,6 +5,7 @@ from typing import Union, List, Optional, Callable, Dict
 import pandas as pd
 
 from napistu import sbml_dfs_core
+from napistu.network import ng_utils
 from napistu.network import net_create
 from napistu.network.ng_core import NapistuGraph
 
@@ -153,7 +154,7 @@ def _add_graph_species_attribute(
     sp_graph_key_list = []
     sp_node_attr_list = []
     for k in species_graph_attrs.keys():
-        net_create._validate_entity_attrs(
+        ng_utils._validate_entity_attrs(
             species_graph_attrs[k], custom_transformations=custom_transformations
         )
 

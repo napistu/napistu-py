@@ -7,22 +7,28 @@ and require knowledge of the Napistu data model (SBML_dfs objects, etc.).
 
 from __future__ import annotations
 
+import copy
 import logging
 import os
 import yaml
-from typing import Optional, Union
+from typing import Optional, Union, TYPE_CHECKING
 
+from pydantic import BaseModel
 import igraph as ig
+import numpy as np
 import pandas as pd
+
 from napistu import sbml_dfs_core
 from napistu import source
 from napistu.network import net_create
-from napistu.network.ng_core import NapistuGraph
-
-from napistu.constants import SBML_DFS
-from napistu.constants import SOURCE_SPEC
 from napistu.identifiers import _validate_assets_sbml_ids
+
+if TYPE_CHECKING:
+    from napistu.network.ng_core import NapistuGraph
+from napistu.constants import ENTITIES_W_DATA, SBML_DFS, SOURCE_SPEC
 from napistu.network.constants import (
+    DEFAULT_WT_TRANS,
+    DEFINED_WEIGHT_TRANSFORMATION,
     DISTANCES,
     GRAPH_WIRING_APPROACHES,
     GRAPH_DIRECTEDNESS,
@@ -31,8 +37,62 @@ from napistu.network.constants import (
     NAPISTU_GRAPH_VERTICES,
 )
 
-
 logger = logging.getLogger(__name__)
+
+
+def apply_weight_transformations(
+    edges_df: pd.DataFrame, reaction_attrs: dict, custom_transformations: dict = None
+):
+    """
+    Apply Weight Transformations to edge attributes.
+
+    Parameters
+    ----------
+    edges_df : pd.DataFrame
+        A table of edges and their attributes extracted from a cpr_graph.
+    reaction_attrs : dict
+        A dictionary of attributes identifying weighting attributes within
+        an sbml_df's reaction_data, how they will be named in edges_df (the keys),
+        and how they should be transformed (the "trans" aliases).
+    custom_transformations : dict, optional
+        A dictionary mapping transformation names to functions. If provided, these
+        will be checked before built-in transformations.
+
+    Returns
+    -------
+    pd.DataFrame
+        edges_df with weight variables transformed.
+
+    Raises
+    ------
+    ValueError
+        If a weighting variable is missing or transformation is not found.
+    """
+
+    _validate_entity_attrs(
+        reaction_attrs, custom_transformations=custom_transformations
+    )
+
+    transformed_edges_df = copy.deepcopy(edges_df)
+    for k, v in reaction_attrs.items():
+        if k not in transformed_edges_df.columns:
+            raise ValueError(f"A weighting variable {k} was missing from edges_df")
+
+        trans_name = v["trans"]
+        # Look up transformation
+        if custom_transformations and trans_name in custom_transformations:
+            trans_fxn = custom_transformations[trans_name]
+        elif trans_name in DEFINED_WEIGHT_TRANSFORMATION:
+            trans_fxn = globals()[DEFINED_WEIGHT_TRANSFORMATION[trans_name]]
+        else:
+            # This should never be hit if _validate_entity_attrs is called correctly.
+            raise ValueError(
+                f"Transformation '{trans_name}' not found in custom_transformations or DEFINED_WEIGHT_TRANSFORMATION."
+            )
+
+        transformed_edges_df[k] = transformed_edges_df[k].apply(trans_fxn)
+
+    return transformed_edges_df
 
 
 def compartmentalize_species(
@@ -273,12 +333,111 @@ def export_networks(
     return None
 
 
+def pluck_entity_data(
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    graph_attrs: dict[str, dict],
+    data_type: str,
+    custom_transformations: Optional[dict[str, callable]] = None,
+) -> pd.DataFrame | None:
+    """
+    Pluck Entity Attributes from an sbml_dfs based on a set of tables and variables to look for.
+
+    Parameters
+    ----------
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        A mechanistic model.
+    graph_attrs : dict
+        A dictionary of species/reaction attributes to pull out. If the requested
+        data_type ("species" or "reactions") is not present as a key, or if the value
+        is an empty dict, this function will return None (no error).
+    data_type : str
+        "species" or "reactions" to pull out species_data or reactions_data.
+    custom_transformations : dict[str, callable], optional
+        A dictionary mapping transformation names to functions. If provided, these
+        will be checked before built-in transformations. Example:
+            custom_transformations = {"square": lambda x: x**2}
+
+    Returns
+    -------
+    pd.DataFrame or None
+        A table where all extracted attributes are merged based on a common index or None
+        if no attributes were extracted. If the requested data_type is not present in
+        graph_attrs, or if the attribute dict is empty, returns None. This is intended
+        to allow optional annotation blocks.
+
+    Raises
+    ------
+    ValueError
+        If data_type is not valid or if requested tables/variables are missing.
+    """
+
+    if data_type not in ENTITIES_W_DATA:
+        raise ValueError(
+            f'"data_type" was {data_type} and must be in {", ".join(ENTITIES_W_DATA)}'
+        )
+
+    if data_type not in graph_attrs.keys():
+        logger.info(
+            f'No {data_type} annotations provided in "graph_attrs"; returning None'
+        )
+        return None
+
+    entity_attrs = graph_attrs[data_type]
+    # validating dict
+    _validate_entity_attrs(entity_attrs, custom_transformations=custom_transformations)
+
+    if len(entity_attrs) == 0:
+        logger.info(
+            f'No attributes defined for "{data_type}" in graph_attrs; returning None'
+        )
+        return None
+
+    data_type_attr = data_type + "_data"
+    entity_data_tbls = getattr(sbml_dfs, data_type_attr)
+
+    data_list = list()
+    for k, v in entity_attrs.items():
+        # v["table"] is always present if entity_attrs is non-empty and validated
+        if v["table"] not in entity_data_tbls.keys():
+            raise ValueError(
+                f"{v['table']} was defined as a table in \"graph_attrs\" but "
+                f'it is not present in the "{data_type_attr}" of the sbml_dfs'
+            )
+
+        if v["variable"] not in entity_data_tbls[v["table"]].columns.tolist():
+            raise ValueError(
+                f"{v['variable']} was defined as a variable in \"graph_attrs\" but "
+                f"it is not present in the {v['table']} of the \"{data_type_attr}\" of "
+                "the sbml_dfs"
+            )
+
+        entity_series = entity_data_tbls[v["table"]][v["variable"]].rename(k)
+        trans_name = v.get("trans", DEFAULT_WT_TRANS)
+        # Look up transformation
+        if custom_transformations and trans_name in custom_transformations:
+            trans_fxn = custom_transformations[trans_name]
+        elif trans_name in DEFINED_WEIGHT_TRANSFORMATION:
+            trans_fxn = globals()[DEFINED_WEIGHT_TRANSFORMATION[trans_name]]
+        else:
+            # This should never be hit if _validate_entity_attrs is called correctly.
+            raise ValueError(
+                f"Transformation '{trans_name}' not found in custom_transformations or DEFINED_WEIGHT_TRANSFORMATION."
+            )
+        entity_series = entity_series.apply(trans_fxn)
+        data_list.append(entity_series)
+
+    if len(data_list) == 0:
+        return None
+
+    return pd.concat(data_list, axis=1)
+
+
 def read_network_pkl(
     model_prefix: str,
     network_dir: str,
     wiring_approach: str,
     directed: bool = True,
-) -> NapistuGraph:
+) -> "NapistuGraph":
     """
     Read Network Pickle
 
@@ -300,8 +459,8 @@ def read_network_pkl(
 
     Returns
     -------
-    network_graph: NapistuGraph
-        A NapistuGraph network of the pathway
+        network_graph: "NapistuGraph"
+    A NapistuGraph network of the pathway
 
     """
     if not isinstance(model_prefix, str):
@@ -329,7 +488,7 @@ def read_network_pkl(
 
 def validate_assets(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    napistu_graph: Optional[Union[NapistuGraph, ig.Graph]] = None,
+    napistu_graph: Optional[Union["NapistuGraph", ig.Graph]] = None,
     precomputed_distances: Optional[pd.DataFrame] = None,
     identifiers_df: Optional[pd.DataFrame] = None,
 ) -> None:
@@ -342,8 +501,8 @@ def validate_assets(
     ----------
     sbml_dfs : sbml_dfs_core.SBML_dfs
         A pathway representation. (Required)
-    napistu_graph : NapistuGraph, optional
-        A network-based representation of `sbml_dfs`. NapistuGraph is a subclass of igraph.Graph.
+        napistu_graph : "NapistuGraph", optional
+    A network-based representation of `sbml_dfs`. NapistuGraph is a subclass of igraph.Graph.
     precomputed_distances : pandas.DataFrame, optional
         Precomputed distances between vertices in `napistu_graph`.
     identifiers_df : pandas.DataFrame, optional
@@ -391,36 +550,6 @@ def validate_assets(
     return None
 
 
-def napistu_graph_to_pandas_dfs(
-    napistu_graph: Union[NapistuGraph, ig.Graph],
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Convert a NapistuGraph to Pandas DataFrames for vertices and edges.
-
-    Parameters
-    ----------
-    napistu_graph : NapistuGraph
-        A NapistuGraph network (subclass of igraph.Graph).
-
-    Returns
-    -------
-    vertices : pandas.DataFrame
-        A table with one row per vertex.
-    edges : pandas.DataFrame
-        A table with one row per edge.
-    """
-    vertices = pd.DataFrame(
-        [{**{"index": v.index}, **v.attributes()} for v in napistu_graph.vs]
-    )
-    edges = pd.DataFrame(
-        [
-            {**{"source": e.source, "target": e.target}, **e.attributes()}
-            for e in napistu_graph.es
-        ]
-    )
-    return vertices, edges
-
-
 def read_graph_attrs_spec(graph_attrs_spec_uri: str) -> dict:
     """Read a YAML file containing the specification for adding reaction- and/or species-attributes to a napistu_graph."""
     with open(graph_attrs_spec_uri) as f:
@@ -462,8 +591,64 @@ def _create_network_save_string(
     return export_pkl_path
 
 
+def _wt_transformation_identity(x):
+    """
+    Identity transformation for weights.
+
+    Parameters
+    ----------
+    x : any
+        Input value.
+
+    Returns
+    -------
+    any
+        The input value unchanged.
+    """
+    return x
+
+
+def _wt_transformation_string(x):
+    """
+    Map STRING scores to a similar scale as topology weights.
+
+    Parameters
+    ----------
+    x : float
+        STRING score.
+
+    Returns
+    -------
+    float
+        Transformed STRING score.
+    """
+    return 250000 / np.power(x, 1.7)
+
+
+def _wt_transformation_string_inv(x):
+    """
+    Map STRING scores so they work with source weights.
+
+    Parameters
+    ----------
+    x : float
+        STRING score.
+
+    Returns
+    -------
+    float
+        Inverse transformed STRING score.
+    """
+    # string scores are bounded on [0, 1000]
+    # and score/1000 is roughly a probability that
+    # there is a real interaction (physical, genetic, ...)
+    # reported string scores are currently on [150, 1000]
+    # so this transformation will map these onto {6.67, 1}
+    return 1 / (x / 1000)
+
+
 def _validate_assets_sbml_graph(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, napistu_graph: Union[NapistuGraph, ig.Graph]
+    sbml_dfs: sbml_dfs_core.SBML_dfs, napistu_graph: Union["NapistuGraph", ig.Graph]
 ) -> None:
     """
     Check an sbml_dfs model and NapistuGraph for inconsistencies.
@@ -472,7 +657,7 @@ def _validate_assets_sbml_graph(
     ----------
     sbml_dfs : sbml_dfs_core.SBML_dfs
         The pathway representation.
-    napistu_graph : NapistuGraph
+    napistu_graph : "NapistuGraph"
         The network representation (subclass of igraph.Graph).
 
     Returns
@@ -513,14 +698,14 @@ def _validate_assets_sbml_graph(
 
 
 def _validate_assets_graph_dist(
-    napistu_graph: NapistuGraph, precomputed_distances: pd.DataFrame
+    napistu_graph: "NapistuGraph", precomputed_distances: pd.DataFrame
 ) -> None:
     """
     Check a NapistuGraph and precomputed distances table for inconsistencies.
 
     Parameters
     ----------
-    napistu_graph : NapistuGraph
+    napistu_graph : "NapistuGraph"
         The network representation (subclass of igraph.Graph).
     precomputed_distances : pandas.DataFrame
         Precomputed distances between vertices in the network.
@@ -559,3 +744,58 @@ def _validate_assets_graph_dist(
             f"This is {inconsistent_weights.shape[0] / edges_with_distances.shape[0]:.2%} of all edges.",
         )
     return None
+
+
+def _validate_entity_attrs(
+    entity_attrs: dict,
+    validate_transformations: bool = True,
+    custom_transformations: Optional[dict] = None,
+) -> None:
+    """
+    Validate that graph attributes are a valid format.
+
+    Parameters
+    ----------
+    entity_attrs : dict
+        Dictionary of entity attributes to validate.
+    validate_transformations : bool, optional
+        Whether to validate transformation names, by default True.
+    custom_transformations : dict, optional
+        Dictionary of custom transformation functions, by default None. Keys are transformation names, values are transformation functions.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    AssertionError
+        If entity_attrs is not a dictionary.
+    ValueError
+        If a transformation is not found in DEFINED_WEIGHT_TRANSFORMATION or custom_transformations.
+    """
+    assert isinstance(entity_attrs, dict), "entity_attrs must be a dictionary"
+
+    for k, v in entity_attrs.items():
+        # check structure against pydantic config
+        validated_attrs = _EntityAttrValidator(**v).model_dump()
+
+        if validate_transformations:
+            trans_name = validated_attrs.get("trans", DEFAULT_WT_TRANS)
+            valid_trans = set(DEFINED_WEIGHT_TRANSFORMATION.keys())
+            if custom_transformations:
+                valid_trans = valid_trans.union(set(custom_transformations.keys()))
+            if trans_name not in valid_trans:
+                raise ValueError(
+                    f"transformation '{trans_name}' was not defined as an alias in "
+                    "DEFINED_WEIGHT_TRANSFORMATION or custom_transformations. The defined transformations "
+                    f"are {', '.join(sorted(valid_trans))}"
+                )
+
+    return None
+
+
+class _EntityAttrValidator(BaseModel):
+    table: str
+    variable: str
+    trans: Optional[str] = DEFAULT_WT_TRANS
