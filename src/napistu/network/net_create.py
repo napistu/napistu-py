@@ -13,15 +13,13 @@ from napistu import utils
 from napistu.network import ng_utils
 from napistu.network import net_create_utils
 from napistu.network.ng_core import NapistuGraph
-
-
+from napistu.network.constants import CORE_NAPISTU_GRAPH_VERTICES_VARS
 from napistu.constants import (
     MINI_SBO_FROM_NAME,
     SBO_MODIFIER_NAMES,
     SBOTERM_NAMES,
     SBML_DFS,
 )
-
 from napistu.network.constants import (
     NAPISTU_GRAPH_VERTICES,
     NAPISTU_GRAPH_EDGES,
@@ -34,7 +32,6 @@ from napistu.network.constants import (
     SOURCE_VARS_DICT,
     DROP_REACTIONS_WHEN,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -359,90 +356,19 @@ def create_napistu_graph_wiring(
         sbml_dfs.reaction_species, wiring_approach, drop_reactions_when
     )
 
-    logger.info(
-        "Adding additional attributes to edges, e.g., # of children and parents."
-    )
+    logger.info("Adding species features to edges.")
 
     # add compartmentalized species summaries to weight edges
     cspecies_features = sbml_dfs.get_cspecies_features()
 
-    # calculate undirected and directed degrees (i.e., # of parents and children)
-    # based on a network's edgelist. this used when the network representation is
-    # not the bipartite network which can be trivially obtained from the pathway
-    # specification
-    unique_edges = (
-        all_reaction_edges_df.groupby(
-            [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
-        )
-        .first()
-        .reset_index()
-    )
-
-    # children
-    n_children = (
-        unique_edges[NAPISTU_GRAPH_EDGES.FROM]
-        .value_counts()
-        # rename values to the child name
-        .to_frame(name=NAPISTU_GRAPH_EDGES.SC_CHILDREN)
-        .reset_index()
-        .rename(
-            {
-                NAPISTU_GRAPH_EDGES.FROM: SBML_DFS.SC_ID,
-            },
-            axis=1,
-        )
-    )
-
-    # parents
-    n_parents = (
-        unique_edges[NAPISTU_GRAPH_EDGES.TO]
-        .value_counts()
-        # rename values to the parent name
-        .to_frame(name=NAPISTU_GRAPH_EDGES.SC_PARENTS)
-        .reset_index()
-        .rename(
-            {
-                NAPISTU_GRAPH_EDGES.TO: SBML_DFS.SC_ID,
-            },
-            axis=1,
-        )
-    )
-
-    graph_degree_by_edgelist = n_children.merge(n_parents, how="outer").fillna(int(0))
-
-    graph_degree_by_edgelist[NAPISTU_GRAPH_EDGES.SC_DEGREE] = (
-        graph_degree_by_edgelist[NAPISTU_GRAPH_EDGES.SC_CHILDREN]
-        + graph_degree_by_edgelist[NAPISTU_GRAPH_EDGES.SC_PARENTS]
-    )
-    graph_degree_by_edgelist = (
-        graph_degree_by_edgelist[
-            ~graph_degree_by_edgelist[SBML_DFS.SC_ID].str.contains("R[0-9]{8}")
-        ]
-        .set_index(SBML_DFS.SC_ID)
-        .sort_index()
-    )
-
-    cspecies_features = (
-        cspecies_features.drop(
-            [
-                NAPISTU_GRAPH_EDGES.SC_DEGREE,
-                NAPISTU_GRAPH_EDGES.SC_CHILDREN,
-                NAPISTU_GRAPH_EDGES.SC_PARENTS,
-            ],
-            axis=1,
-        )
-        .join(graph_degree_by_edgelist)
-        .fillna(int(0))
-    )
-
-    is_from_reaction = all_reaction_edges_df[NAPISTU_GRAPH_EDGES.FROM].isin(
-        sbml_dfs.reactions.index.tolist()
-    )
+    # Determine which edges are from reactions vs species
     is_from_reaction = all_reaction_edges_df[NAPISTU_GRAPH_EDGES.FROM].isin(
         sbml_dfs.reactions.index
     )
-    # add substrate weight whenever "from" edge is a molecule
-    # and product weight when the "from" edge is a reaction
+
+    # Merge species features with edges
+    # For edges where FROM is a species (not reaction), use FROM node's features
+    # For edges where FROM is a reaction, use TO node's features
     decorated_all_reaction_edges_df = pd.concat(
         [
             all_reaction_edges_df[~is_from_reaction].merge(
@@ -846,13 +772,8 @@ def _augment_network_nodes(
     ValueError
         If required attributes are missing from network_nodes.
     """
-    REQUIRED_NETWORK_NODE_ATTRS = {
-        "name",
-        "node_name",
-        "node_type",
-    }
 
-    missing_required_network_nodes_attrs = REQUIRED_NETWORK_NODE_ATTRS.difference(
+    missing_required_network_nodes_attrs = CORE_NAPISTU_GRAPH_VERTICES_VARS.difference(
         set(network_nodes.columns.tolist())
     )
     if len(missing_required_network_nodes_attrs) > 0:
@@ -865,9 +786,9 @@ def _augment_network_nodes(
     # include matching s_ids and c_ids of sc_ids
     network_nodes_sid = utils._merge_and_log_overwrites(
         network_nodes,
-        sbml_dfs.compartmentalized_species[["s_id", "c_id"]],
+        sbml_dfs.compartmentalized_species[[SBML_DFS.S_ID, SBML_DFS.C_ID]],
         "network nodes",
-        left_on="name",
+        left_on=NAPISTU_GRAPH_VERTICES.NAME,
         right_index=True,
         how="left",
     )
@@ -886,7 +807,7 @@ def _augment_network_nodes(
             network_nodes_sid,
             species_graph_data,
             "species graph data",
-            left_on="s_id",
+            left_on=SBML_DFS.S_ID,
             right_index=True,
             how="left",
         )

@@ -15,6 +15,8 @@ from napistu.network.constants import (
     EDGE_DIRECTION_MAPPING,
     ENTITIES_TO_ATTRS,
     NAPISTU_GRAPH_EDGES,
+    NAPISTU_METADATA_KEYS,
+    WEIGHTING_SPEC,
 )
 
 logger = logging.getLogger(__name__)
@@ -304,18 +306,23 @@ class NapistuGraph(ig.Graph):
             If required attributes are missing or if parameters are invalid.
         """
 
-        # check for required attribute before proceeding
-        required_attrs = {
+        # Check for required attributes and add degree attributes if missing
+        degree_attrs = {
             NAPISTU_GRAPH_EDGES.SC_DEGREE,
             NAPISTU_GRAPH_EDGES.SC_CHILDREN,
             NAPISTU_GRAPH_EDGES.SC_PARENTS,
-            NAPISTU_GRAPH_EDGES.SPECIES_TYPE,
         }
 
-        missing_required_attrs = required_attrs.difference(set(self.es.attributes()))
-        if len(missing_required_attrs) != 0:
+        missing_degree_attrs = degree_attrs.difference(set(self.es.attributes()))
+        if missing_degree_attrs:
+            logger.info(f"Adding missing degree attributes: {missing_degree_attrs}")
+            self.add_degree_attributes()
+
+        # Check for species_type attribute
+        if NAPISTU_GRAPH_EDGES.SPECIES_TYPE not in self.es.attributes():
             raise ValueError(
-                f"model is missing {len(missing_required_attrs)} required attributes: {', '.join(missing_required_attrs)}"
+                f"Missing required attribute: {NAPISTU_GRAPH_EDGES.SPECIES_TYPE}. "
+                "Species type information is required for topology weighting."
             )
 
         if base_score < 0:
@@ -398,6 +405,127 @@ class NapistuGraph(ig.Graph):
                 for x, y in zip(weight_table["multiplier"], weight_table["sc_parents"])
             ]
             self.es["upstream_topo_weights"] = weight_table["upstream_topo_weights"]
+
+        return self
+
+    def add_degree_attributes(self) -> "NapistuGraph":
+        """
+        Calculate and add degree-based attributes (parents, children, degree) to the graph.
+
+        This method calculates the number of parents, children, and total degree for each node
+        and stores these as edge attributes to support topology weighting. The attributes are
+        calculated from the current graph's edge data.
+
+        Returns
+        -------
+        NapistuGraph
+            Self with degree attributes added to edges.
+        """
+        # Check if degree attributes already exist
+        existing_attrs = set(self.es.attributes())
+        degree_attrs = {
+            NAPISTU_GRAPH_EDGES.SC_DEGREE,
+            NAPISTU_GRAPH_EDGES.SC_CHILDREN,
+            NAPISTU_GRAPH_EDGES.SC_PARENTS,
+        }
+
+        existing_degree_attrs = degree_attrs.intersection(existing_attrs)
+
+        if existing_degree_attrs and not degree_attrs.issubset(existing_attrs):
+            # Some but not all degree attributes exist - this is pathological
+            missing_attrs = degree_attrs - existing_attrs
+            raise ValueError(
+                f"Some degree attributes already exist ({existing_degree_attrs}) but others are missing ({missing_attrs}). "
+                f"This indicates an inconsistent state. Please remove all degree attributes before recalculating."
+            )
+        elif degree_attrs.issubset(existing_attrs):
+            logger.warning("Degree attributes already exist. Skipping calculation.")
+            return self
+
+        # Get current edge data
+        edges_df = self.get_edge_dataframe()
+
+        # Calculate undirected and directed degrees (i.e., # of parents and children)
+        # based on the network's edgelist
+        unique_edges = (
+            edges_df.groupby([NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO])
+            .first()
+            .reset_index()
+        )
+
+        # Calculate children (out-degree)
+        n_children = (
+            unique_edges[NAPISTU_GRAPH_EDGES.FROM]
+            .value_counts()
+            .to_frame(name=NAPISTU_GRAPH_EDGES.SC_CHILDREN)
+            .reset_index()
+            .rename({NAPISTU_GRAPH_EDGES.FROM: "node_id"}, axis=1)
+        )
+
+        # Calculate parents (in-degree)
+        n_parents = (
+            unique_edges[NAPISTU_GRAPH_EDGES.TO]
+            .value_counts()
+            .to_frame(name=NAPISTU_GRAPH_EDGES.SC_PARENTS)
+            .reset_index()
+            .rename({NAPISTU_GRAPH_EDGES.TO: "node_id"}, axis=1)
+        )
+
+        # Merge children and parents data
+        graph_degree_by_edgelist = n_children.merge(n_parents, how="outer").fillna(
+            int(0)
+        )
+
+        # Calculate total degree
+        graph_degree_by_edgelist[NAPISTU_GRAPH_EDGES.SC_DEGREE] = (
+            graph_degree_by_edgelist[NAPISTU_GRAPH_EDGES.SC_CHILDREN]
+            + graph_degree_by_edgelist[NAPISTU_GRAPH_EDGES.SC_PARENTS]
+        )
+
+        # Filter out reaction nodes (those with IDs matching "R[0-9]{8}")
+        graph_degree_by_edgelist = (
+            graph_degree_by_edgelist[
+                ~graph_degree_by_edgelist["node_id"].str.contains("R[0-9]{8}")
+            ]
+            .set_index("node_id")
+            .sort_index()
+        )
+
+        # Merge degree data back with edge data
+        # For edges where FROM is a species (not reaction), use FROM node's degree
+        # For edges where FROM is a reaction, use TO node's degree
+        is_from_reaction = edges_df[NAPISTU_GRAPH_EDGES.FROM].str.contains("R[0-9]{8}")
+
+        # Create degree data for edges
+        edge_degree_data = pd.concat(
+            [
+                # Edges where FROM is a species - use FROM node's degree
+                edges_df[~is_from_reaction].merge(
+                    graph_degree_by_edgelist,
+                    left_on=NAPISTU_GRAPH_EDGES.FROM,
+                    right_index=True,
+                    how="left",
+                ),
+                # Edges where FROM is a reaction - use TO node's degree
+                edges_df[is_from_reaction].merge(
+                    graph_degree_by_edgelist,
+                    left_on=NAPISTU_GRAPH_EDGES.TO,
+                    right_index=True,
+                    how="left",
+                ),
+            ]
+        ).fillna(int(0))
+
+        # Add degree attributes to edges
+        self.es[NAPISTU_GRAPH_EDGES.SC_DEGREE] = edge_degree_data[
+            NAPISTU_GRAPH_EDGES.SC_DEGREE
+        ].values
+        self.es[NAPISTU_GRAPH_EDGES.SC_CHILDREN] = edge_degree_data[
+            NAPISTU_GRAPH_EDGES.SC_CHILDREN
+        ].values
+        self.es[NAPISTU_GRAPH_EDGES.SC_PARENTS] = edge_degree_data[
+            NAPISTU_GRAPH_EDGES.SC_PARENTS
+        ].values
 
         return self
 
@@ -487,14 +615,20 @@ class NapistuGraph(ig.Graph):
         # Process species attributes if present
         if "species" in graph_attrs:
             merged_species = self._compare_and_merge_attrs(
-                graph_attrs["species"], "species_attrs", mode, overwrite
+                graph_attrs["species"],
+                NAPISTU_METADATA_KEYS.SPECIES_ATTRS,
+                mode,
+                overwrite,
             )
             self.set_metadata(species_attrs=merged_species)
 
         # Process reaction attributes if present
         if "reactions" in graph_attrs:
             merged_reactions = self._compare_and_merge_attrs(
-                graph_attrs["reactions"], "reaction_attrs", mode, overwrite
+                graph_attrs["reactions"],
+                NAPISTU_METADATA_KEYS.REACTION_ATTRS,
+                mode,
+                overwrite,
             )
             self.set_metadata(reaction_attrs=merged_reactions)
 
@@ -636,13 +770,19 @@ class NapistuGraph(ig.Graph):
             return
 
         # Initialize metadata structures
-        if "transformations_applied" not in self._metadata:
-            self._metadata["transformations_applied"] = {"reactions": {}}
-        if "raw_attributes" not in self._metadata:
-            self._metadata["raw_attributes"] = {"reactions": {}}
+        if NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED not in self._metadata:
+            self._metadata[NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED] = {
+                SBML_DFS.REACTIONS: {}
+            }
+        if NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES not in self._metadata:
+            self._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES] = {
+                SBML_DFS.REACTIONS: {}
+            }
 
         # Determine what attributes need updating using set operations
-        current_transformations = self._metadata["transformations_applied"]["reactions"]
+        current_transformations = self._metadata[
+            NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED
+        ][SBML_DFS.REACTIONS]
         requested_attrs = set(reaction_attrs.keys())
 
         # Attributes that have never been transformed
@@ -651,13 +791,19 @@ class NapistuGraph(ig.Graph):
         # Attributes that need different transformations
         needs_retransform = set()
         for attr_name in requested_attrs & set(current_transformations.keys()):
-            new_trans = reaction_attrs[attr_name].get("trans", "identity")
+            new_trans = reaction_attrs[attr_name].get(
+                WEIGHTING_SPEC.TRANSFORMATION, "identity"
+            )
             current_trans = current_transformations[attr_name]
             if current_trans != new_trans:
                 needs_retransform.add(attr_name)
 
         # Check if we can re-transform (need raw data)
-        stored_raw_attrs = set(self._metadata["raw_attributes"]["reactions"].keys())
+        stored_raw_attrs = set(
+            self._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][
+                SBML_DFS.REACTIONS
+            ].keys()
+        )
         invalid_retransform = needs_retransform - stored_raw_attrs
 
         if invalid_retransform and not keep_raw_attributes:
@@ -665,7 +811,9 @@ class NapistuGraph(ig.Graph):
             error_details = []
             for attr_name in invalid_retransform:
                 current_trans = current_transformations[attr_name]
-                new_trans = reaction_attrs[attr_name].get("trans", "identity")
+                new_trans = reaction_attrs[attr_name].get(
+                    WEIGHTING_SPEC.TRANSFORMATION, "identity"
+                )
                 error_details.append(f"'{attr_name}': {current_trans} -> {new_trans}")
 
             raise ValueError(
@@ -696,19 +844,29 @@ class NapistuGraph(ig.Graph):
         # Store raw attributes if requested (for never-transformed attributes)
         if keep_raw_attributes:
             for attr_name in never_transformed & attrs_to_transform:
-                if attr_name not in self._metadata["raw_attributes"]["reactions"]:
-                    self._metadata["raw_attributes"]["reactions"][attr_name] = edges_df[
-                        attr_name
-                    ].copy()
+                if (
+                    attr_name
+                    not in self._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][
+                        SBML_DFS.REACTIONS
+                    ]
+                ):
+                    self._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][
+                        SBML_DFS.REACTIONS
+                    ][attr_name] = edges_df[attr_name].copy()
 
         # Prepare data for transformation - always use raw data
         transform_data = edges_df.copy()
         for attr_name in attrs_to_transform:
-            if attr_name in self._metadata["raw_attributes"]["reactions"]:
+            if (
+                attr_name
+                in self._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][
+                    SBML_DFS.REACTIONS
+                ]
+            ):
                 # Use stored raw values
-                transform_data[attr_name] = self._metadata["raw_attributes"][
-                    "reactions"
-                ][attr_name]
+                transform_data[attr_name] = self._metadata[
+                    NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES
+                ][SBML_DFS.REACTIONS][attr_name]
             # If no raw data available, we must be in the never_transformed case with current data as raw
 
         # Apply transformations using existing function
@@ -725,8 +883,10 @@ class NapistuGraph(ig.Graph):
 
         # Update transformations_applied metadata
         for attr_name in attrs_to_transform:
-            self._metadata["transformations_applied"]["reactions"][attr_name] = (
-                reaction_attrs[attr_name].get("trans", "identity")
+            self._metadata[NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED][
+                SBML_DFS.REACTIONS
+            ][attr_name] = reaction_attrs[attr_name].get(
+                WEIGHTING_SPEC.TRANSFORMATION, "identity"
             )
 
         logger.info(

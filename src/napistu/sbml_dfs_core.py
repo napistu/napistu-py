@@ -32,6 +32,7 @@ from napistu.constants import (
     NAPISTU_STANDARD_OUTPUTS,
     ONTOLOGY_PRIORITIES,
     SBML_DFS,
+    SBML_DFS_METHOD_DEFS,
     SBML_DFS_SCHEMA,
     SBOTERM_NAMES,
     SCHEMA_DEFS,
@@ -425,34 +426,38 @@ class SBML_dfs:
             - species_type: Classification of the species
         """
         cspecies_n_connections = (
-            self.reaction_species["sc_id"].value_counts().rename("sc_degree")
+            self.reaction_species[SBML_DFS.SC_ID]
+            .value_counts()
+            .rename(SBML_DFS_METHOD_DEFS.SC_DEGREE)
         )
 
         cspecies_n_children = (
             self.reaction_species.loc[
-                self.reaction_species[SBML_DFS.STOICHIOMETRY] <= 0, "sc_id"
+                self.reaction_species[SBML_DFS.STOICHIOMETRY] <= 0, SBML_DFS.SC_ID
             ]
             .value_counts()
-            .rename("sc_children")
+            .rename(SBML_DFS_METHOD_DEFS.SC_CHILDREN)
         )
 
         cspecies_n_parents = (
             self.reaction_species.loc[
-                self.reaction_species[SBML_DFS.STOICHIOMETRY] > 0, "sc_id"
+                self.reaction_species[SBML_DFS.STOICHIOMETRY] > 0, SBML_DFS.SC_ID
             ]
             .value_counts()
-            .rename("sc_parents")
+            .rename(SBML_DFS_METHOD_DEFS.SC_PARENTS)
         )
 
-        species_features = self.get_species_features()["species_type"]
+        species_features = self.get_species_features()[
+            SBML_DFS_METHOD_DEFS.SPECIES_TYPE
+        ]
 
         return (
             self.compartmentalized_species.join(cspecies_n_connections)
             .join(cspecies_n_children)
             .join(cspecies_n_parents)
             .fillna(int(0))  # Explicitly fill with int(0) to avoid downcasting warning
-            .merge(species_features, left_on="s_id", right_index=True)
-            .drop(columns=["sc_name", "s_id", "c_id"])
+            .merge(species_features, left_on=SBML_DFS.S_ID, right_index=True)
+            .drop(columns=[SBML_DFS.SC_NAME, SBML_DFS.S_ID, SBML_DFS.C_ID])
         )
 
     def get_identifiers(self, id_type) -> pd.DataFrame:
@@ -563,10 +568,21 @@ class SBML_dfs:
         )
 
         cspecies_features = self.get_cspecies_features()
-        stats["stats_degree"] = cspecies_features["sc_degree"].describe().to_dict()
+        stats["stats_degree"] = (
+            cspecies_features[SBML_DFS_METHOD_DEFS.SC_DEGREE].describe().to_dict()
+        )
         stats["top10_degree"] = (
-            cspecies_features.sort_values("sc_degree", ascending=False)
-            .head(10)[["sc_degree", "sc_children", "sc_parents", "species_type"]]
+            cspecies_features.sort_values(
+                SBML_DFS_METHOD_DEFS.SC_DEGREE, ascending=False
+            )
+            .head(10)[
+                [
+                    SBML_DFS_METHOD_DEFS.SC_DEGREE,
+                    SBML_DFS_METHOD_DEFS.SC_CHILDREN,
+                    SBML_DFS_METHOD_DEFS.SC_PARENTS,
+                    SBML_DFS_METHOD_DEFS.SPECIES_TYPE,
+                ]
+            ]
             .merge(
                 self.compartmentalized_species[[SBML_DFS.S_ID, SBML_DFS.C_ID]],
                 on=SBML_DFS.SC_ID,
@@ -579,14 +595,16 @@ class SBML_dfs:
         s_identifiers = sbml_dfs_utils.unnest_identifiers(
             self.species, SBML_DFS.S_IDENTIFIERS
         )
-        identifiers_stats = s_identifiers.groupby("s_id").size()
+        identifiers_stats = s_identifiers.groupby(SBML_DFS.S_ID).size()
         stats["stats_identifiers_per_species"] = identifiers_stats.describe().to_dict()
         stats["top10_identifiers_per_species"] = (
             identifiers_stats.sort_values(ascending=False)
             .head(10)
             .rename("n_identifiers")
             .to_frame()
-            .join(species_features[[SBML_DFS.S_NAME, "species_type"]])
+            .join(
+                species_features[[SBML_DFS.S_NAME, SBML_DFS_METHOD_DEFS.SPECIES_TYPE]]
+            )
             .reset_index(drop=False)
             .to_dict(orient="records")
         )
@@ -654,9 +672,9 @@ class SBML_dfs:
         species = self.species
         augmented_species = species.assign(
             **{
-                "species_type": lambda d: d["s_Identifiers"].apply(
-                    sbml_dfs_utils.species_type_types
-                )
+                SBML_DFS_METHOD_DEFS.SPECIES_TYPE: lambda d: d[
+                    SBML_DFS.S_IDENTIFIERS
+                ].apply(sbml_dfs_utils.species_type_types)
             }
         )
 
@@ -705,7 +723,11 @@ class SBML_dfs:
                 )
 
             # determine whether required_attributes are appropriate
-            VALID_REQUIRED_ATTRIBUTES = {"id", "source", "label"}
+            VALID_REQUIRED_ATTRIBUTES = {
+                SCHEMA_DEFS.ID,
+                SCHEMA_DEFS.SOURCE,
+                SCHEMA_DEFS.LABEL,
+            }
             invalid_required_attributes = required_attributes.difference(
                 VALID_REQUIRED_ATTRIBUTES
             )
@@ -785,11 +807,11 @@ class SBML_dfs:
         all_ids = pd.concat(
             [
                 sbml_dfs_utils._id_dict_to_df(
-                    entity_table[schema[entity_type]["id"]].iloc[i].ids
+                    entity_table[schema[entity_type][SCHEMA_DEFS.ID]].iloc[i].ids
                 ).assign(id=entity_table.index[i])
                 for i in range(0, entity_table.shape[0])
             ]
-        ).rename(columns={"id": schema[entity_type]["pk"]})
+        ).rename(columns={SCHEMA_DEFS.ID: schema[entity_type][SCHEMA_DEFS.PK]})
 
         # set priorities for ontologies and bqb terms
 
@@ -808,7 +830,7 @@ class SBML_dfs:
 
         uri_urls = (
             all_ids.sort_values(["bqb_rank", "ontology_rank", IDENTIFIERS.URL])
-            .groupby(schema[entity_type]["pk"])
+            .groupby(schema[entity_type][SCHEMA_DEFS.PK])
             .first()[IDENTIFIERS.URL]
         )
         return uri_urls

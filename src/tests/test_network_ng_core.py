@@ -5,6 +5,7 @@ import igraph as ig
 import pandas as pd
 
 from napistu.network.ng_core import NapistuGraph
+from napistu.network.constants import NAPISTU_GRAPH_EDGES
 
 logger = logging.getLogger(__name__)
 
@@ -414,3 +415,103 @@ def test_transform_edges_retransformation_behavior(test_graph, minimal_valid_sbm
         test_graph.get_metadata("transformations_applied")["reactions"]["scores"]
         == "string_inv"
     )
+
+
+def test_add_degree_attributes(test_graph):
+    """Test add_degree_attributes method functionality."""
+    # Create a more complex test graph with multiple edges to test degree calculations
+    g = ig.Graph()
+    g.add_vertices(5, attributes={"name": ["A", "B", "C", "D", "R00001"]})
+    g.add_edges(
+        [(0, 1), (1, 2), (2, 3), (0, 2), (3, 4)]
+    )  # A->B, B->C, C->D, A->C, D->R00001
+    g.es["from"] = ["A", "B", "C", "A", "D"]
+    g.es["to"] = ["B", "C", "D", "C", "R00001"]
+    g.es["r_id"] = ["R1", "R2", "R3", "R4", "R5"]
+
+    napistu_graph = NapistuGraph.from_igraph(g)
+
+    # Add degree attributes
+    napistu_graph.add_degree_attributes()
+
+    # Check that degree attributes were added to edges
+    assert NAPISTU_GRAPH_EDGES.SC_DEGREE in napistu_graph.es.attributes()
+    assert NAPISTU_GRAPH_EDGES.SC_CHILDREN in napistu_graph.es.attributes()
+    assert NAPISTU_GRAPH_EDGES.SC_PARENTS in napistu_graph.es.attributes()
+
+    # Get edge data to verify calculations
+    edges_df = napistu_graph.get_edge_dataframe()
+
+    # Test degree calculations for specific nodes:
+    # Node A: 2 children (B, C), 0 parents -> degree = 2
+    # Node B: 1 child (C), 1 parent (A) -> degree = 2
+    # Node C: 1 child (D), 2 parents (A, B) -> degree = 3
+    # Node D: 1 child (R00001), 1 parent (C) -> degree = 2
+    # Node R00001: 0 children, 1 parent (D) -> degree = 1 (but filtered out)
+
+    # Check edge A->B: should have A's degree (2 children, 0 parents = 2)
+    edge_a_to_b = edges_df[(edges_df["from"] == "A") & (edges_df["to"] == "B")].iloc[0]
+    assert edge_a_to_b[NAPISTU_GRAPH_EDGES.SC_DEGREE] == 2
+    assert edge_a_to_b[NAPISTU_GRAPH_EDGES.SC_CHILDREN] == 2
+    assert edge_a_to_b[NAPISTU_GRAPH_EDGES.SC_PARENTS] == 0
+
+    # Check edge B->C: should have B's degree (1 child, 1 parent = 2)
+    edge_b_to_c = edges_df[(edges_df["from"] == "B") & (edges_df["to"] == "C")].iloc[0]
+    assert edge_b_to_c[NAPISTU_GRAPH_EDGES.SC_DEGREE] == 2
+    assert edge_b_to_c[NAPISTU_GRAPH_EDGES.SC_CHILDREN] == 1
+    assert edge_b_to_c[NAPISTU_GRAPH_EDGES.SC_PARENTS] == 1
+
+    # Check edge C->D: should have C's degree (1 child, 2 parents = 3)
+    edge_c_to_d = edges_df[(edges_df["from"] == "C") & (edges_df["to"] == "D")].iloc[0]
+    assert edge_c_to_d[NAPISTU_GRAPH_EDGES.SC_DEGREE] == 3
+    assert edge_c_to_d[NAPISTU_GRAPH_EDGES.SC_CHILDREN] == 1
+    assert edge_c_to_d[NAPISTU_GRAPH_EDGES.SC_PARENTS] == 2
+
+    # Check edge D->R00001: should have D's degree (1 child, 1 parent = 2)
+    # Note: R00001 is a reaction node, so we use D's degree
+    edge_d_to_r = edges_df[
+        (edges_df["from"] == "D") & (edges_df["to"] == "R00001")
+    ].iloc[0]
+    assert edge_d_to_r[NAPISTU_GRAPH_EDGES.SC_DEGREE] == 2
+    assert edge_d_to_r[NAPISTU_GRAPH_EDGES.SC_CHILDREN] == 1
+    assert edge_d_to_r[NAPISTU_GRAPH_EDGES.SC_PARENTS] == 1
+
+    # Test method chaining
+    result = napistu_graph.add_degree_attributes()
+    assert result is napistu_graph
+
+    # Test that calling again doesn't change values (idempotent)
+    edges_df_after = napistu_graph.get_edge_dataframe()
+    pd.testing.assert_frame_equal(edges_df, edges_df_after)
+
+
+def test_add_degree_attributes_pathological_case(test_graph):
+    """Test add_degree_attributes method handles pathological case correctly."""
+    # Create a test graph
+    g = ig.Graph()
+    g.add_vertices(3, attributes={"name": ["A", "B", "C"]})
+    g.add_edges([(0, 1), (1, 2)])  # A->B, B->C
+    g.es["from"] = ["A", "B"]
+    g.es["to"] = ["B", "C"]
+    g.es["r_id"] = ["R1", "R2"]
+
+    napistu_graph = NapistuGraph.from_igraph(g)
+
+    # Manually add only some degree attributes to create pathological state
+    napistu_graph.es[NAPISTU_GRAPH_EDGES.SC_CHILDREN] = [1, 1]
+    napistu_graph.es[NAPISTU_GRAPH_EDGES.SC_PARENTS] = [0, 1]
+    # Note: sc_degree is missing
+
+    # Test that calling add_degree_attributes raises an error
+    with pytest.raises(ValueError, match="Some degree attributes already exist"):
+        napistu_graph.add_degree_attributes()
+
+    # Test that the error message includes the specific attributes
+    try:
+        napistu_graph.add_degree_attributes()
+    except ValueError as e:
+        error_msg = str(e)
+        assert "sc_children" in error_msg
+        assert "sc_parents" in error_msg
+        assert "sc_degree" in error_msg
+        assert "inconsistent state" in error_msg

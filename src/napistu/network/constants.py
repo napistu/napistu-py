@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 
-from napistu.constants import SBML_DFS
+from napistu.constants import SBML_DFS, SBML_DFS_METHOD_DEFS
 from napistu.constants import SBOTERM_NAMES
 
 NAPISTU_GRAPH = SimpleNamespace(VERTICES="vertices", EDGES="edges", METADATA="metadata")
@@ -24,7 +24,20 @@ NAPISTU_GRAPH_VERTICES = SimpleNamespace(
     NAME="name",  # internal name
     NODE_NAME="node_name",  # human readable name
     NODE_TYPE="node_type",  # type of node (species or reaction)
+    SPECIES_TYPE=SBML_DFS_METHOD_DEFS.SPECIES_TYPE,
+    # TO DO - drop these attributes from the graph
+    SC_DEGREE=SBML_DFS_METHOD_DEFS.SC_DEGREE,
+    SC_CHILDREN=SBML_DFS_METHOD_DEFS.SC_CHILDREN,
+    SC_PARENTS=SBML_DFS_METHOD_DEFS.SC_PARENTS,
 )
+
+CORE_NAPISTU_GRAPH_VERTICES_VARS = {
+    NAPISTU_GRAPH_VERTICES.NAME,
+    NAPISTU_GRAPH_VERTICES.NODE_NAME,
+    NAPISTU_GRAPH_VERTICES.NODE_TYPE,
+    # added during creation
+    NAPISTU_GRAPH_VERTICES.SPECIES_TYPE,
+}
 
 NAPISTU_GRAPH_EDGES = SimpleNamespace(
     DIRECTED="directed",
@@ -44,10 +57,20 @@ NAPISTU_GRAPH_EDGES = SimpleNamespace(
     WEIGHT="weight",
 )
 
-NAPISTU_GRAPH_REQUIRED_EDGE_VARS = {
+# added during graph wiring
+CORE_NAPISTU_GRAPH_EDGES_VARS = {
     NAPISTU_GRAPH_EDGES.FROM,
     NAPISTU_GRAPH_EDGES.TO,
-    NAPISTU_GRAPH_EDGES.DIRECTION,
+    NAPISTU_GRAPH_EDGES.STOICHIOMETRY,
+    NAPISTU_GRAPH_EDGES.SBO_TERM,
+    NAPISTU_GRAPH_EDGES.SPECIES_TYPE,
+    NAPISTU_GRAPH_EDGES.R_ID,
+}
+
+OPTIONAL_NAPISTU_GRAPH_EDGE_VARS_FROM = {
+    NAPISTU_GRAPH_EDGES.SC_DEGREE: "add_degree_attributes",
+    NAPISTU_GRAPH_EDGES.SC_CHILDREN: "add_degree_attributes",
+    NAPISTU_GRAPH_EDGES.SC_PARENTS: "add_degree_attributes",
 }
 
 NAPISTU_GRAPH_NODE_TYPES = SimpleNamespace(SPECIES="species", REACTION="reaction")
@@ -60,6 +83,8 @@ VALID_NAPISTU_GRAPH_NODE_TYPES = [
 NAPISTU_METADATA_KEYS = SimpleNamespace(
     REACTION_ATTRS="reaction_attrs",
     SPECIES_ATTRS="species_attrs",
+    TRANSFORMATIONS_APPLIED="transformations_applied",
+    RAW_ATTRIBUTES="raw_attributes",
 )
 
 ENTITIES_TO_ATTRS = {
