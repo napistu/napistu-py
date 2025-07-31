@@ -6,8 +6,6 @@ import random
 from typing import Optional
 
 import igraph as ig
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 
 from napistu import sbml_dfs_core
@@ -33,7 +31,6 @@ from napistu.network.constants import (
     NAPISTU_WEIGHTING_STRATEGIES,
     VALID_GRAPH_WIRING_APPROACHES,
     VALID_WEIGHTING_STRATEGIES,
-    SCORE_CALIBRATION_POINTS_DICT,
     SOURCE_VARS_DICT,
     DROP_REACTIONS_WHEN,
 )
@@ -284,7 +281,6 @@ def process_napistu_graph(
             - 'unweighted': all weights (and upstream_weight for directed graphs) are set to 1.
             - 'topology': weight edges by the degree of the source nodes favoring nodes with few connections.
             - 'mixed': transform edges with a quantitative score based on reaction_attrs; and set edges without quantitative score as a source-specific weight.
-            - 'calibrated': transform edges with a quantitative score based on reaction_attrs and combine them with topology scores to generate a consensus.
     verbose : bool, optional
         Extra reporting. Default is False.
     custom_transformations : dict, optional
@@ -471,42 +467,6 @@ def create_napistu_graph_wiring(
     return decorated_all_reaction_edges_df
 
 
-def summarize_weight_calibration(
-    napistu_graph: NapistuGraph, reaction_attrs: dict
-) -> None:
-    """
-    Summarize Weight Calibration for a network with multiple sources for edge weights.
-
-    Parameters
-    ----------
-    napistu_graph : NapistuGraph
-        A graph where edge weights have already been calibrated.
-    reaction_attrs : dict
-        A dictionary summarizing the types of weights that exist and how they are transformed for calibration.
-
-    Returns
-    -------
-    None
-    """
-
-    score_calibration_df = pd.DataFrame(SCORE_CALIBRATION_POINTS_DICT)
-    score_calibration_df_calibrated = ng_utils.apply_weight_transformations(
-        score_calibration_df, reaction_attrs
-    )
-
-    calibrated_edges = napistu_graph.get_edge_dataframe()
-
-    _summarize_weight_calibration_table(
-        calibrated_edges, score_calibration_df, score_calibration_df_calibrated
-    )
-
-    _summarize_weight_calibration_plots(
-        calibrated_edges, score_calibration_df_calibrated
-    )
-
-    return None
-
-
 def add_graph_weights(
     napistu_graph: NapistuGraph,
     reaction_attrs: dict,
@@ -526,7 +486,6 @@ def add_graph_weights(
             - 'unweighted': all weights (and upstream_weight for directed graphs) are set to 1.
             - 'topology': weight edges by the degree of the source nodes favoring nodes emerging from nodes with few connections.
             - 'mixed': transform edges with a quantitative score based on reaction_attrs; and set edges without quantitative score as a source-specific weight.
-            - 'calibrated': transform edges with a quantitative score based on reaction_attrs and combine them with topology scores to generate a consensus.
 
     Returns
     -------
@@ -549,10 +508,11 @@ def add_graph_weights(
             f"{', '.join(VALID_WEIGHTING_STRATEGIES)}"
         )
 
-    # count parents and children and create weights based on them
-    topology_weighted_graph = _create_topology_weights(napistu_graph_updated)
+    topology_weighted_graph = napistu_graph_updated.add_topology_weights()
 
     if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY:
+        # count parents and children and create weights based on them
+
         topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.WEIGHT] = (
             topology_weighted_graph.es["topo_weights"]
         )
@@ -572,9 +532,6 @@ def add_graph_weights(
 
     if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.MIXED:
         return _add_graph_weights_mixed(topology_weighted_graph, reaction_attrs)
-
-    if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.CALIBRATED:
-        return _add_graph_weights_calibration(topology_weighted_graph, reaction_attrs)
 
     raise ValueError(f"No logic implemented for {weighting_strategy}")
 
@@ -691,51 +648,6 @@ def _add_graph_weights_mixed(
     return napistu_graph
 
 
-def _add_graph_weights_calibration(
-    napistu_graph: NapistuGraph, reaction_attrs: dict
-) -> NapistuGraph:
-    """
-    Weight a NapistuGraph using a calibrated strategy which aims to roughly align qualitatively similar weights from different sources.
-
-    Parameters
-    ----------
-    napistu_graph : NapistuGraph
-        The network to weight (subclass of igraph.Graph).
-    reaction_attrs : dict
-        Dictionary of reaction attributes to use for weighting.
-
-    Returns
-    -------
-    NapistuGraph
-        The weighted NapistuGraph.
-    """
-
-    edges_df = napistu_graph.get_edge_dataframe()
-
-    calibrated_edges = ng_utils.apply_weight_transformations(edges_df, reaction_attrs)
-
-    score_vars = list(reaction_attrs.keys())
-    score_vars.append("topo_weights")
-
-    logger.info(f"Creating calibrated scores based on {', '.join(score_vars)}")
-    napistu_graph.es[NAPISTU_GRAPH_EDGES.WEIGHT] = calibrated_edges[score_vars].min(
-        axis=1
-    )
-
-    if napistu_graph.is_directed():
-        score_vars = list(reaction_attrs.keys())
-        score_vars.append("upstream_topo_weights")
-        napistu_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = calibrated_edges[
-            score_vars
-        ].min(axis=1)
-
-    # add other attributes and update transformed attributes
-    for k in reaction_attrs.keys():
-        napistu_graph.es[k] = calibrated_edges[k]
-
-    return napistu_graph
-
-
 def _add_edge_attr_to_vertex_graph(
     napistu_graph: NapistuGraph,
     edge_attr_list: list,
@@ -836,112 +748,6 @@ def _add_edge_attr_to_vertex_graph(
         napistu_graph.vs[col_name] = graph_vertex_df_w_edge_attr[col_name]
 
     return napistu_graph
-
-
-def _summarize_weight_calibration_table(
-    calibrated_edges: pd.DataFrame,
-    score_calibration_df: pd.DataFrame,
-    score_calibration_df_calibrated: pd.DataFrame,
-):
-    """
-    Create a table comparing edge weights from multiple sources.
-
-    Parameters
-    ----------
-    calibrated_edges : pd.DataFrame
-        DataFrame of calibrated edge weights.
-    score_calibration_df : pd.DataFrame
-        DataFrame of raw calibration points.
-    score_calibration_df_calibrated : pd.DataFrame
-        DataFrame of calibrated calibration points.
-
-    Returns
-    -------
-    pd.DataFrame
-        Styled DataFrame summarizing calibration points and quantiles.
-    """
-
-    # generate a table summarizing different scoring measures
-    #
-    # a set of calibration points defined in DEFINED_WEIGHT_TRANSFORMATION which map
-    # onto what we might consider strong versus dubious edges are compared to the
-    # observed scores to see whether these calibration points generally map onto
-    # the expected quantiles of the score distribution.
-    #
-    # different scores are also compared to see whether there calibrations are generally
-    # aligned. that is to say a strong weight based on one scoring measure would receive
-    # a similar quantitative score to a strong score for another measure.
-
-    score_calibration_long_raw = (
-        score_calibration_df.reset_index()
-        .rename({"index": "edge_strength"}, axis=1)
-        .melt(
-            id_vars="edge_strength", var_name="weight_measure", value_name="raw_weight"
-        )
-    )
-
-    score_calibration_long_calibrated = (
-        score_calibration_df_calibrated.reset_index()
-        .rename({"index": "edge_strength"}, axis=1)
-        .melt(
-            id_vars="edge_strength",
-            var_name="weight_measure",
-            value_name="trans_weight",
-        )
-    )
-
-    score_calibration_table_long = score_calibration_long_raw.merge(
-        score_calibration_long_calibrated
-    )
-
-    # compare calibration points to the quantiles of the observed score distributions
-    score_quantiles = list()
-    for ind, row in score_calibration_table_long.iterrows():
-        score_quantiles.append(
-            1
-            - np.mean(
-                calibrated_edges[row["weight_measure"]].dropna() >= row["trans_weight"]
-            )
-        )
-    score_calibration_table_long["quantile_of_score_dist"] = score_quantiles
-
-    return utils.style_df(score_calibration_table_long, headers="keys")
-
-
-def _summarize_weight_calibration_plots(
-    calibrated_edges: pd.DataFrame, score_calibration_df_calibrated: pd.DataFrame
-) -> None:
-    """
-    Create plots summarizing the relationships between different scoring measures.
-
-    Parameters
-    ----------
-    calibrated_edges : pd.DataFrame
-        DataFrame of calibrated edge weights.
-    score_calibration_df_calibrated : pd.DataFrame
-        DataFrame of calibrated calibration points.
-
-    Returns
-    -------
-    None
-    """
-
-    # set up a 2 x 1 plot
-    f, (ax1, ax2) = plt.subplots(1, 2)
-
-    calibrated_edges[["topo_weights", "string_wt"]].plot(
-        kind="hist", bins=50, alpha=0.5, ax=ax1
-    )
-    ax1.set_title("Distribution of scores\npost calibration")
-
-    score_calibration_df_calibrated.plot("weights", "string_wt", kind="scatter", ax=ax2)
-
-    for k, v in score_calibration_df_calibrated.iterrows():
-        ax2.annotate(k, v)
-    ax2.axline((0, 0), slope=1.0, color="C0", label="by slope")
-    ax2.set_title("Comparing STRING and\nTopology calibration points")
-
-    return None
 
 
 def _create_source_weights(
@@ -1281,148 +1087,3 @@ def _reverse_network_edges(augmented_network_edges: pd.DataFrame) -> pd.DataFram
     return transformed_r_reaction_edges.assign(
         **{NAPISTU_GRAPH_EDGES.DIRECTION: NAPISTU_GRAPH_EDGE_DIRECTIONS.REVERSE}
     )
-
-
-def _create_topology_weights(
-    napistu_graph: ig.Graph,
-    base_score: float = 2,
-    protein_multiplier: int = 1,
-    metabolite_multiplier: int = 3,
-    unknown_multiplier: int = 10,
-    scale_multiplier_by_meandegree: bool = True,
-) -> ig.Graph:
-    """
-    Create Topology Weights for a network based on its topology.
-
-    Edges downstream of nodes with many connections receive a higher weight suggesting that any one
-    of them is less likely to be regulatory. This is a simple and clearly flawed heuristic which can be
-    combined with more principled weighting schemes.
-
-    Parameters
-    ----------
-    napistu_graph : ig.Graph
-        A graph containing connections between molecules, proteins, and reactions.
-    base_score : float, optional
-        Offset which will be added to all weights. Default is 2.
-    protein_multiplier : int, optional
-        Multiplier for non-metabolite species. Default is 1.
-    metabolite_multiplier : int, optional
-        Multiplier for metabolites. Default is 3.
-    unknown_multiplier : int, optional
-        Multiplier for species without any identifier. Default is 10.
-    scale_multiplier_by_meandegree : bool, optional
-        If True, multipliers will be rescaled by the average number of connections a node has. Default is True.
-
-    Returns
-    -------
-    ig.Graph
-        Graph with added topology weights.
-
-    Raises
-    ------
-    ValueError
-        If required attributes are missing or if parameters are invalid.
-    """
-
-    # check for required attribute before proceeding
-
-    required_attrs = {
-        NAPISTU_GRAPH_EDGES.SC_DEGREE,
-        NAPISTU_GRAPH_EDGES.SC_CHILDREN,
-        NAPISTU_GRAPH_EDGES.SC_PARENTS,
-        NAPISTU_GRAPH_EDGES.SPECIES_TYPE,
-    }
-
-    missing_required_attrs = required_attrs.difference(
-        set(napistu_graph.es.attributes())
-    )
-    if len(missing_required_attrs) != 0:
-        raise ValueError(
-            f"model is missing {len(missing_required_attrs)} required attributes: {', '.join(missing_required_attrs)}"
-        )
-
-    if base_score < 0:
-        raise ValueError(f"base_score was {base_score} and must be non-negative")
-    if protein_multiplier > unknown_multiplier:
-        raise ValueError(
-            f"protein_multiplier was {protein_multiplier} and unknown_multiplier "
-            f"was {unknown_multiplier}. unknown_multiplier must be greater than "
-            "protein_multiplier"
-        )
-    if metabolite_multiplier > unknown_multiplier:
-        raise ValueError(
-            f"protein_multiplier was {metabolite_multiplier} and unknown_multiplier "
-            f"was {unknown_multiplier}. unknown_multiplier must be greater than "
-            "protein_multiplier"
-        )
-
-    # create a new weight variable
-
-    weight_table = pd.DataFrame(
-        {
-            NAPISTU_GRAPH_EDGES.SC_DEGREE: napistu_graph.es[
-                NAPISTU_GRAPH_EDGES.SC_DEGREE
-            ],
-            NAPISTU_GRAPH_EDGES.SC_CHILDREN: napistu_graph.es[
-                NAPISTU_GRAPH_EDGES.SC_CHILDREN
-            ],
-            NAPISTU_GRAPH_EDGES.SC_PARENTS: napistu_graph.es[
-                NAPISTU_GRAPH_EDGES.SC_PARENTS
-            ],
-            NAPISTU_GRAPH_EDGES.SPECIES_TYPE: napistu_graph.es[
-                NAPISTU_GRAPH_EDGES.SPECIES_TYPE
-            ],
-        }
-    )
-
-    lookup_multiplier_dict = {
-        "protein": protein_multiplier,
-        "metabolite": metabolite_multiplier,
-        "unknown": unknown_multiplier,
-    }
-    weight_table["multiplier"] = weight_table["species_type"].map(
-        lookup_multiplier_dict
-    )
-
-    # calculate mean degree
-    # since topology weights will differ based on the structure of the network
-    # and it would be nice to have a consistent notion of edge weights and path weights
-    # for interpretability and filtering, we can rescale topology weights by the
-    # average degree of nodes
-    if scale_multiplier_by_meandegree:
-        mean_degree = len(napistu_graph.es) / len(napistu_graph.vs)
-        if not napistu_graph.is_directed():
-            # for a directed network in- and out-degree are separately treated while
-            # an undirected network's degree will be the sum of these two measures.
-            mean_degree = mean_degree * 2
-
-        weight_table["multiplier"] = weight_table["multiplier"] / mean_degree
-
-    if napistu_graph.is_directed():
-        weight_table["connection_weight"] = weight_table[
-            NAPISTU_GRAPH_EDGES.SC_CHILDREN
-        ]
-    else:
-        weight_table["connection_weight"] = weight_table[NAPISTU_GRAPH_EDGES.SC_DEGREE]
-
-    # weight traveling through a species based on
-    # - a constant
-    # - how plausibly that species type mediates a change
-    # - the number of connections that the node can bridge to
-    weight_table["topo_weights"] = [
-        base_score + (x * y)
-        for x, y in zip(weight_table["multiplier"], weight_table["connection_weight"])
-    ]
-    napistu_graph.es["topo_weights"] = weight_table["topo_weights"]
-
-    # if directed and we want to use travel upstream define a corresponding weighting scheme
-    if napistu_graph.is_directed():
-        weight_table["upstream_topo_weights"] = [
-            base_score + (x * y)
-            for x, y in zip(weight_table["multiplier"], weight_table["sc_parents"])
-        ]
-        napistu_graph.es["upstream_topo_weights"] = weight_table[
-            "upstream_topo_weights"
-        ]
-
-    return napistu_graph

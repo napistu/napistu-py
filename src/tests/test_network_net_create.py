@@ -147,7 +147,9 @@ def test_create_napistu_graph_edge_reversed():
 def test_create_napistu_graph_none_attrs():
     # Should not raise when reaction_graph_attrs is None
     _ = net_create.create_napistu_graph(
-        sbml_dfs, reaction_graph_attrs=None, wiring_approach="bipartite"
+        sbml_dfs,
+        reaction_graph_attrs=None,
+        wiring_approach=GRAPH_WIRING_APPROACHES.BIPARTITE,
     )
 
 
@@ -160,7 +162,10 @@ def test_process_napistu_graph_none_attrs():
 def test_igraph_loading():
     # test read/write of an igraph network
     directeds = [True, False]
-    wiring_approaches = ["bipartite", "regulatory"]
+    wiring_approaches = [
+        GRAPH_WIRING_APPROACHES.BIPARTITE,
+        GRAPH_WIRING_APPROACHES.REGULATORY,
+    ]
 
     ng_utils.export_networks(
         sbml_dfs,
@@ -192,7 +197,9 @@ def test_igraph_loading():
 
 def test_reverse_network_edges(reaction_species_examples):
 
-    graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df("regulatory")
+    graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df(
+        GRAPH_WIRING_APPROACHES.REGULATORY
+    )
 
     rxn_edges = net_create_utils.format_tiered_reaction_species(
         rxn_species=reaction_species_examples["all_entities"],

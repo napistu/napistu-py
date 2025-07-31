@@ -43,7 +43,7 @@ class NapistuGraph(ig.Graph):
     wiring_approach : str or None
         Type of graph (e.g., 'bipartite', 'regulatory', 'surrogate')
     weighting_strategy : str or None
-        Strategy used for edge weighting (e.g., 'topology', 'mixed', 'calibrated')
+        Strategy used for edge weighting (e.g., 'topology', 'mixed')
 
     Methods
     -------
@@ -265,6 +265,142 @@ class NapistuGraph(ig.Graph):
             f"Added {added_count} edge attributes to graph: {list(attrs_to_add)}"
         )
 
+    def add_topology_weights(
+        self,
+        base_score: float = 2,
+        protein_multiplier: int = 1,
+        metabolite_multiplier: int = 3,
+        unknown_multiplier: int = 10,
+        scale_multiplier_by_meandegree: bool = True,
+    ) -> "NapistuGraph":
+        """
+        Create Topology Weights for a network based on its topology.
+
+        Edges downstream of nodes with many connections receive a higher weight suggesting that any one
+        of them is less likely to be regulatory. This is a simple and clearly flawed heuristic which can be
+        combined with more principled weighting schemes.
+
+        Parameters
+        ----------
+        base_score : float, optional
+            Offset which will be added to all weights. Default is 2.
+        protein_multiplier : int, optional
+            Multiplier for non-metabolite species. Default is 1.
+        metabolite_multiplier : int, optional
+            Multiplier for metabolites. Default is 3.
+        unknown_multiplier : int, optional
+            Multiplier for species without any identifier. Default is 10.
+        scale_multiplier_by_meandegree : bool, optional
+            If True, multipliers will be rescaled by the average number of connections a node has. Default is True.
+
+        Returns
+        -------
+        NapistuGraph
+            Graph with added topology weights.
+
+        Raises
+        ------
+        ValueError
+            If required attributes are missing or if parameters are invalid.
+        """
+
+        # check for required attribute before proceeding
+        required_attrs = {
+            NAPISTU_GRAPH_EDGES.SC_DEGREE,
+            NAPISTU_GRAPH_EDGES.SC_CHILDREN,
+            NAPISTU_GRAPH_EDGES.SC_PARENTS,
+            NAPISTU_GRAPH_EDGES.SPECIES_TYPE,
+        }
+
+        missing_required_attrs = required_attrs.difference(set(self.es.attributes()))
+        if len(missing_required_attrs) != 0:
+            raise ValueError(
+                f"model is missing {len(missing_required_attrs)} required attributes: {', '.join(missing_required_attrs)}"
+            )
+
+        if base_score < 0:
+            raise ValueError(f"base_score was {base_score} and must be non-negative")
+        if protein_multiplier > unknown_multiplier:
+            raise ValueError(
+                f"protein_multiplier was {protein_multiplier} and unknown_multiplier "
+                f"was {unknown_multiplier}. unknown_multiplier must be greater than "
+                "protein_multiplier"
+            )
+        if metabolite_multiplier > unknown_multiplier:
+            raise ValueError(
+                f"protein_multiplier was {metabolite_multiplier} and unknown_multiplier "
+                f"was {unknown_multiplier}. unknown_multiplier must be greater than "
+                "protein_multiplier"
+            )
+
+        # create a new weight variable
+        weight_table = pd.DataFrame(
+            {
+                NAPISTU_GRAPH_EDGES.SC_DEGREE: self.es[NAPISTU_GRAPH_EDGES.SC_DEGREE],
+                NAPISTU_GRAPH_EDGES.SC_CHILDREN: self.es[
+                    NAPISTU_GRAPH_EDGES.SC_CHILDREN
+                ],
+                NAPISTU_GRAPH_EDGES.SC_PARENTS: self.es[NAPISTU_GRAPH_EDGES.SC_PARENTS],
+                NAPISTU_GRAPH_EDGES.SPECIES_TYPE: self.es[
+                    NAPISTU_GRAPH_EDGES.SPECIES_TYPE
+                ],
+            }
+        )
+
+        lookup_multiplier_dict = {
+            "protein": protein_multiplier,
+            "metabolite": metabolite_multiplier,
+            "unknown": unknown_multiplier,
+        }
+        weight_table["multiplier"] = weight_table["species_type"].map(
+            lookup_multiplier_dict
+        )
+
+        # calculate mean degree
+        # since topology weights will differ based on the structure of the network
+        # and it would be nice to have a consistent notion of edge weights and path weights
+        # for interpretability and filtering, we can rescale topology weights by the
+        # average degree of nodes
+        if scale_multiplier_by_meandegree:
+            mean_degree = len(self.es) / len(self.vs)
+            if not self.is_directed():
+                # for a directed network in- and out-degree are separately treated while
+                # an undirected network's degree will be the sum of these two measures.
+                mean_degree = mean_degree * 2
+
+            weight_table["multiplier"] = weight_table["multiplier"] / mean_degree
+
+        if self.is_directed():
+            weight_table["connection_weight"] = weight_table[
+                NAPISTU_GRAPH_EDGES.SC_CHILDREN
+            ]
+        else:
+            weight_table["connection_weight"] = weight_table[
+                NAPISTU_GRAPH_EDGES.SC_DEGREE
+            ]
+
+        # weight traveling through a species based on
+        # - a constant
+        # - how plausibly that species type mediates a change
+        # - the number of connections that the node can bridge to
+        weight_table["topo_weights"] = [
+            base_score + (x * y)
+            for x, y in zip(
+                weight_table["multiplier"], weight_table["connection_weight"]
+            )
+        ]
+        self.es["topo_weights"] = weight_table["topo_weights"]
+
+        # if directed and we want to use travel upstream define a corresponding weighting scheme
+        if self.is_directed():
+            weight_table["upstream_topo_weights"] = [
+                base_score + (x * y)
+                for x, y in zip(weight_table["multiplier"], weight_table["sc_parents"])
+            ]
+            self.es["upstream_topo_weights"] = weight_table["upstream_topo_weights"]
+
+        return self
+
     def copy(self) -> "NapistuGraph":
         """
         Create a deep copy of the NapistuGraph.
@@ -283,6 +419,18 @@ class NapistuGraph(ig.Graph):
 
         return napistu_copy
 
+    def get_edge_dataframe(self) -> pd.DataFrame:
+        """
+        Get edges as a Pandas DataFrame.
+        Wrapper around igraph's get_edge_dataframe method.
+
+        Returns
+        -------
+        pandas.DataFrame
+            A table with one row per edge.
+        """
+        return super().get_edge_dataframe()
+
     def get_metadata(self, key: Optional[str] = None) -> Any:
         """
         Get metadata from the graph.
@@ -300,6 +448,18 @@ class NapistuGraph(ig.Graph):
         if key is None:
             return self._metadata.copy()
         return self._metadata.get(key)
+
+    def get_vertex_dataframe(self) -> pd.DataFrame:
+        """
+        Get vertices as a Pandas DataFrame.
+        Wrapper around igraph's get_vertex_dataframe method.
+
+        Returns
+        -------
+        pandas.DataFrame
+            A table with one row per vertex.
+        """
+        return super().get_vertex_dataframe()
 
     def set_graph_attrs(
         self,
@@ -450,6 +610,128 @@ class NapistuGraph(ig.Graph):
             ]
         )
         return vertices, edges
+
+    def transform_edges(
+        self,
+        keep_raw_attributes: bool = False,
+        custom_transformations: Optional[dict] = None,
+    ) -> None:
+        """
+        Apply transformations to edge attributes based on stored reaction_attrs.
+
+        Parameters
+        ----------
+        keep_raw_attributes : bool
+            If True, store untransformed attributes for future re-transformation
+        custom_transformations : dict, optional
+            Dictionary mapping transformation names to functions
+        """
+
+        # Get reaction attributes from stored metadata
+        reaction_attrs = self._get_entity_attrs("reactions")
+        if reaction_attrs is None or not reaction_attrs:
+            logger.warning(
+                "No reaction_attrs found. Use set_graph_attrs() to configure reaction attributes."
+            )
+            return
+
+        # Initialize metadata structures
+        if "transformations_applied" not in self._metadata:
+            self._metadata["transformations_applied"] = {"reactions": {}}
+        if "raw_attributes" not in self._metadata:
+            self._metadata["raw_attributes"] = {"reactions": {}}
+
+        # Determine what attributes need updating using set operations
+        current_transformations = self._metadata["transformations_applied"]["reactions"]
+        requested_attrs = set(reaction_attrs.keys())
+
+        # Attributes that have never been transformed
+        never_transformed = requested_attrs - set(current_transformations.keys())
+
+        # Attributes that need different transformations
+        needs_retransform = set()
+        for attr_name in requested_attrs & set(current_transformations.keys()):
+            new_trans = reaction_attrs[attr_name].get("trans", "identity")
+            current_trans = current_transformations[attr_name]
+            if current_trans != new_trans:
+                needs_retransform.add(attr_name)
+
+        # Check if we can re-transform (need raw data)
+        stored_raw_attrs = set(self._metadata["raw_attributes"]["reactions"].keys())
+        invalid_retransform = needs_retransform - stored_raw_attrs
+
+        if invalid_retransform and not keep_raw_attributes:
+            # Get transformation details for error message
+            error_details = []
+            for attr_name in invalid_retransform:
+                current_trans = current_transformations[attr_name]
+                new_trans = reaction_attrs[attr_name].get("trans", "identity")
+                error_details.append(f"'{attr_name}': {current_trans} -> {new_trans}")
+
+            raise ValueError(
+                f"Cannot re-transform attributes without raw data: {error_details}. "
+                f"Raw attributes were not kept for these attributes."
+            )
+
+        attrs_to_transform = never_transformed | needs_retransform
+
+        if not attrs_to_transform:
+            logger.info("No edge attributes need transformation")
+            return
+
+        # Get current edge data
+        edges_df = self.get_edge_dataframe()
+
+        # Check that all attributes to transform exist
+        missing_attrs = attrs_to_transform - set(edges_df.columns)
+        if missing_attrs:
+            logger.warning(
+                f"Edge attributes not found in graph: {missing_attrs}. Skipping."
+            )
+            attrs_to_transform = attrs_to_transform - missing_attrs
+
+        if not attrs_to_transform:
+            return
+
+        # Store raw attributes if requested (for never-transformed attributes)
+        if keep_raw_attributes:
+            for attr_name in never_transformed & attrs_to_transform:
+                if attr_name not in self._metadata["raw_attributes"]["reactions"]:
+                    self._metadata["raw_attributes"]["reactions"][attr_name] = edges_df[
+                        attr_name
+                    ].copy()
+
+        # Prepare data for transformation - always use raw data
+        transform_data = edges_df.copy()
+        for attr_name in attrs_to_transform:
+            if attr_name in self._metadata["raw_attributes"]["reactions"]:
+                # Use stored raw values
+                transform_data[attr_name] = self._metadata["raw_attributes"][
+                    "reactions"
+                ][attr_name]
+            # If no raw data available, we must be in the never_transformed case with current data as raw
+
+        # Apply transformations using existing function
+        attrs_to_transform_config = {
+            attr: reaction_attrs[attr] for attr in attrs_to_transform
+        }
+        transformed_data = ng_utils.apply_weight_transformations(
+            transform_data, attrs_to_transform_config, custom_transformations
+        )
+
+        # Update edge attributes
+        for attr_name in attrs_to_transform:
+            self.es[attr_name] = transformed_data[attr_name].values
+
+        # Update transformations_applied metadata
+        for attr_name in attrs_to_transform:
+            self._metadata["transformations_applied"]["reactions"][attr_name] = (
+                reaction_attrs[attr_name].get("trans", "identity")
+            )
+
+        logger.info(
+            f"Transformed {len(attrs_to_transform)} edge attributes: {list(attrs_to_transform)}"
+        )
 
     def __str__(self) -> str:
         """String representation including metadata."""

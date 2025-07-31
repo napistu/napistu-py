@@ -286,3 +286,131 @@ def test_add_edge_data_mode_and_overwrite(test_graph, minimal_valid_sbml_dfs):
     )
     test_graph.add_edge_data(minimal_valid_sbml_dfs, mode="extend")
     assert "attr2" in test_graph.es.attributes()
+
+
+def test_transform_edges_basic_functionality(test_graph, minimal_valid_sbml_dfs):
+    """Test basic edge transformation functionality."""
+    # Add mock reaction data with values that will be transformed
+    mock_df = pd.DataFrame(
+        {"raw_scores": [100, 200]}, index=["R00001", "R00002"]
+    )  # Add second reaction for more edges
+    minimal_valid_sbml_dfs.reactions_data["test_table"] = mock_df
+
+    # Set reaction attrs with string_inv transformation (1 / (x / 1000))
+    reaction_attrs = {
+        "raw_scores": {
+            "table": "test_table",
+            "variable": "raw_scores",
+            "trans": "string_inv",
+        }
+    }
+    test_graph.set_graph_attrs({"reactions": reaction_attrs})
+
+    # Add edge data first
+    test_graph.add_edge_data(minimal_valid_sbml_dfs)
+    original_values = test_graph.es["raw_scores"][:]
+
+    # Transform edges
+    test_graph.transform_edges(keep_raw_attributes=True)
+
+    # Check transformation was applied (string_inv: 1/(x/1000))
+    transformed_values = test_graph.es["raw_scores"]
+    assert transformed_values != original_values
+
+    # Check metadata was updated
+    assert (
+        "raw_scores" in test_graph.get_metadata("transformations_applied")["reactions"]
+    )
+    assert (
+        test_graph.get_metadata("transformations_applied")["reactions"]["raw_scores"]
+        == "string_inv"
+    )
+
+    # Check raw attributes were stored
+    assert "raw_scores" in test_graph.get_metadata("raw_attributes")["reactions"]
+
+
+def test_transform_edges_retransformation_behavior(test_graph, minimal_valid_sbml_dfs):
+    """Test re-transformation behavior and error handling."""
+    # Add mock data
+    mock_df = pd.DataFrame({"scores": [500]}, index=["R00001"])
+    minimal_valid_sbml_dfs.reactions_data["test_table"] = mock_df
+
+    # Initial transformation
+    test_graph.set_graph_attrs(
+        {
+            "reactions": {
+                "scores": {
+                    "table": "test_table",
+                    "variable": "scores",
+                    "trans": "identity",
+                }
+            }
+        }
+    )
+    test_graph.add_edge_data(minimal_valid_sbml_dfs)
+    test_graph.transform_edges()  # Don't keep raw attributes
+
+    # Try to change transformation - should fail without raw data
+    test_graph.set_graph_attrs(
+        {
+            "reactions": {
+                "scores": {
+                    "table": "test_table",
+                    "variable": "scores",
+                    "trans": "string_inv",
+                }
+            }
+        },
+        overwrite=True,
+    )
+    with pytest.raises(
+        ValueError, match="Cannot re-transform attributes without raw data"
+    ):
+        test_graph.transform_edges()
+
+    # Clear transformation history for second part of test
+    test_graph.set_metadata(transformations_applied={"reactions": {}})
+    test_graph.set_metadata(raw_attributes={"reactions": {}})
+
+    # Reset with fresh state
+    test_graph.set_graph_attrs(
+        {
+            "reactions": {
+                "scores": {
+                    "table": "test_table",
+                    "variable": "scores",
+                    "trans": "identity",
+                }
+            }
+        },
+        overwrite=True,
+    )
+    test_graph.add_edge_data(minimal_valid_sbml_dfs, overwrite=True)
+    test_graph.transform_edges(
+        keep_raw_attributes=True
+    )  # This time keep raw attributes
+    first_transform = test_graph.es["scores"][:]
+
+    # Now change transformation - should work because we kept raw data
+    test_graph.set_graph_attrs(
+        {
+            "reactions": {
+                "scores": {
+                    "table": "test_table",
+                    "variable": "scores",
+                    "trans": "string_inv",
+                }
+            }
+        },
+        overwrite=True,
+    )
+    test_graph.transform_edges()  # Should work now
+    second_transform = test_graph.es["scores"][:]
+
+    # Values should be different after re-transformation
+    assert first_transform != second_transform
+    assert (
+        test_graph.get_metadata("transformations_applied")["reactions"]["scores"]
+        == "string_inv"
+    )
