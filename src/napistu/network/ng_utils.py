@@ -25,7 +25,12 @@ from napistu.identifiers import _validate_assets_sbml_ids
 
 if TYPE_CHECKING:
     from napistu.network.ng_core import NapistuGraph
-from napistu.constants import ENTITIES_W_DATA, SBML_DFS, SOURCE_SPEC
+from napistu.constants import (
+    ENTITIES_TO_ENTITY_DATA,
+    ENTITIES_W_DATA,
+    SBML_DFS,
+    SOURCE_SPEC,
+)
 from napistu.network.constants import (
     DEFAULT_WT_TRANS,
     DEFINED_WEIGHT_TRANSFORMATION,
@@ -335,7 +340,7 @@ def export_networks(
 
 def pluck_entity_data(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    graph_attrs: dict[str, dict],
+    entity_attrs: dict[str, list[dict]] | list[dict],
     data_type: str,
     custom_transformations: Optional[dict[str, callable]] = None,
 ) -> pd.DataFrame | None:
@@ -346,10 +351,21 @@ def pluck_entity_data(
     ----------
     sbml_dfs : sbml_dfs_core.SBML_dfs
         A mechanistic model.
-    graph_attrs : dict
-        A dictionary of species/reaction attributes to pull out. If the requested
-        data_type ("species" or "reactions") is not present as a key, or if the value
-        is an empty dict, this function will return None (no error).
+    entity_attrs : dict[str, list[dict]] | list[dict]
+        A list of dicts containing the species/reaction attributes to pull out. Of the form:
+        [
+            "to_be_created_graph_attr_name": {
+                "table": "species/reactions data table",
+                "variable": "variable in the data table",
+                "trans": "optionally, a transformation to apply to the variable (where applicable)"
+            }
+        ]
+
+        This can also be a dict of the form but this will result in a deprecation warning:
+        {
+            "species": << entity attributes list >>
+            "reactions" : << entity attributes list >>
+        }
     data_type : str
         "species" or "reactions" to pull out species_data or reactions_data.
     custom_transformations : dict[str, callable], optional
@@ -376,23 +392,22 @@ def pluck_entity_data(
             f'"data_type" was {data_type} and must be in {", ".join(ENTITIES_W_DATA)}'
         )
 
-    if data_type not in graph_attrs.keys():
-        logger.info(
-            f'No {data_type} annotations provided in "graph_attrs"; returning None'
+    if data_type in entity_attrs.keys():
+        logger.warning(
+            f"The provided entity_attrs is a dict of the form {entity_attrs}. This will be deprecated in a future release. Please provide a species- or reactions-level entity_attrs list of dicts."
         )
-        return None
+        entity_attrs = entity_attrs[data_type]
 
-    entity_attrs = graph_attrs[data_type]
     # validating dict
     _validate_entity_attrs(entity_attrs, custom_transformations=custom_transformations)
 
     if len(entity_attrs) == 0:
-        logger.info(
-            f'No attributes defined for "{data_type}" in graph_attrs; returning None'
+        logger.warning(
+            f"No {data_type} attributes were provided in entity_attrs; returning None"
         )
         return None
 
-    data_type_attr = data_type + "_data"
+    data_type_attr = ENTITIES_TO_ENTITY_DATA[data_type]
     entity_data_tbls = getattr(sbml_dfs, data_type_attr)
 
     data_list = list()

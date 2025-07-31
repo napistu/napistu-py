@@ -173,3 +173,116 @@ def test_graph_attrs_extend_and_overwrite_protection(test_graph):
             },
             mode="extend",
         )
+
+
+def test_add_edge_data_basic_functionality(test_graph, minimal_valid_sbml_dfs):
+    """Test basic add_edge_data functionality with mock reaction data."""
+    # Update the test graph to have the correct r_ids that match the SBML data
+    test_graph.es["r_id"] = [
+        "R00001",
+        "R00001",
+    ]  # Both edges should map to the same reaction
+
+    # Create mock reaction data for the test reaction
+    mock_df = pd.DataFrame(
+        {"score_col": [100], "weight_col": [1.5]}, index=["R00001"]
+    )  # Use the reaction ID from minimal_valid_sbml_dfs
+
+    # Add mock data to sbml_dfs
+    minimal_valid_sbml_dfs.reactions_data["mock_table"] = mock_df
+
+    # Set graph attributes
+    reaction_attrs = {
+        "score_col": {
+            "table": "mock_table",
+            "variable": "score_col",
+            "trans": "identity",
+        },
+        "weight_col": {
+            "table": "mock_table",
+            "variable": "weight_col",
+            "trans": "identity",
+        },
+    }
+    test_graph.set_graph_attrs({"reactions": reaction_attrs})
+
+    # Add edge data
+    test_graph.add_edge_data(minimal_valid_sbml_dfs)
+
+    # Check that attributes were added
+    assert "score_col" in test_graph.es.attributes()
+    assert "weight_col" in test_graph.es.attributes()
+    # Note: test_graph has 2 edges but only 1 reaction, so values will be filled appropriately
+    edge_scores = test_graph.es["score_col"]
+    edge_weights = test_graph.es["weight_col"]
+    assert any(
+        score == 100 for score in edge_scores
+    )  # At least one edge should have the value
+    assert any(weight == 1.5 for weight in edge_weights)
+
+
+def test_add_edge_data_mode_and_overwrite(test_graph, minimal_valid_sbml_dfs):
+    """Test mode and overwrite behavior for add_edge_data."""
+    # Update the test graph to have the correct r_ids that match the SBML data
+    test_graph.es["r_id"] = [
+        "R00001",
+        "R00001",
+    ]  # Both edges should map to the same reaction
+
+    # Add initial mock data
+    minimal_valid_sbml_dfs.reactions_data["table1"] = pd.DataFrame(
+        {"attr1": [10]}, index=["R00001"]
+    )
+    minimal_valid_sbml_dfs.reactions_data["table2"] = pd.DataFrame(
+        {"attr1": [30], "attr2": [50]}, index=["R00001"]
+    )
+
+    # Set initial attributes and add
+    test_graph.set_graph_attrs(
+        {
+            "reactions": {
+                "attr1": {"table": "table1", "variable": "attr1", "trans": "identity"}
+            }
+        }
+    )
+    test_graph.add_edge_data(minimal_valid_sbml_dfs)
+    initial_attr1 = test_graph.es["attr1"]
+
+    # Fresh mode should fail without overwrite when setting graph attributes
+    with pytest.raises(ValueError, match="Existing reaction_attrs found"):
+        test_graph.set_graph_attrs(
+            {
+                "reactions": {
+                    "attr1": {
+                        "table": "table2",
+                        "variable": "attr1",
+                        "trans": "identity",
+                    }
+                }
+            }
+        )
+
+    # Fresh mode with overwrite should work for setting graph attributes
+    test_graph.set_graph_attrs(
+        {
+            "reactions": {
+                "attr1": {"table": "table2", "variable": "attr1", "trans": "identity"}
+            }
+        },
+        overwrite=True,
+    )
+    test_graph.add_edge_data(minimal_valid_sbml_dfs, mode="fresh", overwrite=True)
+    updated_attr1 = test_graph.es["attr1"]
+    assert updated_attr1 != initial_attr1  # Values should be different
+
+    # Extend mode should add new attribute - clear reaction attributes first, then add only attr2
+    test_graph.set_metadata(reaction_attrs={})  # Clear existing reaction attributes
+    test_graph.set_graph_attrs(
+        {
+            "reactions": {
+                "attr2": {"table": "table2", "variable": "attr2", "trans": "identity"}
+            }
+        }
+    )
+    test_graph.add_edge_data(minimal_valid_sbml_dfs, mode="extend")
+    assert "attr2" in test_graph.es.attributes()

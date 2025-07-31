@@ -7,7 +7,9 @@ from typing import Any, Optional, Union
 import igraph as ig
 import pandas as pd
 
+from napistu.sbml_dfs_core import SBML_dfs
 from napistu.network import ng_utils
+from napistu.constants import SBML_DFS
 from napistu.network.constants import (
     EDGE_REVERSAL_ATTRIBUTE_MAPPING,
     EDGE_DIRECTION_MAPPING,
@@ -165,6 +167,103 @@ class NapistuGraph(ig.Graph):
     def weighting_strategy(self) -> Optional[str]:
         """Get the weighting strategy used."""
         return self._metadata["weighting_strategy"]
+
+    def add_edge_data(
+        self, sbml_dfs: SBML_dfs, mode: str = "fresh", overwrite: bool = False
+    ) -> None:
+        """
+        Extract and add reaction attributes to the graph edges.
+
+        Parameters
+        ----------
+        sbml_dfs : SBML_dfs
+            The SBML_dfs object containing reaction data
+        mode : str
+            Either "fresh" (replace existing) or "extend" (add new attributes only)
+        overwrite : bool
+            Whether to allow overwriting existing edge attributes when conflicts arise
+        """
+
+        # Get reaction_attrs from stored metadata
+        reaction_attrs = self._get_entity_attrs("reactions")
+        if reaction_attrs is None or not reaction_attrs:
+            logger.warning(
+                "No reaction_attrs found. Use set_graph_attrs() to configure reaction attributes before extracting edge data."
+            )
+            return
+
+        # Check for conflicts with existing edge attributes
+        existing_edge_attrs = set(self.es.attributes())
+        new_attrs = set(reaction_attrs.keys())
+
+        if mode == "fresh":
+            overlapping_attrs = existing_edge_attrs & new_attrs
+            if overlapping_attrs and not overwrite:
+                raise ValueError(
+                    f"Edge attributes already exist: {overlapping_attrs}. "
+                    f"Use overwrite=True to replace or mode='extend' to add only new attributes"
+                )
+            attrs_to_add = new_attrs
+
+        elif mode == "extend":
+            overlapping_attrs = existing_edge_attrs & new_attrs
+            if overlapping_attrs and not overwrite:
+                raise ValueError(
+                    f"Overlapping edge attributes found: {overlapping_attrs}. "
+                    f"Use overwrite=True to allow replacement"
+                )
+            # In extend mode, only add attributes that don't exist (unless overwrite=True)
+            if overwrite:
+                attrs_to_add = new_attrs
+            else:
+                attrs_to_add = new_attrs - existing_edge_attrs
+
+        else:
+            raise ValueError(f"Unknown mode: {mode}. Must be 'fresh' or 'extend'")
+
+        if not attrs_to_add:
+            logger.info("No new attributes to add")
+            return
+
+        # Only extract the attributes we're actually going to add
+        attrs_to_extract = {attr: reaction_attrs[attr] for attr in attrs_to_add}
+
+        # Get reaction data using existing function - only for attributes we need
+        reaction_data = ng_utils.pluck_entity_data(
+            sbml_dfs, attrs_to_extract, SBML_DFS.REACTIONS
+        )
+
+        if reaction_data is None:
+            logger.warning(
+                "No reaction data could be extracted with the stored reaction_attrs"
+            )
+            return
+
+        # Get current edges and merge with reaction data
+        edges_df = self.get_edge_dataframe()
+
+        # Remove overlapping attributes from edges_df if overwrite=True to avoid _x/_y suffixes
+        if overwrite:
+            overlapping_in_edges = [
+                attr for attr in attrs_to_add if attr in edges_df.columns
+            ]
+            if overlapping_in_edges:
+                edges_df = edges_df.drop(columns=overlapping_in_edges)
+
+        edges_with_attrs = edges_df.merge(
+            reaction_data, left_on=SBML_DFS.R_ID, right_index=True, how="left"
+        )
+
+        # Add new attributes directly to the graph
+        added_count = 0
+        for attr_name in attrs_to_add:
+            if attr_name in reaction_data.columns:
+                self.es[attr_name] = edges_with_attrs[attr_name].values
+                added_count += 1
+
+        logger.info(
+            f"Added {added_count} edge attributes to graph: {list(attrs_to_add)}"
+        )
 
     def copy(self) -> "NapistuGraph":
         """
