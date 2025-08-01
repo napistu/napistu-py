@@ -90,6 +90,7 @@ def test_create_napistu_graph_edge_reversed():
             directed=True,
             edge_reversed=False,
         )
+
         reversed_graph = net_create.create_napistu_graph(
             sbml_dfs, wiring_approach=wiring_approach, directed=True, edge_reversed=True
         )
@@ -132,16 +133,6 @@ def test_create_napistu_graph_edge_reversed():
                 assert (
                     reversed_edges.iloc[i]["direction"] == "forward"
                 ), f"Direction not properly reversed (reverse->forward) in {wiring_approach} graph"
-
-            # Check parents/children are swapped
-            assert (
-                normal_edges.iloc[i]["sc_parents"]
-                == reversed_edges.iloc[i]["sc_children"]
-            ), f"Parents/children not properly swapped in {wiring_approach} graph"
-            assert (
-                normal_edges.iloc[i]["sc_children"]
-                == reversed_edges.iloc[i]["sc_parents"]
-            ), f"Parents/children not properly swapped in {wiring_approach} graph"
 
 
 def test_create_napistu_graph_none_attrs():
@@ -207,6 +198,7 @@ def test_reverse_network_edges(reaction_species_examples):
         graph_hierarchy_df=graph_hierarchy_df,
         drop_reactions_when=DROP_REACTIONS_WHEN.SAME_TIER,
     )
+
     augmented_network_edges = rxn_edges.assign(r_isreversible=True)
     augmented_network_edges["sc_parents"] = range(0, augmented_network_edges.shape[0])
     augmented_network_edges["sc_children"] = range(

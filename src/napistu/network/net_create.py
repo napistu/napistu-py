@@ -13,19 +13,20 @@ from napistu import utils
 from napistu.network import ng_utils
 from napistu.network import net_create_utils
 from napistu.network.ng_core import NapistuGraph
-from napistu.network.constants import CORE_NAPISTU_GRAPH_VERTICES_VARS
 from napistu.constants import (
     MINI_SBO_FROM_NAME,
     SBO_MODIFIER_NAMES,
     SBOTERM_NAMES,
     SBML_DFS,
+    SBML_DFS_METHOD_DEFS,
 )
 from napistu.network.constants import (
-    NAPISTU_GRAPH_VERTICES,
+    GRAPH_WIRING_APPROACHES,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_EDGE_DIRECTIONS,
+    NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS,
     NAPISTU_GRAPH_NODE_TYPES,
-    GRAPH_WIRING_APPROACHES,
+    NAPISTU_GRAPH_VERTICES,
     NAPISTU_WEIGHTING_STRATEGIES,
     VALID_GRAPH_WIRING_APPROACHES,
     VALID_WEIGHTING_STRATEGIES,
@@ -359,7 +360,13 @@ def create_napistu_graph_wiring(
     logger.info("Adding species features to edges.")
 
     # add compartmentalized species summaries to weight edges
-    cspecies_features = sbml_dfs.get_cspecies_features()
+    cspecies_features = sbml_dfs.get_cspecies_features().drop(
+        columns=[
+            SBML_DFS_METHOD_DEFS.SC_DEGREE,
+            SBML_DFS_METHOD_DEFS.SC_CHILDREN,
+            SBML_DFS_METHOD_DEFS.SC_PARENTS,
+        ]
+    )
 
     # Determine which edges are from reactions vs species
     is_from_reaction = all_reaction_edges_df[NAPISTU_GRAPH_EDGES.FROM].isin(
@@ -496,10 +503,22 @@ def _create_napistu_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.Data
     ]
 
     # add edge weights
-    cspecies_features = sbml_dfs.get_cspecies_features()
+    cspecies_features = sbml_dfs.get_cspecies_features().drop(
+        columns=[
+            SBML_DFS_METHOD_DEFS.SC_DEGREE,
+            SBML_DFS_METHOD_DEFS.SC_CHILDREN,
+            SBML_DFS_METHOD_DEFS.SC_PARENTS,
+        ]
+    )
     network_edges = network_edges.merge(
         cspecies_features, left_on=NAPISTU_GRAPH_NODE_TYPES.SPECIES, right_index=True
     )
+
+    # Ensure species_type is properly named for edge attributes
+    if SBML_DFS_METHOD_DEFS.SPECIES_TYPE in network_edges.columns:
+        network_edges[NAPISTU_GRAPH_EDGES.SPECIES_TYPE] = network_edges[
+            SBML_DFS_METHOD_DEFS.SPECIES_TYPE
+        ]
 
     # if directed then flip substrates and modifiers to the origin edge
     edge_vars = network_edges.columns.tolist()
@@ -773,9 +792,19 @@ def _augment_network_nodes(
         If required attributes are missing from network_nodes.
     """
 
-    missing_required_network_nodes_attrs = CORE_NAPISTU_GRAPH_VERTICES_VARS.difference(
+    NETWORK_NODE_VARS = {
+        NAPISTU_GRAPH_VERTICES.NAME,
+        NAPISTU_GRAPH_VERTICES.NODE_NAME,
+        NAPISTU_GRAPH_VERTICES.NODE_TYPE,
+    }
+
+    missing_required_network_nodes_attrs = NETWORK_NODE_VARS.difference(
         set(network_nodes.columns.tolist())
     )
+    print(
+        f"DEBUG: _augment_network_nodes - missing_required_network_nodes_attrs: {missing_required_network_nodes_attrs}"
+    )
+
     if len(missing_required_network_nodes_attrs) > 0:
         raise ValueError(
             f"{len(missing_required_network_nodes_attrs)} required attributes were missing "
@@ -853,20 +882,11 @@ def _augment_network_edges(
     ValueError
         If required attributes are missing from network_edges.
     """
-    REQUIRED_NETWORK_EDGE_ATTRS = {
-        "from",
-        "to",
-        "stoichiometry",
-        "sbo_term",
-        "sc_degree",
-        "sc_children",
-        "sc_parents",
-        "species_type",
-        "r_id",
-    }
 
-    missing_required_network_edges_attrs = REQUIRED_NETWORK_EDGE_ATTRS.difference(
-        set(network_edges.columns.tolist())
+    missing_required_network_edges_attrs = (
+        NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS.difference(
+            set(network_edges.columns.tolist())
+        )
     )
     if len(missing_required_network_edges_attrs) > 0:
         raise ValueError(
@@ -876,7 +896,7 @@ def _augment_network_edges(
         )
 
     network_edges = (
-        network_edges[list(REQUIRED_NETWORK_EDGE_ATTRS)]
+        network_edges[list(NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS)]
         # add reaction-level attributes
         .merge(
             sbml_dfs.reactions[SBML_DFS.R_ISREVERSIBLE],
