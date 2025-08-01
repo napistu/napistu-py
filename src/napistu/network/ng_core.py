@@ -715,8 +715,8 @@ class NapistuGraph(ig.Graph):
 
     def add_graph_weights(
         self,
-        weight_by: Optional[list[str]] = None,
         weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
+        weight_by: Optional[list[str]] = None,
     ) -> None:
         """
         Add Graph Weights to this NapistuGraph using a specified weighting strategy.
@@ -747,6 +747,12 @@ class NapistuGraph(ig.Graph):
             )
 
         if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY:
+            if weight_by is not None:
+                logger.warning(
+                    "weight_by is not used for topology weighting. "
+                    "It will be ignored."
+                )
+
             self.add_topology_weights()
 
             # count parents and children and create weights based on them
@@ -757,6 +763,13 @@ class NapistuGraph(ig.Graph):
                 ]
 
         elif weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED:
+
+            if weight_by is not None:
+                logger.warning(
+                    "weight_by is not used for unweighted weighting. "
+                    "It will be ignored."
+                )
+
             # set weights as a constant
             self.es[NAPISTU_GRAPH_EDGES.WEIGHT] = 1
             if self.is_directed():
@@ -766,7 +779,9 @@ class NapistuGraph(ig.Graph):
             self._add_graph_weights_mixed(weight_by)
 
         else:
-            raise ValueError(f"No logic implemented for {weighting_strategy}")
+            raise NotImplementedError(
+                f"No logic implemented for {weighting_strategy}. This error should not happen."
+            )
 
         return None
 

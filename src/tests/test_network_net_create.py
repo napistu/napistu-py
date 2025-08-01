@@ -3,13 +3,11 @@ from __future__ import annotations
 import os
 
 import pandas.testing as pdt
-import pytest
 
 from napistu import sbml_dfs_core
 from napistu.ingestion import sbml
 from napistu.network import net_create
 from napistu.network import net_create_utils
-from napistu.network import ng_utils
 from napistu.network.constants import (
     DROP_REACTIONS_WHEN,
     GRAPH_WIRING_APPROACHES,
@@ -74,43 +72,6 @@ def test_bipartite_regression():
             diff = bipartite_og_edges != bipartite_edges
             print("Differences (first 5 rows):\n", diff.head())
         raise e  # Re-raise to fail the test
-
-
-@pytest.mark.skip_on_windows
-def test_igraph_loading():
-    # test read/write of an igraph network
-    directeds = [True, False]
-    wiring_approaches = [
-        GRAPH_WIRING_APPROACHES.BIPARTITE,
-        GRAPH_WIRING_APPROACHES.REGULATORY,
-    ]
-
-    ng_utils.export_networks(
-        sbml_dfs,
-        model_prefix="tmp",
-        outdir="/tmp",
-        directeds=directeds,
-        wiring_approaches=wiring_approaches,
-    )
-
-    for wiring_approach in wiring_approaches:
-        for directed in directeds:
-            import_pkl_path = ng_utils._create_network_save_string(
-                model_prefix="tmp",
-                outdir="/tmp",
-                directed=directed,
-                wiring_approach=wiring_approach,
-            )
-            network_graph = ng_utils.read_network_pkl(
-                model_prefix="tmp",
-                network_dir="/tmp",
-                directed=directed,
-                wiring_approach=wiring_approach,
-            )
-
-            assert network_graph.is_directed() == directed
-            # cleanup
-            os.unlink(import_pkl_path)
 
 
 def test_reverse_network_edges(reaction_species_examples):

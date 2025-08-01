@@ -2,19 +2,14 @@ from __future__ import annotations
 
 import logging
 import math
-import os
-import pickle
-import shutil
 import textwrap
 import warnings
-from collections import ChainMap
 from typing import Any
 
 import igraph as ig
 import numpy as np
 import pandas as pd
 from napistu import sbml_dfs_core
-from napistu import utils
 from napistu.network import ng_utils
 from napistu.network import paths
 
@@ -29,7 +24,6 @@ from napistu.constants import (
 from napistu.network.constants import (
     DISTANCES,
     GRAPH_RELATIONSHIPS,
-    GRAPH_WIRING_APPROACHES,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
     NAPISTU_GRAPH_VERTICES,
@@ -149,92 +143,6 @@ def find_and_prune_neighborhoods(
     return pruned_neighborhoods
 
 
-def load_neighborhoods(
-    s_ids: list[str],
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
-    napistu_graph: ig.Graph,
-    output_dir: str,
-    network_type: str,
-    order: int,
-    top_n: int,
-    overwrite: bool = False,
-    verbose: bool = False,
-) -> tuple[pd.DataFrame, dict[str, Any]]:
-    """
-    Load Neighborhoods
-
-    Load existing neighborhoods if they exist
-    (and overwrite = False) and otherwise construct
-    neighborhoods using the provided settings
-
-    Parameters
-    ----------
-    s_ids: list(str)
-        create a neighborhood around each species
-    sbml_dfs: sbml_dfs_core.SBML_dfs
-        network model
-    napistu_graph: igraph.Graph
-        network associated with sbml_dfs
-    output_dir: str
-        path to existing output directory
-    network_type: str
-        downstream, upstream or hourglass (i.e., downstream and upstream)
-    order: 10
-        maximum number of steps from the focal node
-    top_n: 30
-        target number of upstream and downstream species to retain
-    overwrite: bool
-        ignore cached files and regenerate neighborhoods
-    verbose: bool
-        extra reporting
-
-    Returns
-    -------
-    all_neighborhoods_df: pd.DataFrame
-        A table containing all species in each query s_ids neighborhood
-    neighborhood_dicts: dict
-        Outputs from find_and_prune_neighborhoods for each s_id
-
-    """
-
-    if not os.path.isdir(output_dir):
-        raise FileNotFoundError(f"{output_dir} does not exist")
-
-    neighborhood_prefix = create_neighborhood_prefix(network_type, order, top_n)
-    vertices_path = os.path.join(output_dir, f"{neighborhood_prefix}_vertices.tsv")
-    networks_path = os.path.join(output_dir, f"{neighborhood_prefix}_networks.pkl")
-    neighborhood_paths = [vertices_path, networks_path]
-
-    if all([os.path.isfile(x) for x in neighborhood_paths]) and overwrite is False:
-        logger.info(f"loading existing neighborhoods for {neighborhood_prefix}")
-
-        all_neighborhoods_df = pd.read_csv(vertices_path, sep="\t")
-        with open(networks_path, "rb") as in_file:
-            neighborhood_dicts = pickle.load(in_file)
-
-    else:
-        logger.info(f"creating neighborhoods based on {neighborhood_prefix}")
-
-        all_neighborhoods_df, neighborhood_dicts = create_neighborhoods(
-            s_ids=s_ids,
-            sbml_dfs=sbml_dfs,
-            napistu_graph=napistu_graph,
-            network_type=network_type,
-            order=order,
-            top_n=top_n,
-            verbose=verbose,
-        )
-
-        # save df
-        all_neighborhoods_df.to_csv(vertices_path, sep="\t", index=False)
-
-        # pickle neighborhoods
-        with open(networks_path, "wb") as fh:
-            pickle.dump(neighborhood_dicts, fh)
-
-    return all_neighborhoods_df, neighborhood_dicts
-
-
 def create_neighborhoods(
     s_ids: list[str],
     sbml_dfs: sbml_dfs_core.SBML_dfs,
@@ -328,210 +236,6 @@ def create_neighborhoods(
         neighborhood_dicts[s_id] = neighborhood_dicts
 
     all_neighborhoods_df = pd.concat(neighborhoods_list).reset_index(drop=True)
-
-    return all_neighborhoods_df, neighborhood_dicts
-
-
-def create_neighborhood_prefix(network_type: str, order: int, top_n: int) -> str:
-    if not isinstance(network_type, str):
-        raise TypeError(f"network_type was a {type(network_type)} and must be a str")
-
-    if network_type not in VALID_NEIGHBORHOOD_NETWORK_TYPES:
-        raise ValueError(
-            f"network_type was {network_type} and must be one of {', '.join(VALID_NEIGHBORHOOD_NETWORK_TYPES)}"
-        )
-    if not isinstance(order, int):
-        raise ValueError("order must be an int")
-    if not isinstance(top_n, int):
-        raise ValueError("top_n must be an int")
-
-    return f"{network_type[0]}{order}s{top_n}n"
-
-
-def load_neighborhoods_by_partition(
-    selected_partition: int,
-    neighborhood_outdir: str,
-    cache_dir: str,
-    wiring_approach: str = GRAPH_WIRING_APPROACHES.REGULATORY,
-) -> None:
-    """
-    Load Neighborhoods By Partition
-
-    Call load_neighborhoods for a subset of species ids defined by a partition.
-    This function is setup to be called in a slurm job.
-
-    Params
-    ------
-    selected_partition: int
-        A partition of sids to search
-    neighborhood_outdir: str
-        Output directory
-
-
-    Returns
-    -------
-    None, used for side-effects
-
-    """
-
-    if not os.path.isdir(neighborhood_outdir):
-        raise FileNotFoundError(f"{neighborhood_outdir} does not exist")
-
-    if not os.path.isdir(cache_dir):
-        raise FileNotFoundError(f"{cache_dir} does not exist")
-
-    partition_output = os.path.join(
-        neighborhood_outdir, f"partition_{selected_partition}"
-    )
-    # initialize an empty output
-    if os.path.isdir(partition_output):
-        logger.warning(f"removing existing directory: {partition_output}")
-        shutil.rmtree(partition_output)
-    os.makedirs(partition_output)
-
-    # format partition s_ids
-
-    sids_to_partition = pd.read_csv(os.path.join(neighborhood_outdir, "partitions.csv"))
-    parition_sids_df = sids_to_partition[
-        sids_to_partition["partition"] == selected_partition
-    ]
-
-    if parition_sids_df.shape[0] == 0:
-        raise ValueError(f"No s_ids associated with partition {selected_partition}")
-
-    parition_sids = parition_sids_df[SBML_DFS.S_ID].tolist()
-
-    # read pathway and network data
-
-    # read model containing Calico curations. this is primarily to support search programs
-    # to not use these switch to refined.pkl
-    refined_model_pkl_path = os.path.join(cache_dir, "curated.pkl")
-    with open(refined_model_pkl_path, "rb") as in_file:
-        refined_model = pickle.load(in_file)
-    refined_model.validate()
-
-    # load the graph
-    napistu_graph = ng_utils.read_network_pkl(
-        model_prefix="curated",
-        network_dir=cache_dir,
-        directed=True,
-        wiring_approach=wiring_approach,
-    )
-
-    _, _ = load_neighborhoods(
-        s_ids=parition_sids,
-        sbml_dfs=refined_model,
-        napistu_graph=napistu_graph,
-        output_dir=partition_output,
-        network_type="hourglass",
-        order=12,
-        top_n=100,
-        overwrite=True,
-        verbose=True,
-    )
-
-    return None
-
-
-def read_paritioned_neighborhoods(
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
-    napistu_graph: ig.Graph,
-    partitions_path: str,
-    n_partitions: int = 200,
-) -> tuple[pd.DataFrame, dict[str, Any]]:
-    """
-    Read Partitioned Neighborhoods
-
-    Import a set of neighborhoods produced by the find_neighborhoods_batch.sh slurm job
-
-    Params
-    ------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
-        network model
-    napistu_graph: igraph.Graph
-        network associated with sbml_dfs
-    partitions_path: str
-        Path to a directory containing folders for each partition's results
-    n_partitions: int
-        Number of partitions that exist
-
-    Returns
-    -------
-    all_neighborhoods_df: pd.DataFrame
-        A table containing all species in each query s_ids neighborhood
-    neighborhood_dicts: dict
-        Outputs from find_and_prune_neighborhoods for each s_id
-
-    """
-
-    # check for partition directories
-    expected_partition_dirs = ["partition_" + str(p) for p in range(0, n_partitions)]
-    missing_partition_dirs = set(expected_partition_dirs).difference(
-        set(os.listdir(partitions_path))
-    )
-    if len(missing_partition_dirs) != 0:
-        raise FileNotFoundError(
-            f"{len(missing_partition_dirs)} neighborhood partition directories were not found:"
-            f" {', '.join(missing_partition_dirs)}"
-        )
-
-    # check for required files
-    expected_files = ["h12s100n_vertices.tsv", "h12s100n_networks.pkl"]
-    expected_paths_df = pd.DataFrame(
-        [
-            {"partition": p, "file": f}
-            for p in expected_partition_dirs
-            for f in expected_files
-        ]
-    )
-    expected_paths_df["path"] = [
-        os.path.join(partitions_path, p, f)
-        for p, f in zip(expected_paths_df["partition"], expected_paths_df["file"])
-    ]
-    expected_paths_df["exists"] = [os.path.isfile(p) for p in expected_paths_df["path"]]
-    missing_expected_paths_df = expected_paths_df[~expected_paths_df["exists"]]
-
-    if missing_expected_paths_df.shape[0] > 0:
-        styled_df = utils.style_df(
-            missing_expected_paths_df.drop(["exists"], axis=1), headers="keys"
-        )
-        logger.warning(styled_df)
-
-        raise FileNotFoundError(
-            f"missing {missing_expected_paths_df.shape[0]} required files"
-        )
-
-    neighborhood_paths_list = list()
-    path_dict_list = list()
-
-    for p in expected_partition_dirs:
-        partition_paths, partition_dict = load_neighborhoods(
-            s_ids=["stub"],
-            sbml_dfs=sbml_dfs,
-            napistu_graph=napistu_graph,
-            output_dir=os.path.join(partitions_path, p),
-            # these settings define the neighborhood string so they must
-            # match the settings at the time of network generation
-            network_type="hourglass",
-            order=12,
-            top_n=100,
-            overwrite=False,
-            verbose=False,
-        )
-
-        neighborhood_paths_list.append(partition_paths)
-        path_dict_list.append(partition_dict)
-
-    # combine all partitions' dfs and dicts
-    all_neighborhoods_df = pd.concat(neighborhood_paths_list).reset_index(drop=True)
-    neighborhood_dicts = dict(ChainMap(*path_dict_list))
-
-    # TO DO - remove s_id duplication (these are present in the vertices table in the partition outputs)
-    if not all(all_neighborhoods_df["s_id_x"] == all_neighborhoods_df["s_id_y"]):
-        raise ValueError("The patch won't hold")
-    all_neighborhoods_df = all_neighborhoods_df.drop(["s_id_y"], axis=1).rename(
-        {"s_id_x": "s_id"}, axis=1
-    )
 
     return all_neighborhoods_df, neighborhood_dicts
 
