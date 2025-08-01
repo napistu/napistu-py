@@ -88,6 +88,7 @@ NAPISTU_METADATA_KEYS = SimpleNamespace(
     IS_REVERSED="is_reversed",
     WIRING_APPROACH="wiring_approach",
     WEIGHTING_STRATEGY="weighting_strategy",
+    WEIGHT_BY="weight_by",
     CREATION_PARAMS="creation_params",
 )
 

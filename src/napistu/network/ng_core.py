@@ -114,6 +114,7 @@ class NapistuGraph(ig.Graph):
             NAPISTU_METADATA_KEYS.IS_REVERSED: False,
             NAPISTU_METADATA_KEYS.WIRING_APPROACH: None,
             NAPISTU_METADATA_KEYS.WEIGHTING_STRATEGY: None,
+            NAPISTU_METADATA_KEYS.WEIGHT_BY: None,
             NAPISTU_METADATA_KEYS.CREATION_PARAMS: {},
             NAPISTU_METADATA_KEYS.SPECIES_ATTRS: {},
             NAPISTU_METADATA_KEYS.REACTION_ATTRS: {},
@@ -174,6 +175,11 @@ class NapistuGraph(ig.Graph):
     def weighting_strategy(self) -> Optional[str]:
         """Get the weighting strategy used."""
         return self._metadata["weighting_strategy"]
+
+    @property
+    def weight_by(self) -> Optional[list[str]]:
+        """Get the weight_by attributes used."""
+        return self._metadata["weight_by"]
 
     def add_edge_data(
         self, sbml_dfs: SBML_dfs, mode: str = "fresh", overwrite: bool = False
@@ -237,7 +243,7 @@ class NapistuGraph(ig.Graph):
 
         # Get reaction data using existing function - only for attributes we need
         reaction_data = ng_utils.pluck_entity_data(
-            sbml_dfs, attrs_to_extract, SBML_DFS.REACTIONS
+            sbml_dfs, attrs_to_extract, SBML_DFS.REACTIONS, transform=False
         )
 
         if reaction_data is None:
@@ -783,6 +789,9 @@ class NapistuGraph(ig.Graph):
                 f"No logic implemented for {weighting_strategy}. This error should not happen."
             )
 
+        # Set the weighting strategy and weight_by metadata
+        self.set_metadata(weighting_strategy=weighting_strategy, weight_by=weight_by)
+
         return None
 
     def _get_weight_variables(self, weight_by: Optional[list[str]] = None) -> dict:
@@ -842,36 +851,29 @@ class NapistuGraph(ig.Graph):
         Modifies the graph in-place.
         """
         # Get the variables to weight by
-
         reaction_attrs = self._get_weight_variables(weight_by)
         edges_df = self.get_edge_dataframe()
 
-        calibrated_edges = ng_utils.apply_weight_transformations(
-            edges_df, reaction_attrs
-        )
-        calibrated_edges = self._create_source_weights(calibrated_edges, "source_wt")
+        # Use the already-transformed edge data (transformations should have been applied in transform_edges)
+        edges_df = self._create_source_weights(edges_df, "source_wt")
 
         score_vars = list(reaction_attrs.keys())
         score_vars.append("source_wt")
 
         logger.info(f"Creating mixed scores based on {', '.join(score_vars)}")
 
-        calibrated_edges[NAPISTU_GRAPH_EDGES.WEIGHT] = calibrated_edges[score_vars].min(
-            axis=1
-        )
+        edges_df[NAPISTU_GRAPH_EDGES.WEIGHT] = edges_df[score_vars].min(axis=1)
 
-        self.es[NAPISTU_GRAPH_EDGES.WEIGHT] = calibrated_edges[
-            NAPISTU_GRAPH_EDGES.WEIGHT
-        ]
+        self.es[NAPISTU_GRAPH_EDGES.WEIGHT] = edges_df[NAPISTU_GRAPH_EDGES.WEIGHT]
         if self.is_directed():
-            self.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = calibrated_edges[
+            self.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = edges_df[
                 NAPISTU_GRAPH_EDGES.WEIGHT
             ]
 
         # add other attributes and update transformed attributes
-        self.es["source_wt"] = calibrated_edges["source_wt"]
+        self.es["source_wt"] = edges_df["source_wt"]
         for k in reaction_attrs.keys():
-            self.es[k] = calibrated_edges[k]
+            self.es[k] = edges_df[k]
 
         return None
 
@@ -1082,6 +1084,7 @@ class NapistuGraph(ig.Graph):
         attrs_to_transform_config = {
             attr: reaction_attrs[attr] for attr in attrs_to_transform
         }
+
         transformed_data = ng_utils.apply_weight_transformations(
             transform_data, attrs_to_transform_config, custom_transformations
         )

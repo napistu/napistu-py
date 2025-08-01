@@ -260,12 +260,12 @@ def create_napistu_graph(
 
 def process_napistu_graph(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    reaction_graph_attrs: Optional[dict] = None,
     directed: bool = True,
     wiring_approach: str = GRAPH_WIRING_APPROACHES.BIPARTITE,
     weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
-    verbose: bool = False,
+    reaction_graph_attrs: Optional[dict] = None,
     custom_transformations: dict = None,
+    verbose: bool = False,
 ) -> NapistuGraph:
     """
     Process Consensus Graph.
@@ -276,8 +276,6 @@ def process_napistu_graph(
     ----------
     sbml_dfs : sbml_dfs_core.SBML_dfs
         A model formed by aggregating pathways.
-    reaction_graph_attrs : dict, optional
-        Dictionary containing attributes to pull out of reaction_data and a weighting scheme for the graph.
     directed : bool, optional
         Whether to create a directed (True) or undirected (False) graph. Default is True.
     wiring_approach : str, optional
@@ -287,10 +285,12 @@ def process_napistu_graph(
             - 'unweighted': all weights (and upstream_weight for directed graphs) are set to 1.
             - 'topology': weight edges by the degree of the source nodes favoring nodes with few connections.
             - 'mixed': transform edges with a quantitative score based on reaction_attrs; and set edges without quantitative score as a source-specific weight.
-    verbose : bool, optional
-        Extra reporting. Default is False.
+    reaction_graph_attrs : dict, optional
+        Dictionary containing attributes to pull out of reaction_data and a weighting scheme for the graph.
     custom_transformations : dict, optional
         Dictionary of custom transformation functions to use for attribute transformation.
+    verbose : bool, optional
+        Extra reporting. Default is False.
 
     Returns
     -------
@@ -568,6 +568,9 @@ def _augment_network_nodes(
         species_graph_attrs,
         "species",
         custom_transformations=custom_transformations,
+        # to do - separate concern by add data to the graph and then transforming results
+        # to better track transformations and allow for rewinding
+        transform=True,
     )
 
     if species_graph_data is not None:

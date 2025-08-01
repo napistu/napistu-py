@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import copy
 import logging
-import os
 import yaml
 from typing import Optional, Union, TYPE_CHECKING
 
@@ -35,8 +34,6 @@ from napistu.network.constants import (
     DEFAULT_WT_TRANS,
     DEFINED_WEIGHT_TRANSFORMATION,
     DISTANCES,
-    GRAPH_WIRING_APPROACHES,
-    GRAPH_DIRECTEDNESS,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
     NAPISTU_GRAPH_VERTICES,
@@ -84,6 +81,7 @@ def apply_weight_transformations(
             raise ValueError(f"A weighting variable {k} was missing from edges_df")
 
         trans_name = v["trans"]
+
         # Look up transformation
         if custom_transformations and trans_name in custom_transformations:
             trans_fxn = custom_transformations[trans_name]
@@ -95,7 +93,12 @@ def apply_weight_transformations(
                 f"Transformation '{trans_name}' not found in custom_transformations or DEFINED_WEIGHT_TRANSFORMATION."
             )
 
-        transformed_edges_df[k] = transformed_edges_df[k].apply(trans_fxn)
+        # Handle NaN values properly
+        original_series = transformed_edges_df[k]
+        transformed_series = original_series.apply(
+            lambda x: trans_fxn(x) if pd.notna(x) else x
+        )
+        transformed_edges_df[k] = transformed_series
 
     return transformed_edges_df
 
@@ -265,84 +268,12 @@ def get_minimal_sources_edges(
         ]
 
 
-def export_networks(
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
-    model_prefix: str,
-    outdir: str,
-    directeds: list[bool] = [True, False],
-    wiring_approaches: list[str] = [
-        GRAPH_WIRING_APPROACHES.BIPARTITE,
-        GRAPH_WIRING_APPROACHES.REGULATORY,
-    ],
-) -> None:
-    """
-    Exports Networks
-
-    Create one or more network from a pathway model and pickle the results
-
-    Parameters
-    ----------
-    sbml_dfs : sbml_dfs_core.SBML_dfs
-        A pathway model
-    model_prefix: str
-        Label to prepend to all exported files
-    outdir: str
-        Path to an existing directory where results should be saved
-    directeds : [bool]
-        List of directed types to export: a directed (True) or undirected graph be made (False)
-    wiring_approaches : [str]
-        Types of graphs to construct, valid values are:
-            - bipartite: substrates and modifiers point to the reaction they drive, this reaction points to products
-            - regulatory: non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
-            - surrogate regulatory approach but with substrates upstream of enzymes
-
-    Returns:
-    ----------
-    None
-    """
-    if not isinstance(sbml_dfs, sbml_dfs_core.SBML_dfs):
-        raise TypeError(
-            f"sbml_dfs must be a sbml_dfs_core.SBML_dfs, but was {type(sbml_dfs)}"
-        )
-    if not isinstance(model_prefix, str):
-        raise TypeError(f"model_prefix was a {type(model_prefix)} and must be a str")
-    if not os.path.isdir(outdir):
-        raise FileNotFoundError(f"{outdir} does not exist")
-    if not isinstance(directeds, list):
-        raise TypeError(f"directeds must be a list, but was {type(directeds)}")
-    if not isinstance(wiring_approaches, list):
-        raise TypeError(
-            f"wiring_approaches must be a list but was a {type(wiring_approaches)}"
-        )
-
-    # iterate through provided wiring_approaches and export each type
-    for wiring_approach in wiring_approaches:
-        for directed in directeds:
-            export_pkl_path = _create_network_save_string(
-                model_prefix=model_prefix,
-                outdir=outdir,
-                directed=directed,
-                wiring_approach=wiring_approach,
-            )
-            print(f"Exporting {wiring_approach} network to {export_pkl_path}")
-
-            network_graph = net_create.process_napistu_graph(
-                sbml_dfs=sbml_dfs,
-                directed=directed,
-                wiring_approach=wiring_approach,
-                verbose=True,
-            )
-
-            network_graph.write_pickle(export_pkl_path)
-
-    return None
-
-
 def pluck_entity_data(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     entity_attrs: dict[str, list[dict]] | list[dict],
     data_type: str,
     custom_transformations: Optional[dict[str, callable]] = None,
+    transform: bool = True,
 ) -> pd.DataFrame | None:
     """
     Pluck Entity Attributes from an sbml_dfs based on a set of tables and variables to look for.
@@ -372,6 +303,9 @@ def pluck_entity_data(
         A dictionary mapping transformation names to functions. If provided, these
         will be checked before built-in transformations. Example:
             custom_transformations = {"square": lambda x: x**2}
+    transform : bool, default=True
+        Whether to apply transformations to the extracted data. In a future version,
+        this function will not support transformations by default.
 
     Returns
     -------
@@ -401,6 +335,13 @@ def pluck_entity_data(
     # validating dict
     _validate_entity_attrs(entity_attrs, custom_transformations=custom_transformations)
 
+    if transform:
+        logger.warning(
+            "pluck_entity_data is applying transformations. In a future version, "
+            "this function will not support transformations by default. "
+            "Use transform=False to disable transformations."
+        )
+
     if len(entity_attrs) == 0:
         logger.warning(
             f"No {data_type} attributes were provided in entity_attrs; returning None"
@@ -427,78 +368,25 @@ def pluck_entity_data(
             )
 
         entity_series = entity_data_tbls[v["table"]][v["variable"]].rename(k)
-        trans_name = v.get("trans", DEFAULT_WT_TRANS)
-        # Look up transformation
-        if custom_transformations and trans_name in custom_transformations:
-            trans_fxn = custom_transformations[trans_name]
-        elif trans_name in DEFINED_WEIGHT_TRANSFORMATION:
-            trans_fxn = globals()[DEFINED_WEIGHT_TRANSFORMATION[trans_name]]
-        else:
-            # This should never be hit if _validate_entity_attrs is called correctly.
-            raise ValueError(
-                f"Transformation '{trans_name}' not found in custom_transformations or DEFINED_WEIGHT_TRANSFORMATION."
-            )
-        entity_series = entity_series.apply(trans_fxn)
+        if transform:
+            trans_name = v.get("trans", DEFAULT_WT_TRANS)
+            # Look up transformation
+            if custom_transformations and trans_name in custom_transformations:
+                trans_fxn = custom_transformations[trans_name]
+            elif trans_name in DEFINED_WEIGHT_TRANSFORMATION:
+                trans_fxn = globals()[DEFINED_WEIGHT_TRANSFORMATION[trans_name]]
+            else:
+                # This should never be hit if _validate_entity_attrs is called correctly.
+                raise ValueError(
+                    f"Transformation '{trans_name}' not found in custom_transformations or DEFINED_WEIGHT_TRANSFORMATION."
+                )
+            entity_series = entity_series.apply(trans_fxn)
         data_list.append(entity_series)
 
     if len(data_list) == 0:
         return None
 
     return pd.concat(data_list, axis=1)
-
-
-def read_network_pkl(
-    model_prefix: str,
-    network_dir: str,
-    wiring_approach: str,
-    directed: bool = True,
-) -> "NapistuGraph":
-    """
-    Read Network Pickle
-
-    Read a saved network representation.
-
-    Params
-    ------
-    model_prefix: str
-        Type of model to import
-    network_dir: str
-        Path to a directory containing all saved networks.
-    directed : bool
-        Should a directed (True) or undirected graph be loaded (False)
-    wiring_approach : [str]
-        Type of graphs to read, valid values are:
-            - bipartite: substrates and modifiers point to the reaction they drive, this reaction points to products
-            - reguatory: non-enzymatic modifiers point to enzymes, enzymes point to substrates and products
-            - surrogate regulatory approach but with substrates upstream of enzymes
-
-    Returns
-    -------
-        network_graph: "NapistuGraph"
-    A NapistuGraph network of the pathway
-
-    """
-    if not isinstance(model_prefix, str):
-        raise TypeError(f"model_prefix was a {type(model_prefix)} and must be a str")
-    if not os.path.isdir(network_dir):
-        raise FileNotFoundError(f"{network_dir} does not exist")
-    if not isinstance(directed, bool):
-        raise TypeError(f"directed must be a bool, but was {type(directed)}")
-    if not isinstance(wiring_approach, str):
-        raise TypeError(
-            f"wiring_approach must be a str but was a {type(wiring_approach)}"
-        )
-
-    import_pkl_path = _create_network_save_string(
-        model_prefix, network_dir, directed, wiring_approach
-    )
-    if not os.path.isfile(import_pkl_path):
-        raise FileNotFoundError(f"{import_pkl_path} does not exist")
-    print(f"Importing {wiring_approach} network from {import_pkl_path}")
-
-    network_graph = ig.Graph.Read_Pickle(fname=import_pkl_path)
-
-    return network_graph
 
 
 def validate_assets(
@@ -590,20 +478,6 @@ def read_graph_attrs_spec(graph_attrs_spec_uri: str) -> dict:
 
 
 # Internal utility functions
-def _create_network_save_string(
-    model_prefix: str, outdir: str, directed: bool, wiring_approach: str
-) -> str:
-    if directed:
-        directed_str = GRAPH_DIRECTEDNESS.DIRECTED
-    else:
-        directed_str = GRAPH_DIRECTEDNESS.UNDIRECTED
-
-    export_pkl_path = os.path.join(
-        outdir,
-        model_prefix + "_network_" + wiring_approach + "_" + directed_str + ".pkl",
-    )
-
-    return export_pkl_path
 
 
 def _wt_transformation_identity(x):

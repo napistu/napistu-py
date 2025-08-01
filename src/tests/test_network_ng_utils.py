@@ -1,3 +1,5 @@
+"""Tests for network utility functions."""
+
 import pytest
 import pandas as pd
 import numpy as np
@@ -142,3 +144,60 @@ def test_pluck_entity_data_empty_species_dict(sbml_dfs):
     graph_attrs = {SBML_DFS.SPECIES: {}}
     result = ng_utils.pluck_entity_data(sbml_dfs, graph_attrs, SBML_DFS.SPECIES)
     assert result is None
+
+
+def test_apply_weight_transformations_basic():
+    """Test basic weight transformation functionality."""
+    # Create test data
+    edges_df = pd.DataFrame(
+        {"string_wt": [150, 500, 1000, np.nan], "other_attr": [1, 2, 3, 4]}
+    )
+
+    reaction_attrs = {
+        "string_wt": {
+            "table": "string",
+            "variable": "combined_score",
+            "trans": "string_inv",
+        }
+    }
+
+    # Apply transformations
+    result = ng_utils.apply_weight_transformations(edges_df, reaction_attrs)
+
+    # Check that string_wt was transformed
+    expected_values = [1000 / 150, 1000 / 500, 1000 / 1000, np.nan]
+    for i, expected in enumerate(expected_values):
+        if pd.notna(expected):
+            assert abs(result["string_wt"].iloc[i] - expected) < 1e-10
+        else:
+            assert pd.isna(result["string_wt"].iloc[i])
+
+    # Check that other_attr was not changed
+    assert all(result["other_attr"] == edges_df["other_attr"])
+
+
+def test_apply_weight_transformations_nan_handling():
+    """Test that NaN values are handled correctly."""
+    edges_df = pd.DataFrame({"string_wt": [150, np.nan, 1000, 500, np.nan]})
+
+    reaction_attrs = {
+        "string_wt": {
+            "table": "string",
+            "variable": "combined_score",
+            "trans": "string_inv",
+        }
+    }
+
+    result = ng_utils.apply_weight_transformations(edges_df, reaction_attrs)
+
+    # Check that NaN values remain NaN
+    assert pd.isna(result["string_wt"].iloc[1])
+    assert pd.isna(result["string_wt"].iloc[4])
+
+    # Check that non-NaN values are transformed
+    expected_values = [1000 / 150, np.nan, 1000 / 1000, 1000 / 500, np.nan]
+    for i, expected in enumerate(expected_values):
+        if pd.notna(expected):
+            assert abs(result["string_wt"].iloc[i] - expected) < 1e-10
+        else:
+            assert pd.isna(result["string_wt"].iloc[i])

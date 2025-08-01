@@ -727,3 +727,100 @@ def test_get_weight_variables():
     weight_vars = napistu_graph._get_weight_variables()
     assert "string_wt" in weight_vars
     assert weight_vars["string_wt"]["table"] == "string"
+
+
+def test_process_napistu_graph_with_reactions_data(sbml_dfs):
+    """Test process_napistu_graph with reactions data and graph attributes."""
+    import pandas as pd
+    import numpy as np
+    from napistu.network.net_create import process_napistu_graph
+    from napistu.network.constants import NAPISTU_WEIGHTING_STRATEGIES
+
+    # Add reactions_data table called "string" with combined_score variable
+    # Only add data for a subset of reactions to test source weights
+    reaction_ids = sbml_dfs.reactions.index.tolist()
+    # Add string data for only half of the reactions
+    subset_size = len(reaction_ids) // 2
+    subset_reactions = reaction_ids[:subset_size]
+
+    # Generate random scores in the 150-1000 range for subset of reactions
+    combined_scores = np.random.uniform(150, 1000, len(subset_reactions))
+
+    string_data = pd.DataFrame(
+        {"combined_score": combined_scores}, index=subset_reactions
+    )
+    string_data.index.name = "r_id"
+
+    # Add the reactions data to sbml_dfs
+    sbml_dfs.add_reactions_data("string", string_data)
+
+    # Define reaction_graph_attrs matching graph_attrs_spec.yaml
+    reaction_graph_attrs = {
+        "reactions": {
+            "string_wt": {
+                "table": "string",
+                "variable": "combined_score",
+                "trans": "string_inv",
+            }
+        }
+    }
+
+    # Process the napistu graph with the specified parameters
+    processed_graph = process_napistu_graph(
+        sbml_dfs=sbml_dfs,
+        directed=True,
+        wiring_approach="bipartite",
+        weighting_strategy=NAPISTU_WEIGHTING_STRATEGIES.MIXED,
+        reaction_graph_attrs=reaction_graph_attrs,
+        verbose=False,
+    )
+
+    # Verify the graph was processed correctly
+    assert processed_graph is not None
+    assert hasattr(processed_graph, "es")
+    assert hasattr(processed_graph, "vs")
+
+    # Check that the string_wt attribute was added to edges
+    assert "string_wt" in processed_graph.es.attributes()
+
+    # Check that weights were applied
+    assert "weight" in processed_graph.es.attributes()
+    if processed_graph.is_directed():
+        assert "upstream_weight" in processed_graph.es.attributes()
+
+    # Check that source_wt was created (part of mixed strategy)
+    assert "source_wt" in processed_graph.es.attributes()
+
+    # Verify the graph has the expected metadata
+    assert processed_graph.get_metadata("wiring_approach") == "bipartite"
+    assert processed_graph.get_metadata("weighting_strategy") == "mixed"
+
+    # Check that transformed string weights are in the correct range (≥1 and ≤6.67 for string_inv)
+    string_weights = processed_graph.es["string_wt"]
+    non_null_weights = [w for w in string_weights if pd.notna(w)]
+    assert len(non_null_weights) > 0
+    # Allow for some numerical precision issues
+    weight_checks = [bool(0.99 <= w <= 6.68) for w in non_null_weights]
+    assert all(weight_checks)
+
+    # Check that source weights are correct:
+    # - 10 if string_wt is not None (has string data)
+    # - 1 if string_wt is None (no string data)
+    source_weights = processed_graph.es["source_wt"]
+    for i, (sw, str_wt) in enumerate(zip(source_weights, string_weights)):
+        if pd.notna(str_wt):
+            assert (
+                sw == 10
+            ), f"Source weight should be 10 when string_wt exists, got {sw} at edge {i}"
+        else:
+            assert (
+                sw == 1
+            ), f"Source weight should be 1 when string_wt is None, got {sw} at edge {i}"
+
+    # Check that final weights are in the correct range (≥1 and <10)
+    final_weights = processed_graph.es["weight"]
+    assert all(0.99 <= w < 10 for w in final_weights)
+
+    if processed_graph.is_directed():
+        upstream_weights = processed_graph.es["upstream_weight"]
+        assert all(0.99 <= w < 10 for w in upstream_weights)
