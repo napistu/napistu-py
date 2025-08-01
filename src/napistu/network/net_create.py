@@ -29,8 +29,6 @@ from napistu.network.constants import (
     NAPISTU_GRAPH_VERTICES,
     NAPISTU_WEIGHTING_STRATEGIES,
     VALID_GRAPH_WIRING_APPROACHES,
-    VALID_WEIGHTING_STRATEGIES,
-    SOURCE_VARS_DICT,
     DROP_REACTIONS_WHEN,
 )
 
@@ -264,7 +262,6 @@ def process_napistu_graph(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     reaction_graph_attrs: Optional[dict] = None,
     directed: bool = True,
-    edge_reversed: bool = False,
     wiring_approach: str = GRAPH_WIRING_APPROACHES.BIPARTITE,
     weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
     verbose: bool = False,
@@ -330,82 +327,12 @@ def process_napistu_graph(
 
     logging.info(f"Adding edge weights with an {weighting_strategy} strategy")
 
-    weighted_napistu_graph = add_graph_weights(
-        napistu_graph=napistu_graph,
-        reaction_attrs=reaction_attrs,
+    napistu_graph.add_graph_weights(
+        weight_by=list(reaction_attrs.keys()),
         weighting_strategy=weighting_strategy,
     )
 
-    return weighted_napistu_graph
-
-
-def add_graph_weights(
-    napistu_graph: NapistuGraph,
-    reaction_attrs: dict,
-    weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
-) -> NapistuGraph:
-    """
-    Add Graph Weights to a NapistuGraph using a specified weighting strategy.
-
-    Parameters
-    ----------
-    napistu_graph : NapistuGraph
-        A graphical network of molecules/reactions (nodes) and edges linking them (subclass of igraph.Graph).
-    reaction_attrs : dict
-        An optional dict of reaction attributes.
-    weighting_strategy : str, optional
-        A network weighting strategy. Options:
-            - 'unweighted': all weights (and upstream_weight for directed graphs) are set to 1.
-            - 'topology': weight edges by the degree of the source nodes favoring nodes emerging from nodes with few connections.
-            - 'mixed': transform edges with a quantitative score based on reaction_attrs; and set edges without quantitative score as a source-specific weight.
-
-    Returns
-    -------
-    NapistuGraph
-        The weighted NapistuGraph.
-
-    Raises
-    ------
-    ValueError
-        If weighting_strategy is not valid.
-    """
-
-    napistu_graph_updated = copy.deepcopy(napistu_graph)
-
-    ng_utils._validate_entity_attrs(reaction_attrs)
-
-    if weighting_strategy not in VALID_WEIGHTING_STRATEGIES:
-        raise ValueError(
-            f"weighting_strategy was {weighting_strategy} and must be one of: "
-            f"{', '.join(VALID_WEIGHTING_STRATEGIES)}"
-        )
-
-    topology_weighted_graph = napistu_graph_updated.add_topology_weights()
-
-    if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY:
-        # count parents and children and create weights based on them
-
-        topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.WEIGHT] = (
-            topology_weighted_graph.es["topo_weights"]
-        )
-        if napistu_graph_updated.is_directed():
-            topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = (
-                topology_weighted_graph.es["upstream_topo_weights"]
-            )
-
-        return topology_weighted_graph
-
-    if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED:
-        # set weights as a constant
-        topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.WEIGHT] = 1
-        if napistu_graph_updated.is_directed():
-            topology_weighted_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = 1
-        return topology_weighted_graph
-
-    if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.MIXED:
-        return _add_graph_weights_mixed(topology_weighted_graph, reaction_attrs)
-
-    raise ValueError(f"No logic implemented for {weighting_strategy}")
+    return napistu_graph
 
 
 def _create_napistu_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.DataFrame:
@@ -463,55 +390,6 @@ def _create_napistu_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.Data
     network_edges = pd.concat([origin_edges, dest_edges])
 
     return network_edges
-
-
-def _add_graph_weights_mixed(
-    napistu_graph: NapistuGraph, reaction_attrs: dict
-) -> NapistuGraph:
-    """
-    Weight a NapistuGraph using a mixed approach combining source-specific weights and existing edge weights.
-
-    Parameters
-    ----------
-    napistu_graph : NapistuGraph
-        The network to weight (subclass of igraph.Graph).
-    reaction_attrs : dict
-        Dictionary of reaction attributes to use for weighting.
-
-    Returns
-    -------
-    NapistuGraph
-        The weighted NapistuGraph.
-    """
-
-    edges_df = napistu_graph.get_edge_dataframe()
-
-    calibrated_edges = ng_utils.apply_weight_transformations(edges_df, reaction_attrs)
-    calibrated_edges = _create_source_weights(calibrated_edges, "source_wt")
-
-    score_vars = list(reaction_attrs.keys())
-    score_vars.append("source_wt")
-
-    logger.info(f"Creating mixed scores based on {', '.join(score_vars)}")
-
-    calibrated_edges[NAPISTU_GRAPH_EDGES.WEIGHT] = calibrated_edges[score_vars].min(
-        axis=1
-    )
-
-    napistu_graph.es[NAPISTU_GRAPH_EDGES.WEIGHT] = calibrated_edges[
-        NAPISTU_GRAPH_EDGES.WEIGHT
-    ]
-    if napistu_graph.is_directed():
-        napistu_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = calibrated_edges[
-            NAPISTU_GRAPH_EDGES.WEIGHT
-        ]
-
-    # add other attributes and update transformed attributes
-    napistu_graph.es["source_wt"] = calibrated_edges["source_wt"]
-    for k in reaction_attrs.keys():
-        napistu_graph.es[k] = calibrated_edges[k]
-
-    return napistu_graph
 
 
 def _add_edge_attr_to_vertex_graph(
@@ -618,61 +496,6 @@ def _add_edge_attr_to_vertex_graph(
         napistu_graph.vs[col_name] = graph_vertex_df_w_edge_attr[col_name]
 
     return napistu_graph
-
-
-def _create_source_weights(
-    edges_df: pd.DataFrame,
-    source_wt_var: str = "source_wt",
-    source_vars_dict: dict = SOURCE_VARS_DICT,
-    source_wt_default: int = 1,
-) -> pd.DataFrame:
-    """
-    Create weights based on an edge's source.
-
-    Parameters
-    ----------
-    edges_df : pd.DataFrame
-        The edges dataframe to add the source weights to.
-    source_wt_var : str, optional
-        The name of the column to store the source weights. Default is "source_wt".
-    source_vars_dict : dict, optional
-        Dictionary with keys indicating edge attributes and values indicating the weight to assign to that attribute. Default is SOURCE_VARS_DICT.
-    source_wt_default : int, optional
-        The default weight to assign to an edge if no other weight attribute is found. Default is 1.
-
-    Returns
-    -------
-    pd.DataFrame
-        The edges dataframe with the source weights added.
-    """
-
-    # currently, we will look for values of source_indicator_var which are non NA and set them to
-    # source_indicator_match_score and setting entries which are NA as source_indicator_nonmatch_score.
-    #
-    # this is a simple way of flagging string vs. non-string scores
-
-    included_weight_vars = set(source_vars_dict.keys()).intersection(
-        set(edges_df.columns)
-    )
-    if len(included_weight_vars) == 0:
-        logger.warning(
-            f"No edge attributes were found which match those in source_vars_dict: {', '.join(source_vars_dict.keys())}"
-        )
-        edges_df[source_wt_var] = source_wt_default
-        return edges_df
-
-    edges_df_source_wts = edges_df[list(included_weight_vars)].copy()
-    for wt in list(included_weight_vars):
-        edges_df_source_wts[wt] = [
-            source_wt_default if x is True else source_vars_dict[wt]
-            for x in edges_df[wt].isna()
-        ]
-
-    source_wt_edges_df = edges_df.join(
-        edges_df_source_wts.max(axis=1).rename(source_wt_var)
-    )
-
-    return source_wt_edges_df
 
 
 def _augment_network_nodes(

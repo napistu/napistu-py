@@ -601,3 +601,129 @@ def test_reverse_edges():
     assert napistu_graph.es[NAPISTU_GRAPH_EDGES.SC_PARENTS] == [0, 1]  # restored
     assert napistu_graph.es[NAPISTU_GRAPH_EDGES.SC_CHILDREN] == [1, 1]  # restored
     assert napistu_graph.es[NAPISTU_GRAPH_EDGES.SC_DEGREE] == [1, 2]  # restored
+
+
+def test_add_graph_weights():
+    """Test the add_graph_weights method."""
+    import igraph as ig
+    from napistu.network.constants import (
+        NAPISTU_GRAPH_EDGES,
+        NAPISTU_WEIGHTING_STRATEGIES,
+    )
+
+    # Create a simple test graph
+    g = ig.Graph(directed=True)
+    g.add_vertices(3, attributes={"name": ["A", "B", "C"]})
+    g.add_edges([(0, 1), (1, 2)])  # A->B->C
+
+    # Add basic edge attributes
+    g.es[NAPISTU_GRAPH_EDGES.FROM] = ["A", "B"]
+    g.es[NAPISTU_GRAPH_EDGES.TO] = ["B", "C"]
+    # Add required species_type attribute for topology weighting
+    g.es[NAPISTU_GRAPH_EDGES.SPECIES_TYPE] = ["protein", "protein"]
+
+    napistu_graph = NapistuGraph.from_igraph(g)
+    napistu_graph.add_degree_attributes()
+
+    # Test unweighted strategy
+    napistu_graph.add_graph_weights(
+        weighting_strategy=NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED
+    )
+
+    # Check that weights are set to 1
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.WEIGHT] == [1, 1]
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] == [1, 1]
+
+    # Test topology strategy
+    napistu_graph.add_graph_weights(
+        weighting_strategy=NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY
+    )
+
+    # Check that topology weights are applied
+    assert NAPISTU_GRAPH_EDGES.WEIGHT in napistu_graph.es.attributes()
+    assert NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT in napistu_graph.es.attributes()
+
+    # Test invalid strategy
+    with pytest.raises(
+        ValueError,
+        match="weighting_strategy was invalid_strategy and must be one of: mixed, topology, unweighted",
+    ):
+        napistu_graph.add_graph_weights(weighting_strategy="invalid_strategy")
+
+    # Test with reaction attributes set via set_graph_attrs
+    napistu_graph_with_attrs = NapistuGraph.from_igraph(g)
+    napistu_graph_with_attrs.add_degree_attributes()
+
+    # Add the string_wt attribute that the mixed strategy expects
+    napistu_graph_with_attrs.es["string_wt"] = [0.8, 0.9]
+
+    napistu_graph_with_attrs.set_graph_attrs(
+        {
+            "reactions": {
+                "string_wt": {
+                    "table": "string",
+                    "variable": "score",
+                    "trans": "identity",
+                }
+            }
+        }
+    )
+
+    # Test mixed strategy with reaction attributes
+    napistu_graph_with_attrs.add_graph_weights(
+        weighting_strategy=NAPISTU_WEIGHTING_STRATEGIES.MIXED
+    )
+
+    # Check that mixed weights are applied
+    assert NAPISTU_GRAPH_EDGES.WEIGHT in napistu_graph_with_attrs.es.attributes()
+    assert (
+        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT in napistu_graph_with_attrs.es.attributes()
+    )
+    assert "source_wt" in napistu_graph_with_attrs.es.attributes()
+
+
+def test_get_weight_variables():
+    """Test the _get_weight_variables utility method."""
+    import igraph as ig
+    from napistu.network.constants import NAPISTU_GRAPH_EDGES
+
+    # Create a test graph
+    g = ig.Graph(directed=True)
+    g.add_vertices(2, attributes={"name": ["A", "B"]})
+    g.add_edges([(0, 1)])
+    g.es[NAPISTU_GRAPH_EDGES.FROM] = ["A"]
+    g.es[NAPISTU_GRAPH_EDGES.TO] = ["B"]
+    g.es["custom_weight"] = [2.5]
+
+    napistu_graph = NapistuGraph.from_igraph(g)
+
+    # Test with weight_by parameter
+    weight_vars = napistu_graph._get_weight_variables(weight_by=["custom_weight"])
+    assert "custom_weight" in weight_vars
+    assert weight_vars["custom_weight"]["table"] == "edge"
+    assert weight_vars["custom_weight"]["variable"] == "custom_weight"
+
+    # Test with non-existent attribute
+    with pytest.raises(ValueError, match="Edge attributes not found in graph"):
+        napistu_graph._get_weight_variables(weight_by=["non_existent"])
+
+    # Test with no reaction_attrs and no weight_by
+    with pytest.raises(ValueError, match="No reaction_attrs found"):
+        napistu_graph._get_weight_variables()
+
+    # Test with reaction_attrs set
+    napistu_graph.set_graph_attrs(
+        {
+            "reactions": {
+                "string_wt": {
+                    "table": "string",
+                    "variable": "score",
+                    "trans": "identity",
+                }
+            }
+        }
+    )
+
+    weight_vars = napistu_graph._get_weight_variables()
+    assert "string_wt" in weight_vars
+    assert weight_vars["string_wt"]["table"] == "string"
