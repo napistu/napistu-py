@@ -10,12 +10,9 @@ from napistu.ingestion import sbml
 from napistu.network import net_create
 from napistu.network import net_create_utils
 from napistu.network import ng_utils
-from napistu.constants import SBML_DFS
 from napistu.network.constants import (
     DROP_REACTIONS_WHEN,
     GRAPH_WIRING_APPROACHES,
-    NAPISTU_GRAPH_EDGES,
-    VALID_GRAPH_WIRING_APPROACHES,
 )
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
@@ -77,76 +74,6 @@ def test_bipartite_regression():
             diff = bipartite_og_edges != bipartite_edges
             print("Differences (first 5 rows):\n", diff.head())
         raise e  # Re-raise to fail the test
-
-
-def test_create_napistu_graph_edge_reversed():
-    """Test that edge_reversed=True properly reverses edges in the graph for all graph types."""
-    # Test each graph type
-    for wiring_approach in VALID_GRAPH_WIRING_APPROACHES:
-        # Create graphs with and without edge reversal
-        normal_graph = net_create.create_napistu_graph(
-            sbml_dfs,
-            wiring_approach=wiring_approach,
-            directed=True,
-            edge_reversed=False,
-        )
-
-        reversed_graph = net_create.create_napistu_graph(
-            sbml_dfs, wiring_approach=wiring_approach, directed=True, edge_reversed=True
-        )
-
-        # Get edge dataframes for comparison
-        normal_edges = normal_graph.get_edge_dataframe()
-        reversed_edges = reversed_graph.get_edge_dataframe()
-
-        # Verify we have edges to test
-        assert len(normal_edges) > 0, f"No edges found in {wiring_approach} graph"
-        assert len(normal_edges) == len(
-            reversed_edges
-        ), f"Edge count mismatch in {wiring_approach} graph"
-
-        # Test edge reversal
-        # Check a few edges to verify from/to are swapped
-        for i in range(min(5, len(normal_edges))):
-            # Check from/to are swapped
-            assert (
-                normal_edges.iloc[i][NAPISTU_GRAPH_EDGES.FROM]
-                == reversed_edges.iloc[i][NAPISTU_GRAPH_EDGES.TO]
-            ), f"From/to not properly swapped in {wiring_approach} graph"
-            assert (
-                normal_edges.iloc[i][NAPISTU_GRAPH_EDGES.TO]
-                == reversed_edges.iloc[i][NAPISTU_GRAPH_EDGES.FROM]
-            ), f"From/to not properly swapped in {wiring_approach} graph"
-
-            # Check stoichiometry is negated
-            assert (
-                normal_edges.iloc[i][SBML_DFS.STOICHIOMETRY]
-                == -reversed_edges.iloc[i][SBML_DFS.STOICHIOMETRY]
-            ), f"Stoichiometry not properly negated in {wiring_approach} graph"
-
-            # Check direction attributes are properly swapped
-            if normal_edges.iloc[i]["direction"] == "forward":
-                assert (
-                    reversed_edges.iloc[i]["direction"] == "reverse"
-                ), f"Direction not properly reversed (forward->reverse) in {wiring_approach} graph"
-            elif normal_edges.iloc[i]["direction"] == "reverse":
-                assert (
-                    reversed_edges.iloc[i]["direction"] == "forward"
-                ), f"Direction not properly reversed (reverse->forward) in {wiring_approach} graph"
-
-
-def test_create_napistu_graph_none_attrs():
-    # Should not raise when reaction_graph_attrs is None
-    _ = net_create.create_napistu_graph(
-        sbml_dfs,
-        reaction_graph_attrs=None,
-        wiring_approach=GRAPH_WIRING_APPROACHES.BIPARTITE,
-    )
-
-
-def test_process_napistu_graph_none_attrs():
-    # Should not raise when reaction_graph_attrs is None
-    _ = net_create.process_napistu_graph(sbml_dfs, reaction_graph_attrs=None)
 
 
 @pytest.mark.skip_on_windows

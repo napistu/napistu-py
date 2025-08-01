@@ -515,3 +515,89 @@ def test_add_degree_attributes_pathological_case(test_graph):
         assert "sc_parents" in error_msg
         assert "sc_degree" in error_msg
         assert "inconsistent state" in error_msg
+
+
+def test_reverse_edges():
+    """Test the reverse_edges method."""
+    import igraph as ig
+    from napistu.network.constants import (
+        NAPISTU_GRAPH_EDGES,
+        NAPISTU_GRAPH_EDGE_DIRECTIONS,
+    )
+
+    # Create test graph with edge attributes
+    g = ig.Graph(directed=True)
+    g.add_vertices(3, attributes={"name": ["A", "B", "C"]})
+    g.add_edges([(0, 1), (1, 2)])  # A->B->C
+
+    # Add attributes that should be swapped
+    g.es[NAPISTU_GRAPH_EDGES.FROM] = ["A", "B"]
+    g.es[NAPISTU_GRAPH_EDGES.TO] = ["B", "C"]
+    g.es[NAPISTU_GRAPH_EDGES.WEIGHT] = [1.0, 2.0]
+    g.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = [0.5, 1.5]
+    g.es[NAPISTU_GRAPH_EDGES.STOICHIOMETRY] = [1.0, -2.0]
+    g.es[NAPISTU_GRAPH_EDGES.DIRECTION] = [
+        NAPISTU_GRAPH_EDGE_DIRECTIONS.FORWARD,
+        NAPISTU_GRAPH_EDGE_DIRECTIONS.REVERSE,
+    ]
+
+    napistu_graph = NapistuGraph.from_igraph(g)
+    napistu_graph.add_degree_attributes()
+
+    # Test reversal
+    napistu_graph.reverse_edges()
+
+    # Check metadata
+    assert napistu_graph.is_reversed is True
+
+    # Check that edge attributes represent reversed graph
+    # (FROM/TO attributes are swapped, so conceptually the graph is reversed)
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.FROM] == ["B", "C"]  # was ["A", "B"]
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.TO] == ["A", "B"]  # was ["B", "C"]
+
+    # Check other attribute swapping
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.WEIGHT] == [0.5, 1.5]
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] == [1.0, 2.0]
+
+    # Check degree attribute swapping
+    # Original: A->B->C
+    # After reversal: B->A, C->B
+    # The degree attributes should be swapped (SC_PARENTS ↔ SC_CHILDREN)
+    # and SC_DEGREE should remain unchanged (total degree)
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.SC_PARENTS] == [
+        1,
+        1,
+    ]  # swapped from SC_CHILDREN
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.SC_CHILDREN] == [
+        0,
+        1,
+    ]  # swapped from SC_PARENTS
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.SC_DEGREE] == [
+        1,
+        2,
+    ]  # unchanged (total degree)
+
+    # Check special handling
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.STOICHIOMETRY] == [-1.0, 2.0]
+    expected_directions = [
+        NAPISTU_GRAPH_EDGE_DIRECTIONS.REVERSE,  # forward -> reverse
+        NAPISTU_GRAPH_EDGE_DIRECTIONS.FORWARD,  # reverse -> forward
+    ]
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.DIRECTION] == expected_directions
+
+    # Test double reversal restores original state
+    napistu_graph.reverse_edges()
+    assert napistu_graph.is_reversed is False
+
+    # Check that attributes are restored to original values
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.FROM] == ["A", "B"]  # restored
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.TO] == ["B", "C"]  # restored
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.WEIGHT] == [1.0, 2.0]  # restored
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] == [
+        0.5,
+        1.5,
+    ]  # restored
+    # Original degree values: A->B (0 parents, 1 child), B->C (1 parent, 1 child)
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.SC_PARENTS] == [0, 1]  # restored
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.SC_CHILDREN] == [1, 1]  # restored
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.SC_DEGREE] == [1, 2]  # restored

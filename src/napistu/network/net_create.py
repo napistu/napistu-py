@@ -39,13 +39,10 @@ logger = logging.getLogger(__name__)
 
 def create_napistu_graph(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    reaction_graph_attrs: Optional[dict] = None,
     directed: bool = True,
-    edge_reversed: bool = False,
     wiring_approach: str = GRAPH_WIRING_APPROACHES.REGULATORY,
     drop_reactions_when: str = DROP_REACTIONS_WHEN.SAME_TIER,
     verbose: bool = False,
-    custom_transformations: Optional[dict] = None,
 ) -> NapistuGraph:
     """
     Create a NapistuGraph network from a mechanistic network using one of a set of wiring approaches.
@@ -54,12 +51,8 @@ def create_napistu_graph(
     ----------
     sbml_dfs : sbml_dfs_core.SBML_dfs
         A model formed by aggregating pathways.
-    reaction_graph_attrs : dict, optional
-        Dictionary containing attributes to pull out of reaction_data and a weighting scheme for the graph.
     directed : bool, optional
         Whether to create a directed (True) or undirected (False) graph. Default is True.
-    edge_reversed : bool, optional
-        Whether to reverse the directions of edges. Default is False.
     wiring_approach : str, optional
         Type of graph to create. Valid values are:
             - 'bipartite': substrates and modifiers point to the reaction they drive, this reaction points to products
@@ -73,8 +66,6 @@ def create_napistu_graph(
             - 'always': drop reactions regardless of tiers
     verbose : bool, optional
         Extra reporting. Default is False.
-    custom_transformations : dict, optional
-        Dictionary of custom transformation functions to use for attribute transformation.
 
     Returns
     -------
@@ -87,18 +78,9 @@ def create_napistu_graph(
         If wiring_approach is not valid or if required attributes are missing.
     """
 
-    if reaction_graph_attrs is None:
-        reaction_graph_attrs = {}
-
     if wiring_approach not in VALID_GRAPH_WIRING_APPROACHES + ["bipartite_og"]:
         raise ValueError(
             f"wiring_approach is not a valid value ({wiring_approach}), valid values are {','.join(VALID_GRAPH_WIRING_APPROACHES)}"
-        )
-
-    # fail fast if reaction_graph_attrs is not properly formatted
-    for k in reaction_graph_attrs.keys():
-        ng_utils._validate_entity_attrs(
-            reaction_graph_attrs[k], custom_transformations=custom_transformations
         )
 
     working_sbml_dfs = copy.deepcopy(sbml_dfs)
@@ -124,27 +106,60 @@ def create_napistu_graph(
             working_sbml_dfs.reaction_species[SBML_DFS.R_ID].isin(valid_reactions)
         ]
 
+    logger.debug("DEBUG: creating compartmentalized species features")
+
+    cspecies_features = working_sbml_dfs.get_cspecies_features().drop(
+        columns=[
+            SBML_DFS_METHOD_DEFS.SC_DEGREE,
+            SBML_DFS_METHOD_DEFS.SC_CHILDREN,
+            SBML_DFS_METHOD_DEFS.SC_PARENTS,
+        ]
+    )
+
     logger.info(
         "Organizing all network nodes (compartmentalized species and reactions)"
     )
 
-    network_nodes = list()
-    network_nodes.append(
-        working_sbml_dfs.compartmentalized_species.reset_index()[
-            [SBML_DFS.SC_ID, SBML_DFS.SC_NAME]
+    network_nodes_df = pd.concat(
+        [
+            (
+                working_sbml_dfs.compartmentalized_species.reset_index()[
+                    [SBML_DFS.SC_ID, SBML_DFS.SC_NAME]
+                ]
+                .rename(
+                    columns={
+                        SBML_DFS.SC_ID: NAPISTU_GRAPH_VERTICES.NAME,
+                        SBML_DFS.SC_NAME: NAPISTU_GRAPH_VERTICES.NODE_NAME,
+                    }
+                )
+                .assign(
+                    **{
+                        NAPISTU_GRAPH_VERTICES.NODE_TYPE: NAPISTU_GRAPH_NODE_TYPES.SPECIES
+                    }
+                )
+            ),
+            (
+                working_sbml_dfs.reactions.reset_index()[
+                    [SBML_DFS.R_ID, SBML_DFS.R_NAME]
+                ]
+                .rename(
+                    columns={
+                        SBML_DFS.R_ID: NAPISTU_GRAPH_VERTICES.NAME,
+                        SBML_DFS.R_NAME: NAPISTU_GRAPH_VERTICES.NODE_NAME,
+                    }
+                )
+                .assign(
+                    **{
+                        NAPISTU_GRAPH_VERTICES.NODE_TYPE: NAPISTU_GRAPH_NODE_TYPES.REACTION
+                    }
+                )
+            ),
         ]
-        .rename(columns={SBML_DFS.SC_ID: "node_id", SBML_DFS.SC_NAME: "node_name"})
-        .assign(node_type=NAPISTU_GRAPH_NODE_TYPES.SPECIES)
-    )
-    network_nodes.append(
-        working_sbml_dfs.reactions.reset_index()[[SBML_DFS.R_ID, SBML_DFS.R_NAME]]
-        .rename(columns={SBML_DFS.R_ID: "node_id", SBML_DFS.R_NAME: "node_name"})
-        .assign(node_type=NAPISTU_GRAPH_NODE_TYPES.REACTION)
-    )
-
-    # rename nodes to name since it is treated specially
-    network_nodes_df = pd.concat(network_nodes).rename(
-        columns={"node_id": NAPISTU_GRAPH_VERTICES.NAME}
+    ).merge(
+        cspecies_features,
+        left_on=NAPISTU_GRAPH_VERTICES.NAME,
+        right_index=True,
+        how="left",
     )
 
     logger.info(f"Formatting edges as a {wiring_approach} graph")
@@ -153,8 +168,8 @@ def create_napistu_graph(
         network_edges = _create_napistu_graph_bipartite(working_sbml_dfs)
     elif wiring_approach in VALID_GRAPH_WIRING_APPROACHES:
         # pass wiring_approach so that an appropriate tiered schema can be used.
-        network_edges = create_napistu_graph_wiring(
-            working_sbml_dfs, wiring_approach, drop_reactions_when
+        network_edges = net_create_utils.wire_reaction_species(
+            working_sbml_dfs.reaction_species, wiring_approach, drop_reactions_when
         )
     else:
         raise NotImplementedError("Invalid wiring_approach")
@@ -163,8 +178,7 @@ def create_napistu_graph(
     augmented_network_edges = _augment_network_edges(
         network_edges,
         working_sbml_dfs,
-        reaction_graph_attrs,
-        custom_transformations=custom_transformations,
+        cspecies_features,
     )
 
     logger.info(
@@ -234,15 +248,14 @@ def create_napistu_graph(
 
     # Always return NapistuGraph
     napistu_graph = NapistuGraph.from_igraph(
-        napistu_ig_graph, wiring_approach=wiring_approach, is_reversed=edge_reversed
+        napistu_ig_graph, wiring_approach=wiring_approach
     )
+
+    # validate assumptions about the graph structure
+    napistu_graph.validate()
 
     # remove singleton nodes (mostly reactions that are not part of any interaction)
     napistu_graph.remove_isolated_vertices()
-
-    if edge_reversed:
-        logger.info("Applying edge reversal using reversal utilities")
-        napistu_graph.reverse_edges()
 
     return napistu_graph
 
@@ -270,8 +283,6 @@ def process_napistu_graph(
         Dictionary containing attributes to pull out of reaction_data and a weighting scheme for the graph.
     directed : bool, optional
         Whether to create a directed (True) or undirected (False) graph. Default is True.
-    edge_reversed : bool, optional
-        Whether to reverse the directions of edges. Default is False.
     wiring_approach : str, optional
         Type of graph to create. See `create_napistu_graph` for valid values.
     weighting_strategy : str, optional
@@ -293,16 +304,24 @@ def process_napistu_graph(
     if reaction_graph_attrs is None:
         reaction_graph_attrs = {}
 
+    # fail fast if reaction_graph_attrs is pathological
+    for k in reaction_graph_attrs.keys():
+        ng_utils._validate_entity_attrs(
+            reaction_graph_attrs[k], custom_transformations=custom_transformations
+        )
+
     logging.info("Constructing network")
     napistu_graph = create_napistu_graph(
         sbml_dfs,
-        reaction_graph_attrs,
         directed=directed,
-        edge_reversed=edge_reversed,
         wiring_approach=wiring_approach,
         verbose=verbose,
-        custom_transformations=custom_transformations,
     )
+
+    # pull out the requested attributes
+    napistu_graph.set_graph_attrs(reaction_graph_attrs)
+    napistu_graph.add_edge_data(sbml_dfs)
+    napistu_graph.transform_edges(custom_transformations=custom_transformations)
 
     if "reactions" in reaction_graph_attrs.keys():
         reaction_attrs = reaction_graph_attrs["reactions"]
@@ -318,86 +337,6 @@ def process_napistu_graph(
     )
 
     return weighted_napistu_graph
-
-
-def create_napistu_graph_wiring(
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
-    wiring_approach: str,
-    drop_reactions_when: str = DROP_REACTIONS_WHEN.SAME_TIER,
-) -> pd.DataFrame:
-    """
-    Turn an sbml_dfs model into a tiered graph which links upstream entities to downstream ones.
-
-    Parameters
-    ----------
-    sbml_dfs : sbml_dfs_core.SBML_dfs
-        The SBML_dfs object containing the model data.
-    wiring_approach : str
-        The wiring approach to use for the graph.
-    drop_reactions_when : str, optional
-        The condition under which to drop reactions as a network vertex. Default is 'same_tier'.
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame representing the tiered network edges.
-
-    Raises
-    ------
-    ValueError
-        If invalid SBO terms are present or required attributes are missing.
-    """
-
-    # organize reaction species for defining connections
-    logger.info(
-        f"Turning {sbml_dfs.reaction_species.shape[0]} reactions species into edges."
-    )
-
-    all_reaction_edges_df = net_create_utils.wire_reaction_species(
-        sbml_dfs.reaction_species, wiring_approach, drop_reactions_when
-    )
-
-    logger.info("Adding species features to edges.")
-
-    # add compartmentalized species summaries to weight edges
-    cspecies_features = sbml_dfs.get_cspecies_features().drop(
-        columns=[
-            SBML_DFS_METHOD_DEFS.SC_DEGREE,
-            SBML_DFS_METHOD_DEFS.SC_CHILDREN,
-            SBML_DFS_METHOD_DEFS.SC_PARENTS,
-        ]
-    )
-
-    # Determine which edges are from reactions vs species
-    is_from_reaction = all_reaction_edges_df[NAPISTU_GRAPH_EDGES.FROM].isin(
-        sbml_dfs.reactions.index
-    )
-
-    # Merge species features with edges
-    # For edges where FROM is a species (not reaction), use FROM node's features
-    # For edges where FROM is a reaction, use TO node's features
-    decorated_all_reaction_edges_df = pd.concat(
-        [
-            all_reaction_edges_df[~is_from_reaction].merge(
-                cspecies_features, left_on=NAPISTU_GRAPH_EDGES.FROM, right_index=True
-            ),
-            all_reaction_edges_df[is_from_reaction].merge(
-                cspecies_features, left_on=NAPISTU_GRAPH_EDGES.TO, right_index=True
-            ),
-        ]
-    ).sort_index()
-
-    if all_reaction_edges_df.shape[0] != decorated_all_reaction_edges_df.shape[0]:
-        msg = (
-            "'decorated_all_reaction_edges_df' and 'all_reaction_edges_df' should\n"
-            "have the same number of rows but they did not"
-        )
-
-        raise ValueError(msg)
-
-    logger.info(f"Done preparing {wiring_approach} graph")
-
-    return decorated_all_reaction_edges_df
 
 
 def add_graph_weights(
@@ -502,24 +441,6 @@ def _create_napistu_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.Data
         NAPISTU_GRAPH_NODE_TYPES.REACTION
     ]
 
-    # add edge weights
-    cspecies_features = sbml_dfs.get_cspecies_features().drop(
-        columns=[
-            SBML_DFS_METHOD_DEFS.SC_DEGREE,
-            SBML_DFS_METHOD_DEFS.SC_CHILDREN,
-            SBML_DFS_METHOD_DEFS.SC_PARENTS,
-        ]
-    )
-    network_edges = network_edges.merge(
-        cspecies_features, left_on=NAPISTU_GRAPH_NODE_TYPES.SPECIES, right_index=True
-    )
-
-    # Ensure species_type is properly named for edge attributes
-    if SBML_DFS_METHOD_DEFS.SPECIES_TYPE in network_edges.columns:
-        network_edges[NAPISTU_GRAPH_EDGES.SPECIES_TYPE] = network_edges[
-            SBML_DFS_METHOD_DEFS.SPECIES_TYPE
-        ]
-
     # if directed then flip substrates and modifiers to the origin edge
     edge_vars = network_edges.columns.tolist()
 
@@ -614,6 +535,10 @@ def _add_edge_attr_to_vertex_graph(
     -------
     NapistuGraph
         The input NapistuGraph with additional vertex attributes added from edge attributes.
+
+    Notes
+    -----
+    This is useful if we want to add reaction-level data like metabolic flux to a graph's vertices.
     """
 
     if len(edge_attr_list) == 0:
@@ -721,11 +646,6 @@ def _create_source_weights(
         The edges dataframe with the source weights added.
     """
 
-    logger.warning(
-        "_create_source_weights should be reimplemented once https://github.com/calico/pathadex-data/issues/95 "
-        "is fixed. The current implementation is quite limited."
-    )
-
     # currently, we will look for values of source_indicator_var which are non NA and set them to
     # source_indicator_match_score and setting entries which are NA as source_indicator_nonmatch_score.
     #
@@ -801,9 +721,6 @@ def _augment_network_nodes(
     missing_required_network_nodes_attrs = NETWORK_NODE_VARS.difference(
         set(network_nodes.columns.tolist())
     )
-    print(
-        f"DEBUG: _augment_network_nodes - missing_required_network_nodes_attrs: {missing_required_network_nodes_attrs}"
-    )
 
     if len(missing_required_network_nodes_attrs) > 0:
         raise ValueError(
@@ -855,11 +772,10 @@ def _augment_network_nodes(
 def _augment_network_edges(
     network_edges: pd.DataFrame,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
-    reaction_graph_attrs: dict = dict(),
-    custom_transformations: Optional[dict] = None,
+    cspecies_features: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Add reversibility and other metadata from reactions.
+    Add reversibility and other metadata from reactions, and species features.
 
     Parameters
     ----------
@@ -867,10 +783,8 @@ def _augment_network_edges(
         DataFrame of network edges.
     sbml_dfs : sbml_dfs_core.SBML_dfs
         The SBML_dfs object containing reaction data.
-    reaction_graph_attrs : dict, optional
-        Dictionary of reaction attributes to add.
-    custom_transformations : dict, optional
-        Dictionary of custom transformation functions to use for attribute transformation.
+    cspecies_features : pd.DataFrame
+        DataFrame containing species features to merge with edges.
 
     Returns
     -------
@@ -895,29 +809,42 @@ def _augment_network_edges(
             f"{', '.join(missing_required_network_edges_attrs)}"
         )
 
-    network_edges = (
-        network_edges[list(NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS)]
-        # add reaction-level attributes
+    # Determine which edges are from reactions vs species
+    is_from_reaction = network_edges[NAPISTU_GRAPH_EDGES.FROM].isin(
+        sbml_dfs.reactions.index
+    )
+
+    # Merge species features with edges
+    # For edges where FROM is a species (not reaction), use FROM node's features
+    # For edges where FROM is a reaction, use TO node's features
+    augmented_network_edges = (
+        pd.concat(
+            [
+                network_edges[~is_from_reaction].merge(
+                    cspecies_features,
+                    left_on=NAPISTU_GRAPH_EDGES.FROM,
+                    right_index=True,
+                ),
+                network_edges[is_from_reaction].merge(
+                    cspecies_features, left_on=NAPISTU_GRAPH_EDGES.TO, right_index=True
+                ),
+            ]
+        )
+        .sort_index()
         .merge(
             sbml_dfs.reactions[SBML_DFS.R_ISREVERSIBLE],
             left_on=SBML_DFS.R_ID,
             right_index=True,
+            how="left",
         )
     )
 
-    # add other attributes based on reactions data
-    reaction_graph_data = ng_utils.pluck_entity_data(
-        sbml_dfs,
-        reaction_graph_attrs,
-        SBML_DFS.REACTIONS,
-        custom_transformations=custom_transformations,
-    )
-    if reaction_graph_data is not None:
-        network_edges = network_edges.merge(
-            reaction_graph_data, left_on=SBML_DFS.R_ID, right_index=True, how="left"
+    if augmented_network_edges.shape[0] != network_edges.shape[0]:
+        raise ValueError(
+            "Augmented_network_edges and network_edges must have the same number of rows. Please contact the developers."
         )
 
-    return network_edges
+    return augmented_network_edges
 
 
 def _reverse_network_edges(augmented_network_edges: pd.DataFrame) -> pd.DataFrame:

@@ -17,6 +17,7 @@ from napistu.network.constants import (
     NAPISTU_GRAPH_EDGES,
     NAPISTU_METADATA_KEYS,
     WEIGHTING_SPEC,
+    NAPISTU_GRAPH_VERTICES,
 )
 
 logger = logging.getLogger(__name__)
@@ -106,12 +107,12 @@ class NapistuGraph(ig.Graph):
 
         # Initialize metadata
         self._metadata = {
-            "is_reversed": False,
-            "wiring_approach": None,
-            "weighting_strategy": None,
-            "creation_params": {},
-            "species_attrs": {},
-            "reaction_attrs": {},
+            NAPISTU_METADATA_KEYS.IS_REVERSED: False,
+            NAPISTU_METADATA_KEYS.WIRING_APPROACH: None,
+            NAPISTU_METADATA_KEYS.WEIGHTING_STRATEGY: None,
+            NAPISTU_METADATA_KEYS.CREATION_PARAMS: {},
+            NAPISTU_METADATA_KEYS.SPECIES_ATTRS: {},
+            NAPISTU_METADATA_KEYS.REACTION_ATTRS: {},
         }
 
     @classmethod
@@ -892,6 +893,41 @@ class NapistuGraph(ig.Graph):
         logger.info(
             f"Transformed {len(attrs_to_transform)} edge attributes: {list(attrs_to_transform)}"
         )
+
+    def validate(self) -> None:
+        """
+        Validate the NapistuGraph structure and attributes.
+
+        This method performs various validation checks to ensure the graph
+        is properly structured and has required attributes.
+
+        Raises
+        ------
+        ValueError
+            If validation fails with specific details about the issue
+        """
+        # Check if species_type is defined for all vertices
+        if NAPISTU_GRAPH_VERTICES.SPECIES_TYPE in self.vs.attributes():
+            species_types = self.vs[NAPISTU_GRAPH_VERTICES.SPECIES_TYPE]
+            missing_species_types = [
+                i for i, st in enumerate(species_types) if st is None or st == ""
+            ]
+
+            if missing_species_types:
+                vertex_names = [
+                    self.vs[i][NAPISTU_GRAPH_VERTICES.NAME]
+                    for i in missing_species_types
+                ]
+                raise ValueError(
+                    f"Found {len(missing_species_types)} vertices with missing species_type: {vertex_names[:10]}"
+                    + (
+                        f" and {len(missing_species_types) - 10} more..."
+                        if len(missing_species_types) > 10
+                        else ""
+                    )
+                )
+        else:
+            raise ValueError("species_type attribute is missing from all vertices")
 
     def __str__(self) -> str:
         """String representation including metadata."""
