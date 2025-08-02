@@ -812,6 +812,7 @@ def test_validate_passes_with_valid_data(minimal_valid_sbml_dfs):
     minimal_valid_sbml_dfs.validate()  # Should not raise any exceptions
 
 
+@pytest.mark.skip_on_windows
 def test_to_pickle_and_from_pickle(sbml_dfs):
     """Test saving and loading an SBML_dfs via pickle."""
 
@@ -868,6 +869,7 @@ def test_to_pickle_and_from_pickle(sbml_dfs):
             os.unlink(pickle_path)
 
 
+@pytest.mark.skip_on_windows
 def test_from_pickle_nonexistent_file():
     """Test that from_pickle raises appropriate error for nonexistent file."""
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -876,6 +878,7 @@ def test_from_pickle_nonexistent_file():
             SBML_dfs.from_pickle(nonexistent_path)
 
 
+@pytest.mark.skip_on_windows
 def test_pickle_with_species_data(sbml_dfs):
     """Test pickle functionality with species_data."""
     # Use the existing sbml_dfs fixture and add species_data

@@ -827,6 +827,7 @@ def test_process_napistu_graph_with_reactions_data(sbml_dfs):
         assert all(0.99 <= w < 10 for w in upstream_weights)
 
 
+@pytest.mark.skip_on_windows
 def test_to_pickle_and_from_pickle(napistu_graph):
     """Test saving and loading a NapistuGraph via pickle."""
     # Use the existing napistu_graph fixture
@@ -857,6 +858,7 @@ def test_to_pickle_and_from_pickle(napistu_graph):
             os.unlink(pickle_path)
 
 
+@pytest.mark.skip_on_windows
 def test_from_pickle_nonexistent_file():
     """Test that from_pickle raises appropriate error for nonexistent file."""
 
