@@ -51,6 +51,9 @@ def create_bioconductor_mapping_tables(
         "Creating mapping tables from entrez genes to/from %s", ", ".join(mappings)
     )
 
+    # always add entrez because it is used to create the joined table
+    mappings = mappings.union({ONTOLOGIES.NCBI_ENTREZ_GENE})
+
     invalid_mappings = set(mappings).difference(BIOC_VALID_EXPANDED_SPECIES_ONTOLOGIES)
     if len(invalid_mappings) > 0:
         raise ValueError(
