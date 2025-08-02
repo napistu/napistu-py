@@ -33,6 +33,7 @@ from napistu.network.ng_core import NapistuGraph
 from napistu.network.net_create import process_napistu_graph
 from napistu.network.ig_utils import get_graph_summary
 from napistu.network.ng_utils import read_graph_attrs_spec
+from napistu.network.ng_utils import validate_assets as validate_assets_func
 from napistu.network.precompute import precompute_distances
 from napistu.ontologies.genodexito import Genodexito
 from napistu.ontologies import dogma
@@ -878,6 +879,69 @@ def validate_sbml_dfs(input_uri):
     logger.info(f"Successfully validated: {input_uri}")
 
 
+@helpers.command(name="validate_assets")
+@click.argument("sbml_dfs_uri", type=str)
+@click.option(
+    "--napistu-graph-uri", "-g", type=str, help="URI to NapistuGraph pickle file"
+)
+@click.option(
+    "--precomputed-distances-uri",
+    "-d",
+    type=str,
+    help="URI to precomputed distances parquet file",
+)
+@click.option(
+    "--identifiers-df-uri", "-i", type=str, help="URI to identifiers DataFrame TSV file"
+)
+@click_logging.simple_verbosity_option(logger)
+def validate_assets(
+    sbml_dfs_uri: str,
+    napistu_graph_uri: str = None,
+    precomputed_distances_uri: str = None,
+    identifiers_df_uri: str = None,
+):
+    """Validate assets for consistency
+
+    Loads an SBML_dfs object and optionally validates it against other assets:
+    - NapistuGraph: Network representation of the SBML_dfs
+    - Precomputed distances: Distance matrix between vertices in the graph
+    - Identifiers DataFrame: Systematic identifiers for compartmentalized species
+
+    At least one optional asset must be provided for validation to occur.
+    """
+
+    # Load the required SBML_dfs
+    logger.info(f"Loading SBML_dfs from: {sbml_dfs_uri}")
+    sbml_dfs = SBML_dfs.from_pickle(sbml_dfs_uri)
+
+    # Load optional assets
+    napistu_graph = None
+    if napistu_graph_uri:
+        logger.info(f"Loading NapistuGraph from: {napistu_graph_uri}")
+        napistu_graph = NapistuGraph.from_pickle(napistu_graph_uri)
+
+    precomputed_distances = None
+    if precomputed_distances_uri:
+        logger.info(f"Loading precomputed distances from: {precomputed_distances_uri}")
+        precomputed_distances = pd.read_parquet(precomputed_distances_uri)
+
+    identifiers_df = None
+    if identifiers_df_uri:
+        logger.info(f"Loading identifiers DataFrame from: {identifiers_df_uri}")
+        identifiers_df = pd.read_csv(identifiers_df_uri, sep="\t")
+
+    # Validate assets
+    logger.info("Validating assets...")
+    validate_assets_func(
+        sbml_dfs=sbml_dfs,
+        napistu_graph=napistu_graph,
+        precomputed_distances=precomputed_distances,
+        identifiers_df=identifiers_df,
+    )
+
+    logger.info("Asset validation completed successfully!")
+
+
 @click.group()
 def stats():
     """Various functions to calculate network statistics
@@ -902,7 +966,7 @@ def calculate_sbml_dfs_stats(input_uri, output_uri):
 @click.argument("output_uri", type=str)
 def calculate_igraph_stats(input_uri, output_uri):
     """Calculate statistics for an igraph object"""
-    
+
     graph = NapistuGraph.from_pickle(input_uri)
     stats = get_graph_summary(graph)
     utils.save_json(output_uri, stats)

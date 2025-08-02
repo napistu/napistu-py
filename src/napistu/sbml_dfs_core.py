@@ -401,7 +401,7 @@ class SBML_dfs:
             raise ValueError(
                 f"Pickled input is not an SBML_dfs object but {type(sbml_dfs)}: {path}"
             )
-        
+
         return sbml_dfs
 
     def get_characteristic_species_ids(self, dogmatic: bool = True) -> pd.DataFrame:

@@ -638,9 +638,7 @@ def test_set_weights():
     assert napistu_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] == [1, 1]
 
     # Test topology strategy
-    napistu_graph.set_weights(
-        weighting_strategy=NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY
-    )
+    napistu_graph.set_weights(weighting_strategy=NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY)
 
     # Check that topology weights are applied
     assert NAPISTU_GRAPH_EDGES.WEIGHT in napistu_graph.es.attributes()
@@ -861,7 +859,7 @@ def test_to_pickle_and_from_pickle(napistu_graph):
 
 def test_from_pickle_nonexistent_file():
     """Test that from_pickle raises appropriate error for nonexistent file."""
-    
+
     # Create a temporary directory and use a path that definitely doesn't exist
     with tempfile.TemporaryDirectory() as temp_dir:
         nonexistent_path = os.path.join(temp_dir, "nonexistent_file.pkl")

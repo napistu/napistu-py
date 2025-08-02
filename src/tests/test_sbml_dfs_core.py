@@ -814,7 +814,7 @@ def test_validate_passes_with_valid_data(minimal_valid_sbml_dfs):
 
 def test_to_pickle_and_from_pickle(sbml_dfs):
     """Test saving and loading an SBML_dfs via pickle."""
-    
+
     # Save to pickle
     with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as tmp_file:
         pickle_path = tmp_file.name
@@ -832,19 +832,18 @@ def test_to_pickle_and_from_pickle(sbml_dfs):
         assert len(loaded_sbml_dfs.reactions) == len(sbml_dfs.reactions)
         assert len(loaded_sbml_dfs.reaction_species) == len(sbml_dfs.reaction_species)
 
-
         # Compare each table, excluding identifier and source columns that contain custom objects
         for table_name in SBML_DFS_SCHEMA.REQUIRED_ENTITIES:
             original_df = getattr(sbml_dfs, table_name)
             loaded_df = getattr(loaded_sbml_dfs, table_name)
-            
+
             # Get the schema for this table
             table_schema = SBML_DFS_SCHEMA.SCHEMA[table_name]
-            
+
             # Create copies to avoid modifying the original DataFrames
             original_copy = original_df.copy()
             loaded_copy = loaded_df.copy()
-            
+
             # Drop identifier and source columns if they exist
             if SCHEMA_DEFS.ID in table_schema:
                 id_col = table_schema[SCHEMA_DEFS.ID]
@@ -852,14 +851,14 @@ def test_to_pickle_and_from_pickle(sbml_dfs):
                     original_copy = original_copy.drop(columns=[id_col])
                 if id_col in loaded_copy.columns:
                     loaded_copy = loaded_copy.drop(columns=[id_col])
-                    
+
             if SCHEMA_DEFS.SOURCE in table_schema:
                 source_col = table_schema[SCHEMA_DEFS.SOURCE]
                 if source_col in original_copy.columns:
                     original_copy = original_copy.drop(columns=[source_col])
                 if source_col in loaded_copy.columns:
                     loaded_copy = loaded_copy.drop(columns=[source_col])
-            
+
             # Compare the DataFrames without custom object columns
             pd.testing.assert_frame_equal(original_copy, loaded_copy)
 
@@ -883,12 +882,11 @@ def test_pickle_with_species_data(sbml_dfs):
 
     # Get actual species IDs from the fixture
     species_ids = sbml_dfs.species.index.tolist()[:2]  # Use first 2 species
-    
+
     # Add species data
-    species_data = pd.DataFrame({
-        "expression": [10.5, 20.3],
-        "confidence": [0.8, 0.9]
-    }, index=species_ids)
+    species_data = pd.DataFrame(
+        {"expression": [10.5, 20.3], "confidence": [0.8, 0.9]}, index=species_ids
+    )
     species_data.index.name = SBML_DFS.S_ID
     sbml_dfs.add_species_data("test_data", species_data)
 

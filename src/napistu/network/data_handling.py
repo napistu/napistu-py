@@ -51,7 +51,7 @@ def add_results_table_to_graph(
         The type of graph attribute to modify: vertices or edges. Certain table_types can only modify vertices (species) while others can modify either vertices or edges (reactions). Currently, ignore.
     transformation: str or Callable, optional
         Either:
-            - the name of a function in custom_transformations or DEFINED_WEIGHT_TRANSFORMATION.
+            - the name of a function in custom_transformations or the built-in transformations.
             - A function to apply to the attribute.
         If not provided, the attribute will not be transformed.
     custom_transformations: dict, optional

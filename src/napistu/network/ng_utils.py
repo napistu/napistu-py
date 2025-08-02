@@ -31,11 +31,11 @@ from napistu.constants import (
 )
 from napistu.network.constants import (
     DEFAULT_WT_TRANS,
-    DEFINED_WEIGHT_TRANSFORMATION,
     DISTANCES,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
     NAPISTU_GRAPH_VERTICES,
+    WEIGHT_TRANSFORMATIONS,
 )
 
 logger = logging.getLogger(__name__)
@@ -82,10 +82,16 @@ def apply_weight_transformations(
         trans_name = v["trans"]
 
         # Look up transformation
-        if custom_transformations and trans_name in custom_transformations:
-            trans_fxn = custom_transformations[trans_name]
-        elif trans_name in DEFINED_WEIGHT_TRANSFORMATION:
-            trans_fxn = globals()[DEFINED_WEIGHT_TRANSFORMATION[trans_name]]
+        if custom_transformations:
+            valid_transformations = {
+                **DEFINED_WEIGHT_TRANSFORMATION,
+                **custom_transformations,
+            }
+        else:
+            valid_transformations = DEFINED_WEIGHT_TRANSFORMATION
+
+        if trans_name in valid_transformations:
+            trans_fxn = valid_transformations[trans_name]
         else:
             # This should never be hit if _validate_entity_attrs is called correctly.
             raise ValueError(
@@ -370,10 +376,16 @@ def pluck_entity_data(
         if transform:
             trans_name = v.get("trans", DEFAULT_WT_TRANS)
             # Look up transformation
-            if custom_transformations and trans_name in custom_transformations:
-                trans_fxn = custom_transformations[trans_name]
-            elif trans_name in DEFINED_WEIGHT_TRANSFORMATION:
-                trans_fxn = globals()[DEFINED_WEIGHT_TRANSFORMATION[trans_name]]
+            if custom_transformations:
+                valid_transformations = {
+                    **DEFINED_WEIGHT_TRANSFORMATION,
+                    **custom_transformations,
+                }
+            else:
+                valid_transformations = DEFINED_WEIGHT_TRANSFORMATION
+
+            if trans_name in valid_transformations:
+                trans_fxn = valid_transformations[trans_name]
             else:
                 # This should never be hit if _validate_entity_attrs is called correctly.
                 raise ValueError(
@@ -535,6 +547,14 @@ def _wt_transformation_string_inv(x):
     return 1 / (x / 1000)
 
 
+# Define weight transformations mapping directly to functions
+DEFINED_WEIGHT_TRANSFORMATION = {
+    WEIGHT_TRANSFORMATIONS.IDENTITY: _wt_transformation_identity,
+    WEIGHT_TRANSFORMATIONS.STRING: _wt_transformation_string,
+    WEIGHT_TRANSFORMATIONS.STRING_INV: _wt_transformation_string_inv,
+}
+
+
 def _validate_assets_sbml_graph(
     sbml_dfs: sbml_dfs_core.SBML_dfs, napistu_graph: Union["NapistuGraph", ig.Graph]
 ) -> None:
@@ -670,14 +690,19 @@ def _validate_entity_attrs(
 
         if validate_transformations:
             trans_name = validated_attrs.get("trans", DEFAULT_WT_TRANS)
-            valid_trans = set(DEFINED_WEIGHT_TRANSFORMATION.keys())
             if custom_transformations:
-                valid_trans = valid_trans.union(set(custom_transformations.keys()))
-            if trans_name not in valid_trans:
+                valid_transformations = {
+                    **DEFINED_WEIGHT_TRANSFORMATION,
+                    **custom_transformations,
+                }
+            else:
+                valid_transformations = DEFINED_WEIGHT_TRANSFORMATION
+
+            if trans_name not in valid_transformations:
                 raise ValueError(
                     f"transformation '{trans_name}' was not defined as an alias in "
                     "DEFINED_WEIGHT_TRANSFORMATION or custom_transformations. The defined transformations "
-                    f"are {', '.join(sorted(valid_trans))}"
+                    f"are {', '.join(sorted(valid_transformations.keys()))}"
                 )
 
     return None

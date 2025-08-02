@@ -230,18 +230,13 @@ WEIGHTING_SPEC = SimpleNamespace(
     TRANSFORMATION="trans",
 )
 
-DEFAULT_WT_TRANS = "identity"
+WEIGHT_TRANSFORMATIONS = SimpleNamespace(
+    IDENTITY="identity",
+    STRING="string",
+    STRING_INV="string_inv",
+)
 
-DEFINED_WEIGHT_TRANSFORMATION = {
-    DEFAULT_WT_TRANS: "_wt_transformation_identity",
-    "string": "_wt_transformation_string",
-    "string_inv": "_wt_transformation_string_inv",
-}
-
-SCORE_CALIBRATION_POINTS_DICT = {
-    "weights": {"strong": 3, "good": 7, "okay": 20, "weak": 40},
-    "string_wt": {"strong": 950, "good": 400, "okay": 230, "weak": 150},
-}
+DEFAULT_WT_TRANS = WEIGHT_TRANSFORMATIONS.IDENTITY
 
 SOURCE_VARS_DICT = {"string_wt": 10}
 
