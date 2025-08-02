@@ -41,6 +41,10 @@ def get_graph_summary(graph: ig.Graph) -> dict[str, Any]:
         - top10_betweenness (list[dict]): the top 10 vertices by betweenness centrality
         - top10_harmonic_centrality (list[dict]): the top 10 vertices by harmonic centrality
     """
+
+    if not isinstance(graph, ig.Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
     stats = {}
     stats["n_edges"] = graph.ecount()
     stats["n_vertices"] = graph.vcount()
@@ -86,6 +90,10 @@ def filter_to_largest_subgraph(graph: ig.Graph) -> ig.Graph:
     ig.Graph
         The largest weakly connected component.
     """
+
+    if not isinstance(graph, ig.Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
     component_members = graph.components(mode="weak")
     component_sizes = [len(x) for x in component_members]
 
@@ -115,6 +123,10 @@ def filter_to_largest_subgraphs(graph: ig.Graph, top_k: int) -> list[ig.Graph]:
     list[ig.Graph]
         A list of the top K largest components as graphs.
     """
+
+    if not isinstance(graph, ig.Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
     if top_k < 1:
         raise ValueError("top_k must be 1 or greater.")
 
@@ -150,6 +162,10 @@ def graph_to_pandas_dfs(graph: ig.Graph) -> tuple[pd.DataFrame, pd.DataFrame]:
     edges : pandas.DataFrame
         A table with one row per edge.
     """
+
+    if not isinstance(graph, ig.Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
     vertices = pd.DataFrame(
         [{**{"index": v.index}, **v.attributes()} for v in graph.vs]
     )
@@ -184,6 +200,10 @@ def create_induced_subgraph(
     ig.Graph
         The induced subgraph.
     """
+
+    if not isinstance(graph, ig.Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
     if vertices is not None:
         selected_vertices = vertices
     else:
@@ -222,6 +242,10 @@ def validate_edge_attributes(graph: ig.Graph, edge_attributes: list[str]) -> Non
     ValueError
         If any required edge attribute is missing from the graph.
     """
+
+    if not isinstance(graph, ig.Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
     if isinstance(edge_attributes, list):
         attrs = edge_attributes
     elif isinstance(edge_attributes, str):
@@ -264,6 +288,10 @@ def validate_vertex_attributes(graph: ig.Graph, vertex_attributes: list[str]) ->
     ValueError
         If any required vertex attribute is missing from the graph.
     """
+
+    if not isinstance(graph, ig.Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
     if isinstance(vertex_attributes, list):
         attrs = vertex_attributes
     elif isinstance(vertex_attributes, str):
@@ -344,6 +372,10 @@ def _get_top_n_component_stats(
         - 'n': size of the component
         - 'examples': up to 10 example vertex attribute dicts from the component
     """
+
+    if not isinstance(graph, ig.Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
     top_components = _get_top_n_objects(component_sizes, components, n, ascending)
     top_component_stats = [
         {"n": len(c), "examples": [graph.vs[n].attributes() for n in c[:10]]}
@@ -380,6 +412,10 @@ def _get_top_n_nodes(
     list of dict
         Each dict contains the value and the node's attributes.
     """
+
+    if not isinstance(graph, ig.Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
     top_idxs = _get_top_n_idx(vals, n, ascending=ascending)
     top_node_attrs = [graph.vs[idx].attributes() for idx in top_idxs]
     top_vals = [vals[idx] for idx in top_idxs]
@@ -457,6 +493,10 @@ def _get_attribute_masks(
     Dict[str, np.ndarray]
         Dictionary mapping each attribute to its boolean mask array.
     """
+
+    if not isinstance(graph, ig.Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
     n_nodes = graph.vcount()
     masks = {}
 
@@ -537,6 +577,10 @@ def _ensure_valid_attribute(graph: ig.Graph, attribute: str, non_negative: bool 
     ValueError
         If the attribute is missing for all vertices, all values are zero, or any value is negative (if non_negative=True).
     """
+
+    if not isinstance(graph, ig.Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
     all_missing = all(
         (attribute not in v.attributes() or v[attribute] is None) for v in graph.vs
     )

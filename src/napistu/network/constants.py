@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 
-from napistu.constants import SBML_DFS
+from napistu.constants import SBML_DFS, SBML_DFS_METHOD_DEFS
 from napistu.constants import SBOTERM_NAMES
 
 NAPISTU_GRAPH = SimpleNamespace(VERTICES="vertices", EDGES="edges", METADATA="metadata")
@@ -24,7 +24,16 @@ NAPISTU_GRAPH_VERTICES = SimpleNamespace(
     NAME="name",  # internal name
     NODE_NAME="node_name",  # human readable name
     NODE_TYPE="node_type",  # type of node (species or reaction)
+    SPECIES_TYPE=SBML_DFS_METHOD_DEFS.SPECIES_TYPE,
 )
+
+CORE_NAPISTU_GRAPH_VERTICES_VARS = {
+    NAPISTU_GRAPH_VERTICES.NAME,
+    NAPISTU_GRAPH_VERTICES.NODE_NAME,
+    NAPISTU_GRAPH_VERTICES.NODE_TYPE,
+    # added during creation
+    NAPISTU_GRAPH_VERTICES.SPECIES_TYPE,
+}
 
 NAPISTU_GRAPH_EDGES = SimpleNamespace(
     DIRECTED="directed",
@@ -44,10 +53,24 @@ NAPISTU_GRAPH_EDGES = SimpleNamespace(
     WEIGHT="weight",
 )
 
-NAPISTU_GRAPH_REQUIRED_EDGE_VARS = {
+# added during graph wiring
+NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS = {
     NAPISTU_GRAPH_EDGES.FROM,
     NAPISTU_GRAPH_EDGES.TO,
-    NAPISTU_GRAPH_EDGES.DIRECTION,
+    NAPISTU_GRAPH_EDGES.STOICHIOMETRY,
+    NAPISTU_GRAPH_EDGES.SBO_TERM,
+    NAPISTU_GRAPH_EDGES.R_ID,
+}
+
+NAPISTU_GRAPH_EDGES_FROM_AUGMENTATION_VARS = {
+    NAPISTU_GRAPH_EDGES.SPECIES_TYPE,
+    NAPISTU_GRAPH_EDGES.R_ISREVERSIBLE,
+}
+
+OPTIONAL_NAPISTU_GRAPH_EDGES_FROM_ADD_DEGREE = {
+    NAPISTU_GRAPH_EDGES.SC_DEGREE,
+    NAPISTU_GRAPH_EDGES.SC_CHILDREN,
+    NAPISTU_GRAPH_EDGES.SC_PARENTS,
 }
 
 NAPISTU_GRAPH_NODE_TYPES = SimpleNamespace(SPECIES="species", REACTION="reaction")
@@ -56,6 +79,23 @@ VALID_NAPISTU_GRAPH_NODE_TYPES = [
     NAPISTU_GRAPH_NODE_TYPES.REACTION,
     NAPISTU_GRAPH_NODE_TYPES.SPECIES,
 ]
+
+NAPISTU_METADATA_KEYS = SimpleNamespace(
+    REACTION_ATTRS="reaction_attrs",
+    SPECIES_ATTRS="species_attrs",
+    TRANSFORMATIONS_APPLIED="transformations_applied",
+    RAW_ATTRIBUTES="raw_attributes",
+    IS_REVERSED="is_reversed",
+    WIRING_APPROACH="wiring_approach",
+    WEIGHTING_STRATEGY="weighting_strategy",
+    WEIGHT_BY="weight_by",
+    CREATION_PARAMS="creation_params",
+)
+
+ENTITIES_TO_ATTRS = {
+    SBML_DFS.REACTIONS: NAPISTU_METADATA_KEYS.REACTION_ATTRS,
+    SBML_DFS.SPECIES: NAPISTU_METADATA_KEYS.SPECIES_ATTRS,
+}
 
 # translating an SBML_dfs -> NapistuGraph
 
@@ -119,15 +159,10 @@ VALID_DROP_REACTIONS_WHEN = list(DROP_REACTIONS_WHEN.__dict__.values())
 # adding weights to NapistuGraph
 
 NAPISTU_WEIGHTING_STRATEGIES = SimpleNamespace(
-    CALIBRATED="calibrated", MIXED="mixed", TOPOLOGY="topology", UNWEIGHTED="unweighted"
+    MIXED="mixed", TOPOLOGY="topology", UNWEIGHTED="unweighted"
 )
 
-VALID_WEIGHTING_STRATEGIES = [
-    NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
-    NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY,
-    NAPISTU_WEIGHTING_STRATEGIES.MIXED,
-    NAPISTU_WEIGHTING_STRATEGIES.CALIBRATED,
-]
+VALID_WEIGHTING_STRATEGIES = NAPISTU_WEIGHTING_STRATEGIES.__dict__.values()
 
 # edge reversal
 
@@ -195,18 +230,13 @@ WEIGHTING_SPEC = SimpleNamespace(
     TRANSFORMATION="trans",
 )
 
-DEFAULT_WT_TRANS = "identity"
+WEIGHT_TRANSFORMATIONS = SimpleNamespace(
+    IDENTITY="identity",
+    STRING="string",
+    STRING_INV="string_inv",
+)
 
-DEFINED_WEIGHT_TRANSFORMATION = {
-    DEFAULT_WT_TRANS: "_wt_transformation_identity",
-    "string": "_wt_transformation_string",
-    "string_inv": "_wt_transformation_string_inv",
-}
-
-SCORE_CALIBRATION_POINTS_DICT = {
-    "weights": {"strong": 3, "good": 7, "okay": 20, "weak": 40},
-    "string_wt": {"strong": 950, "good": 400, "okay": 230, "weak": 150},
-}
+DEFAULT_WT_TRANS = WEIGHT_TRANSFORMATIONS.IDENTITY
 
 SOURCE_VARS_DICT = {"string_wt": 10}
 
