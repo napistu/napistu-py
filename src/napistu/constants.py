@@ -149,6 +149,13 @@ ENTITIES_TO_ENTITY_DATA = {
     SBML_DFS.REACTIONS: SBML_DFS.REACTIONS_DATA,
 }
 
+SBML_DFS_METHOD_DEFS = SimpleNamespace(
+    SPECIES_TYPE="species_type",  # produced by sbml_dfs_core.get_species_features
+    SC_DEGREE="sc_degree",  # produced by sbml_dfs_core.get_cspecies_features
+    SC_CHILDREN="sc_children",  # produced by sbml_dfs_core.get_cspecies_features
+    SC_PARENTS="sc_parents",  # produced by sbml_dfs_core.get_cspecies_features
+)
+
 NAPISTU_STANDARD_OUTPUTS = SimpleNamespace(
     SPECIES_IDENTIFIERS="species_identifiers.tsv",
     SPECIES="species.json",
