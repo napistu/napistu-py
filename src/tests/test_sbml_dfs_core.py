@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 import pytest
+from fs.errors import ResourceNotFound
 
 from napistu import identifiers
 from napistu import sbml_dfs_core
@@ -22,6 +24,7 @@ from napistu.constants import (
     IDENTIFIERS,
     MINI_SBO_FROM_NAME,
     SBML_DFS,
+    SBML_DFS_SCHEMA,
     SBOTERM_NAMES,
     SCHEMA_DEFS,
     ONTOLOGIES,
@@ -807,3 +810,106 @@ def test_validate_reactions_data(minimal_valid_sbml_dfs):
 def test_validate_passes_with_valid_data(minimal_valid_sbml_dfs):
     """Test that validation passes with completely valid data."""
     minimal_valid_sbml_dfs.validate()  # Should not raise any exceptions
+
+
+def test_to_pickle_and_from_pickle(sbml_dfs):
+    """Test saving and loading an SBML_dfs via pickle."""
+    
+    # Save to pickle
+    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as tmp_file:
+        pickle_path = tmp_file.name
+
+    try:
+        sbml_dfs.to_pickle(pickle_path)
+
+        # Load from pickle
+        loaded_sbml_dfs = SBML_dfs.from_pickle(pickle_path)
+
+        # Verify the loaded SBML_dfs is identical
+        assert isinstance(loaded_sbml_dfs, SBML_dfs)
+        assert len(loaded_sbml_dfs.compartments) == len(sbml_dfs.compartments)
+        assert len(loaded_sbml_dfs.species) == len(sbml_dfs.species)
+        assert len(loaded_sbml_dfs.reactions) == len(sbml_dfs.reactions)
+        assert len(loaded_sbml_dfs.reaction_species) == len(sbml_dfs.reaction_species)
+
+
+        # Compare each table, excluding identifier and source columns that contain custom objects
+        for table_name in SBML_DFS_SCHEMA.REQUIRED_ENTITIES:
+            original_df = getattr(sbml_dfs, table_name)
+            loaded_df = getattr(loaded_sbml_dfs, table_name)
+            
+            # Get the schema for this table
+            table_schema = SBML_DFS_SCHEMA.SCHEMA[table_name]
+            
+            # Create copies to avoid modifying the original DataFrames
+            original_copy = original_df.copy()
+            loaded_copy = loaded_df.copy()
+            
+            # Drop identifier and source columns if they exist
+            if SCHEMA_DEFS.ID in table_schema:
+                id_col = table_schema[SCHEMA_DEFS.ID]
+                if id_col in original_copy.columns:
+                    original_copy = original_copy.drop(columns=[id_col])
+                if id_col in loaded_copy.columns:
+                    loaded_copy = loaded_copy.drop(columns=[id_col])
+                    
+            if SCHEMA_DEFS.SOURCE in table_schema:
+                source_col = table_schema[SCHEMA_DEFS.SOURCE]
+                if source_col in original_copy.columns:
+                    original_copy = original_copy.drop(columns=[source_col])
+                if source_col in loaded_copy.columns:
+                    loaded_copy = loaded_copy.drop(columns=[source_col])
+            
+            # Compare the DataFrames without custom object columns
+            pd.testing.assert_frame_equal(original_copy, loaded_copy)
+
+    finally:
+        # Clean up
+        if os.path.exists(pickle_path):
+            os.unlink(pickle_path)
+
+
+def test_from_pickle_nonexistent_file():
+    """Test that from_pickle raises appropriate error for nonexistent file."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        nonexistent_path = os.path.join(temp_dir, "nonexistent_file.pkl")
+        with pytest.raises(ResourceNotFound):
+            SBML_dfs.from_pickle(nonexistent_path)
+
+
+def test_pickle_with_species_data(sbml_dfs):
+    """Test pickle functionality with species_data."""
+    # Use the existing sbml_dfs fixture and add species_data
+
+    # Get actual species IDs from the fixture
+    species_ids = sbml_dfs.species.index.tolist()[:2]  # Use first 2 species
+    
+    # Add species data
+    species_data = pd.DataFrame({
+        "expression": [10.5, 20.3],
+        "confidence": [0.8, 0.9]
+    }, index=species_ids)
+    species_data.index.name = SBML_DFS.S_ID
+    sbml_dfs.add_species_data("test_data", species_data)
+
+    # Save to pickle
+    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as tmp_file:
+        pickle_path = tmp_file.name
+
+    try:
+        sbml_dfs.to_pickle(pickle_path)
+
+        # Load from pickle
+        loaded_sbml_dfs = SBML_dfs.from_pickle(pickle_path)
+
+        # Verify species_data is preserved
+        assert "test_data" in loaded_sbml_dfs.species_data
+        pd.testing.assert_frame_equal(
+            loaded_sbml_dfs.species_data["test_data"],
+            sbml_dfs.species_data["test_data"],
+        )
+
+    finally:
+        # Clean up
+        if os.path.exists(pickle_path):
+            os.unlink(pickle_path)

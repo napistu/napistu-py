@@ -19,7 +19,6 @@ import pandas as pd
 
 from napistu import sbml_dfs_core
 from napistu import source
-from napistu.network import net_create
 from napistu.identifiers import _validate_assets_sbml_ids
 
 if TYPE_CHECKING:
@@ -469,10 +468,10 @@ def read_graph_attrs_spec(graph_attrs_spec_uri: str) -> dict:
         )
 
     if SBML_DFS.REACTIONS in defined_spec_sections:
-        net_create._validate_entity_attrs(graph_attrs_spec[SBML_DFS.REACTIONS])
+        _validate_entity_attrs(graph_attrs_spec[SBML_DFS.REACTIONS])
 
     if SBML_DFS.SPECIES in defined_spec_sections:
-        net_create._validate_entity_attrs(graph_attrs_spec["reactions"])
+        _validate_entity_attrs(graph_attrs_spec[SBML_DFS.SPECIES])
 
     return graph_attrs_spec
 

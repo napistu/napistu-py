@@ -77,6 +77,8 @@ class SBML_dfs:
         Return a deep copy of the SBML_dfs object.
     export_sbml_dfs(model_prefix, outdir, overwrite=False, dogmatic=True)
         Export the SBML_dfs model and its tables to files in a specified directory.
+    from_pickle(path)
+        Load an SBML_dfs from a pickle file.
     get_characteristic_species_ids(dogmatic=True)
         Return characteristic systematic identifiers for molecular species, optionally using a strict or loose definition.
     get_cspecies_features()
@@ -119,6 +121,8 @@ class SBML_dfs:
         Select a species data table from the SBML_dfs object by name.
     species_status(s_id)
         Return all reactions a species participates in, with stoichiometry and formula information.
+    to_pickle(path)
+        Save the SBML_dfs to a pickle file.
     validate()
         Validate the SBML_dfs structure and relationships.
     validate_and_resolve()
@@ -376,6 +380,29 @@ class SBML_dfs:
                 )
 
         return None
+
+    @classmethod
+    def from_pickle(cls, path: str) -> "SBML_dfs":
+        """
+        Load an SBML_dfs from a pickle file.
+
+        Parameters
+        ----------
+        path : str
+            Path to the pickle file
+
+        Returns
+        -------
+        SBML_dfs
+            The loaded SBML_dfs object
+        """
+        sbml_dfs = utils.load_pickle(path)
+        if not isinstance(sbml_dfs, cls):
+            raise ValueError(
+                f"Pickled input is not an SBML_dfs object but {type(sbml_dfs)}: {path}"
+            )
+        
+        return sbml_dfs
 
     def get_characteristic_species_ids(self, dogmatic: bool = True) -> pd.DataFrame:
         """
@@ -1427,6 +1454,17 @@ class SBML_dfs:
         )
 
         return status
+
+    def to_pickle(self, path: str) -> None:
+        """
+        Save the SBML_dfs to a pickle file.
+
+        Parameters
+        ----------
+        path : str
+            Path where to save the pickle file
+        """
+        utils.save_pickle(path, self)
 
     def validate(self):
         """

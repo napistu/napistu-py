@@ -327,7 +327,7 @@ def process_napistu_graph(
 
     logging.info(f"Adding edge weights with an {weighting_strategy} strategy")
 
-    napistu_graph.add_graph_weights(
+    napistu_graph.set_weights(
         weight_by=list(reaction_attrs.keys()),
         weighting_strategy=weighting_strategy,
     )

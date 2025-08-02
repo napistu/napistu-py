@@ -11,6 +11,7 @@ from napistu.sbml_dfs_core import SBML_dfs
 from napistu.network import ng_utils
 from napistu.network import ig_utils
 from napistu.constants import SBML_DFS
+from napistu import utils
 from napistu.network.constants import (
     EDGE_REVERSAL_ATTRIBUTE_MAPPING,
     EDGE_DIRECTION_MAPPING,
@@ -277,6 +278,81 @@ class NapistuGraph(ig.Graph):
         logger.info(
             f"Added {added_count} edge attributes to graph: {list(attrs_to_add)}"
         )
+
+    def set_weights(
+        self,
+        weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
+        weight_by: Optional[list[str]] = None,
+    ) -> None:
+        """
+        Set Graph Weights for this NapistuGraph using a specified weighting strategy.
+
+        Modifies the graph in-place.
+
+        Parameters
+        ----------
+        weight_by : list[str], optional
+            A list of edge attributes to weight by. How these are used depends on the weighting strategy.
+        weighting_strategy : str, optional
+            A network weighting strategy. Options:
+                - 'unweighted': all weights (and upstream_weight for directed graphs) are set to 1.
+                - 'topology': weight edges by the degree of the source nodes favoring nodes emerging from nodes with few connections.
+                - 'mixed': transform edges with a quantitative score based on reaction_attrs; and set edges without quantitative score as a source-specific weight.
+
+        Raises
+        ------
+        ValueError
+            If weighting_strategy is not valid.
+        """
+        # Get the variables to weight by
+
+        if weighting_strategy not in VALID_WEIGHTING_STRATEGIES:
+            raise ValueError(
+                f"weighting_strategy was {weighting_strategy} and must be one of: "
+                f"{', '.join(VALID_WEIGHTING_STRATEGIES)}"
+            )
+
+        if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY:
+            if weight_by is not None:
+                logger.warning(
+                    "weight_by is not used for topology weighting. "
+                    "It will be ignored."
+                )
+
+            self.add_topology_weights()
+
+            # count parents and children and create weights based on them
+            self.es[NAPISTU_GRAPH_EDGES.WEIGHT] = self.es["topo_weights"]
+            if self.is_directed():
+                self.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = self.es[
+                    "upstream_topo_weights"
+                ]
+
+        elif weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED:
+
+            if weight_by is not None:
+                logger.warning(
+                    "weight_by is not used for unweighted weighting. "
+                    "It will be ignored."
+                )
+
+            # set weights as a constant
+            self.es[NAPISTU_GRAPH_EDGES.WEIGHT] = 1
+            if self.is_directed():
+                self.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = 1
+
+        elif weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.MIXED:
+            self._add_graph_weights_mixed(weight_by)
+
+        else:
+            raise NotImplementedError(
+                f"No logic implemented for {weighting_strategy}. This error should not happen."
+            )
+
+        # Set the weighting strategy and weight_by metadata
+        self.set_metadata(weighting_strategy=weighting_strategy, weight_by=weight_by)
+
+        return None
 
     def add_topology_weights(
         self,
@@ -558,6 +634,28 @@ class NapistuGraph(ig.Graph):
 
         return napistu_copy
 
+    @classmethod
+    def from_pickle(cls, path: str) -> "NapistuGraph":
+        """
+        Load a NapistuGraph from a pickle file.
+
+        Parameters
+        ----------
+        path : str
+            Path to the pickle file
+
+        Returns
+        -------
+        NapistuGraph
+            The loaded NapistuGraph object
+        """
+        napistu_graph = utils.load_pickle(path)
+        if not isinstance(napistu_graph, cls):
+            raise ValueError(
+                f"Pickled input is not a NapistuGraph object but {type(napistu_graph)}: {path}"
+            )
+        return napistu_graph
+
     def get_edge_dataframe(self) -> pd.DataFrame:
         """
         Get edges as a Pandas DataFrame.
@@ -719,80 +817,18 @@ class NapistuGraph(ig.Graph):
 
         return None
 
-    def add_graph_weights(
-        self,
-        weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
-        weight_by: Optional[list[str]] = None,
-    ) -> None:
+    def to_pickle(self, path: str) -> None:
         """
-        Add Graph Weights to this NapistuGraph using a specified weighting strategy.
-
-        Modifies the graph in-place.
+        Save the NapistuGraph to a pickle file.
 
         Parameters
         ----------
-        weight_by : list[str], optional
-            A list of edge attributes to weight by. How these are used depends on the weighting strategy.
-        weighting_strategy : str, optional
-            A network weighting strategy. Options:
-                - 'unweighted': all weights (and upstream_weight for directed graphs) are set to 1.
-                - 'topology': weight edges by the degree of the source nodes favoring nodes emerging from nodes with few connections.
-                - 'mixed': transform edges with a quantitative score based on reaction_attrs; and set edges without quantitative score as a source-specific weight.
-
-        Raises
-        ------
-        ValueError
-            If weighting_strategy is not valid.
+        path : str
+            Path where to save the pickle file
         """
-        # Get the variables to weight by
+        utils.save_pickle(path, self)
 
-        if weighting_strategy not in VALID_WEIGHTING_STRATEGIES:
-            raise ValueError(
-                f"weighting_strategy was {weighting_strategy} and must be one of: "
-                f"{', '.join(VALID_WEIGHTING_STRATEGIES)}"
-            )
-
-        if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY:
-            if weight_by is not None:
-                logger.warning(
-                    "weight_by is not used for topology weighting. "
-                    "It will be ignored."
-                )
-
-            self.add_topology_weights()
-
-            # count parents and children and create weights based on them
-            self.es[NAPISTU_GRAPH_EDGES.WEIGHT] = self.es["topo_weights"]
-            if self.is_directed():
-                self.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = self.es[
-                    "upstream_topo_weights"
-                ]
-
-        elif weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED:
-
-            if weight_by is not None:
-                logger.warning(
-                    "weight_by is not used for unweighted weighting. "
-                    "It will be ignored."
-                )
-
-            # set weights as a constant
-            self.es[NAPISTU_GRAPH_EDGES.WEIGHT] = 1
-            if self.is_directed():
-                self.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = 1
-
-        elif weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.MIXED:
-            self._add_graph_weights_mixed(weight_by)
-
-        else:
-            raise NotImplementedError(
-                f"No logic implemented for {weighting_strategy}. This error should not happen."
-            )
-
-        # Set the weighting strategy and weight_by metadata
-        self.set_metadata(weighting_strategy=weighting_strategy, weight_by=weight_by)
-
-        return None
+    ### private methods
 
     def _get_weight_variables(self, weight_by: Optional[list[str]] = None) -> dict:
         """

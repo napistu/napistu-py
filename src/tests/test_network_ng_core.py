@@ -1,8 +1,11 @@
 import logging
+import os
+import tempfile
 import pytest
 
 import igraph as ig
 import pandas as pd
+from fs.errors import ResourceNotFound
 
 from napistu.network.ng_core import NapistuGraph
 from napistu.network.constants import NAPISTU_GRAPH_EDGES
@@ -603,8 +606,8 @@ def test_reverse_edges():
     assert napistu_graph.es[NAPISTU_GRAPH_EDGES.SC_DEGREE] == [1, 2]  # restored
 
 
-def test_add_graph_weights():
-    """Test the add_graph_weights method."""
+def test_set_weights():
+    """Test the set_weights method."""
     import igraph as ig
     from napistu.network.constants import (
         NAPISTU_GRAPH_EDGES,
@@ -626,7 +629,7 @@ def test_add_graph_weights():
     napistu_graph.add_degree_attributes()
 
     # Test unweighted strategy
-    napistu_graph.add_graph_weights(
+    napistu_graph.set_weights(
         weighting_strategy=NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED
     )
 
@@ -635,7 +638,7 @@ def test_add_graph_weights():
     assert napistu_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] == [1, 1]
 
     # Test topology strategy
-    napistu_graph.add_graph_weights(
+    napistu_graph.set_weights(
         weighting_strategy=NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY
     )
 
@@ -648,7 +651,7 @@ def test_add_graph_weights():
         ValueError,
         match="weighting_strategy was invalid_strategy and must be one of: mixed, topology, unweighted",
     ):
-        napistu_graph.add_graph_weights(weighting_strategy="invalid_strategy")
+        napistu_graph.set_weights(weighting_strategy="invalid_strategy")
 
     # Test with reaction attributes set via set_graph_attrs
     napistu_graph_with_attrs = NapistuGraph.from_igraph(g)
@@ -670,7 +673,7 @@ def test_add_graph_weights():
     )
 
     # Test mixed strategy with reaction attributes
-    napistu_graph_with_attrs.add_graph_weights(
+    napistu_graph_with_attrs.set_weights(
         weighting_strategy=NAPISTU_WEIGHTING_STRATEGIES.MIXED
     )
 
@@ -824,3 +827,43 @@ def test_process_napistu_graph_with_reactions_data(sbml_dfs):
     if processed_graph.is_directed():
         upstream_weights = processed_graph.es["upstream_weight"]
         assert all(0.99 <= w < 10 for w in upstream_weights)
+
+
+def test_to_pickle_and_from_pickle(napistu_graph):
+    """Test saving and loading a NapistuGraph via pickle."""
+    # Use the existing napistu_graph fixture
+    # Add some test metadata to verify it's preserved
+    napistu_graph.set_metadata(test_attr="test_value", graph_type="test")
+
+    # Save to pickle
+    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as tmp_file:
+        pickle_path = tmp_file.name
+
+    try:
+        napistu_graph.to_pickle(pickle_path)
+
+        # Load from pickle
+        loaded_graph = NapistuGraph.from_pickle(pickle_path)
+
+        # Verify the loaded graph is identical
+        assert isinstance(loaded_graph, NapistuGraph)
+        assert loaded_graph.vcount() == napistu_graph.vcount()
+        assert loaded_graph.ecount() == napistu_graph.ecount()
+        assert loaded_graph.is_directed() == napistu_graph.is_directed()
+        assert loaded_graph.get_metadata("test_attr") == "test_value"
+        assert loaded_graph.get_metadata("graph_type") == "test"
+
+    finally:
+        # Clean up
+        if os.path.exists(pickle_path):
+            os.unlink(pickle_path)
+
+
+def test_from_pickle_nonexistent_file():
+    """Test that from_pickle raises appropriate error for nonexistent file."""
+    
+    # Create a temporary directory and use a path that definitely doesn't exist
+    with tempfile.TemporaryDirectory() as temp_dir:
+        nonexistent_path = os.path.join(temp_dir, "nonexistent_file.pkl")
+        with pytest.raises(ResourceNotFound):
+            NapistuGraph.from_pickle(nonexistent_path)
