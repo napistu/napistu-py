@@ -442,6 +442,35 @@ def create_neighborhood_dict_entry(
             source_total_counts=source_total_counts,
             verbose=verbose,
         )
+
+        # Check for consistency: reaction_sources should only contain reactions present in neighborhood vertices
+        if reaction_sources is not None:
+            # Get reaction vertices from the neighborhood
+            neighborhood_reaction_ids = set(
+                vertices[
+                    vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE]
+                    == NAPISTU_GRAPH_NODE_TYPES.REACTION
+                ][NAPISTU_GRAPH_VERTICES.NAME]
+            )
+
+            # Get reaction IDs from reaction_sources
+            reaction_source_r_ids = set(reaction_sources[SBML_DFS.R_ID])
+
+            # Find extra reactions that shouldn't be there
+            extra_source_vertices = reaction_source_r_ids - neighborhood_reaction_ids
+
+            if len(extra_source_vertices) > 0:
+                logger.warning(
+                    f"{len(extra_source_vertices)} vertices were present in reaction_sources but not in neighborhood vertices for {sc_id}. "
+                    f"Extra vertices: {list(extra_source_vertices)[:10]}{'...' if len(extra_source_vertices) > 10 else ''}. "
+                    f"This indicates an upstream issue in get_minimal_sources_edges where it's returning reactions not present in the neighborhood."
+                )
+
+                # Filter out the extra reactions to maintain consistency
+                reaction_sources = reaction_sources[
+                    reaction_sources[SBML_DFS.R_ID].isin(neighborhood_reaction_ids)
+                ]
+
     except Exception as e:
         logger.warning(
             f"Could not get reaction sources for {sc_id}; returning None. Error: {e}"

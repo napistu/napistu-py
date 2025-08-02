@@ -8,7 +8,12 @@ import pandas as pd
 from fs.errors import ResourceNotFound
 
 from napistu.network.ng_core import NapistuGraph
-from napistu.network.constants import NAPISTU_GRAPH_EDGES
+from napistu.network.constants import (
+    NAPISTU_GRAPH_EDGES,
+    NAPISTU_GRAPH_VERTICES,
+    NAPISTU_GRAPH_NODE_TYPES,
+)
+from napistu.constants import SBML_DFS
 
 logger = logging.getLogger(__name__)
 
@@ -17,23 +22,121 @@ logger = logging.getLogger(__name__)
 def test_graph():
     """Create a simple test graph."""
     g = ig.Graph()
-    g.add_vertices(3, attributes={"name": ["A", "B", "C"]})
+    g.add_vertices(3, attributes={NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C"]})
     g.add_edges([(0, 1), (1, 2)])
-    g.es["r_id"] = ["R1", "R2"]
+    g.es[SBML_DFS.R_ID] = ["R1", "R2"]
     return NapistuGraph.from_igraph(g)
+
+
+@pytest.fixture
+def mixed_node_types_graph():
+    """Create a graph with both species and reaction nodes for testing node type filtering."""
+    g = ig.Graph()
+    g.add_vertices(
+        6,
+        attributes={
+            NAPISTU_GRAPH_VERTICES.NAME: [
+                "species_A",
+                "species_B",
+                "reaction_1",
+                "reaction_2",
+                "species_C",
+                "reaction_3",
+            ],
+            NAPISTU_GRAPH_VERTICES.NODE_TYPE: [
+                NAPISTU_GRAPH_NODE_TYPES.SPECIES,
+                NAPISTU_GRAPH_NODE_TYPES.SPECIES,
+                NAPISTU_GRAPH_NODE_TYPES.REACTION,
+                NAPISTU_GRAPH_NODE_TYPES.REACTION,
+                NAPISTU_GRAPH_NODE_TYPES.SPECIES,
+                NAPISTU_GRAPH_NODE_TYPES.REACTION,
+            ],
+        },
+    )
+    g.add_edges([(0, 2), (2, 1)])  # species_A -> reaction_1 -> species_B
+    # species_C and reaction_2, reaction_3 are isolated
+    return g
 
 
 def test_remove_isolated_vertices():
     """Test removing isolated vertices from a graph."""
 
     g = ig.Graph()
-    g.add_vertices(5, attributes={"name": ["A", "B", "C", "D", "E"]})
+    g.add_vertices(
+        5, attributes={NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C", "D", "E"]}
+    )
     g.add_edges([(0, 1), (2, 3)])  # A-B, C-D connected; E isolated
 
     napstu_graph = NapistuGraph.from_igraph(g)
-    napstu_graph.remove_isolated_vertices()
+    napstu_graph.remove_isolated_vertices("all")
     assert napstu_graph.vcount() == 4  # Should have 4 vertices after removing E
-    assert "E" not in [v["name"] for v in napstu_graph.vs]  # E should be gone
+    assert "E" not in [
+        v[NAPISTU_GRAPH_VERTICES.NAME] for v in napstu_graph.vs
+    ]  # E should be gone
+
+
+def test_remove_isolated_vertices_with_node_types(mixed_node_types_graph):
+    """Test removing isolated vertices with node type filtering."""
+
+    # Test default behavior (remove only reactions)
+    napstu_graph = NapistuGraph.from_igraph(mixed_node_types_graph)
+
+    # Test default behavior (remove only reactions)
+    napstu_graph.remove_isolated_vertices()
+    assert napstu_graph.vcount() == 4  # Should remove reaction_2 and reaction_3
+    remaining_names = [v[NAPISTU_GRAPH_VERTICES.NAME] for v in napstu_graph.vs]
+    assert "species_C" in remaining_names  # species singleton should remain
+    assert "reaction_2" not in remaining_names  # reaction singleton should be removed
+    assert "reaction_3" not in remaining_names  # reaction singleton should be removed
+
+    # Test removing only species
+    napstu_graph2 = NapistuGraph.from_igraph(mixed_node_types_graph)
+    napstu_graph2.remove_isolated_vertices(SBML_DFS.SPECIES)
+    assert (
+        napstu_graph2.vcount() == 5
+    )  # Should remove species_C, keep reaction_2 and reaction_3
+    remaining_names2 = [v[NAPISTU_GRAPH_VERTICES.NAME] for v in napstu_graph2.vs]
+    assert "species_C" not in remaining_names2  # species singleton should be removed
+    assert "reaction_2" in remaining_names2  # reaction singleton should remain
+    assert "reaction_3" in remaining_names2  # reaction singleton should remain
+
+    # Test removing only reactions
+    napstu_graph2_reactions = NapistuGraph.from_igraph(mixed_node_types_graph)
+    napstu_graph2_reactions.remove_isolated_vertices(SBML_DFS.REACTIONS)
+    assert (
+        napstu_graph2_reactions.vcount() == 4
+    )  # Should remove reaction_2 and reaction_3, keep species_C
+    remaining_names2_reactions = [
+        v[NAPISTU_GRAPH_VERTICES.NAME] for v in napstu_graph2_reactions.vs
+    ]
+    assert "species_C" in remaining_names2_reactions  # species singleton should remain
+    assert (
+        "reaction_2" not in remaining_names2_reactions
+    )  # reaction singleton should be removed
+    assert (
+        "reaction_3" not in remaining_names2_reactions
+    )  # reaction singleton should be removed
+
+    # Test removing all
+    napstu_graph3 = NapistuGraph.from_igraph(mixed_node_types_graph)
+    napstu_graph3.remove_isolated_vertices("all")
+    assert (
+        napstu_graph3.vcount() == 3
+    )  # Should remove species_C, reaction_2, reaction_3
+    remaining_names3 = [v[NAPISTU_GRAPH_VERTICES.NAME] for v in napstu_graph3.vs]
+    assert "species_C" not in remaining_names3
+    assert "reaction_2" not in remaining_names3
+    assert "reaction_3" not in remaining_names3
+
+    # Test that ValueError is raised when node_type attribute is missing
+    g4 = ig.Graph()
+    g4.add_vertices(3, attributes={NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C"]})
+    g4.add_edges([(0, 1)])  # A-B connected; C isolated
+
+    napstu_graph4 = NapistuGraph.from_igraph(g4)
+
+    with pytest.raises(ValueError, match="Cannot filter by reactions"):
+        napstu_graph4.remove_isolated_vertices(SBML_DFS.REACTIONS)
 
 
 def test_to_pandas_dfs():
