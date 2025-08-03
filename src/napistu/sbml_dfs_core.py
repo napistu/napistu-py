@@ -3,15 +3,12 @@ from __future__ import annotations
 import copy
 import logging
 import re
-from typing import Any
-from typing import Iterable
-from typing import Mapping
-from typing import MutableMapping
-from typing import TYPE_CHECKING
-from typing import Optional
-from typing import Union
+import warnings
+from typing import Any, Iterable, Mapping, MutableMapping, TYPE_CHECKING, Optional, Union
 
-from fs import open_fs
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+    from fs import open_fs
 import pandas as pd
 
 from napistu import identifiers

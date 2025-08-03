@@ -4,11 +4,16 @@ import datetime
 import logging
 import os
 import random
+import warnings
 from io import StringIO
 from typing import Iterable
 
 import pandas as pd
 import requests
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+    from fs import open_fs
+
 from napistu import indices
 from napistu import sbml_dfs_core
 from napistu import utils
@@ -18,7 +23,6 @@ from napistu.ingestion.constants import REACTOME_PATHWAY_INDEX_COLUMNS
 from napistu.ingestion.constants import REACTOME_PATHWAY_LIST_COLUMNS
 from napistu.ingestion.constants import REACTOME_PATHWAYS_URL
 from napistu.ingestion.constants import REACTOME_SMBL_URL
-from fs import open_fs
 
 logger = logging.getLogger(__name__)
 

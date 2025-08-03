@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import os
+import warnings
 from typing import Any
 
-from fs import open_fs
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+    from fs import open_fs
 import numpy as np
 import pandas as pd
 

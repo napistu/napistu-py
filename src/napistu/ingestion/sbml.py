@@ -3,11 +3,14 @@ from __future__ import annotations
 import logging
 import os
 import re
+import warnings
 from typing import Any
 
 import libsbml
 import pandas as pd
-from fs import open_fs
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+    from fs import open_fs
 from pydantic import field_validator, RootModel
 
 from napistu import consensus

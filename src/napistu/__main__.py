@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import pickle
+import warnings
 from typing import Sequence
 
 import click
@@ -12,6 +13,10 @@ import click_logging
 import napistu
 import igraph as ig
 import pandas as pd
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+    from fs import open_fs
+
 from napistu import consensus as napistu_consensus
 from napistu import indices
 from napistu.sbml_dfs_core import SBML_dfs
@@ -42,7 +47,6 @@ from napistu.constants import RESOLVE_MATCHES_AGGREGATORS
 from napistu.ingestion.constants import PROTEINATLAS_SUBCELL_LOC_URL
 from napistu.ingestion.constants import GTEX_RNASEQ_EXPRESSION_URL
 from napistu.network.constants import NAPISTU_GRAPH_EDGES
-from fs import open_fs
 
 logger = logging.getLogger(napistu.__name__)
 click_logging.basic_config(logger)

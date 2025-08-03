@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import os
+import warnings
 from itertools import chain
 
 import pandas as pd
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+    from fs import open_fs
+
 from napistu import identifiers
 from napistu import sbml_dfs_core
 from napistu import source
@@ -23,7 +28,6 @@ from napistu.ingestion.constants import TRRUST_UNIPROT_ID
 from napistu.ingestion.constants import TTRUST_URL_RAW_DATA_HUMAN
 from napistu.ingestion.constants import TRRUST_SIGNS
 from napistu.rpy2 import callr
-from fs import open_fs
 
 
 def download_trrust(target_uri: str) -> None:

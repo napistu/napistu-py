@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import logging
 import pandas as pd
-from fs import open_fs
-from napistu import utils
+import warnings
 
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+    from fs import open_fs
+
+from napistu import utils
 from napistu.constants import ONTOLOGIES
 from napistu.ingestion.constants import GTEX_DEFS, GTEX_RNASEQ_EXPRESSION_URL
 

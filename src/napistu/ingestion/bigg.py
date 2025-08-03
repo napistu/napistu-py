@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 from typing import Iterable
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+    from fs import open_fs
 
 from napistu import indices
 from napistu import sbml_dfs_core
@@ -12,7 +17,6 @@ from napistu.ontologies.renaming import rename_species_ontologies
 from napistu.ingestion.constants import BIGG_MODEL_KEYS
 from napistu.ingestion.constants import BIGG_MODEL_URLS
 from napistu.ingestion.constants import LATIN_SPECIES_NAMES
-from fs import open_fs
 
 logger = logging.getLogger(__name__)
 

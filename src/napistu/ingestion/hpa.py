@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import logging
+import warnings
+
 import pandas as pd
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+    from fs import open_fs
+
 from napistu import utils
-from fs import open_fs
 from napistu.constants import ONTOLOGIES
 from napistu.ingestion.constants import PROTEINATLAS_SUBCELL_LOC_URL, PROTEINATLAS_DEFS
 

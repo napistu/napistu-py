@@ -1,8 +1,11 @@
 from __future__ import annotations
 import logging
+import warnings
 
 import pandas as pd
-from fs import open_fs
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+    from fs import open_fs
 
 from napistu import identifiers
 from napistu import sbml_dfs_core

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import copy
-
 import logging
 import re
 from typing import Any, Optional, Iterable
-from fs import open_fs
+import warnings
 
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+    from fs import open_fs
 import numpy as np
 import pandas as pd
+
 from napistu import utils
 from napistu import identifiers
 from napistu import indices
