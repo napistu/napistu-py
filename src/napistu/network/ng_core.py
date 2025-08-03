@@ -31,19 +31,13 @@ logger = logging.getLogger(__name__)
 
 class NapistuGraph(ig.Graph):
     """
-    A subclass of igraph.Graph with additional functionality for molecular network analysis.
+    NapistuGraph - Molecular Network Analysis Graph.
 
+    A subclass of igraph.Graph with additional functionality for molecular network analysis.
     This class extends igraph.Graph with domain-specific methods and metadata tracking
     for biological pathway and molecular interaction networks. All standard igraph
-    methods are available, plus additional functionality for edge reversal and
-    metadata management.
-
-    Parameters
-    ----------
-    *args : tuple
-        Positional arguments passed to igraph.Graph constructor
-    **kwargs : dict
-        Keyword arguments passed to igraph.Graph constructor
+    methods are available, plus additional functionality for edge reversal, weighting,
+    and metadata management.
 
     Attributes
     ----------
@@ -53,19 +47,62 @@ class NapistuGraph(ig.Graph):
         Type of graph (e.g., 'bipartite', 'regulatory', 'surrogate')
     weighting_strategy : str or None
         Strategy used for edge weighting (e.g., 'topology', 'mixed')
+    weight_by : list[str] or None
+        List of attributes used for edge weighting
 
-    Methods
-    -------
-    from_igraph(graph, **metadata)
-        Create a NapistuGraph from an existing igraph.Graph
-    reverse_edges()
-        Reverse all edges in the graph in-place
-    set_metadata(**kwargs)
-        Set metadata for the graph in-place
-    get_metadata(key=None)
-        Get metadata from the graph
+    Public Methods (alphabetical)
+    ----------------------------
+    add_degree_attributes()
+        Add degree-based attributes to vertices and edges.
+    add_edge_data(sbml_dfs, mode='fresh', overwrite=False)
+        Add edge data from SBML_dfs to the graph.
+    add_topology_weights(base_score=2, protein_multiplier=1, metabolite_multiplier=3, unknown_multiplier=10, scale_multiplier_by_meandegree=True)
+        Add topology-based weights to graph edges.
     copy()
-        Create a deep copy of the NapistuGraph
+        Create a deep copy of the NapistuGraph.
+    from_igraph(graph, **metadata)
+        Create a NapistuGraph from an existing igraph.Graph.
+    from_pickle(path)
+        Load a NapistuGraph from a pickle file.
+    get_edge_dataframe()
+        Return graph edges as a pandas DataFrame.
+    get_metadata(key=None)
+        Get metadata from the graph.
+    get_vertex_dataframe()
+        Return graph vertices as a pandas DataFrame.
+    remove_isolated_vertices(node_types='reactions')
+        Remove isolated vertices from the graph.
+    reverse_edges()
+        Reverse all edges in the graph in-place.
+    set_graph_attrs(graph_attrs, mode='fresh', overwrite=False)
+        Set graph attributes from SBML_dfs or dictionary.
+    set_metadata(**kwargs)
+        Set metadata for the graph in-place.
+    set_weights(weighting_strategy='unweighted', weight_by=None, reaction_edge_multiplier=0.5)
+        Set edge weights using various strategies.
+    to_pandas_dfs()
+        Convert graph to pandas DataFrames for vertices and edges.
+    to_pickle(path)
+        Save the NapistuGraph to a pickle file.
+    transform_edges(keep_raw_attributes=False, custom_transformations=None)
+        Transform edge attributes using predefined or custom transformations.
+    validate()
+        Validate the graph structure and metadata.
+
+    Private/Hidden Methods (alphabetical, appear after public methods)
+    -----------------------------------------------------------------
+    _add_graph_weights_mixed(weight_by=None)
+        Add mixed weighting strategy to graph edges.
+    _apply_reaction_edge_multiplier(multiplier=0.5)
+        Apply multiplier to reaction edges.
+    _compare_and_merge_attrs(new_attrs, attr_type, mode='fresh', overwrite=False)
+        Compare and merge attributes with existing ones.
+    _create_source_weights(edges_df, source_wt_var='source_wt', source_vars_dict=SOURCE_VARS_DICT, source_wt_default=1)
+        Create source-based weights for edges.
+    _get_entity_attrs(entity_type)
+        Get entity-specific attributes from metadata.
+    _get_weight_variables(weight_by=None)
+        Get weight variables for edge weighting.
 
     Examples
     --------
@@ -79,7 +116,7 @@ class NapistuGraph(ig.Graph):
 
     >>> import igraph as ig
     >>> g = ig.Graph.Erdos_Renyi(10, 0.3)
-    >>> ng = NapistuGraph.from_igraph(g, graph_type='random')
+    >>> ng = NapistuGraph.from_igraph(g, wiring_approach='regulatory')
 
     Reverse edges and check state:
 
@@ -280,33 +317,44 @@ class NapistuGraph(ig.Graph):
             f"Added {added_count} edge attributes to graph: {list(attrs_to_add)}"
         )
 
+        return None
+
     def set_weights(
         self,
         weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
-        weight_by: Optional[list[str]] = None,
+        weight_by: list[str] | None = None,
+        reaction_edge_multiplier: float = 0.5,
     ) -> None:
         """
         Set Graph Weights for this NapistuGraph using a specified weighting strategy.
 
-        Modifies the graph in-place.
+        Modifies the graph in-place. Now includes functionality to downweight edges
+        connected to reaction vertices to account for increased path lengths through
+        reaction intermediates (e.g., S → R → P vs direct S → P).
 
-        Parameters
-        ----------
-        weight_by : list[str], optional
-            A list of edge attributes to weight by. How these are used depends on the weighting strategy.
-        weighting_strategy : str, optional
-            A network weighting strategy. Options:
-                - 'unweighted': all weights (and upstream_weight for directed graphs) are set to 1.
-                - 'topology': weight edges by the degree of the source nodes favoring nodes emerging from nodes with few connections.
-                - 'mixed': transform edges with a quantitative score based on reaction_attrs; and set edges without quantitative score as a source-specific weight.
+        Parameters:
+            weight_by (list[str], optional): A list of edge attributes to weight by.
+                How these are used depends on the weighting strategy.
+            weighting_strategy (str, optional): A network weighting strategy. Options:
+                'unweighted': all weights (and upstream_weight for directed graphs) are set to 1.
+                'topology': weight edges by the degree of the source nodes favoring nodes
+                    emerging from nodes with few connections.
+                'mixed': transform edges with a quantitative score based on reaction_attrs;
+                    and set edges without quantitative score as a source-specific weight.
+            reaction_edge_multiplier (float, optional): Factor to multiply weights of edges
+                connected to reaction vertices. Default 0.5 reduces reaction edge weights
+                by 50% to normalize path lengths. Set to 1.0 to disable this feature.
 
-        Raises
-        ------
-        ValueError
-            If weighting_strategy is not valid.
+        Raises:
+            ValueError: If weighting_strategy is not valid.
+
+        Notes:
+            The reaction_edge_multiplier addresses the issue where SBML-derived networks
+            have paths like S → R → P (length 2) compared to direct protein interactions
+            S → P (length 1). A multiplier of 0.5 makes these path costs equivalent.
         """
-        # Get the variables to weight by
 
+        # Apply base weighting strategy first
         if weighting_strategy not in VALID_WEIGHTING_STRATEGIES:
             raise ValueError(
                 f"weighting_strategy was {weighting_strategy} and must be one of: "
@@ -350,7 +398,11 @@ class NapistuGraph(ig.Graph):
                 f"No logic implemented for {weighting_strategy}. This error should not happen."
             )
 
-        # Set the weighting strategy and weight_by metadata
+        # Apply reaction edge multiplier if not 1.0
+        if reaction_edge_multiplier != 1.0:
+            self._apply_reaction_edge_multiplier(reaction_edge_multiplier)
+
+        # Update metadata to track weighting configuration
         self.set_metadata(weighting_strategy=weighting_strategy, weight_by=weight_by)
 
         return None
@@ -861,153 +913,6 @@ class NapistuGraph(ig.Graph):
 
         return None
 
-    def to_pickle(self, path: str) -> None:
-        """
-        Save the NapistuGraph to a pickle file.
-
-        Parameters
-        ----------
-        path : str
-            Path where to save the pickle file
-        """
-        utils.save_pickle(path, self)
-
-    ### private methods
-
-    def _get_weight_variables(self, weight_by: Optional[list[str]] = None) -> dict:
-        """
-        Get the variables to weight by, either from weight_by or reaction_attrs.
-
-        Parameters
-        ----------
-        weight_by : list[str], optional
-            A list of edge attributes to weight by. If None, uses reaction_attrs from metadata.
-
-        Returns
-        -------
-        dict
-            Dictionary of reaction attributes to use for weighting.
-
-        Raises
-        ------
-        ValueError
-            If no weights are available or if specified weights do not exist as edge attributes.
-        """
-        if weight_by is None:
-            # Use reaction attributes from stored metadata
-            reaction_attrs = self._get_entity_attrs(SBML_DFS.REACTIONS)
-            if reaction_attrs is None or not reaction_attrs:
-                raise ValueError(
-                    "No reaction_attrs found. Use set_graph_attrs() to configure reaction attributes "
-                    "or add_reaction_data() to add reaction attributes."
-                )
-            return reaction_attrs
-        else:
-            # Use specified weight_by attributes
-            logger.info(f"Using weight_by attributes: {weight_by}")
-
-            # Ensure all attributes are present in the graph
-            existing_edge_attrs = set(self.es.attributes())
-            missing_attrs = set(weight_by) - existing_edge_attrs
-
-            if missing_attrs:
-                raise ValueError(
-                    f"Edge attributes not found in graph: {missing_attrs}. "
-                    "Please weight by an existing attribute with `weight_by` or use "
-                    "`add_reaction_data()` to configure reaction attributes."
-                )
-
-            # Create a simple reaction_attrs dict from the weight_by attributes
-            # This maintains compatibility with the existing weighting logic
-            return {
-                attr: {"table": "edge", "variable": attr, "trans": "identity"}
-                for attr in weight_by
-            }
-
-    def _add_graph_weights_mixed(self, weight_by: Optional[list[str]] = None) -> None:
-        """
-        Weight this NapistuGraph using a mixed approach combining source-specific weights and existing edge weights.
-
-        Modifies the graph in-place.
-        """
-        # Get the variables to weight by
-        reaction_attrs = self._get_weight_variables(weight_by)
-        edges_df = self.get_edge_dataframe()
-
-        # Use the already-transformed edge data (transformations should have been applied in transform_edges)
-        edges_df = self._create_source_weights(edges_df, NAPISTU_GRAPH_EDGES.SOURCE_WT)
-
-        score_vars = list(reaction_attrs.keys())
-        score_vars.append(NAPISTU_GRAPH_EDGES.SOURCE_WT)
-
-        logger.info(f"Creating mixed scores based on {', '.join(score_vars)}")
-
-        edges_df[NAPISTU_GRAPH_EDGES.WEIGHT] = edges_df[score_vars].min(axis=1)
-
-        self.es[NAPISTU_GRAPH_EDGES.WEIGHT] = edges_df[NAPISTU_GRAPH_EDGES.WEIGHT]
-        if self.is_directed():
-            self.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = edges_df[
-                NAPISTU_GRAPH_EDGES.WEIGHT
-            ]
-
-        # add other attributes and update transformed attributes
-        self.es[NAPISTU_GRAPH_EDGES.SOURCE_WT] = edges_df[NAPISTU_GRAPH_EDGES.SOURCE_WT]
-        for k in reaction_attrs.keys():
-            self.es[k] = edges_df[k]
-
-        return None
-
-    def _create_source_weights(
-        self,
-        edges_df: pd.DataFrame,
-        source_wt_var: str = NAPISTU_GRAPH_EDGES.SOURCE_WT,
-        source_vars_dict: dict = SOURCE_VARS_DICT,
-        source_wt_default: float = 1,
-    ) -> pd.DataFrame:
-        """
-        Create weights based on an edge's source.
-
-        Parameters
-        ----------
-        edges_df : pd.DataFrame
-            The edges dataframe to add the source weights to.
-        source_wt_var : str, optional
-            The name of the column to store the source weights. Default is "source_wt".
-        source_vars_dict : dict, optional
-            Dictionary with keys indicating edge attributes and values indicating the weight to assign to that attribute. Default is SOURCE_VARS_DICT.
-        source_wt_default : float, optional
-            The default weight to assign to an edge if no other weight attribute is found. Default is 0.5.
-
-        Returns
-        -------
-        pd.DataFrame
-            The edges dataframe with the source weights added.
-        """
-        # Check if any source variables are present in the dataframe
-        included_weight_vars = set(source_vars_dict.keys()).intersection(
-            set(edges_df.columns)
-        )
-        if len(included_weight_vars) == 0:
-            logger.warning(
-                f"No edge attributes were found which match those in source_vars_dict: {', '.join(source_vars_dict.keys())}"
-            )
-            edges_df[source_wt_var] = source_wt_default
-            return edges_df
-
-        # Create source weights based on available variables
-        edges_df_source_wts = edges_df[list(included_weight_vars)].copy()
-        for wt in list(included_weight_vars):
-            edges_df_source_wts[wt] = [
-                source_wt_default if x is True else source_vars_dict[wt]
-                for x in edges_df[wt].isna()
-            ]
-
-        source_wt_edges_df = edges_df.join(
-            edges_df_source_wts.max(axis=1).rename(source_wt_var)
-        )
-
-        return source_wt_edges_df
-
     def set_metadata(self, **kwargs) -> None:
         """
         Set metadata for the graph.
@@ -1035,6 +940,17 @@ class NapistuGraph(ig.Graph):
             A table with one row per edge.
         """
         return ig_utils.graph_to_pandas_dfs(self)
+
+    def to_pickle(self, path: str) -> None:
+        """
+        Save the NapistuGraph to a pickle file.
+
+        Parameters
+        ----------
+        path : str
+            Path where to save the pickle file
+        """
+        utils.save_pickle(path, self)
 
     def transform_edges(
         self,
@@ -1220,6 +1136,8 @@ class NapistuGraph(ig.Graph):
         else:
             raise ValueError("species_type attribute is missing from all vertices")
 
+    ### private methods
+
     def __str__(self) -> str:
         """String representation including metadata."""
         base_str = super().__str__()
@@ -1233,6 +1151,87 @@ class NapistuGraph(ig.Graph):
     def __repr__(self) -> str:
         """Detailed representation."""
         return self.__str__()
+
+    def _add_graph_weights_mixed(self, weight_by: Optional[list[str]] = None) -> None:
+        """
+        Weight this NapistuGraph using a mixed approach combining source-specific weights and existing edge weights.
+
+        Modifies the graph in-place.
+        """
+        # Get the variables to weight by
+        reaction_attrs = self._get_weight_variables(weight_by)
+        edges_df = self.get_edge_dataframe()
+
+        # Use the already-transformed edge data (transformations should have been applied in transform_edges)
+        edges_df = self._create_source_weights(edges_df, NAPISTU_GRAPH_EDGES.SOURCE_WT)
+
+        score_vars = list(reaction_attrs.keys())
+        score_vars.append(NAPISTU_GRAPH_EDGES.SOURCE_WT)
+
+        logger.info(f"Creating mixed scores based on {', '.join(score_vars)}")
+
+        edges_df[NAPISTU_GRAPH_EDGES.WEIGHT] = edges_df[score_vars].min(axis=1)
+
+        self.es[NAPISTU_GRAPH_EDGES.WEIGHT] = edges_df[NAPISTU_GRAPH_EDGES.WEIGHT]
+        if self.is_directed():
+            self.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = edges_df[
+                NAPISTU_GRAPH_EDGES.WEIGHT
+            ]
+
+        # add other attributes and update transformed attributes
+        self.es[NAPISTU_GRAPH_EDGES.SOURCE_WT] = edges_df[NAPISTU_GRAPH_EDGES.SOURCE_WT]
+        for k in reaction_attrs.keys():
+            self.es[k] = edges_df[k]
+
+        return None
+
+    def _apply_reaction_edge_multiplier(self, multiplier: float = 0.5) -> None:
+        """
+        Apply multiplier to edges connected to reaction vertices.
+
+        This method modifies edge weights to account for path length differences
+        between reaction-mediated connections (S → R → P) and direct connections (S → P).
+
+        Parameters:
+            multiplier (float): Factor to multiply edge weights by. Values < 1.0
+                decrease weights, values > 1.0 increase weights.
+
+        Notes:
+            - Modifies both 'weight' and 'upstream_weight' attributes if they exist
+            - Only affects edges that connect to/from reaction vertices
+            - Preserves relative weight differences within modified edges
+        """
+        # Get reaction vertex indices and edges connected to them in one step
+        reaction_vertices = {
+            v.index
+            for v in self.vs
+            if v.attributes().get(NAPISTU_GRAPH_VERTICES.NODE_TYPE)
+            == NAPISTU_GRAPH_NODE_TYPES.REACTION
+        }
+        edges_to_modify = [
+            e.index
+            for e in self.es
+            if e.source in reaction_vertices or e.target in reaction_vertices
+        ]
+
+        if not edges_to_modify:
+            # No reaction vertices found, nothing to modify
+            return
+
+        for edge_idx in edges_to_modify:
+            edge = self.es[edge_idx]
+
+            # Modify 'weight' attribute if it exists
+            if NAPISTU_GRAPH_EDGES.WEIGHT in edge.attributes():
+                current_weight = edge[NAPISTU_GRAPH_EDGES.WEIGHT]
+                edge[NAPISTU_GRAPH_EDGES.WEIGHT] = current_weight * multiplier
+
+            # Modify 'upstream_weight' attribute if it exists (for directed graphs)
+            if NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT in edge.attributes():
+                current_upstream = edge[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT]
+                edge[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = (
+                    current_upstream * multiplier
+                )
 
     def _compare_and_merge_attrs(
         self,
@@ -1286,6 +1285,57 @@ class NapistuGraph(ig.Graph):
         else:
             raise ValueError(f"Unknown mode: {mode}. Must be 'fresh' or 'extend'")
 
+    def _create_source_weights(
+        self,
+        edges_df: pd.DataFrame,
+        source_wt_var: str = NAPISTU_GRAPH_EDGES.SOURCE_WT,
+        source_vars_dict: dict = SOURCE_VARS_DICT,
+        source_wt_default: float = 1,
+    ) -> pd.DataFrame:
+        """
+        Create weights based on an edge's source.
+
+        Parameters
+        ----------
+        edges_df : pd.DataFrame
+            The edges dataframe to add the source weights to.
+        source_wt_var : str, optional
+            The name of the column to store the source weights. Default is "source_wt".
+        source_vars_dict : dict, optional
+            Dictionary with keys indicating edge attributes and values indicating the weight to assign to that attribute. Default is SOURCE_VARS_DICT.
+        source_wt_default : float, optional
+            The default weight to assign to an edge if no other weight attribute is found. Default is 0.5.
+
+        Returns
+        -------
+        pd.DataFrame
+            The edges dataframe with the source weights added.
+        """
+        # Check if any source variables are present in the dataframe
+        included_weight_vars = set(source_vars_dict.keys()).intersection(
+            set(edges_df.columns)
+        )
+        if len(included_weight_vars) == 0:
+            logger.warning(
+                f"No edge attributes were found which match those in source_vars_dict: {', '.join(source_vars_dict.keys())}"
+            )
+            edges_df[source_wt_var] = source_wt_default
+            return edges_df
+
+        # Create source weights based on available variables
+        edges_df_source_wts = edges_df[list(included_weight_vars)].copy()
+        for wt in list(included_weight_vars):
+            edges_df_source_wts[wt] = [
+                source_wt_default if x is True else source_vars_dict[wt]
+                for x in edges_df[wt].isna()
+            ]
+
+        source_wt_edges_df = edges_df.join(
+            edges_df_source_wts.max(axis=1).rename(source_wt_var)
+        )
+
+        return source_wt_edges_df
+
     def _get_entity_attrs(self, entity_type: str) -> Optional[dict]:
         """
         Get entity attributes (species or reactions) from graph metadata.
@@ -1319,6 +1369,56 @@ class NapistuGraph(ig.Graph):
         # Validate and let any exceptions propagate
         ng_utils._validate_entity_attrs(entity_attrs)
         return entity_attrs
+
+    def _get_weight_variables(self, weight_by: Optional[list[str]] = None) -> dict:
+        """
+        Get the variables to weight by, either from weight_by or reaction_attrs.
+
+        Parameters
+        ----------
+        weight_by : list[str], optional
+            A list of edge attributes to weight by. If None, uses reaction_attrs from metadata.
+
+        Returns
+        -------
+        dict
+            Dictionary of reaction attributes to use for weighting.
+
+        Raises
+        ------
+        ValueError
+            If no weights are available or if specified weights do not exist as edge attributes.
+        """
+        if weight_by is None:
+            # Use reaction attributes from stored metadata
+            reaction_attrs = self._get_entity_attrs(SBML_DFS.REACTIONS)
+            if reaction_attrs is None or not reaction_attrs:
+                raise ValueError(
+                    "No reaction_attrs found. Use set_graph_attrs() to configure reaction attributes "
+                    "or add_reaction_data() to add reaction attributes."
+                )
+            return reaction_attrs
+        else:
+            # Use specified weight_by attributes
+            logger.info(f"Using weight_by attributes: {weight_by}")
+
+            # Ensure all attributes are present in the graph
+            existing_edge_attrs = set(self.es.attributes())
+            missing_attrs = set(weight_by) - existing_edge_attrs
+
+            if missing_attrs:
+                raise ValueError(
+                    f"Edge attributes not found in graph: {missing_attrs}. "
+                    "Please weight by an existing attribute with `weight_by` or use "
+                    "`add_reaction_data()` to configure reaction attributes."
+                )
+
+            # Create a simple reaction_attrs dict from the weight_by attributes
+            # This maintains compatibility with the existing weighting logic
+            return {
+                attr: {"table": "edge", "variable": attr, "trans": "identity"}
+                for attr in weight_by
+            }
 
 
 def _apply_edge_reversal_mapping(edges_df: pd.DataFrame) -> pd.DataFrame:

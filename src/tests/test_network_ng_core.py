@@ -10,8 +10,11 @@ from fs.errors import ResourceNotFound
 from napistu.network.ng_core import NapistuGraph
 from napistu.network.constants import (
     NAPISTU_GRAPH_EDGES,
-    NAPISTU_GRAPH_VERTICES,
     NAPISTU_GRAPH_NODE_TYPES,
+    GRAPH_WIRING_APPROACHES,
+    NAPISTU_GRAPH_VERTICES,
+    NAPISTU_METADATA_KEYS,
+    NAPISTU_WEIGHTING_STRATEGIES,
 )
 from napistu.constants import SBML_DFS
 
@@ -527,13 +530,15 @@ def test_add_degree_attributes(test_graph):
     """Test add_degree_attributes method functionality."""
     # Create a more complex test graph with multiple edges to test degree calculations
     g = ig.Graph()
-    g.add_vertices(5, attributes={"name": ["A", "B", "C", "D", "R00001"]})
+    g.add_vertices(
+        5, attributes={NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C", "D", "R00001"]}
+    )
     g.add_edges(
         [(0, 1), (1, 2), (2, 3), (0, 2), (3, 4)]
     )  # A->B, B->C, C->D, A->C, D->R00001
-    g.es["from"] = ["A", "B", "C", "A", "D"]
-    g.es["to"] = ["B", "C", "D", "C", "R00001"]
-    g.es["r_id"] = ["R1", "R2", "R3", "R4", "R5"]
+    g.es[NAPISTU_GRAPH_EDGES.FROM] = ["A", "B", "C", "A", "D"]
+    g.es[NAPISTU_GRAPH_EDGES.TO] = ["B", "C", "D", "C", "R00001"]
+    g.es[NAPISTU_GRAPH_EDGES.R_ID] = ["R1", "R2", "R3", "R4", "R5"]
 
     napistu_graph = NapistuGraph.from_igraph(g)
 
@@ -556,19 +561,28 @@ def test_add_degree_attributes(test_graph):
     # Node R00001: 0 children, 1 parent (D) -> degree = 1 (but filtered out)
 
     # Check edge A->B: should have A's degree (2 children, 0 parents = 2)
-    edge_a_to_b = edges_df[(edges_df["from"] == "A") & (edges_df["to"] == "B")].iloc[0]
+    edge_a_to_b = edges_df[
+        (edges_df[NAPISTU_GRAPH_EDGES.FROM] == "A")
+        & (edges_df[NAPISTU_GRAPH_EDGES.TO] == "B")
+    ].iloc[0]
     assert edge_a_to_b[NAPISTU_GRAPH_EDGES.SC_DEGREE] == 2
     assert edge_a_to_b[NAPISTU_GRAPH_EDGES.SC_CHILDREN] == 2
     assert edge_a_to_b[NAPISTU_GRAPH_EDGES.SC_PARENTS] == 0
 
     # Check edge B->C: should have B's degree (1 child, 1 parent = 2)
-    edge_b_to_c = edges_df[(edges_df["from"] == "B") & (edges_df["to"] == "C")].iloc[0]
+    edge_b_to_c = edges_df[
+        (edges_df[NAPISTU_GRAPH_EDGES.FROM] == "B")
+        & (edges_df[NAPISTU_GRAPH_EDGES.TO] == "C")
+    ].iloc[0]
     assert edge_b_to_c[NAPISTU_GRAPH_EDGES.SC_DEGREE] == 2
     assert edge_b_to_c[NAPISTU_GRAPH_EDGES.SC_CHILDREN] == 1
     assert edge_b_to_c[NAPISTU_GRAPH_EDGES.SC_PARENTS] == 1
 
     # Check edge C->D: should have C's degree (1 child, 2 parents = 3)
-    edge_c_to_d = edges_df[(edges_df["from"] == "C") & (edges_df["to"] == "D")].iloc[0]
+    edge_c_to_d = edges_df[
+        (edges_df[NAPISTU_GRAPH_EDGES.FROM] == "C")
+        & (edges_df[NAPISTU_GRAPH_EDGES.TO] == "D")
+    ].iloc[0]
     assert edge_c_to_d[NAPISTU_GRAPH_EDGES.SC_DEGREE] == 3
     assert edge_c_to_d[NAPISTU_GRAPH_EDGES.SC_CHILDREN] == 1
     assert edge_c_to_d[NAPISTU_GRAPH_EDGES.SC_PARENTS] == 2
@@ -576,7 +590,8 @@ def test_add_degree_attributes(test_graph):
     # Check edge D->R00001: should have D's degree (1 child, 1 parent = 2)
     # Note: R00001 is a reaction node, so we use D's degree
     edge_d_to_r = edges_df[
-        (edges_df["from"] == "D") & (edges_df["to"] == "R00001")
+        (edges_df[NAPISTU_GRAPH_EDGES.FROM] == "D")
+        & (edges_df[NAPISTU_GRAPH_EDGES.TO] == "R00001")
     ].iloc[0]
     assert edge_d_to_r[NAPISTU_GRAPH_EDGES.SC_DEGREE] == 2
     assert edge_d_to_r[NAPISTU_GRAPH_EDGES.SC_CHILDREN] == 1
@@ -595,11 +610,11 @@ def test_add_degree_attributes_pathological_case(test_graph):
     """Test add_degree_attributes method handles pathological case correctly."""
     # Create a test graph
     g = ig.Graph()
-    g.add_vertices(3, attributes={"name": ["A", "B", "C"]})
+    g.add_vertices(3, attributes={NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C"]})
     g.add_edges([(0, 1), (1, 2)])  # A->B, B->C
-    g.es["from"] = ["A", "B"]
-    g.es["to"] = ["B", "C"]
-    g.es["r_id"] = ["R1", "R2"]
+    g.es[NAPISTU_GRAPH_EDGES.FROM] = ["A", "B"]
+    g.es[NAPISTU_GRAPH_EDGES.TO] = ["B", "C"]
+    g.es[NAPISTU_GRAPH_EDGES.R_ID] = ["R1", "R2"]
 
     napistu_graph = NapistuGraph.from_igraph(g)
 
@@ -633,7 +648,7 @@ def test_reverse_edges():
 
     # Create test graph with edge attributes
     g = ig.Graph(directed=True)
-    g.add_vertices(3, attributes={"name": ["A", "B", "C"]})
+    g.add_vertices(3, attributes={NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C"]})
     g.add_edges([(0, 1), (1, 2)])  # A->B->C
 
     # Add attributes that should be swapped
@@ -719,7 +734,7 @@ def test_set_weights():
 
     # Create a simple test graph
     g = ig.Graph(directed=True)
-    g.add_vertices(3, attributes={"name": ["A", "B", "C"]})
+    g.add_vertices(3, attributes={NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C"]})
     g.add_edges([(0, 1), (1, 2)])  # A->B->C
 
     # Add basic edge attributes
@@ -793,7 +808,7 @@ def test_get_weight_variables():
 
     # Create a test graph
     g = ig.Graph(directed=True)
-    g.add_vertices(2, attributes={"name": ["A", "B"]})
+    g.add_vertices(2, attributes={NAPISTU_GRAPH_VERTICES.NAME: ["A", "B"]})
     g.add_edges([(0, 1)])
     g.es[NAPISTU_GRAPH_EDGES.FROM] = ["A"]
     g.es[NAPISTU_GRAPH_EDGES.TO] = ["B"]
@@ -853,7 +868,7 @@ def test_process_napistu_graph_with_reactions_data(sbml_dfs):
     string_data = pd.DataFrame(
         {"combined_score": combined_scores}, index=subset_reactions
     )
-    string_data.index.name = "r_id"
+    string_data.index.name = SBML_DFS.R_ID
 
     # Add the reactions data to sbml_dfs
     sbml_dfs.add_reactions_data("string", string_data)
@@ -873,7 +888,7 @@ def test_process_napistu_graph_with_reactions_data(sbml_dfs):
     processed_graph = process_napistu_graph(
         sbml_dfs=sbml_dfs,
         directed=True,
-        wiring_approach="bipartite",
+        wiring_approach=GRAPH_WIRING_APPROACHES.BIPARTITE,
         weighting_strategy=NAPISTU_WEIGHTING_STRATEGIES.MIXED,
         reaction_graph_attrs=reaction_graph_attrs,
         verbose=False,
@@ -888,16 +903,22 @@ def test_process_napistu_graph_with_reactions_data(sbml_dfs):
     assert "string_wt" in processed_graph.es.attributes()
 
     # Check that weights were applied
-    assert "weight" in processed_graph.es.attributes()
+    assert NAPISTU_GRAPH_EDGES.WEIGHT in processed_graph.es.attributes()
     if processed_graph.is_directed():
-        assert "upstream_weight" in processed_graph.es.attributes()
+        assert NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT in processed_graph.es.attributes()
 
     # Check that source_wt was created (part of mixed strategy)
-    assert "source_wt" in processed_graph.es.attributes()
+    assert NAPISTU_GRAPH_EDGES.SOURCE_WT in processed_graph.es.attributes()
 
     # Verify the graph has the expected metadata
-    assert processed_graph.get_metadata("wiring_approach") == "bipartite"
-    assert processed_graph.get_metadata("weighting_strategy") == "mixed"
+    assert (
+        processed_graph.get_metadata(NAPISTU_METADATA_KEYS.WIRING_APPROACH)
+        == GRAPH_WIRING_APPROACHES.BIPARTITE
+    )
+    assert (
+        processed_graph.get_metadata(NAPISTU_METADATA_KEYS.WEIGHTING_STRATEGY)
+        == NAPISTU_WEIGHTING_STRATEGIES.MIXED
+    )
 
     # Check that transformed string weights are in the correct range (≥1 and ≤6.67 for string_inv)
     string_weights = processed_graph.es["string_wt"]
@@ -910,7 +931,7 @@ def test_process_napistu_graph_with_reactions_data(sbml_dfs):
     # Check that source weights are correct:
     # - 10 if string_wt is not None (has string data)
     # - 1 if string_wt is None (no string data)
-    source_weights = processed_graph.es["source_wt"]
+    source_weights = processed_graph.es[NAPISTU_GRAPH_EDGES.SOURCE_WT]
     for i, (sw, str_wt) in enumerate(zip(source_weights, string_weights)):
         if pd.notna(str_wt):
             assert (
@@ -922,12 +943,12 @@ def test_process_napistu_graph_with_reactions_data(sbml_dfs):
             ), f"Source weight should be 1 when string_wt is None, got {sw} at edge {i}"
 
     # Check that final weights are in the correct range (≥1 and <10)
-    final_weights = processed_graph.es["weight"]
-    assert all(0.99 <= w < 10 for w in final_weights)
+    final_weights = processed_graph.es[NAPISTU_GRAPH_EDGES.WEIGHT]
+    assert all(0.49 <= w < 10 for w in final_weights)
 
     if processed_graph.is_directed():
-        upstream_weights = processed_graph.es["upstream_weight"]
-        assert all(0.99 <= w < 10 for w in upstream_weights)
+        upstream_weights = processed_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT]
+        assert all(0.49 <= w < 10 for w in upstream_weights)
 
 
 @pytest.mark.skip_on_windows
@@ -970,3 +991,47 @@ def test_from_pickle_nonexistent_file():
         nonexistent_path = os.path.join(temp_dir, "nonexistent_file.pkl")
         with pytest.raises(ResourceNotFound):
             NapistuGraph.from_pickle(nonexistent_path)
+
+
+def test_reaction_edge_weighting():
+    """Test reaction edge downweighting functionality."""
+    # Create a simple test graph: A → R1 → B and C → D (direct)
+    ng = NapistuGraph(directed=True)
+    ng.add_vertices(
+        5, attributes={NAPISTU_GRAPH_VERTICES.NAME: ["A", "R1", "B", "C", "D"]}
+    )
+    # Set node_types: R1 is a reaction, others are species
+    ng.vs[1][
+        NAPISTU_GRAPH_VERTICES.NODE_TYPE
+    ] = NAPISTU_GRAPH_NODE_TYPES.REACTION  # R1 is a reaction
+    ng.add_edges([(0, 1), (1, 2), (3, 4)])  # A→R1, R1→B, C→D
+
+    # Test with default multiplier (0.5)
+    ng.set_weights(weighting_strategy=NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED)
+
+    # Check that reaction edges have reduced weights
+    edges_df = ng.get_edge_dataframe()
+
+    # Path A→R1→B should have total cost of 1.0 (0.5 + 0.5)
+    # Path C→D should have cost of 1.0
+    assert edges_df.loc[0, NAPISTU_GRAPH_EDGES.WEIGHT] == 0.5  # A→R1
+    assert edges_df.loc[1, NAPISTU_GRAPH_EDGES.WEIGHT] == 0.5  # R1→B
+    assert edges_df.loc[2, NAPISTU_GRAPH_EDGES.WEIGHT] == 1.0  # C→D (no reaction)
+
+    # Check that upstream_weight is also modified for directed graphs
+    assert edges_df.loc[0, NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] == 0.5  # A→R1
+    assert edges_df.loc[1, NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] == 0.5  # R1→B
+    assert (
+        edges_df.loc[2, NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] == 1.0
+    )  # C→D (no reaction)
+
+    # Test disabling the feature
+    ng.set_weights(
+        weighting_strategy=NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
+        reaction_edge_multiplier=1.0,
+    )
+    edges_df = ng.get_edge_dataframe()
+
+    # All edges should have weight 1.0
+    assert all(edges_df[NAPISTU_GRAPH_EDGES.WEIGHT] == 1.0)
+    assert all(edges_df[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] == 1.0)
