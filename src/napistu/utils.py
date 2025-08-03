@@ -11,6 +11,7 @@ import requests
 import shutil
 import urllib.request as request
 import zipfile
+import warnings
 from contextlib import closing
 from itertools import starmap
 from textwrap import fill
@@ -25,15 +26,18 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-from fs import open_fs
-from fs.copy import copy_dir
-from fs.copy import copy_file
-from fs.copy import copy_fs
-from fs.errors import CreateFailed
-from fs.errors import ResourceNotFound
-from fs.tarfs import TarFS
-from fs.tempfs import TempFS
-from fs.zipfs import ZipFS
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+    from fs import open_fs
+    from fs.copy import copy_dir
+    from fs.copy import copy_file
+    from fs.copy import copy_fs
+    from fs.errors import CreateFailed
+    from fs.errors import ResourceNotFound
+    from fs.tarfs import TarFS
+    from fs.tempfs import TempFS
+    from fs.zipfs import ZipFS
 
 from napistu.constants import FILE_EXT_GZ
 from napistu.constants import FILE_EXT_ZIP

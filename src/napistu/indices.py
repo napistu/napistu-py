@@ -4,10 +4,13 @@ import copy
 import os
 import re
 import datetime
+import warnings
 from os import PathLike
 from typing import Iterable
 
-from fs import open_fs
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+    from fs import open_fs
 import pandas as pd
 
 from napistu.utils import path_exists

@@ -51,6 +51,7 @@ NAPISTU_GRAPH_EDGES = SimpleNamespace(
     TO="to",
     UPSTREAM_WEIGHT="upstream_weight",
     WEIGHT="weight",
+    SOURCE_WT="source_wt",
 )
 
 # added during graph wiring

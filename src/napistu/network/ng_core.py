@@ -20,6 +20,7 @@ from napistu.network.constants import (
     NAPISTU_METADATA_KEYS,
     WEIGHTING_SPEC,
     NAPISTU_GRAPH_VERTICES,
+    NAPISTU_GRAPH_NODE_TYPES,
     NAPISTU_WEIGHTING_STRATEGIES,
     VALID_WEIGHTING_STRATEGIES,
     SOURCE_VARS_DICT,
@@ -741,10 +742,22 @@ class NapistuGraph(ig.Graph):
             )
             self.set_metadata(reaction_attrs=merged_reactions)
 
-    def remove_isolated_vertices(self):
+    def remove_isolated_vertices(self, node_types: str = SBML_DFS.REACTIONS):
         """
         Remove vertices that have no edges (degree 0) from the graph.
 
+        By default, only removes reaction singletons since these are not included
+        in wiring by-construction for interaction edges. Species singletons may
+        reflect that their reactions were specifically removed (e.g., water if
+        cofactors are removed).
+
+        Parameters
+        ----------
+        node_types : str, default="reactions"
+            Which type of isolated vertices to remove. Options:
+            - "reactions": Remove only isolated reaction vertices (default)
+            - "species": Remove only isolated species vertices
+            - "all": Remove all isolated vertices regardless of type
 
         Returns
         -------
@@ -760,28 +773,59 @@ class NapistuGraph(ig.Graph):
             logger.info("No isolated vertices found to remove")
             return
 
+        # Filter by node type if specified
+        if node_types in [SBML_DFS.REACTIONS, SBML_DFS.SPECIES]:
+            # Check if node_type attribute exists
+            if NAPISTU_GRAPH_VERTICES.NODE_TYPE not in self.vs.attributes():
+                raise ValueError(
+                    f"Cannot filter by {node_types} - {NAPISTU_GRAPH_VERTICES.NODE_TYPE} "
+                    "attribute not found. Please add the node_type attribute to the graph."
+                )
+            else:
+                # Filter to only the specified type
+                target_type = (
+                    NAPISTU_GRAPH_NODE_TYPES.REACTION
+                    if node_types == SBML_DFS.REACTIONS
+                    else NAPISTU_GRAPH_NODE_TYPES.SPECIES
+                )
+                filtered_vertices = isolated_vertices.select(
+                    **{NAPISTU_GRAPH_VERTICES.NODE_TYPE: target_type}
+                )
+        elif node_types == "all":
+            filtered_vertices = isolated_vertices
+        else:
+            raise ValueError(
+                f"Invalid node_types: {node_types}. "
+                f"Must be one of: 'reactions', 'species', 'all'"
+            )
+
+        if len(filtered_vertices) == 0:
+            logger.info(f"No isolated {node_types} vertices found to remove")
+            return
+
         # Get vertex names/indices for logging (up to 5 examples)
         vertex_names = []
-        for v in isolated_vertices[:5]:
+        for v in filtered_vertices[:5]:
             # Use vertex name if available, otherwise use index
             name = (
-                v["name"]
-                if "name" in v.attributes() and v["name"] is not None
+                v[NAPISTU_GRAPH_VERTICES.NAME]
+                if NAPISTU_GRAPH_VERTICES.NAME in v.attributes()
+                and v[NAPISTU_GRAPH_VERTICES.NAME] is not None
                 else str(v.index)
             )
             vertex_names.append(name)
 
         # Create log message
         examples_str = ", ".join(f"'{name}'" for name in vertex_names)
-        if len(isolated_vertices) > 5:
-            examples_str += f" (and {len(isolated_vertices) - 5} more)"
+        if len(filtered_vertices) > 5:
+            examples_str += f" (and {len(filtered_vertices) - 5} more)"
 
         logger.info(
-            f"Removed {len(isolated_vertices)} isolated vertices: [{examples_str}]"
+            f"Removed {len(filtered_vertices)} isolated {node_types} vertices: [{examples_str}]"
         )
 
-        # Remove the isolated vertices
-        self.delete_vertices(isolated_vertices)
+        # Remove the filtered isolated vertices
+        self.delete_vertices(filtered_vertices)
 
     def reverse_edges(self) -> None:
         """
@@ -891,10 +935,10 @@ class NapistuGraph(ig.Graph):
         edges_df = self.get_edge_dataframe()
 
         # Use the already-transformed edge data (transformations should have been applied in transform_edges)
-        edges_df = self._create_source_weights(edges_df, "source_wt")
+        edges_df = self._create_source_weights(edges_df, NAPISTU_GRAPH_EDGES.SOURCE_WT)
 
         score_vars = list(reaction_attrs.keys())
-        score_vars.append("source_wt")
+        score_vars.append(NAPISTU_GRAPH_EDGES.SOURCE_WT)
 
         logger.info(f"Creating mixed scores based on {', '.join(score_vars)}")
 
@@ -907,7 +951,7 @@ class NapistuGraph(ig.Graph):
             ]
 
         # add other attributes and update transformed attributes
-        self.es["source_wt"] = edges_df["source_wt"]
+        self.es[NAPISTU_GRAPH_EDGES.SOURCE_WT] = edges_df[NAPISTU_GRAPH_EDGES.SOURCE_WT]
         for k in reaction_attrs.keys():
             self.es[k] = edges_df[k]
 
@@ -916,9 +960,9 @@ class NapistuGraph(ig.Graph):
     def _create_source_weights(
         self,
         edges_df: pd.DataFrame,
-        source_wt_var: str = "source_wt",
+        source_wt_var: str = NAPISTU_GRAPH_EDGES.SOURCE_WT,
         source_vars_dict: dict = SOURCE_VARS_DICT,
-        source_wt_default: int = 1,
+        source_wt_default: float = 1,
     ) -> pd.DataFrame:
         """
         Create weights based on an edge's source.
@@ -931,8 +975,8 @@ class NapistuGraph(ig.Graph):
             The name of the column to store the source weights. Default is "source_wt".
         source_vars_dict : dict, optional
             Dictionary with keys indicating edge attributes and values indicating the weight to assign to that attribute. Default is SOURCE_VARS_DICT.
-        source_wt_default : int, optional
-            The default weight to assign to an edge if no other weight attribute is found. Default is 1.
+        source_wt_default : float, optional
+            The default weight to assign to an edge if no other weight attribute is found. Default is 0.5.
 
         Returns
         -------
