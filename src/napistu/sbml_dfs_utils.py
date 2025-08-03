@@ -190,6 +190,18 @@ def construct_formula_string(
         )
     ]
 
+    if all(
+        reaction_species_df[SBML_DFS.SBO_TERM]
+        == MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
+    ):
+        labels = reaction_species_df["label"].tolist()
+        if len(labels) != 2:
+            logger.warning(
+                f"Reaction {reaction_species_df[SBML_DFS.R_ID].iloc[0]} has {len(labels)} species, expected 2"
+            )
+            return None
+        return f"{labels[0]} ---- {labels[1]}"
+
     rxn_reversible = bool(
         reactions_df.loc[
             reaction_species_df[SBML_DFS.R_ID].iloc[0], SBML_DFS.R_ISREVERSIBLE
@@ -210,9 +222,13 @@ def construct_formula_string(
             reaction_species_df[SBML_DFS.STOICHIOMETRY] < 0
         ].tolist()
     )
+    product_sbo_terms = [
+        MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
+        MINI_SBO_FROM_NAME[SBOTERM_NAMES.MODIFIER],
+    ]
     products = " + ".join(
         reaction_species_df["label"][
-            reaction_species_df[SBML_DFS.STOICHIOMETRY] > 0
+            reaction_species_df[SBML_DFS.SBO_TERM].isin(product_sbo_terms)
         ].tolist()
     )
     modifiers = " + ".join(
@@ -220,6 +236,7 @@ def construct_formula_string(
             reaction_species_df[SBML_DFS.STOICHIOMETRY] == 0
         ].tolist()
     )
+
     if modifiers != "":
         modifiers = f" ---- modifiers: {modifiers}]"
 

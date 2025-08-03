@@ -8,10 +8,10 @@ from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS,
     BQB_DEFINING_ATTRS_LOOSE,
-    SBML_DFS,
     IDENTIFIERS,
     POLARITIES,
     POLARITY_TO_SYMBOL,
+    SBML_DFS,
     SBOTERM_NAMES,
     VALID_SBO_TERMS,
     VALID_SBO_TERM_NAMES,
@@ -544,3 +544,99 @@ def test_add_edgelist_defaults():
             INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME
         ]
     )
+
+
+def test_construct_formula_string():
+    """Test construct_formula_string with various scenarios."""
+
+    # Test pure interactor reaction (A ---- B format)
+    reaction_species_df = pd.DataFrame(
+        {
+            SBML_DFS.R_ID: ["R001", "R001"],
+            SBML_DFS.SC_ID: ["SC001", "SC002"],
+            SBML_DFS.STOICHIOMETRY: [0, 0],
+            SBML_DFS.SBO_TERM: [
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR],
+            ],
+            "sc_name": ["Protein A", "Protein B"],
+            SBML_DFS.RSC_ID: ["RSC001", "RSC002"],
+        }
+    )
+    reactions_df = pd.DataFrame({SBML_DFS.R_ISREVERSIBLE: [False]}, index=["R001"])
+
+    formula_str = sbml_dfs_utils.construct_formula_string(
+        reaction_species_df, reactions_df, name_var="sc_name"
+    )
+    assert formula_str == "Protein A ---- Protein B"
+
+    # Test mixed reaction with modifiers
+    reaction_species_df = pd.DataFrame(
+        {
+            SBML_DFS.R_ID: ["R002", "R002", "R002", "R002"],
+            SBML_DFS.SC_ID: ["SC003", "SC004", "SC005", "SC006"],
+            SBML_DFS.STOICHIOMETRY: [-1, -1, 1, 0],
+            SBML_DFS.SBO_TERM: [
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.CATALYST],
+            ],
+            "sc_name": ["Substrate1", "Substrate2", "Product1", "Catalyst"],
+            SBML_DFS.RSC_ID: ["RSC003", "RSC004", "RSC005", "RSC006"],
+        }
+    )
+    reactions_df = pd.DataFrame({SBML_DFS.R_ISREVERSIBLE: [False]}, index=["R002"])
+
+    formula_str = sbml_dfs_utils.construct_formula_string(
+        reaction_species_df, reactions_df, name_var="sc_name"
+    )
+    assert (
+        "Substrate1 + Substrate2 -> Product1 ---- modifiers: Catalyst]" in formula_str
+    )
+
+    # Test too many interactors (should return None)
+    reaction_species_df = pd.DataFrame(
+        {
+            SBML_DFS.R_ID: ["R003", "R003", "R003"],
+            SBML_DFS.SC_ID: ["SC007", "SC008", "SC009"],
+            SBML_DFS.STOICHIOMETRY: [0, 0, 0],
+            SBML_DFS.SBO_TERM: [
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR],
+            ],
+            "sc_name": ["Protein A", "Protein B", "Protein C"],
+            SBML_DFS.RSC_ID: ["RSC007", "RSC008", "RSC009"],
+        }
+    )
+    reactions_df = pd.DataFrame({SBML_DFS.R_ISREVERSIBLE: [False]}, index=["R003"])
+
+    formula_str = sbml_dfs_utils.construct_formula_string(
+        reaction_species_df, reactions_df, name_var="sc_name"
+    )
+    assert formula_str is None
+
+
+def test_reaction_formulas(sbml_dfs):
+    """Test reaction_formulas method with various inputs."""
+    # Test single reaction
+    first_r_id = sbml_dfs.reactions.index[0]
+    formulas = sbml_dfs.reaction_formulas(r_ids=first_r_id)
+    assert isinstance(formulas, pd.Series)
+    assert len(formulas) == 1
+    assert first_r_id in formulas.index
+
+    # Test multiple reactions
+    r_ids = sbml_dfs.reactions.index[:2].tolist()
+    formulas = sbml_dfs.reaction_formulas(r_ids=r_ids)
+    assert len(formulas) == 2
+    assert all(r_id in formulas.index for r_id in r_ids)
+
+    # Test all reactions (default)
+    formulas = sbml_dfs.reaction_formulas()
+    assert len(formulas) == len(sbml_dfs.reactions)
+
+    # Test invalid IDs
+    with pytest.raises(ValueError, match="Reaction IDs.*not found"):
+        sbml_dfs.reaction_formulas(r_ids=["invalid_id"])

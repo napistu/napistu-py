@@ -935,10 +935,10 @@ class NapistuGraph(ig.Graph):
         edges_df = self.get_edge_dataframe()
 
         # Use the already-transformed edge data (transformations should have been applied in transform_edges)
-        edges_df = self._create_source_weights(edges_df, "source_wt")
+        edges_df = self._create_source_weights(edges_df, NAPISTU_GRAPH_EDGES.SOURCE_WT)
 
         score_vars = list(reaction_attrs.keys())
-        score_vars.append("source_wt")
+        score_vars.append(NAPISTU_GRAPH_EDGES.SOURCE_WT)
 
         logger.info(f"Creating mixed scores based on {', '.join(score_vars)}")
 
@@ -951,7 +951,7 @@ class NapistuGraph(ig.Graph):
             ]
 
         # add other attributes and update transformed attributes
-        self.es["source_wt"] = edges_df["source_wt"]
+        self.es[NAPISTU_GRAPH_EDGES.SOURCE_WT] = edges_df[NAPISTU_GRAPH_EDGES.SOURCE_WT]
         for k in reaction_attrs.keys():
             self.es[k] = edges_df[k]
 
@@ -960,9 +960,9 @@ class NapistuGraph(ig.Graph):
     def _create_source_weights(
         self,
         edges_df: pd.DataFrame,
-        source_wt_var: str = "source_wt",
+        source_wt_var: str = NAPISTU_GRAPH_EDGES.SOURCE_WT,
         source_vars_dict: dict = SOURCE_VARS_DICT,
-        source_wt_default: int = 1,
+        source_wt_default: float = 1,
     ) -> pd.DataFrame:
         """
         Create weights based on an edge's source.
@@ -975,8 +975,8 @@ class NapistuGraph(ig.Graph):
             The name of the column to store the source weights. Default is "source_wt".
         source_vars_dict : dict, optional
             Dictionary with keys indicating edge attributes and values indicating the weight to assign to that attribute. Default is SOURCE_VARS_DICT.
-        source_wt_default : int, optional
-            The default weight to assign to an edge if no other weight attribute is found. Default is 1.
+        source_wt_default : float, optional
+            The default weight to assign to an edge if no other weight attribute is found. Default is 0.5.
 
         Returns
         -------
