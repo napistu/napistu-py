@@ -113,7 +113,7 @@ def find_and_prune_neighborhoods(
         )
 
     if isinstance(precomputed_distances, pd.DataFrame):
-        logger.info("Pre-computed neighbors based on precomputed_distances")
+        logger.info("Finding neighbors based on precomputed_distances")
 
         precomputed_neighbors = _precompute_neighbors(
             compartmentalized_species,
@@ -139,6 +139,14 @@ def find_and_prune_neighborhoods(
     )
 
     pruned_neighborhoods = prune_neighborhoods(neighborhood_dicts, top_n=top_n)
+
+    # Validate each neighborhood for consistency
+    for sc_id, neighborhood in pruned_neighborhoods.items():
+        if (
+            NEIGHBORHOOD_DICT_KEYS.VERTICES in neighborhood
+            and NEIGHBORHOOD_DICT_KEYS.EDGES in neighborhood
+        ):
+            _validate_neighborhood_consistency(neighborhood, sc_id)
 
     return pruned_neighborhoods
 
@@ -356,6 +364,164 @@ def find_neighborhoods(
     return neighborhood_dict
 
 
+def _process_path_information(
+    neighborhood_graph: ig.Graph,
+    one_neighborhood_df: pd.DataFrame,
+    sc_id: str,
+    edges: pd.DataFrame,
+    vertices: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """
+    Process shortest path information and merge with vertices/edges.
+
+    Handles the complex path-finding logic and attribute merging that was
+    cluttering the main function.
+    """
+    # Find paths to neighbors
+    (
+        downstream_path_attrs,
+        downstream_entity_dict,
+        upstream_path_attrs,
+        upstream_entity_dict,
+    ) = _find_neighbors_paths(
+        neighborhood_graph,
+        one_neighborhood_df,
+        sc_id,
+        edges,
+    )
+
+    # Combine upstream and downstream shortest paths
+    vertex_neighborhood_attrs = (
+        pd.concat([downstream_path_attrs, upstream_path_attrs])
+        .sort_values(DISTANCES.PATH_WEIGHT)
+        .groupby("neighbor")
+        .first()
+    )
+    # Label the focal node
+    vertex_neighborhood_attrs.loc[sc_id, "node_orientation"] = GRAPH_RELATIONSHIPS.FOCAL
+
+    # Validate expected attributes are present
+    EXPECTED_VERTEX_ATTRS = {
+        DISTANCES.FINAL_FROM,
+        DISTANCES.FINAL_TO,
+        NET_POLARITY.NET_POLARITY,
+    }
+    missing_vertex_attrs = EXPECTED_VERTEX_ATTRS.difference(
+        set(vertex_neighborhood_attrs.columns.tolist())
+    )
+
+    if len(missing_vertex_attrs) > 0:
+        raise ValueError(
+            f"vertex_neighborhood_attrs did not contain the expected columns: {EXPECTED_VERTEX_ATTRS}."
+            "This is likely because of inconsistencies between the precomputed distances, graph and/or sbml_dfs."
+            "Please try ng_utils.validate_assets() to check for consistency."
+        )
+
+    # Add net_polarity to edges
+    edges = edges.merge(
+        vertex_neighborhood_attrs.reset_index()[
+            [DISTANCES.FINAL_FROM, DISTANCES.FINAL_TO, NET_POLARITY.NET_POLARITY]
+        ].dropna(),
+        left_on=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO],
+        right_on=[DISTANCES.FINAL_FROM, DISTANCES.FINAL_TO],
+        how="left",
+    )
+
+    # Merge path attributes with vertices
+    vertices = vertices.merge(
+        vertex_neighborhood_attrs, left_on=NAPISTU_GRAPH_VERTICES.NAME, right_index=True
+    )
+
+    # Package path entities
+    neighborhood_path_entities = {
+        NEIGHBORHOOD_NETWORK_TYPES.DOWNSTREAM: downstream_entity_dict,
+        NEIGHBORHOOD_NETWORK_TYPES.UPSTREAM: upstream_entity_dict,
+    }
+
+    return vertices, edges, neighborhood_path_entities
+
+
+def _clean_disconnected_components(
+    vertices: pd.DataFrame,
+    edges: pd.DataFrame,
+    reaction_sources: pd.DataFrame | None,
+    sc_id: str,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame | None]:
+    """
+    Remove disconnected components and filter related data structures.
+
+    Handles the cleanup logic for removing nodes that couldn't be reached
+    from the focal node and updating all related data structures accordingly.
+    """
+
+    # Find disconnected neighbors (path weight = 0, not focal node)
+    disconnected_neighbors = vertices.query(
+        f"(not node_orientation == '{GRAPH_RELATIONSHIPS.FOCAL}') and {DISTANCES.PATH_WEIGHT} == 0"
+    )
+
+    # Filter vertices
+    vertices = vertices[~vertices.index.isin(disconnected_neighbors.index.tolist())]
+
+    # Filter edges to only include those between remaining vertices
+    vertex_names = vertices[NAPISTU_GRAPH_VERTICES.NAME]
+    edges = edges[
+        edges[NAPISTU_GRAPH_EDGES.FROM].isin(vertex_names)
+        & edges[NAPISTU_GRAPH_EDGES.TO].isin(vertex_names)
+    ]
+
+    # Filter reaction sources if present
+    if reaction_sources is not None:
+        reaction_sources = reaction_sources[
+            reaction_sources[SBML_DFS.R_ID].isin(vertex_names)
+        ]
+
+    _validate_neighborhood_consistency(
+        {
+            NEIGHBORHOOD_DICT_KEYS.VERTICES: vertices,
+            NEIGHBORHOOD_DICT_KEYS.EDGES: edges,
+            NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES: reaction_sources,
+        },
+        sc_id,
+    )
+
+    return vertices, edges, reaction_sources
+
+
+def _build_final_result(
+    vertices: pd.DataFrame,
+    edges: pd.DataFrame,
+    reaction_sources: pd.DataFrame | None,
+    neighborhood_path_entities: dict,
+    napistu_graph: ig.Graph,
+    sbml_dfs,
+) -> dict[str, Any]:
+    """
+    Build the final result dictionary with all required components.
+
+    Handles the final assembly of the neighborhood result, including
+    adding reference URLs and creating the updated graph.
+    """
+    # Add reference urls
+    vertices = add_vertices_uri_urls(vertices, sbml_dfs)
+
+    # Create updated graph with additional vertex and edge attributes
+    updated_napistu_graph = ig.Graph.DictList(
+        vertices=vertices.to_dict("records"),
+        edges=edges.to_dict("records"),
+        directed=napistu_graph.is_directed(),
+        vertex_name_attr=NAPISTU_GRAPH_VERTICES.NAME,
+        edge_foreign_keys=(NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO),
+    )
+
+    return {
+        NEIGHBORHOOD_DICT_KEYS.GRAPH: updated_napistu_graph,
+        NEIGHBORHOOD_DICT_KEYS.VERTICES: vertices,
+        NEIGHBORHOOD_DICT_KEYS.EDGES: edges,
+        NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES: reaction_sources,
+        NEIGHBORHOOD_DICT_KEYS.NEIGHBORHOOD_PATH_ENTITIES: neighborhood_path_entities,
+    }
+
+
 def create_neighborhood_dict_entry(
     sc_id: str,
     neighborhood_df: pd.DataFrame,
@@ -406,6 +572,7 @@ def create_neighborhood_dict_entry(
             focal node.
     """
 
+    # Extract neighborhood data and validate
     one_neighborhood_df = neighborhood_df[neighborhood_df[SBML_DFS.SC_ID] == sc_id]
 
     if verbose:
@@ -417,7 +584,7 @@ def create_neighborhood_dict_entry(
             By convention it should be part of its neighborhood"
         )
 
-    # create the subgraph formed by filtering to neighborhoods
+    # Create the subgraph
     neighborhood_graph = napistu_graph.subgraph(
         napistu_graph.vs[one_neighborhood_df["neighbor"]], implementation="auto"
     )
@@ -425,7 +592,7 @@ def create_neighborhood_dict_entry(
     vertices = pd.DataFrame([v.attributes() for v in neighborhood_graph.vs])
     edges = pd.DataFrame([e.attributes() for e in neighborhood_graph.es])
 
-    # add edge polarity: whether edges are activating, inhibiting or unknown
+    # Add edge polarity
     if edges.shape[0] > 0:
         edges[NET_POLARITY.LINK_POLARITY] = (
             edges[SBML_DFS.SBO_TERM]
@@ -433,144 +600,43 @@ def create_neighborhood_dict_entry(
             .map(MINI_SBO_NAME_TO_POLARITY)
         )
 
+    # Get reaction sources with error handling
     try:
         reaction_sources = ng_utils.get_minimal_sources_edges(
             vertices.rename(columns={NAPISTU_GRAPH_VERTICES.NAME: "node"}),
             sbml_dfs,
             min_pw_size=min_pw_size,
-            # optional, counts of sources across the whole model
             source_total_counts=source_total_counts,
             verbose=verbose,
         )
-
-        # Check for consistency: reaction_sources should only contain reactions present in neighborhood vertices
-        if reaction_sources is not None:
-            # Get reaction vertices from the neighborhood
-            neighborhood_reaction_ids = set(
-                vertices[
-                    vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE]
-                    == NAPISTU_GRAPH_NODE_TYPES.REACTION
-                ][NAPISTU_GRAPH_VERTICES.NAME]
-            )
-
-            # Get reaction IDs from reaction_sources
-            reaction_source_r_ids = set(reaction_sources[SBML_DFS.R_ID])
-
-            # Find extra reactions that shouldn't be there
-            extra_source_vertices = reaction_source_r_ids - neighborhood_reaction_ids
-
-            if len(extra_source_vertices) > 0:
-                logger.warning(
-                    f"{len(extra_source_vertices)} vertices were present in reaction_sources but not in neighborhood vertices for {sc_id}. "
-                    f"Extra vertices: {list(extra_source_vertices)[:10]}{'...' if len(extra_source_vertices) > 10 else ''}. "
-                    f"This indicates an upstream issue in get_minimal_sources_edges where it's returning reactions not present in the neighborhood."
-                )
-
-                # Filter out the extra reactions to maintain consistency
-                reaction_sources = reaction_sources[
-                    reaction_sources[SBML_DFS.R_ID].isin(neighborhood_reaction_ids)
-                ]
-
     except Exception as e:
         logger.warning(
             f"Could not get reaction sources for {sc_id}; returning None. Error: {e}"
         )
         reaction_sources = None
 
-    # to add weights to the network solve the shortest path problem
-    # from the focal node to each neighbor
-    # solve this problem separately whether a given neighbor is an
-    # ancestor or descendant
+    # Process path information (extracted utility function)
+    vertices, edges, neighborhood_path_entities = _process_path_information(
+        neighborhood_graph, one_neighborhood_df, sc_id, edges, vertices
+    )
 
-    (
-        downstream_path_attrs,
-        downstream_entity_dict,
-        upstream_path_attrs,
-        upstream_entity_dict,
-    ) = _find_neighbors_paths(
-        neighborhood_graph,
-        one_neighborhood_df,
-        sc_id,
+    # Clean up disconnected components (extracted utility function)
+    vertices, edges, reaction_sources = _clean_disconnected_components(
+        vertices, edges, reaction_sources, sc_id
+    )
+
+    # Build final result (extracted utility function)
+    outdict = _build_final_result(
+        vertices,
         edges,
+        reaction_sources,
+        neighborhood_path_entities,
+        napistu_graph,
+        sbml_dfs,
     )
 
-    # combine upstream and downstream shortest paths
-    # in cases a node is upstream and downstream of the focal node
-    # by taking the lowest path weight
-    vertex_neighborhood_attrs = (
-        pd.concat([downstream_path_attrs, upstream_path_attrs])
-        .sort_values(DISTANCES.PATH_WEIGHT)
-        .groupby("neighbor")
-        .first()
-    )
-    # label the focal node
-    vertex_neighborhood_attrs.loc[sc_id, "node_orientation"] = GRAPH_RELATIONSHIPS.FOCAL
-
-    # if the precomputed distances, graph and/or sbml_dfs are inconsistent
-    # then the shortest paths search may just return empty lists
-    # throw a clearer error message in this case.
-    EXPECTED_VERTEX_ATTRS = {
-        DISTANCES.FINAL_FROM,
-        DISTANCES.FINAL_TO,
-        NET_POLARITY.NET_POLARITY,
-    }
-    missing_vertex_attrs = EXPECTED_VERTEX_ATTRS.difference(
-        set(vertex_neighborhood_attrs.columns.tolist())
-    )
-
-    if len(missing_vertex_attrs) > 0:
-        raise ValueError(
-            f"vertex_neighborhood_attrs did not contain the expected columns: {EXPECTED_VERTEX_ATTRS}."
-            "This is likely because of inconsistencies between the precomputed distances, graph and/or sbml_dfs."
-            "Please try ng_utils.validate_assets() to check for consistency."
-        )
-
-    # add net_polarity to edges in addition to nodes
-    edges = edges.merge(
-        vertex_neighborhood_attrs.reset_index()[
-            [DISTANCES.FINAL_FROM, DISTANCES.FINAL_TO, NET_POLARITY.NET_POLARITY]
-        ].dropna(),
-        left_on=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO],
-        right_on=[DISTANCES.FINAL_FROM, DISTANCES.FINAL_TO],
-        how="left",
-    )
-
-    vertices = vertices.merge(
-        vertex_neighborhood_attrs, left_on=NAPISTU_GRAPH_VERTICES.NAME, right_index=True
-    )
-
-    # drop nodes with a path length / weight of zero
-    # which are NOT the focal node
-    # these were cases where no path to/from the focal node to the query node was found
-    disconnected_neighbors = vertices.query(
-        f"(not node_orientation == '{GRAPH_RELATIONSHIPS.FOCAL}') and {DISTANCES.PATH_WEIGHT} == 0"
-    )
-    vertices = vertices[~vertices.index.isin(disconnected_neighbors.index.tolist())]
-
-    # add reference urls
-    vertices = add_vertices_uri_urls(vertices, sbml_dfs)
-
-    neighborhood_path_entities = {
-        NEIGHBORHOOD_NETWORK_TYPES.DOWNSTREAM: downstream_entity_dict,
-        NEIGHBORHOOD_NETWORK_TYPES.UPSTREAM: upstream_entity_dict,
-    }
-
-    # update graph with additional vertex and edge attributes
-    updated_napistu_graph = ig.Graph.DictList(
-        vertices=vertices.to_dict("records"),
-        edges=edges.to_dict("records"),
-        directed=napistu_graph.is_directed(),
-        vertex_name_attr=NAPISTU_GRAPH_VERTICES.NAME,
-        edge_foreign_keys=(NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO),
-    )
-
-    outdict = {
-        NEIGHBORHOOD_DICT_KEYS.GRAPH: updated_napistu_graph,
-        NEIGHBORHOOD_DICT_KEYS.VERTICES: vertices,
-        NEIGHBORHOOD_DICT_KEYS.EDGES: edges,
-        NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES: reaction_sources,
-        NEIGHBORHOOD_DICT_KEYS.NEIGHBORHOOD_PATH_ENTITIES: neighborhood_path_entities,
-    }
+    # Validate consistency before returning
+    _validate_neighborhood_consistency(outdict, sc_id)
 
     return outdict
 
@@ -754,6 +820,8 @@ def prune_neighborhoods(neighborhoods: dict, top_n: int = 100) -> dict:
 
     for an_sc_id in neighborhoods.keys():
         one_neighborhood = neighborhoods[an_sc_id]
+        vertices = one_neighborhood[NEIGHBORHOOD_DICT_KEYS.VERTICES]
+        raw_graph = one_neighborhood[NEIGHBORHOOD_DICT_KEYS.GRAPH]
 
         # filter to the desired number of vertices w/ lowest path_weight (from focal node)
         # filter neighborhood to high-weight vertices
@@ -761,55 +829,78 @@ def prune_neighborhoods(neighborhoods: dict, top_n: int = 100) -> dict:
 
         # reduce neighborhood to this set of high-weight vertices
         all_neighbors = pd.DataFrame(
-            {
-                NAPISTU_GRAPH_VERTICES.NAME: one_neighborhood[
-                    NEIGHBORHOOD_DICT_KEYS.GRAPH
-                ].vs[NAPISTU_GRAPH_VERTICES.NAME]
-            }
+            {NAPISTU_GRAPH_VERTICES.NAME: raw_graph.vs[NAPISTU_GRAPH_VERTICES.NAME]}
         )
+
         pruned_vertices_indices = all_neighbors[
             all_neighbors[NAPISTU_GRAPH_VERTICES.NAME].isin(
                 pruned_vertices[NAPISTU_GRAPH_VERTICES.NAME]
             )
         ].index.tolist()
 
-        pruned_neighborhood = one_neighborhood[NEIGHBORHOOD_DICT_KEYS.GRAPH].subgraph(
-            one_neighborhood[NEIGHBORHOOD_DICT_KEYS.GRAPH].vs[pruned_vertices_indices],
+        pruned_neighborhood = raw_graph.subgraph(
+            raw_graph.vs[pruned_vertices_indices],
             implementation="auto",
         )
 
         pruned_edges = pd.DataFrame([e.attributes() for e in pruned_neighborhood.es])
 
-        pruned_reactions = pruned_vertices[
-            pruned_vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE]
-            == NAPISTU_GRAPH_NODE_TYPES.REACTION
-        ][NAPISTU_GRAPH_VERTICES.NAME]
+        # reactions remaining in the graph
+        pruned_reactions = set(
+            pruned_vertices.loc[
+                pruned_vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE]
+                == NAPISTU_GRAPH_NODE_TYPES.REACTION,
+                NAPISTU_GRAPH_VERTICES.NAME,
+            ].tolist()
+        )
+        original_reactions = set(
+            vertices.loc[
+                vertices[NAPISTU_GRAPH_VERTICES.NODE_TYPE]
+                == NAPISTU_GRAPH_NODE_TYPES.REACTION,
+                NAPISTU_GRAPH_VERTICES.NAME,
+            ].tolist()
+        )
+        reactions_to_remove = original_reactions - pruned_reactions
 
-        if pruned_reactions.shape[0] != 0:
+        if len(reactions_to_remove) != 0:
+
+            logger.debug(
+                f"Removing {len(reactions_to_remove)} reactions from reaction_sources"
+            )
+
             if one_neighborhood[NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES] is None:
+
+                logger.debug("No reaction sources found in one_neighborhood")
                 # allow for missing source information since this is currently optional
                 pruned_reaction_sources = one_neighborhood[
                     NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES
                 ]
             else:
+                source_filtering_mask = one_neighborhood[
+                    NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES
+                ][SBML_DFS.R_ID].isin(pruned_reactions)
+
+                logger.debug(
+                    f"source_filtering_mask contains {sum(source_filtering_mask)} reaction sources of {source_filtering_mask.shape[0]} total sources"
+                )
+
                 pruned_reaction_sources = one_neighborhood[
                     NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES
-                ][
-                    one_neighborhood[NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES][
-                        SBML_DFS.R_ID
-                    ].isin(pruned_reactions)
-                ]
+                ][source_filtering_mask]
         else:
             pruned_reaction_sources = one_neighborhood[
                 NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES
             ]
 
-        pruned_neighborhood_dicts[an_sc_id] = {
+        pruned_neighborhood_dict = {
             NEIGHBORHOOD_DICT_KEYS.GRAPH: pruned_neighborhood,
             NEIGHBORHOOD_DICT_KEYS.VERTICES: pruned_vertices,
             NEIGHBORHOOD_DICT_KEYS.EDGES: pruned_edges,
             NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES: pruned_reaction_sources,
         }
+
+        _validate_neighborhood_consistency(pruned_neighborhood_dict, an_sc_id)
+        pruned_neighborhood_dicts[an_sc_id] = pruned_neighborhood_dict
 
     return pruned_neighborhood_dicts
 
@@ -1359,6 +1450,7 @@ def _prune_vertex_set(one_neighborhood: dict, top_n: int) -> pd.DataFrame:
 
     # combine all neighbors
     pruned_neighbors = set().union(*pruned_oriented_neighbors)
+
     pruned_vertices = neighborhood_vertices[
         neighborhood_vertices[NAPISTU_GRAPH_VERTICES.NAME].isin(pruned_neighbors)
     ].reset_index(drop=True)
@@ -1587,3 +1679,38 @@ def _find_neighbors_paths(
         upstream_path_attrs,
         upstream_entity_dict,
     )
+
+
+def _validate_neighborhood_consistency(neighborhood: dict, sc_id: str) -> None:
+    """
+    Validate that a single neighborhood has consistent vertices, edges, and reaction_sources.
+
+    This reproduces the exact validation logic from the R add_sources_to_graph function.
+    """
+    vertices = neighborhood[NEIGHBORHOOD_DICT_KEYS.VERTICES]
+    edges = neighborhood[NEIGHBORHOOD_DICT_KEYS.EDGES]
+    reaction_sources = neighborhood.get(NEIGHBORHOOD_DICT_KEYS.REACTION_SOURCES)
+
+    # Check edges consistency: all vertices in edges should be in vertices
+    if len(edges) > 0:
+        edgelist_vertices = set(
+            edges[NAPISTU_GRAPH_EDGES.FROM].tolist()
+            + edges[NAPISTU_GRAPH_EDGES.TO].tolist()
+        )
+        extra_edgelist_vertices = edgelist_vertices - set(
+            vertices[NAPISTU_GRAPH_VERTICES.NAME]
+        )
+        if len(extra_edgelist_vertices) > 0:
+            raise ValueError(
+                f"{sc_id} neighborhood: {len(extra_edgelist_vertices)} vertices were present in edges but not vertices: {list(extra_edgelist_vertices)[:10]}{'...' if len(extra_edgelist_vertices) > 10 else ''}"
+            )
+
+    # Check reaction_sources consistency: all r_id entries should be in vertices
+    if reaction_sources is not None and len(reaction_sources) > 0:
+        extra_source_vertices = set(reaction_sources[SBML_DFS.R_ID]) - set(
+            vertices[NAPISTU_GRAPH_VERTICES.NAME]
+        )
+        if len(extra_source_vertices) > 0:
+            raise ValueError(
+                f"{sc_id} neighborhood: {len(extra_source_vertices)} vertices were present in reaction_sources but not vertices: {list(extra_source_vertices)[:10]}{'...' if len(extra_source_vertices) > 10 else ''}"
+            )

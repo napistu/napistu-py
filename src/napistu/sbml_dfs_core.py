@@ -4,7 +4,15 @@ import copy
 import logging
 import re
 import warnings
-from typing import Any, Iterable, Mapping, MutableMapping, TYPE_CHECKING, Optional, Union
+from typing import (
+    Any,
+    Iterable,
+    Mapping,
+    MutableMapping,
+    TYPE_CHECKING,
+    Optional,
+    Union,
+)
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="pkg_resources is deprecated")

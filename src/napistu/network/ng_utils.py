@@ -261,19 +261,6 @@ def get_minimal_sources_edges(
                     )
                 return None
 
-        # Debug: Log the input data
-        if verbose:
-            logger.info(f"get_minimal_sources_edges: Input nodes count: {len(nodes)}")
-            logger.info(
-                f"get_minimal_sources_edges: present_reactions count: {len(present_reactions)}"
-            )
-            logger.info(
-                f"get_minimal_sources_edges: source_df shape: {source_df.shape}"
-            )
-            logger.info(
-                f"get_minimal_sources_edges: source_df unique reactions: {len(source_df.index.get_level_values(0).unique())}"
-            )
-
         reaction_sources = source.source_set_coverage(
             source_df,
             source_total_counts,
@@ -281,41 +268,7 @@ def get_minimal_sources_edges(
             min_pw_size=min_pw_size,
             verbose=verbose,
         )
-
-        # Debug: Log the output before filtering
-        if verbose and reaction_sources is not None:
-            reaction_sources_reset = reaction_sources.reset_index()
-            logger.info(
-                f"get_minimal_sources_edges: reaction_sources before filtering shape: {reaction_sources_reset.shape}"
-            )
-            logger.info(
-                f"get_minimal_sources_edges: reaction_sources unique reactions before filtering: {len(reaction_sources_reset[SBML_DFS.R_ID].unique())}"
-            )
-
-            # Check for extra reactions
-            extra_reactions = set(reaction_sources_reset[SBML_DFS.R_ID]) - set(nodes)
-            if len(extra_reactions) > 0:
-                logger.warning(
-                    f"get_minimal_sources_edges: Found {len(extra_reactions)} extra reactions in source_set_coverage output: "
-                    f"{list(extra_reactions)[:10]}{'...' if len(extra_reactions) > 10 else ''}"
-                )
-
-        # Filter to only include reactions that were in the original input vertices
-        # source_set_coverage returns all reactions from selected pathways, but we only want
-        # reactions that were present in the neighborhood
-        reaction_sources = reaction_sources.reset_index()
-        reaction_sources = reaction_sources[reaction_sources[SBML_DFS.R_ID].isin(nodes)]
-
-        # Debug: Log the final output
-        if verbose:
-            logger.info(
-                f"get_minimal_sources_edges: Final reaction_sources shape: {reaction_sources.shape}"
-            )
-            logger.info(
-                f"get_minimal_sources_edges: Final unique reactions: {len(reaction_sources[SBML_DFS.R_ID].unique())}"
-            )
-
-        return reaction_sources[
+        return reaction_sources.reset_index()[
             [SBML_DFS.R_ID, SOURCE_SPEC.PATHWAY_ID, SOURCE_SPEC.NAME]
         ]
 

@@ -10,6 +10,7 @@ from typing import Iterable
 
 import pandas as pd
 import requests
+
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
     from fs import open_fs

@@ -357,10 +357,7 @@ def source_set_coverage(
             )
 
     # rollup pathways with identical membership
-    if source_total_counts is None:
-        deduplicated_sources = _deduplicate_source_df(select_sources_df)
-    else:
-        deduplicated_sources = select_sources_df
+    deduplicated_sources = _deduplicate_source_df(select_sources_df)
 
     unaccounted_for_members = deduplicated_sources
     retained_pathway_ids = []
@@ -393,31 +390,6 @@ def source_set_coverage(
     minimial_sources = deduplicated_sources[
         deduplicated_sources[SOURCE_SPEC.PATHWAY_ID].isin(retained_pathway_ids)
     ].sort_index()
-
-    # Debug: Log what's being returned
-    if verbose:
-        logger.info(
-            f"source_set_coverage: Input select_sources_df shape: {select_sources_df.shape}"
-        )
-        logger.info(
-            f"source_set_coverage: Input unique reactions: {len(select_sources_df.index.get_level_values(0).unique())}"
-        )
-        logger.info(
-            f"source_set_coverage: Output minimial_sources shape: {minimial_sources.shape}"
-        )
-        logger.info(
-            f"source_set_coverage: Output unique reactions: {len(minimial_sources.index.get_level_values(0).unique())}"
-        )
-
-        # Check if we're adding extra reactions
-        input_reactions = set(select_sources_df.index.get_level_values(0).unique())
-        output_reactions = set(minimial_sources.index.get_level_values(0).unique())
-        extra_reactions = output_reactions - input_reactions
-        if len(extra_reactions) > 0:
-            logger.warning(
-                f"source_set_coverage: Found {len(extra_reactions)} extra reactions in output: "
-                f"{list(extra_reactions)[:10]}{'...' if len(extra_reactions) > 10 else ''}"
-            )
 
     return minimial_sources
 
