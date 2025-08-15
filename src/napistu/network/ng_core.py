@@ -354,6 +354,8 @@ class NapistuGraph(ig.Graph):
             S → P (length 1). A multiplier of 0.5 makes these path costs equivalent.
         """
 
+        is_weights_provided = not ((weight_by is None) or (weight_by == []))
+
         # Apply base weighting strategy first
         if weighting_strategy not in VALID_WEIGHTING_STRATEGIES:
             raise ValueError(
@@ -362,7 +364,7 @@ class NapistuGraph(ig.Graph):
             )
 
         if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY:
-            if weight_by is not None:
+            if is_weights_provided:
                 logger.warning(
                     "weight_by is not used for topology weighting. "
                     "It will be ignored."
@@ -379,7 +381,7 @@ class NapistuGraph(ig.Graph):
 
         elif weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED:
 
-            if weight_by is not None:
+            if is_weights_provided:
                 logger.warning(
                     "weight_by is not used for unweighted weighting. "
                     "It will be ignored."
