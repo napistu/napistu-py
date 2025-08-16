@@ -12,10 +12,10 @@ from napistu.mcp import documentation
 from napistu.mcp import execution
 from napistu.mcp import tutorials
 from napistu.mcp import health
-
 from napistu.mcp.profiles import ServerProfile, get_profile
-from napistu.mcp.constants import MCP_DEFAULTS
 from napistu.mcp.config import MCPServerConfig
+from napistu.mcp.semantic_search import SemanticSearch
+from napistu.mcp.constants import MCP_DEFAULTS
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,11 @@ def create_server(profile: ServerProfile, server_config: MCPServerConfig) -> Fas
 
 
 async def _initialize_component(
-    name: str, module, config_key: str, config: dict
+    name: str,
+    module,
+    config_key: str,
+    config: dict,
+    semantic_search: SemanticSearch = None,
 ) -> bool:
     """
     Initialize a single component with error handling.
@@ -125,6 +129,9 @@ async def _initialize_component(
         Configuration key to check if component is enabled
     config : dict
         Server configuration
+    semantic_search : SemanticSearch, optional
+        Shared semantic search instance for AI-powered search capabilities.
+        If None, component will operate with exact text search only.
 
     Returns
     -------
@@ -137,7 +144,7 @@ async def _initialize_component(
     logger.info(f"Initializing {name} components")
     try:
         component = module.get_component()
-        result = await component.safe_initialize()
+        result = await component.safe_initialize(semantic_search)
         return result
     except Exception as e:
         logger.error(f"❌ {name.title()} components failed to initialize: {e}")
@@ -167,11 +174,18 @@ async def initialize_components(profile: ServerProfile) -> None:
         ("execution", execution, "enable_execution"),
     ]
 
+    # Create semantic search instance
+    # this supports RAG indexing of content and search using an underlying
+    # sqlite vector database (chromadb)
+    semantic_search = SemanticSearch()
+
     # Initialize all components
     initialization_results = {}
 
     for name, module, config_key in component_configs:
-        result = await _initialize_component(name, module, config_key, config)
+        result = await _initialize_component(
+            name, module, config_key, config, semantic_search
+        )
         initialization_results[name] = result
 
     # Initialize health components last since they monitor the other components

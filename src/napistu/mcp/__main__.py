@@ -14,6 +14,7 @@ from napistu.mcp.client import (
     print_health_status,
     list_server_resources,
     read_server_resource,
+    search_component,
 )
 from napistu.mcp.config import (
     validate_server_config_flags,
@@ -249,12 +250,124 @@ def compare():
     asyncio.run(run_comparison())
 
 
+@cli.command()
+@click.argument(
+    "component", type=click.Choice(["documentation", "tutorials", "codebase"])
+)
+@click.argument("query")
+@click.option(
+    "--search-type",
+    type=click.Choice(["semantic", "exact"]),
+    default="semantic",
+    help="Search strategy to use (default: semantic)",
+)
+@click.option(
+    "--show-scores",
+    is_flag=True,
+    help="Show similarity scores for semantic search results",
+)
+@client_config_options
+@click_logging.simple_verbosity_option(logger)
+def search(
+    component, query, search_type, show_scores, production, local, host, port, https
+):
+    """Search Napistu documentation, tutorials, or codebase content."""
+
+    async def run_search():
+        try:
+            config = validate_client_config_flags(local, production, host, port, https)
+
+            print(f"🔍 Searching {component.title()} for: '{query}'")
+            print("=" * 50)
+            print(f"Server URL: {config.base_url}")
+            print(f"Search Type: {search_type}")
+            print()
+
+            result = await search_component(component, query, search_type, config)
+
+            if not result:
+                print("❌ Search failed - check server connection")
+                return
+
+            # Display results
+            results = result.get("results", [])
+            actual_search_type = result.get("search_type", search_type)
+
+            if not results:
+                print("🔍 No results found")
+                if result.get("tip"):
+                    print(f"💡 Tip: {result['tip']}")
+                return
+
+            print(f"📋 Found {len(results)} result(s):")
+            print()
+
+            # Format results based on search type
+            if actual_search_type == "semantic" and isinstance(results, list):
+                # Semantic search results with scores
+                for i, r in enumerate(results, 1):
+                    source = r.get("source", "Unknown")
+                    content = (
+                        r.get("content", "")[:100] + "..."
+                        if len(r.get("content", "")) > 100
+                        else r.get("content", "")
+                    )
+
+                    if show_scores and "similarity_score" in r:
+                        score = r["similarity_score"]
+                        print(f"{i}. {source} (Score: {score:.3f})")
+                    else:
+                        print(f"{i}. {source}")
+
+                    if content:
+                        print(f"   {content}")
+                    print()
+
+            elif actual_search_type == "exact" and isinstance(results, dict):
+                # Exact search results organized by type
+                total_found = 0
+                for result_type, items in results.items():
+                    if items:
+                        print(f"📁 {result_type.title()}:")
+                        for item in items:
+                            name = item.get("name", "Unknown")
+                            snippet = (
+                                item.get("snippet", "")[:100] + "..."
+                                if len(item.get("snippet", "")) > 100
+                                else item.get("snippet", "")
+                            )
+                            print(f"  • {name}")
+                            if snippet:
+                                print(f"    {snippet}")
+                        print()
+                        total_found += len(items)
+
+                if total_found == 0:
+                    print("🔍 No results found")
+
+            else:
+                # Fallback formatting
+                print(f"Results: {results}")
+
+            # Show tip if available
+            if result.get("tip"):
+                print(f"💡 Tip: {result['tip']}")
+
+        except click.BadParameter as e:
+            raise click.ClickException(str(e))
+        except Exception as e:
+            raise click.ClickException(f"Search failed: {str(e)}")
+
+    asyncio.run(run_search())
+
+
 # Add commands to the CLI
 cli.add_command(server)
 cli.add_command(health)
 cli.add_command(resources)
 cli.add_command(read)
 cli.add_command(compare)
+cli.add_command(search)
 
 
 if __name__ == "__main__":

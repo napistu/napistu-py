@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, computed_field, validator
+from pydantic import BaseModel, Field, computed_field, field_validator
 from typing import Optional
 import click
 from napistu.mcp.constants import MCP_DEFAULTS, MCP_PRODUCTION_URL
@@ -11,7 +11,8 @@ class MCPServerConfig(BaseModel):
     port: int = Field(ge=1, le=65535, description="Port to bind server to")
     server_name: str = Field(description="Server name")
 
-    @validator("host")
+    @field_validator("host")
+    @classmethod
     def validate_host(cls, v):
         """Basic host validation."""
         if not v or v.isspace():

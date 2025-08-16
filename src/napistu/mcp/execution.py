@@ -9,6 +9,7 @@ import logging
 from fastmcp import FastMCP
 
 from napistu.mcp.component_base import ComponentState, MCPComponent
+from napistu.mcp.semantic_search import SemanticSearch
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +62,15 @@ class ExecutionComponent(MCPComponent):
         """This won't be called due to overridden constructor."""
         pass
 
-    async def initialize(self) -> bool:
+    async def initialize(self, semantic_search: SemanticSearch = None) -> bool:
         """
         Initialize execution component by setting up the session context.
+
+        Parameters
+        ----------
+        semantic_search : SemanticSearch, optional
+            Shared semantic search instance (unused by execution component).
+            Parameter included for consistency with other components.
 
         Returns
         -------
@@ -106,7 +113,35 @@ class ExecutionComponent(MCPComponent):
         # Register resources
         @mcp.resource("napistu://execution/registry")
         async def get_registry():
-            """Get a summary of all objects registered with the server."""
+            """
+            Get a summary of all objects registered with the execution server.
+
+            **USE THIS WHEN:**
+            - Checking what Napistu objects are currently available for execution
+            - Understanding what data structures, networks, or results are loaded
+            - Getting an overview of the current execution session state
+
+            **DO NOT USE FOR:**
+            - General information about Napistu classes or functions (use codebase component)
+            - Creating new objects (use execute_function tool)
+            - Detailed object inspection (use describe_object tool)
+
+            Returns
+            -------
+            Dict[str, Any]
+                Dictionary containing:
+                - object_count : int
+                    Number of objects currently registered
+                - object_names : List[str]
+                    Names of all registered objects
+                - object_types : Dict[str, str]
+                    Mapping of object names to their types
+
+            Examples
+            --------
+            Use this to see what Napistu objects are available before attempting
+            to execute methods on them or analyze their contents.
+            """
             return {
                 "object_count": len(self.state.session_objects),
                 "object_names": list(self.state.session_objects.keys()),
@@ -118,7 +153,39 @@ class ExecutionComponent(MCPComponent):
 
         @mcp.resource("napistu://execution/environment")
         async def get_environment_info() -> Dict[str, Any]:
-            """Get information about the local Python environment."""
+            """
+            Get information about the local Python environment and Napistu installation.
+
+            **USE THIS WHEN:**
+            - Checking if Napistu is properly installed and available
+            - Debugging environment issues with Napistu execution
+            - Understanding the Python version and platform context
+
+            **DO NOT USE FOR:**
+            - General Napistu documentation (use documentation component)
+            - Napistu version comparisons or release notes (use documentation component)
+            - Installation instructions (use documentation component)
+
+            Returns
+            -------
+            Dict[str, Any]
+                Dictionary containing:
+                - python_version : str
+                    Current Python version
+                - napistu_version : str
+                    Installed Napistu version
+                - platform : str
+                    Operating system platform
+                - registered_objects : List[str]
+                    Currently registered object names
+                - session_context : List[str]
+                    Available session context keys
+
+            Examples
+            --------
+            Use this to verify Napistu is available before attempting function execution
+            or to troubleshoot environment-related execution issues.
+            """
             try:
                 import napistu
 
@@ -139,7 +206,35 @@ class ExecutionComponent(MCPComponent):
         # Register tools
         @mcp.tool()
         async def list_registry() -> Dict[str, Any]:
-            """List all objects registered with the server."""
+            """
+            List all objects registered with the execution server with detailed type information.
+
+            **USE THIS WHEN:**
+            - Getting detailed information about registered Napistu objects
+            - Understanding object shapes, lengths, or structure before operating on them
+            - Deciding which objects to use for analysis or computation
+
+            **DO NOT USE FOR:**
+            - Creating new objects (use execute_function tool)
+            - Getting method/attribute details (use describe_object tool)
+            - General Napistu API documentation (use codebase component)
+
+            Returns
+            -------
+            Dict[str, Any]
+                Dictionary mapping object names to their detailed information including:
+                - type : str
+                    Object type name
+                - shape : str (for arrays/DataFrames)
+                    Dimensions of the data structure
+                - length : int (for collections)
+                    Number of elements in the object
+
+            Examples
+            --------
+            Use this to understand the structure of loaded datasets, networks, or
+            analysis results before performing operations on them.
+            """
             result = {}
 
             for name, obj in self.state.session_objects.items():
@@ -167,7 +262,47 @@ class ExecutionComponent(MCPComponent):
 
         @mcp.tool()
         async def describe_object(object_name: str) -> Dict[str, Any]:
-            """Get detailed information about a registered object."""
+            """
+            Get detailed information about a specific registered Napistu object.
+
+            **USE THIS WHEN:**
+            - Exploring methods and attributes available on a Napistu object
+            - Understanding what operations can be performed on a loaded dataset or network
+            - Getting function signatures and documentation for object methods
+            - Planning how to interact with a specific Napistu data structure
+
+            **DO NOT USE FOR:**
+            - General Napistu API documentation (use codebase component for class definitions)
+            - Creating new objects (use execute_function tool)
+            - Objects that aren't registered (check list_registry first)
+            - Non-Napistu objects or general Python concepts
+
+            Parameters
+            ----------
+            object_name : str
+                Name of the registered object to describe (from list_registry)
+
+            Returns
+            -------
+            Dict[str, Any]
+                Detailed object information including:
+                - name : str
+                    Object name in registry
+                - type : str
+                    Object type name
+                - methods : List[Dict]
+                    Available methods with signatures and documentation
+                - attributes : List[Dict]
+                    Available attributes with types
+
+            Examples
+            --------
+            After loading a consensus network or SBML model, use this to understand
+            what analysis methods are available and how to call them.
+
+            >>> describe_object("my_network")
+            # Returns methods like find_paths, get_nodes, analyze_topology, etc.
+            """
             if object_name not in self.state.session_objects:
                 return {"error": f"Object '{object_name}' not found in registry"}
 
@@ -223,7 +358,89 @@ class ExecutionComponent(MCPComponent):
             args: Optional[List] = None,
             kwargs: Optional[Dict] = None,
         ) -> Dict[str, Any]:
-            """Execute a Napistu function on a registered object."""
+            """
+            Execute a Napistu function or method on registered objects.
+
+            **USE THIS WHEN:**
+            - Calling Napistu functions to create networks, load data, or perform analysis
+            - Executing methods on registered Napistu objects (networks, datasets, models)
+            - Creating new Napistu objects from loaded data
+            - Performing computational analysis using Napistu functionality
+
+            **DO NOT USE FOR:**
+            - General Python functions not related to Napistu
+            - Functions from other libraries (pandas, numpy, etc.) unless they're part of Napistu workflows
+            - Operations that don't involve Napistu objects or functionality
+            - File I/O operations outside of Napistu's data loading functions
+
+            **EXAMPLE APPROPRIATE USES:**
+            - Creating consensus networks: `execute_function("create_consensus_network", args=[data])`
+            - Loading SBML models: `execute_function("sbml.load_model", args=["path/to/model.xml"])`
+            - Analyzing networks: `execute_function("analyze_topology", object_name="my_network")`
+            - Pathway analysis: `execute_function("find_pathways", object_name="network", args=[source, target])`
+
+            **EXAMPLE INAPPROPRIATE USES:**
+            - `execute_function("pandas.read_csv")` (use Napistu's data loading instead)
+            - `execute_function("print", args=["hello"])` (not Napistu-related)
+            - `execute_function("os.listdir")` (file system operations)
+
+            Parameters
+            ----------
+            function_name : str
+                Name of the Napistu function to execute. Can be:
+                - Method name (if object_name provided): "find_paths", "get_nodes"
+                - Module function: "sbml.load_model", "consensus.create_network"
+                - Top-level function: "load_data", "create_graph"
+            object_name : str, optional
+                Name of registered object to call method on. If None, treats as global function.
+            args : List, optional
+                Positional arguments to pass to the function
+            kwargs : Dict, optional
+                Keyword arguments to pass to the function
+
+            Returns
+            -------
+            Dict[str, Any]
+                Execution result containing:
+                - success : bool
+                    Whether execution succeeded
+                - result_name : str (if successful)
+                    Name assigned to result object in registry
+                - result_type : str (if successful)
+                    Type of the result object
+                - result_preview : Any (if successful)
+                    Preview of the result data
+                - error : str (if failed)
+                    Error message describing the failure
+                - traceback : str (if failed)
+                    Full Python traceback for debugging
+
+            Examples
+            --------
+            Execute Napistu functions for network analysis workflows:
+
+            >>> # Create a consensus network from data
+            >>> execute_function("consensus.create_network", args=[data_object])
+
+            >>> # Analyze network topology
+            >>> execute_function("analyze_centrality", object_name="network_1")
+
+            >>> # Load and process SBML model
+            >>> execute_function("sbml.load_and_process", args=["model.xml"])
+
+            Notes
+            -----
+            **RESULT HANDLING:**
+            - Successful executions automatically register results with generated names
+            - Use list_registry() to see newly created objects
+            - Use describe_object() to explore result object capabilities
+            - Results persist in the session for further analysis
+
+            **ERROR HANDLING:**
+            - Function errors return detailed traceback for debugging
+            - Check codebase component for correct function signatures
+            - Verify object names exist using list_registry() before method calls
+            """
             args = args or []
             kwargs = kwargs or {}
 
@@ -329,7 +546,77 @@ class ExecutionComponent(MCPComponent):
             network_object: str,
             max_depth: int = 3,
         ) -> Dict[str, Any]:
-            """Find paths between two nodes in a network."""
+            """
+            Find paths between two nodes in a registered Napistu network object.
+
+            **USE THIS WHEN:**
+            - Analyzing connectivity between specific nodes in a Napistu network
+            - Finding pathways in biological networks (metabolic, signaling, etc.)
+            - Exploring network structure and shortest paths
+            - Conducting pathway analysis in consensus networks
+
+            **DO NOT USE FOR:**
+            - General graph algorithms not related to Napistu networks
+            - Networks from other libraries (NetworkX, igraph, etc.)
+            - Objects that aren't network-like or don't have path-finding capabilities
+            - Non-Napistu data structures
+
+            **PREREQUISITES:**
+            - Must have a registered network object (check with list_registry)
+            - Network object should support path finding (check with describe_object)
+            - Node names must exist in the network
+
+            Parameters
+            ----------
+            source_node : str
+                Name/ID of the starting node in the network
+            target_node : str
+                Name/ID of the destination node in the network
+            network_object : str
+                Name of the registered network object (from list_registry)
+            max_depth : int, optional
+                Maximum path length to search (default 3)
+
+            Returns
+            -------
+            Dict[str, Any]
+                Path search results containing:
+                - success : bool
+                    Whether path search succeeded
+                - result_name : str (if successful)
+                    Name assigned to paths result in registry
+                - paths_found : int (if successful)
+                    Number of paths discovered
+                - result_preview : Any (if successful)
+                    Preview of the path data
+                - error : str (if failed)
+                    Error message describing the failure
+
+            Examples
+            --------
+            Find pathways in biological networks:
+
+            >>> # Find metabolic pathways
+            >>> search_paths("glucose", "ATP", "metabolic_network", max_depth=5)
+
+            >>> # Explore signaling cascades
+            >>> search_paths("receptor", "transcription_factor", "signaling_net")
+
+            >>> # Analyze consensus network connectivity
+            >>> search_paths("gene_A", "gene_B", "consensus_net", max_depth=4)
+
+            Notes
+            -----
+            **NETWORK COMPATIBILITY:**
+            - Works with Napistu network objects that have path-finding capabilities
+            - Automatically detects whether to use object methods or Napistu graph functions
+            - Results are registered for further analysis and visualization
+
+            **PATH INTERPRETATION:**
+            - Paths represent functional connections in biological contexts
+            - Path length indicates directness of molecular relationships
+            - Multiple paths suggest robustness or alternative mechanisms
+            """
             if network_object not in self.state.session_objects:
                 return {
                     "error": f"Network object '{network_object}' not found in registry"

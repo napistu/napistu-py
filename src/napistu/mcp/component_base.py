@@ -8,6 +8,8 @@ import logging
 
 from fastmcp import FastMCP
 
+from napistu.mcp.semantic_search import SemanticSearch
+
 logger = logging.getLogger(__name__)
 
 
@@ -139,9 +141,15 @@ class MCPComponent(ABC):
         """
         return self.state
 
-    async def safe_initialize(self) -> bool:
+    async def safe_initialize(self, semantic_search: SemanticSearch = None) -> bool:
         """
         Initialize with error handling and state tracking.
+
+        Parameters
+        ----------
+        semantic_search : SemanticSearch, optional
+            Shared semantic search instance for AI-powered search capabilities.
+            If None, component will operate with exact text search only.
 
         Returns
         -------
@@ -151,7 +159,8 @@ class MCPComponent(ABC):
         try:
             logger.info(f"Initializing {self.__class__.__name__}...")
 
-            result = await self.initialize()
+            # Pass semantic_search to the component-specific initialize method
+            result = await self.initialize(semantic_search)
 
             self.state.initialized = True
             self.state.initialization_error = None
