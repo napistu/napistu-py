@@ -196,3 +196,163 @@ async def read_server_resource(
     except Exception as e:
         logger.error(f"Failed to read resource {resource_uri}: {str(e)}")
         return None
+
+
+async def call_server_tool(
+    tool_name: str, arguments: Dict[str, Any], config: MCPClientConfig
+) -> Optional[Dict[str, Any]]:
+    """
+    Call a tool on the MCP server.
+
+    Parameters
+    ----------
+    tool_name : str
+        Name of the tool to call (e.g., 'search_documentation', 'search_codebase')
+    arguments : Dict[str, Any]
+        Arguments to pass to the tool
+    config : MCPClientConfig
+        Client configuration object with validated settings.
+
+    Returns
+    -------
+    Optional[Dict[str, Any]]
+        Tool result as dictionary, or None if failed.
+
+    Examples
+    --------
+    Search for SBML_dfs usage in documentation:
+
+    >>> config = local_client_config()
+    >>> result = await call_server_tool(
+    ...     "search_documentation",
+    ...     {"query": "how do i use sbml_dfs"},
+    ...     config
+    ... )
+    >>> print(f"Found {len(result['results'])} results")
+
+    Search for an exact string in the codebase's class, method, and function definitions:
+
+    >>> result = await call_server_tool(
+    ...     "search_codebase",
+    ...     {"query": "process_napistu_graph", "search_type": "exact"},
+    ...     config
+    ... )
+
+    Search tutorials for network creation:
+
+    >>> result = await call_server_tool(
+    ...     "search_tutorials",
+    ...     {"query": "create consensus networks", "search_type": "semantic"},
+    ...     config
+    ... )
+    """
+    try:
+        logger.info(f"Calling tool {tool_name} on: {config.mcp_url}")
+
+        client = Client(config.mcp_url)
+
+        async with client:
+            # Call the tool
+            result = await client.call_tool(tool_name, arguments)
+
+            if result and len(result) > 0:
+                # Parse the result
+                if hasattr(result[0], "text"):
+                    try:
+                        return json.loads(result[0].text)
+                    except json.JSONDecodeError:
+                        return {"content": result[0].text}
+                else:
+                    return {"content": str(result[0])}
+            else:
+                logger.error(f"No result from tool: {tool_name}")
+                return None
+
+    except Exception as e:
+        logger.error(f"Failed to call tool {tool_name}: {str(e)}")
+        return None
+
+
+async def search_component(
+    component: str,
+    query: str,
+    search_type: str = "semantic",
+    config: MCPClientConfig = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Search a specific Napistu component using semantic or exact search.
+
+    Parameters
+    ----------
+    component : str
+        Component to search. Must be one of: 'documentation', 'tutorials', 'codebase'
+    query : str
+        Search query or natural language question
+    search_type : str, optional
+        Search strategy: 'semantic' (default) or 'exact'
+    config : MCPClientConfig, optional
+        Client configuration object with validated settings
+
+    Returns
+    -------
+    Optional[Dict[str, Any]]
+        Search results dictionary containing:
+        - query : str
+            Original search query
+        - search_type : str
+            Actual search type used
+        - results : List[Dict] or Dict[str, List]
+            Search results (format depends on search type)
+        - tip : str
+            Helpful guidance for improving results
+
+    Raises
+    ------
+    ValueError
+        If component is not one of the valid options
+
+    Examples
+    --------
+    Search documentation for installation info:
+
+    >>> config = local_client_config()
+    >>> result = await search_component("documentation", "how to install", config=config)
+    >>> print(f"Found {len(result['results'])} results")
+
+    Search codebase for SBML_dfs usage:
+
+    >>> result = await search_component("codebase", "how do i use sbml_dfs", config=config)
+    >>> for r in result['results']:
+    ...     print(f"- {r['source']}: score {r['similarity_score']:.3f}")
+
+    Search tutorials with exact matching:
+
+    >>> result = await search_component("tutorials", "consensus", "exact", config)
+
+    Search all components by calling multiple times:
+
+    >>> for comp in ['documentation', 'tutorials', 'codebase']:
+    ...     result = await search_component(comp, "SBML processing", config=config)
+    ...     print(f"{comp}: {len(result.get('results', []))} results")
+    """
+    # Validate component
+    valid_components = {"documentation", "tutorials", "codebase"}
+    if component not in valid_components:
+        raise ValueError(
+            f"Invalid component '{component}'. Must be one of: {', '.join(sorted(valid_components))}"
+        )
+
+    # Validate search type
+    valid_search_types = {"semantic", "exact"}
+    if search_type not in valid_search_types:
+        raise ValueError(
+            f"Invalid search_type '{search_type}'. Must be one of: {', '.join(sorted(valid_search_types))}"
+        )
+
+    # Map component to tool name
+    tool_name = f"search_{component}"
+
+    # Call the appropriate tool
+    return await call_server_tool(
+        tool_name, {"query": query, "search_type": search_type}, config
+    )

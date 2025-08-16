@@ -30,16 +30,115 @@ def register_components(mcp: FastMCP) -> None:
     @mcp.resource("napistu://health")
     async def health_check() -> Dict[str, Any]:
         """
-        Health check endpoint for deployment monitoring.
-        Returns current cached health status.
+        Get cached health status of the Napistu MCP server and all components.
+
+        **USE THIS WHEN:**
+        - Checking if Napistu MCP server is running and operational
+        - Verifying that Napistu components (documentation, tutorials, codebase, execution) are loaded
+        - Getting a quick overview of server status without triggering active checks
+        - Monitoring server health for deployment or troubleshooting
+
+        **DO NOT USE FOR:**
+        - Real-time health verification (use check_health tool for active checking)
+        - General Napistu installation questions (use documentation component)
+        - Component-specific issues (use individual component health details)
+        - Performance monitoring (this only shows component availability)
+
+        Returns
+        -------
+        Dict[str, Any]
+            Cached health status containing:
+            - status : str
+                Overall server status ("healthy", "degraded", "unhealthy", "initializing")
+            - timestamp : str
+                ISO timestamp of when health was last assessed
+            - version : str
+                Napistu package version
+            - components : Dict[str, Dict]
+                Status of each component (documentation, tutorials, codebase, execution)
+            - failed_components : List[str] (if any)
+                Names of components that are unavailable
+            - last_check : str
+                ISO timestamp of last active health check
+
+        Examples
+        --------
+        Use this to quickly verify the MCP server is operational before attempting
+        to search documentation, execute functions, or access tutorials.
+
+        **Component Status Meanings:**
+        - "healthy": Component loaded successfully with data
+        - "degraded": Component partially functional but missing some data
+        - "unavailable": Component failed to initialize or crashed
+        - "initializing": Component still loading (check again later)
+
+        Notes
+        -----
+        This returns cached status for fast response. Use check_health() tool
+        for real-time verification if you suspect issues.
         """
         return _health_cache
 
     @mcp.tool()
     async def check_health() -> Dict[str, Any]:
         """
-        Tool to actively check current component health.
-        This performs real-time checks and updates the cached status.
+        Actively check current health of all Napistu MCP server components.
+
+        **USE THIS WHEN:**
+        - Diagnosing why Napistu MCP server seems unresponsive or broken
+        - Verifying components are working after troubleshooting
+        - Getting real-time status when cached health might be stale
+        - Confirming server recovery after errors or restarts
+
+        **DO NOT USE FOR:**
+        - Routine status checks (use health resource for cached status)
+        - Component functionality testing (use component-specific tools)
+        - Performance benchmarking (this only tests basic availability)
+        - Frequent monitoring (use sparingly to avoid resource overhead)
+
+        **WHEN TO EXPECT DIFFERENT STATUSES:**
+        - "healthy": All components loaded successfully with data
+        - "degraded": Some components failed but core functionality available
+        - "unhealthy": Critical failures preventing normal operation
+        - "initializing": Server still starting up (normal during deployment)
+
+        Returns
+        -------
+        Dict[str, Any]
+            Real-time health status containing:
+            - status : str
+                Overall server status after active checking
+            - timestamp : str
+                ISO timestamp of this health check
+            - version : str
+                Napistu package version
+            - components : Dict[str, Dict]
+                Current status of each component with detailed info
+            - failed_components : List[str] (if any)
+                Names of components that are currently unavailable
+            - last_check : str
+                ISO timestamp of this check (same as timestamp)
+
+        Examples
+        --------
+        Use this when Napistu searches are failing or components seem unavailable:
+
+        >>> result = await check_health()
+        >>> if result["status"] != "healthy":
+        ...     print(f"Issues found: {result.get('failed_components', [])}")
+
+        **Interpreting Component Details:**
+        Each component status includes:
+        - Initialization success/failure
+        - Data loading counts (tutorials, documentation items, etc.)
+        - Error messages for failed components
+        - Semantic search availability
+
+        Notes
+        -----
+        This performs active checks and updates the health cache. May take
+        several seconds to complete as it verifies each component's data
+        and functionality.
         """
         global _health_cache
         try:
@@ -208,6 +307,8 @@ async def _check_components() -> Dict[str, Dict[str, Any]]:
         for name, module_path in component_configs.items()
     }
 
+    results["semantic_search"] = _check_semantic_search_health()
+
     logger.info(f"Health check results: {results}")
     return results
 
@@ -227,3 +328,42 @@ def _get_version() -> str:
         return getattr(napistu, "__version__", "unknown")
     except ImportError:
         return "unknown"
+
+
+def _check_semantic_search_health() -> Dict[str, Any]:
+    """Check health of shared semantic search instance"""
+    try:
+        # Try components in order until we find one with semantic search
+        component_modules = [
+            "napistu.mcp.documentation",
+            "napistu.mcp.tutorials",
+            "napistu.mcp.codebase",
+        ]
+
+        for module_path in component_modules:
+            try:
+                module = __import__(module_path, fromlist=["get_component"])
+                component = module.get_component()
+                if (
+                    hasattr(component.state, "semantic_search")
+                    and component.state.semantic_search
+                ):
+                    shared_instance = component.state.semantic_search
+                    break
+            except Exception:
+                continue
+        else:
+            return {
+                "status": "unavailable",
+                "message": "No semantic search instance found",
+            }
+
+        collections = shared_instance.collections
+        return {
+            "status": "healthy",
+            "collections": list(collections.keys()),
+            "total_collections": len(collections),
+        }
+
+    except Exception as e:
+        return {"status": "unavailable", "error": str(e)}
