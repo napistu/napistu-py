@@ -55,7 +55,6 @@ def process_issues_and_prs(
                                 "source": f"{content_type}: {repo_name}#{item.get('number', '')}",
                                 "chunk": 0,
                                 "is_chunked": False,
-                                "chunking_method": "none",
                             }
                         )
                         ids.append(
@@ -170,10 +169,89 @@ def process_regular_content(
                     "source": f"{content_type}: {name}",
                     "chunk": 0,
                     "is_chunked": False,
-                    "chunking_method": "none",
                 }
             )
             ids.append(f"{content_type}_{name}")
+
+    return documents, metadatas, ids
+
+
+def process_codebase_content(
+    content_type: str, items: Dict[str, Any]
+) -> Tuple[List[str], List[Dict], List[str]]:
+    """
+    Process codebase content (functions, classes) with proper formatting.
+
+    For classes, extracts methods as separate searchable items.
+    For functions, formats with full qualified names.
+    """
+    documents = []
+    metadatas = []
+    ids = []
+
+    for name, info in items.items():
+        if not isinstance(info, dict):
+            continue
+
+        # Process main class/function content
+        signature = info.get("signature", "")
+        doc = info.get("doc", "")
+
+        if doc or signature:
+            # Format content for embedding
+            if content_type == "functions":
+                # Use full qualified name: napistu.module.function_name()
+                func_name = name.split(".")[-1]
+                if signature and func_name in signature:
+                    content = signature.replace(func_name, name, 1)
+                else:
+                    content = f"{name}()"
+            elif content_type == "classes":
+                # Use full qualified name: class napistu.module.ClassName
+                content = f"class {name}"
+            else:
+                content = signature or name
+
+            if doc:
+                content = f"{content}\n\n{doc}"
+
+            if len(content.strip()) > 20:
+                documents.append(content)
+                metadatas.append(
+                    {
+                        "type": content_type,
+                        "name": name,
+                        "source": f"{content_type}: {name}",
+                    }
+                )
+                ids.append(f"{content_type}_{name.replace('.', '_')}")
+
+        # For classes, also process individual methods
+        if content_type == "classes" and "methods" in info:
+            class_short_name = name.split(".")[-1]  # Just "SBML_dfs" not full path
+
+            for method_name, method_info in info["methods"].items():
+                if isinstance(method_info, dict):
+                    method_sig = method_info.get("signature", "")
+                    method_doc = method_info.get("doc", "")
+
+                    if method_doc or method_sig:
+                        # Format as ClassName.method_name()
+                        method_content = f"{class_short_name}.{method_name}()"
+                        if method_doc:
+                            method_content = f"{method_content}\n\n{method_doc}"
+
+                        if len(method_content.strip()) > 20:
+                            documents.append(method_content)
+                            metadatas.append(
+                                {
+                                    "type": "methods",
+                                    "name": f"{name}.{method_name}",
+                                    "source": f"method: {class_short_name}.{method_name}",
+                                    "class_name": name,
+                                }
+                            )
+                            ids.append(f"method_{name.replace('.', '_')}_{method_name}")
 
     return documents, metadatas, ids
 

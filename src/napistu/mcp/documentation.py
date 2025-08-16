@@ -35,8 +35,6 @@ class DocumentationState(ComponentState):
         - packagedown: Package documentation sections (if any)
     semantic_search : SemanticSearch or None
         Semantic search instance for AI-powered content search, None if not initialized
-    semantic_indexed : bool
-        Whether documentation content has been indexed for semantic search
 
     Examples
     --------
@@ -44,7 +42,6 @@ class DocumentationState(ComponentState):
     >>> state.docs_cache["readme"]["install"] = "Installation guide..."
     >>> print(state.is_healthy())  # True if any content loaded
     >>> health = state.get_health_details()
-    >>> print(health["semantic_search_available"])  # False initially
     """
 
     def __init__(self):
@@ -58,7 +55,6 @@ class DocumentationState(ComponentState):
             DOCUMENTATION.PACKAGEDOWN: {},
         }
         self.semantic_search = None
-        self.semantic_indexed = False
 
     def is_healthy(self) -> bool:
         """
@@ -94,10 +90,6 @@ class DocumentationState(ComponentState):
                 Number of repositories with pull requests loaded
             - total_sections : int
                 Total number of content items across all categories
-            - semantic_search_available : bool
-                Whether semantic search has been initialized
-            - semantic_indexed : bool
-                Whether content has been indexed for semantic search
 
         Examples
         --------
@@ -105,7 +97,6 @@ class DocumentationState(ComponentState):
         >>> # ... load content ...
         >>> details = state.get_health_details()
         >>> print(f"Total content items: {details['total_sections']}")
-        >>> print(f"Semantic search ready: {details['semantic_indexed']}")
         """
         base_details = {
             "readme_count": len(self.docs_cache[DOCUMENTATION.README]),
@@ -114,14 +105,6 @@ class DocumentationState(ComponentState):
             "prs_repos": len(self.docs_cache[DOCUMENTATION.PRS]),
             "total_sections": sum(len(section) for section in self.docs_cache.values()),
         }
-
-        # Add semantic search status
-        base_details.update(
-            {
-                "semantic_search_available": self.semantic_search is not None,
-                "semantic_indexed": self.semantic_indexed,
-            }
-        )
 
         return base_details
 
@@ -171,7 +154,7 @@ class DocumentationComponent(MCPComponent):
         """
         return DocumentationState()
 
-    async def initialize(self) -> bool:
+    async def initialize(self, semantic_search: SemanticSearch = None) -> bool:
         """
         Initialize documentation component with content loading and semantic indexing.
 
@@ -186,6 +169,8 @@ class DocumentationComponent(MCPComponent):
         bool
             True if at least some documentation was loaded successfully, False if
             all loading operations failed
+        semantic_search : SemanticSearch
+            Semantic search instance for AI-powered content search, None if not initialized
 
         Notes
         -----
@@ -249,7 +234,8 @@ class DocumentationComponent(MCPComponent):
 
         # Initialize semantic search if content was loaded
         content_loaded = success_count > 0
-        if content_loaded:
+        if semantic_search and content_loaded:
+            self.state.semantic_search = semantic_search  # Reference, not creation
             semantic_success = await self._initialize_semantic_search()
             logger.info(
                 f"Semantic search initialization: {'✅ Success' if semantic_success else '⚠️ Failed'}"
@@ -259,53 +245,42 @@ class DocumentationComponent(MCPComponent):
 
     async def _initialize_semantic_search(self) -> bool:
         """
-        Initialize semantic search engine and index documentation content.
+        Index documentation content into the shared semantic search instance.
 
-        Creates a SemanticSearch instance, sets up ChromaDB collections, and indexes
-        all loaded documentation content for AI-powered search capabilities.
+        Uses the shared semantic search instance (stored in self.state.semantic_search)
+        to index this component's content into the appropriate collection.
 
         Returns
         -------
         bool
-            True if semantic search was successfully initialized and content indexed,
-            False if initialization failed
+            True if content was successfully indexed, False if indexing failed
 
         Notes
         -----
-        Failure to initialize semantic search is not considered a critical error.
+        Assumes self.state.semantic_search has already been set to a valid
+        SemanticSearch instance during initialize().
+
+        Failure to index content is not considered a critical error.
         The component continues to function with exact text search if semantic
-        search initialization fails.
-
-        The method updates state.semantic_search and state.semantic_indexed to
-        track semantic search availability for health monitoring.
-
-        Raises
-        ------
-        Exception
-            Any exception during semantic search setup is caught and logged,
-            ensuring component initialization continues
+        search indexing fails.
         """
         try:
-            logger.info("Initializing semantic search...")
+            if not self.state.semantic_search:
+                logger.warning("No semantic search instance available")
+                return False
 
-            # Create semantic search instance
-            self.state.semantic_search = SemanticSearch()
-
-            # Index the documentation content
             logger.info("Indexing documentation content for semantic search...")
+
+            # Index content using the shared instance stored in component state
             self.state.semantic_search.index_content(
                 "documentation", self.state.docs_cache
             )
 
-            self.state.semantic_indexed = True
-            logger.info("✅ Semantic search initialized and content indexed")
+            logger.info("✅ Documentation content indexed successfully")
             return True
 
         except Exception as e:
-            logger.error(f"❌ Semantic search initialization failed: {e}")
-            # Don't fail the entire component if semantic search fails
-            self.state.semantic_search = None
-            self.state.semantic_indexed = False
+            logger.error(f"❌ Failed to index documentation content: {e}")
             return False
 
     def register(self, mcp: FastMCP) -> None:
@@ -331,20 +306,30 @@ class DocumentationComponent(MCPComponent):
         @mcp.resource("napistu://documentation/summary")
         async def get_documentation_summary():
             """
-            Get a comprehensive summary of all available documentation.
+            Get a comprehensive summary of all available Napistu project documentation.
+
+            **USE THIS WHEN:**
+            - Getting an overview of available Napistu documentation before searching
+            - Understanding what types of Napistu content are available (READMEs, wikis, issues)
+            - Checking if semantic search is available for documentation
+
+            **DO NOT USE FOR:**
+            - General bioinformatics documentation (only covers Napistu project)
+            - Questions not related to Napistu implementation or usage
+            - Academic literature or external tool documentation
 
             Returns
             -------
             Dict[str, Any]
                 Dictionary containing:
                 - readme_files : List[str]
-                    Names of loaded README files
+                    Names of loaded README files from Napistu repositories
                 - issues : List[str]
-                    Repository names with loaded issues
+                    Repository names with loaded GitHub issues
                 - prs : List[str]
                     Repository names with loaded pull requests
                 - wiki_pages : List[str]
-                    Names of loaded wiki pages
+                    Names of loaded Napistu wiki pages
                 - packagedown_sections : List[str]
                     Names of package documentation sections
                 - semantic_search : Dict[str, bool]
@@ -352,9 +337,10 @@ class DocumentationComponent(MCPComponent):
 
             Examples
             --------
-            Resource provides overview of all documentation content and capabilities
-            for clients to understand what information is available.
+            Use this to understand what Napistu documentation is available before
+            searching for specific implementation details or troubleshooting information.
             """
+
             summary = {
                 "readme_files": list(
                     self.state.docs_cache[DOCUMENTATION.README].keys()
@@ -365,12 +351,6 @@ class DocumentationComponent(MCPComponent):
                 "packagedown_sections": list(
                     self.state.docs_cache[DOCUMENTATION.PACKAGEDOWN].keys()
                 ),
-            }
-
-            # Add semantic search status
-            summary["semantic_search"] = {
-                "available": self.state.semantic_search is not None,
-                "indexed": self.state.semantic_indexed,
             }
 
             return summary
@@ -434,18 +414,44 @@ class DocumentationComponent(MCPComponent):
         @mcp.tool()
         async def search_documentation(query: str, search_type: str = "semantic"):
             """
-            Search all documentation with intelligent search strategy.
+            Search all Napistu project documentation with intelligent search strategy.
 
-            Provides flexible search capabilities using either AI-powered semantic search
-            for natural language queries or exact text matching for precise keyword searches.
-            Automatically falls back to exact search if semantic search is unavailable.
+            Provides flexible search capabilities for finding relevant Napistu documentation
+            using either AI-powered semantic search for natural language queries or exact text
+            matching for precise keyword searches. Covers README files, wiki pages, GitHub
+            issues, and pull requests from the Napistu project.
+
+            **USE THIS WHEN:**
+            - Looking for Napistu project information, setup instructions, or usage documentation
+            - Finding README content, wiki pages, GitHub issues, or pull requests
+            - Researching Napistu-specific concepts, workflows, troubleshooting, or features
+            - Understanding Napistu installation, configuration, or implementation details
+
+            **DO NOT USE FOR:**
+            - General bioinformatics concepts not specific to Napistu
+            - Documentation for other tools, libraries, or frameworks
+            - Academic literature or research papers
+            - Programming concepts unrelated to Napistu implementation
+            - Questions about biological concepts that don't involve Napistu usage
+
+            **EXAMPLE APPROPRIATE QUERIES:**
+            - "how to install Napistu"
+            - "SBML file processing with Napistu"
+            - "consensus network creation"
+            - "troubleshooting pathway integration"
+            - "GitHub issues about data ingestion"
+
+            **EXAMPLE INAPPROPRIATE QUERIES:**
+            - "what is systems biology" (too general, not Napistu-specific)
+            - "how to use pandas" (not related to Napistu)
+            - "latest research in pathway analysis" (academic, not implementation)
+            - "machine learning algorithms" (unless specifically about Napistu ML features)
 
             Parameters
             ----------
             query : str
-                Search term or natural language question. For semantic search, can be
-                full questions like "how to install napistu". For exact search, use
-                specific keywords like "installation" or "consensus".
+                Search term or natural language question about Napistu. Should be
+                specific to Napistu project documentation, features, or implementation.
             search_type : str, optional
                 Search strategy to use:
                 - "semantic" (default): AI-powered search using embeddings
@@ -462,39 +468,43 @@ class DocumentationComponent(MCPComponent):
                     Actual search type used ("semantic" or "exact")
                 - results : List[Dict] or Dict[str, List]
                     Search results. Format depends on search type:
-                    - Semantic: List of result dictionaries with content, metadata, source
+                    - Semantic: List of result dictionaries with content, metadata, source, similarity_score
                     - Exact: Dictionary organized by content type (readme, wiki, issues, prs)
                 - tip : str
                     Helpful guidance for improving search results
 
             Examples
             --------
-            Natural language semantic search:
+            Natural language semantic search for Napistu concepts:
 
-            >>> results = await search_documentation("how to install napistu")
+            >>> results = await search_documentation("how to install Napistu")
             >>> print(results["search_type"])  # "semantic"
             >>> for result in results["results"]:
-            ...     print(f"Found in: {result['source']}")
+            ...     score = result['similarity_score']
+            ...     print(f"Score: {score:.3f} - Found in: {result['source']}")
 
-            Exact keyword search:
+            Exact keyword search for specific Napistu terms:
 
             >>> results = await search_documentation("installation", search_type="exact")
             >>> print(len(results["results"]["readme"]))  # Number of matching READMEs
 
             Notes
             -----
-            **WHEN TO USE:**
-            - Finding information about Napistu project features, setup, or usage
-            - Looking for README content, wiki pages, GitHub issues, or pull requests
-            - Researching Napistu-specific concepts, workflows, or troubleshooting
+            **CONTENT SCOPE:**
+            This tool searches only Napistu project documentation including:
+            - Official README files from Napistu repositories
+            - Napistu project wiki pages with implementation details
+            - GitHub issues and pull requests for troubleshooting and feature discussions
+            - Package documentation specific to Napistu functionality
 
             **SEARCH TYPE GUIDANCE:**
-            - Use semantic (default) for conceptual queries and natural language
-            - Use exact for precise terms, function names, or known keywords
+            - Use semantic (default) for conceptual queries and natural language questions
+            - Use exact for precise Napistu function names, error messages, or known keywords
 
-            **EXAMPLE QUERIES:**
-            - Semantic: "consensus network creation", "SBML file processing", "pathway integration"
-            - Exact: "installation", "consensus", "SBML", "create_graph"
+            **RESULT INTERPRETATION:**
+            - Semantic results include similarity scores (0.8-1.0 = very relevant)
+            - Results may include chunked sections from long documents for precision
+            - Multiple related sections may appear for comprehensive coverage
 
             The function automatically handles semantic search failures by falling back
             to exact search, ensuring reliable results even if AI components are unavailable.
