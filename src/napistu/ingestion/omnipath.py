@@ -13,7 +13,7 @@ from napistu.ontologies import renaming
 from napistu.ontologies.genodexito import Genodexito
 from napistu.ontologies.pubchem import map_pubchem_ids
 from napistu.ontologies.mirbase import load_mirbase_xrefs
-from napistu.ingestion.species import SpeciesValidator
+from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 
 from napistu.constants import (
     BQB,
@@ -117,7 +117,7 @@ def format_omnipath_as_sbml_dfs(
     >>> print(f"Reactions: {len(sbml_dfs.reactions)}")
     """
 
-    organismal_species = SpeciesValidator(organismal_species)
+    organismal_species = OrganismalSpeciesValidator(organismal_species)
     organismal_species.assert_supported(VALID_OMNIPATH_SPECIES)
 
     interactions = get_interactions(organismal_species=organismal_species, **kwargs)
@@ -218,7 +218,7 @@ def format_omnipath_as_sbml_dfs(
 
 def get_interactions(
     dataset: Union[str, object] = "all",
-    organismal_species: Union[str, SpeciesValidator] = "human",
+    organismal_species: Union[str, OrganismalSpeciesValidator] = "human",
     **kwargs,
 ) -> pd.DataFrame:
     """
@@ -344,8 +344,8 @@ def get_interactions(
         )
 
     if isinstance(organismal_species, str):
-        organismal_species = SpeciesValidator(organismal_species)
-    if not isinstance(organismal_species, SpeciesValidator):
+        organismal_species = OrganismalSpeciesValidator(organismal_species)
+    if not isinstance(organismal_species, OrganismalSpeciesValidator):
         raise ValueError(f"Invalid organismal_species: {organismal_species}")
     organismal_species.assert_supported(VALID_OMNIPATH_SPECIES)
 
@@ -462,7 +462,7 @@ def _prepare_integer_based_ids(interactor_int_ids: List[str]) -> pd.DataFrame:
 
 def _prepare_omnipath_ids_uniprot(
     interactor_string_ids: List[str],
-    organismal_species: Union[str, SpeciesValidator],
+    organismal_species: Union[str, OrganismalSpeciesValidator],
     preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
     allow_fallback: bool = True,
 ) -> pd.DataFrame:
@@ -473,7 +473,7 @@ def _prepare_omnipath_ids_uniprot(
     ----------
     interactor_string_ids : List[str]
         List of string-based interactor IDs to cross-reference with UniProt.
-    organismal_species : Union[str, SpeciesValidator]
+    organismal_species : Union[str, OrganismalSpeciesValidator]
         The species for which to retrieve UniProt annotations.
     preferred_method : str, optional
         Preferred method for identifier mapping, by default GENODEXITO_DEFS.BIOCONDUCTOR.
@@ -495,8 +495,8 @@ def _prepare_omnipath_ids_uniprot(
     """
 
     if isinstance(organismal_species, str):
-        organismal_species = SpeciesValidator(organismal_species)
-    if not isinstance(organismal_species, SpeciesValidator):
+        organismal_species = OrganismalSpeciesValidator(organismal_species)
+    if not isinstance(organismal_species, OrganismalSpeciesValidator):
         raise ValueError(f"Invalid organismal_species: {organismal_species}")
 
     logger.info(

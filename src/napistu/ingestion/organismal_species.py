@@ -1,9 +1,13 @@
+"""
+This module contains the OrganismalSpeciesValidator class, which is used to validate and convert between common and Latin species names.
+"""
+
 from typing import Dict, Union, Set, List, Any
 
 from napistu.ingestion.constants import LATIN_TO_COMMON_SPECIES_NAMES
 
 
-class SpeciesValidator:
+class OrganismalSpeciesValidator:
     """
     A class for validating and converting between common and Latin species names.
 
@@ -30,17 +34,17 @@ class SpeciesValidator:
 
     Examples
     --------
-    >>> species = SpeciesValidator("Homo sapiens")
+    >>> species = OrganismalSpeciesValidator("Homo sapiens")
     >>> species.common_name
     'human'
     >>> species.latin_name
     'Homo sapiens'
 
-    >>> species = SpeciesValidator("mouse")
+    >>> species = OrganismalSpeciesValidator("mouse")
     >>> species.latin_name
     'Mus musculus'
 
-    >>> species = SpeciesValidator("HUMAN")  # case-insensitive
+    >>> species = OrganismalSpeciesValidator("HUMAN")  # case-insensitive
     >>> species.latin_name
     'Homo sapiens'
     """
@@ -163,9 +167,9 @@ class SpeciesValidator:
         Returns
         -------
         str
-            String representation of the SpeciesValidator instance.
+            String representation of the OrganismalSpeciesValidator instance.
         """
-        return f"SpeciesValidator('{self.latin_name}')"
+        return f"OrganismalSpeciesValidator('{self.latin_name}')"
 
     @classmethod
     def get_available_species(cls) -> Dict[str, list]:
@@ -180,7 +184,7 @@ class SpeciesValidator:
 
         Examples
         --------
-        >>> available = SpeciesValidator.get_available_species()
+        >>> available = OrganismalSpeciesValidator.get_available_species()
         >>> available['latin_names']
         ['Homo sapiens', 'Mus musculus', ...]
         >>> available['common_names']
@@ -213,15 +217,15 @@ class SpeciesValidator:
 
         Examples
         --------
-        >>> species = SpeciesValidator("human")
+        >>> species = OrganismalSpeciesValidator("human")
         >>> species.validate_against_supported(["human", "mouse", "rat"])
         True
 
-        >>> species = SpeciesValidator("Homo sapiens")
+        >>> species = OrganismalSpeciesValidator("Homo sapiens")
         >>> species.validate_against_supported(["Homo sapiens", "Mus musculus"])
         True
 
-        >>> species = SpeciesValidator("fly")
+        >>> species = OrganismalSpeciesValidator("fly")
         >>> species.validate_against_supported(["human", "mouse"])
         False
         """
@@ -257,11 +261,11 @@ class SpeciesValidator:
 
         Examples
         --------
-        >>> species = SpeciesValidator("human")
+        >>> species = OrganismalSpeciesValidator("human")
         >>> species.assert_supported(["human", "mouse"], "my_analysis_function")
         # No exception raised
 
-        >>> species = SpeciesValidator("fly")
+        >>> species = OrganismalSpeciesValidator("fly")
         >>> species.assert_supported(["human", "mouse"], "my_analysis_function")
         ValueError: Species 'fly (Drosophila melanogaster)' not supported by my_analysis_function...
         """
@@ -306,7 +310,7 @@ class SpeciesValidator:
         ...     "Mus musculus": "mouse",
         ...     "Saccharomyces cerevisiae": "yeast"
         ... }
-        >>> species = SpeciesValidator("human")
+        >>> species = OrganismalSpeciesValidator("human")
         >>> species.lookup_custom_value(psi_table, is_latin=True)
         'human'
 
@@ -315,12 +319,12 @@ class SpeciesValidator:
         ...     "human": "HUMAN_001",
         ...     "mouse": "MOUSE_001"
         ... }
-        >>> species = SpeciesValidator("Homo sapiens")
+        >>> species = OrganismalSpeciesValidator("Homo sapiens")
         >>> species.lookup_custom_value(custom_ids, is_latin=False)
         'HUMAN_001'
 
         >>> # Species not in table raises error
-        >>> species = SpeciesValidator("fly")
+        >>> species = OrganismalSpeciesValidator("fly")
         >>> species.lookup_custom_value(psi_table, is_latin=True)
         ValueError: Species 'fly (Drosophila melanogaster)' not found in custom table...
         """
