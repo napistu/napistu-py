@@ -391,7 +391,7 @@ class SBML:
         # find unique species and create a table
         consensus_species_df = comp_species_df.copy()
         consensus_species_df.index.names = [SBML_DFS.S_ID]
-        consensus_species, species_lookup = consensus.reduce_to_consensus_ids(
+        consensus_species, species_lookup = consensus._reduce_to_consensus_ids(
             consensus_species_df,
             # note that this is an incomplete schema because consensus_species_df isn't a
             # normal species table

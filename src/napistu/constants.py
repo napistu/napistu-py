@@ -65,6 +65,10 @@ SCHEMA_DEFS = SimpleNamespace(
     VARS="vars",
 )
 
+SBML_DFS_METADATA = SimpleNamespace(
+    SBML_DFS_SOURCE="sbml_dfs_source",
+)
+
 SBML_DFS_SCHEMA = SimpleNamespace(
     SCHEMA={
         SBML_DFS.COMPARTMENTS: {
@@ -369,23 +373,31 @@ RESOLVE_MATCHES_TMP_WEIGHT_COL = "__tmp_weight_for_aggregation__"
 # source information
 
 SOURCE_SPEC = SimpleNamespace(
-    PATHWAY_ID="pathway_id",
-    MODEL="model",
-    SOURCE="source",
-    SPECIES="species",
-    NAME="name",
-    ENTRY="entry",
-    N_COLLAPSED_PATHWAYS="n_collapsed_pathways",
-    INDEX_NAME="entry",
+    # core attributes
     FILE="file",
+    PATHWAY_ID="pathway_id",
+    DATA_SOURCE="data_source",
+    ORGANISMAL_SPECIES="organismal_species",
+    NAME="name",
     DATE="date",
+    # alternative unique name which can be used to avoid conflicts if PATHWAY_ID
+    # is not unique across sources in consensus models
+    MODEL="model",
+    # index name
+    ENTRY="entry",
+    # values relevant to some methods
+    N_COLLAPSED_PATHWAYS="n_collapsed_pathways",
+    # PWIndex
+    URL="url",
+    SBML_PATH="sbml_path",
+    PW_INDEX_FILE="pw_index.tsv",
 )
 
 EXPECTED_PW_INDEX_COLUMNS = {
     SOURCE_SPEC.FILE,
     SOURCE_SPEC.PATHWAY_ID,
-    SOURCE_SPEC.SOURCE,
-    SOURCE_SPEC.SPECIES,
+    SOURCE_SPEC.DATA_SOURCE,
+    SOURCE_SPEC.ORGANISMAL_SPECIES,
     SOURCE_SPEC.NAME,
     SOURCE_SPEC.DATE,
 }
@@ -430,11 +442,11 @@ ONTOLOGY_SPECIES_ALIASES = {
 
 ONTOLOGY_PRIORITIES = pd.DataFrame(
     [
-        {"ontology": ONTOLOGIES.REACTOME, "ontology_rank": 1},
-        {"ontology": ONTOLOGIES.ENSEMBL_GENE, "ontology_rank": 2},
-        {"ontology": ONTOLOGIES.CHEBI, "ontology_rank": 3},
-        {"ontology": ONTOLOGIES.UNIPROT, "ontology_rank": 4},
-        {"ontology": ONTOLOGIES.GO, "ontology_rank": 5},
+        {IDENTIFIERS.ONTOLOGY: ONTOLOGIES.REACTOME, "ontology_rank": 1},
+        {IDENTIFIERS.ONTOLOGY: ONTOLOGIES.ENSEMBL_GENE, "ontology_rank": 2},
+        {IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CHEBI, "ontology_rank": 3},
+        {IDENTIFIERS.ONTOLOGY: ONTOLOGIES.UNIPROT, "ontology_rank": 4},
+        {IDENTIFIERS.ONTOLOGY: ONTOLOGIES.GO, "ontology_rank": 5},
     ]
 )
 
@@ -451,7 +463,6 @@ ENSEMBL_MOLECULE_TYPES_FROM_ONTOLOGY = {
 }
 
 ENSEMBL_SPECIES_FROM_CODE = {"MUS": "Mus musculus"}
-
 ENSEMBL_SPECIES_TO_CODE = {"Mus musculus": "MUS"}
 
 ENSEMBL_PREFIX_TO_ONTOLOGY = {

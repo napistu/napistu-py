@@ -1,20 +1,14 @@
 from __future__ import annotations
 
-import copy
 import logging
 import re
 from typing import Any, Optional, Iterable
-import warnings
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
 import numpy as np
 import pandas as pd
 
 from napistu import utils
 from napistu import identifiers
-from napistu import indices
 
 from napistu.constants import (
     BQB,
@@ -51,39 +45,6 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # PUBLIC FUNCTIONS (ALPHABETICAL ORDER)
 # =============================================================================
-
-
-def adapt_pw_index(
-    source: str | indices.PWIndex,
-    species: str | Iterable[str] | None,
-    outdir: str | None = None,
-) -> indices.PWIndex:
-    """Adapts a pw_index
-
-    Helpful to filter for species before reconstructing.
-
-    Args:
-        source (str | PWIndex): uri for pw_index.csv file or PWIndex object
-        species (str):
-        outdir (str | None, optional): Optional directory to write pw_index to.
-            Defaults to None.
-
-    Returns:
-        indices.PWIndex: Filtered pw index
-    """
-    if isinstance(source, str):
-        pw_index = indices.PWIndex(source)
-    elif isinstance(source, indices.PWIndex):
-        pw_index = copy.deepcopy(source)
-    else:
-        raise ValueError("'source' needs to be str or PWIndex.")
-    pw_index.filter(species=species)
-
-    if outdir is not None:
-        with open_fs(outdir, create=True) as fs:
-            with fs.open("pw_index.tsv", "w") as f:
-                pw_index.index.to_csv(f, sep="\t")
-    return pw_index
 
 
 def add_sbo_role(reaction_species: pd.DataFrame) -> pd.DataFrame:

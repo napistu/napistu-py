@@ -241,8 +241,8 @@ def _create_stubbed_index() -> indices.PWIndex:
     stubbed_index_df = pd.DataFrame(
         {
             SOURCE_SPEC.FILE: None,
-            SOURCE_SPEC.SOURCE: None,
-            SOURCE_SPEC.SPECIES: None,
+            SOURCE_SPEC.DATA_SOURCE: None,
+            SOURCE_SPEC.ORGANISMAL_SPECIES: None,
             SOURCE_SPEC.PATHWAY_ID: "uncompartmentalization",
             SOURCE_SPEC.NAME: "Merging all compartments",
             SOURCE_SPEC.DATE: None,

@@ -3,11 +3,12 @@ import logging
 
 import numpy as np
 import pandas as pd
-from typing import Optional
+from typing import Optional, Union
 
 from napistu import indices
 from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
+from napistu import utils
 from napistu.statistics import hypothesis_testing
 from napistu.constants import (
     SBML_DFS_SCHEMA,
@@ -32,6 +33,8 @@ class Source:
     -------
     empty() : classmethod
         Create an empty Source object
+    single_entry(model, pathway_id, **kwargs) : classmethod
+        Create a Source object with a single entry
     validate_single_source() : bool
         Check whether the Source object contains exactly 1 entry
     _validate_source_df(source_df) : None
@@ -99,10 +102,21 @@ class Source:
         -------
         bool
             True if the Source contains exactly one row, False otherwise
+
+        Raises
+        ------
+        ValueError:
+            If the Source object is empty or contains more than one row
         """
+
         if self.source is None:
-            return False
-        return len(self.source) == 1
+            raise ValueError("Source object is empty and must contain exactly one row")
+        if len(self.source) != 1:
+            raise ValueError(
+                f"Source object must contain exactly one row, but has {len(self.source)} rows"
+            )
+
+        return True
 
     @classmethod
     def empty(cls) -> "Source":
@@ -119,6 +133,82 @@ class Source:
         instance = cls.__new__(cls)  # Create instance without calling __init__
         instance.source = None
         return instance
+
+    @classmethod
+    def single_entry(
+        cls,
+        model: str,
+        pathway_id: str | None = None,
+        file: str | None = None,
+        data_source: str | None = None,
+        organismal_species: str | None = None,
+        name: str | None = None,
+        date: str | None = None,
+    ) -> "Source":
+        """
+        Create a Source object with a single entry.
+
+        Convenience method for creating a Source with one row containing the core
+        attributes from the pathway index schema.
+
+        Parameters
+        ----------
+        model : str
+            The model identifier (required)
+        pathway_id : str, optional
+            The pathway identifier. Defaults to same as model if not provided
+        file : str, optional
+            Source file path or identifier
+        data_source : str, optional
+            Source database or origin (e.g., 'Reactome', 'KEGG')
+        organismal_species : str, optional
+            Species the pathway is from
+        name : str, optional
+            Human-readable pathway/model name
+        date : str, optional
+            Date of pathway/model creation or last update
+
+        Returns
+        -------
+        Source
+            A Source instance with a single-row DataFrame
+
+        Examples
+        --------
+        >>> source = Source.single_entry(
+        ...     model="R-HSA-123",
+        ...     name="Glycolysis",
+        ...     source="Reactome",
+        ...     organismal_species="Homo sapiens"
+        ... )
+        """
+        # Set pathway_id to model if not provided
+        if pathway_id is None:
+            pathway_id = model
+
+        # Build the data dictionary with core fields
+        data = {
+            SOURCE_SPEC.MODEL: model,
+            SOURCE_SPEC.PATHWAY_ID: pathway_id,
+        }
+
+        # Add optional fields if provided (using actual SOURCE_SPEC column names)
+        optional_fields = {
+            SOURCE_SPEC.FILE: file,
+            SOURCE_SPEC.DATA_SOURCE: data_source,
+            SOURCE_SPEC.ORGANISMAL_SPECIES: organismal_species,
+            SOURCE_SPEC.NAME: name,
+            SOURCE_SPEC.DATE: date,
+        }
+
+        for field_name, value in optional_fields.items():
+            data[field_name] = value
+
+        # Create DataFrame with single row
+        source_df = pd.DataFrame([data])
+
+        # Create and return Source instance
+        return cls(source_df)
 
     def _validate_source_df(self, source_df: pd.DataFrame) -> None:
         """Validate that source_df is a pandas DataFrame with required columns."""
@@ -201,12 +291,12 @@ def create_source_table(
     Raises
     ------
     ValueError:
-        if SOURCE_SPEC.SOURCE is not present in table_schema
+        if SOURCE_SPEC.DATA_SOURCE is not present in table_schema
     """
 
-    if SOURCE_SPEC.SOURCE not in table_schema.keys():
+    if SCHEMA_DEFS.SOURCE not in table_schema.keys():
         raise ValueError(
-            f"{SOURCE_SPEC.SOURCE} not present in schema, can't create source_table"
+            f"{SCHEMA_DEFS.SOURCE} not present in schema, can't create source_table"
         )
 
     # take lookup_table and create an index on "new_id". Multiple rows may have the
@@ -226,11 +316,11 @@ def create_source_table(
     id_table = (
         lookup_table_rearranged.groupby("new_id")
         .apply(create_source)
-        .rename(table_schema[SOURCE_SPEC.SOURCE])
+        .rename(table_schema[SCHEMA_DEFS.SOURCE])
         .to_frame()
     )
 
-    id_table.index = id_table.index.rename(table_schema["pk"])
+    id_table.index = id_table.index.rename(table_schema[SCHEMA_DEFS.PK])
 
     return id_table
 
@@ -326,14 +416,14 @@ def unnest_sources(source_table: pd.DataFrame, verbose: bool = False) -> pd.Data
             return None
 
         source_tbl = pd.DataFrame(source_value.source)
-        source_tbl.index.name = SOURCE_SPEC.INDEX_NAME
+        source_tbl.index.name = SOURCE_SPEC.ENTRY
         source_tbl = source_tbl.reset_index()
 
         # add original index as variables and then set index
         for j in range(source_table_index.shape[1]):
             source_tbl[source_table_index.columns[j]] = source_table_index.iloc[i, j]
         source_tbl = source_tbl.set_index(
-            list(source_table_index.columns) + [SOURCE_SPEC.INDEX_NAME]
+            list(source_table_index.columns) + [SOURCE_SPEC.ENTRY]
         )
 
         sources.append(source_tbl)
@@ -514,12 +604,12 @@ def _deduplicate_source_df(source_df: pd.DataFrame) -> pd.DataFrame:
             for s in category_index.tolist()
         ]
     )
-    merged_sources[SOURCE_SPEC.INDEX_NAME] = merged_sources.groupby(
+    merged_sources[SOURCE_SPEC.ENTRY] = merged_sources.groupby(
         source_table_schema[SCHEMA_DEFS.PK]
     ).cumcount()
 
     return merged_sources.set_index(
-        [source_table_schema[SCHEMA_DEFS.PK], SOURCE_SPEC.INDEX_NAME]
+        [source_table_schema[SCHEMA_DEFS.PK], SOURCE_SPEC.ENTRY]
     ).sort_index()
 
 
@@ -545,32 +635,87 @@ def _collapse_by_membership_string(
     )
 
 
-def _collapse_source_df(source_df: pd.DataFrame) -> pd.Series:
-    """Collapse a source_df table into a single entry."""
+def _collapse_source_df(source_df: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+    """Collapse a source_df table into a single entry.
+
+    Combines multiple source entries into a single entry by joining values
+    with " OR " separators. Handles None values by filtering them out before joining.
+
+    Parameters
+    ----------
+    source_df : pd.DataFrame or pd.Series
+        Source data to collapse. Must contain required columns MODEL and PATHWAY_ID.
+
+    Returns
+    -------
+    pd.Series
+        Collapsed source entry with joined values and count of collapsed pathways.
+
+    Raises
+    ------
+    TypeError
+        If source_df is not a DataFrame or Series.
+    ValueError
+        If required columns MODEL or PATHWAY_ID are missing.
+
+    Notes
+    -----
+    - None values are filtered out before joining
+    - For DataFrame input, unique values are used for DATA_SOURCE and ORGANISMAL_SPECIES
+    - The N_COLLAPSED_PATHWAYS field tracks how many entries were collapsed
+    """
 
     if isinstance(source_df, pd.DataFrame):
+        # Validate required columns
+        required_cols = [SOURCE_SPEC.MODEL, SOURCE_SPEC.PATHWAY_ID]
+        missing_cols = [col for col in required_cols if col not in source_df.columns]
+        if missing_cols:
+            raise ValueError(f"Missing required columns: {missing_cols}")
+
         collapsed_source_series = pd.Series(
             {
-                SOURCE_SPEC.PATHWAY_ID: " OR ".join(source_df[SOURCE_SPEC.PATHWAY_ID]),
-                SOURCE_SPEC.MODEL: " OR ".join(source_df[SOURCE_SPEC.MODEL]),
-                SOURCE_SPEC.SOURCE: " OR ".join(
-                    set(source_df[SOURCE_SPEC.SOURCE].tolist())
+                SOURCE_SPEC.PATHWAY_ID: utils.safe_join_set(
+                    source_df[SOURCE_SPEC.PATHWAY_ID]
                 ),
-                SOURCE_SPEC.SPECIES: " OR ".join(
-                    set(source_df[SOURCE_SPEC.SPECIES].tolist())
+                SOURCE_SPEC.MODEL: utils.safe_join_set(source_df[SOURCE_SPEC.MODEL]),
+                SOURCE_SPEC.DATA_SOURCE: (
+                    utils.safe_join_set(
+                        source_df[SOURCE_SPEC.DATA_SOURCE], unique_only=True
+                    )
+                    if SOURCE_SPEC.DATA_SOURCE in source_df.columns
+                    else None
                 ),
-                SOURCE_SPEC.NAME: " OR ".join(source_df[SOURCE_SPEC.NAME]),
+                SOURCE_SPEC.ORGANISMAL_SPECIES: (
+                    utils.safe_join_set(
+                        source_df[SOURCE_SPEC.ORGANISMAL_SPECIES], unique_only=True
+                    )
+                    if SOURCE_SPEC.ORGANISMAL_SPECIES in source_df.columns
+                    else None
+                ),
+                SOURCE_SPEC.NAME: (
+                    utils.safe_join_set(source_df[SOURCE_SPEC.NAME])
+                    if SOURCE_SPEC.NAME in source_df.columns
+                    else None
+                ),
                 SOURCE_SPEC.N_COLLAPSED_PATHWAYS: source_df.shape[0],
             }
         )
     elif isinstance(source_df, pd.Series):
+        # Validate required columns
+        required_cols = [SOURCE_SPEC.MODEL, SOURCE_SPEC.PATHWAY_ID]
+        missing_cols = [col for col in required_cols if col not in source_df.index]
+        if missing_cols:
+            raise ValueError(f"Missing required columns: {missing_cols}")
+
         collapsed_source_series = pd.Series(
             {
                 SOURCE_SPEC.PATHWAY_ID: source_df[SOURCE_SPEC.PATHWAY_ID],
                 SOURCE_SPEC.MODEL: source_df[SOURCE_SPEC.MODEL],
-                SOURCE_SPEC.SOURCE: source_df[SOURCE_SPEC.SOURCE],
-                SOURCE_SPEC.SPECIES: source_df[SOURCE_SPEC.SPECIES],
-                SOURCE_SPEC.NAME: source_df[SOURCE_SPEC.NAME],
+                SOURCE_SPEC.DATA_SOURCE: source_df.get(SOURCE_SPEC.DATA_SOURCE),
+                SOURCE_SPEC.ORGANISMAL_SPECIES: source_df.get(
+                    SOURCE_SPEC.ORGANISMAL_SPECIES
+                ),
+                SOURCE_SPEC.NAME: source_df.get(SOURCE_SPEC.NAME),
                 SOURCE_SPEC.N_COLLAPSED_PATHWAYS: 1,
             }
         )

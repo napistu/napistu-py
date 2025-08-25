@@ -106,9 +106,9 @@ def test_drop_cofactors(sbml_dfs):
     assert starting_rscs - reduced_dfs.reaction_species.shape[0] == 20
 
 
-def test_sbml_dfs_from_dict_required(sbml_dfs):
+def test_sbml_dfs_from_dict_required(sbml_dfs, model_source_stub):
     val_dict = {k: getattr(sbml_dfs, k) for k in sbml_dfs._required_entities}
-    sbml_dfs2 = sbml_dfs_core.SBML_dfs(val_dict)
+    sbml_dfs2 = sbml_dfs_core.SBML_dfs(val_dict, model_source_stub)
     sbml_dfs2.validate()
 
     for k in sbml_dfs._required_entities:
@@ -292,7 +292,7 @@ def test_sbml_dfs_remove_reactions_check_species(sbml_dfs):
     sbml_dfs.validate()
 
 
-def test_read_sbml_with_invalid_ids():
+def test_read_sbml_with_invalid_ids(model_source_stub):
     SBML_W_BAD_IDS = "R-HSA-166658.sbml"
     test_path = os.path.abspath(os.path.join(__file__, os.pardir))
     sbml_w_bad_ids_path = os.path.join(test_path, "test_data", SBML_W_BAD_IDS)
@@ -300,7 +300,10 @@ def test_read_sbml_with_invalid_ids():
 
     # invalid identifiers still create a valid sbml_dfs
     sbml_w_bad_ids = sbml.SBML(sbml_w_bad_ids_path)
-    assert isinstance(sbml_dfs_core.SBML_dfs(sbml_w_bad_ids), sbml_dfs_core.SBML_dfs)
+    assert isinstance(
+        sbml_dfs_core.SBML_dfs(sbml_w_bad_ids, model_source_stub),
+        sbml_dfs_core.SBML_dfs,
+    )
 
 
 def test_get_table(sbml_dfs):
@@ -379,7 +382,7 @@ def test_species_status(sbml_dfs):
     )
 
 
-def test_get_identifiers_handles_missing_values():
+def test_get_identifiers_handles_missing_values(model_source_stub):
 
     # Minimal DataFrame with all types
     df = pd.DataFrame(
@@ -435,7 +438,7 @@ def test_get_identifiers_handles_missing_values():
             index=[],
         ),
     }
-    sbml = SBML_dfs(sbml_dict, validate=False)
+    sbml = SBML_dfs(sbml_dict, model_source_stub, validate=False)
     result = sbml.get_identifiers(SBML_DFS.SPECIES)
     assert result.shape[0] == 0 or all(
         result[SBML_DFS.S_ID] == "s1"
@@ -485,7 +488,7 @@ def test_remove_entity_data_nonexistent(sbml_dfs_w_data, caplog):
     sbml_dfs_w_data.validate()
 
 
-def test_get_characteristic_species_ids():
+def test_get_characteristic_species_ids(model_source_stub):
     """
     Test get_characteristic_species_ids function with both dogmatic and non-dogmatic cases.
     """
@@ -563,7 +566,7 @@ def test_get_characteristic_species_ids():
         SBML_DFS.REACTIONS: reactions,
         SBML_DFS.REACTION_SPECIES: reaction_species,
     }
-    sbml_dfs = SBML_dfs(sbml_dict, validate=False, resolve=False)
+    sbml_dfs = SBML_dfs(sbml_dict, model_source_stub, validate=False, resolve=False)
 
     # Test dogmatic case (default)
     expected_bqbs = BQB_DEFINING_ATTRS + [BQB.HAS_PART]  # noqa: F841
@@ -584,12 +587,12 @@ def test_get_characteristic_species_ids():
         )
 
 
-def test_sbml_basic_functionality(test_data):
+def test_sbml_basic_functionality(test_data, model_source_stub):
     """Test basic SBML_dfs creation from edgelist."""
     interaction_edgelist, species_df, compartments_df = test_data
 
     result = sbml_dfs_core.sbml_dfs_from_edgelist(
-        interaction_edgelist, species_df, compartments_df
+        interaction_edgelist, species_df, compartments_df, model_source_stub
     )
 
     assert isinstance(result, SBML_dfs)
@@ -602,7 +605,7 @@ def test_sbml_basic_functionality(test_data):
     assert len(result.reaction_species) == 4  # 2 reactions * 2 species each
 
 
-def test_sbml_extra_data_preservation(test_data):
+def test_sbml_extra_data_preservation(test_data, model_source_stub):
     """Test that extra columns are preserved when requested."""
     interaction_edgelist, species_df, compartments_df = test_data
 
@@ -610,6 +613,7 @@ def test_sbml_extra_data_preservation(test_data):
         interaction_edgelist,
         species_df,
         compartments_df,
+        model_source_stub,
         keep_species_data=True,
         keep_reactions_data="experiment",
     )
@@ -620,12 +624,12 @@ def test_sbml_extra_data_preservation(test_data):
     assert "confidence" in result.reactions_data["experiment"].columns
 
 
-def test_sbml_compartmentalized_naming(test_data):
+def test_sbml_compartmentalized_naming(test_data, model_source_stub):
     """Test compartmentalized species naming convention."""
     interaction_edgelist, species_df, compartments_df = test_data
 
     result = sbml_dfs_core.sbml_dfs_from_edgelist(
-        interaction_edgelist, species_df, compartments_df
+        interaction_edgelist, species_df, compartments_df, model_source_stub
     )
 
     comp_names = result.compartmentalized_species[SBML_DFS.SC_NAME].tolist()
@@ -634,7 +638,7 @@ def test_sbml_compartmentalized_naming(test_data):
     assert "CDKN1A [nucleus]" in comp_names
 
 
-def test_sbml_custom_defaults(test_data):
+def test_sbml_custom_defaults(test_data, model_source_stub):
     """Test custom stoichiometry parameters."""
     interaction_edgelist, species_df, compartments_df = test_data
 
@@ -652,6 +656,7 @@ def test_sbml_custom_defaults(test_data):
         interaction_edgelist,
         species_df,
         compartments_df,
+        model_source_stub,
         interaction_edgelist_defaults=custom_defaults,
     )
 

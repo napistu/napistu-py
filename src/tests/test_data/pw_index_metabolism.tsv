@@ -1,4 +1,4 @@
-file	source	species	pathway_id	name	date
+file	data_source	organismal_species	pathway_id	name	date
 reactome_tca.sbml	Reactome	Homo sapiens	tca	citric acid cycle
 reactome_ppp.sbml	Reactome	Homo sapiens	ppp	pentose phosphate pathway
 reactome_glycolysis.sbml	Reactome	Homo sapiens	glycolysis	glycolysis

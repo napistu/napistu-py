@@ -1135,6 +1135,51 @@ def safe_fill(x: str, fill_width: int = 15) -> str:
         return fill(x, fill_width)
 
 
+def safe_join_set(values: Any) -> str | None:
+    """
+    Safely join values, filtering out None values.
+
+    Converts input to a set (ensuring uniqueness), removes None values,
+    and joins remaining values with " OR " separator in sorted order.
+
+    Parameters
+    ----------
+    values : Any
+        Values to join. Can be list, tuple, set, pandas Series, string,
+        or other iterable. Strings are treated as single values, not character sequences.
+
+    Returns
+    -------
+    str or None
+        Joined string with " OR " separator in alphabetical order,
+        or None if no valid values remain after filtering.
+
+    Examples
+    --------
+    >>> safe_join_set([1, 2, 3])
+    '1 OR 2 OR 3'
+    >>> safe_join_set([3, 1, 2, 1])  # Removes duplicates and sorts
+    '1 OR 2 OR 3'
+    >>> safe_join_set([1, None, 3])
+    '1 OR 3'
+    >>> safe_join_set([None, None])
+    None
+    >>> safe_join_set("hello")  # String treated as single value
+    'hello'
+    """
+    # Handle pandas Series
+    if hasattr(values, "tolist"):
+        unique_values = set(values.tolist()) - {None}
+    # Handle regular iterables (but not strings)
+    elif hasattr(values, "__iter__") and not isinstance(values, str):
+        unique_values = set(values) - {None}
+    # Handle single values (including strings)
+    else:
+        unique_values = set([values]) - {None}
+
+    return " OR ".join(sorted(str(v) for v in unique_values)) if unique_values else None
+
+
 def match_regex_dict(s: str, regex_dict: Dict[str, any]) -> Optional[any]:
     """
     Apply each regex in regex_dict to the string s. If a regex matches, return its value.

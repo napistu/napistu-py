@@ -298,7 +298,7 @@ def create_consensus(
     pw_index_df["species"] = "unknown"
     pw_index = indices.PWIndex(pw_index=pw_index_df, validate_paths=False)
     consensus_model = napistu_consensus.construct_consensus_model(
-        sbml_dfs_dict, pw_index, dogmatic
+        sbml_dfs_dict, pw_index, dogmatic=dogmatic
     )
     consensus_model.to_pickle(output_model_uri)
 

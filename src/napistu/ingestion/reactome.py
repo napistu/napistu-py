@@ -71,7 +71,9 @@ def construct_reactome_consensus(
         sbml_dfs_core.SBML_dfs: A consensus SBML
     """
     if isinstance(pw_index_inp, str):
-        pw_index = indices.adapt_pw_index(pw_index_inp, species=species, outdir=outdir)
+        pw_index = indices.adapt_pw_index(
+            pw_index_inp, organismal_species=species, outdir=outdir
+        )
     elif isinstance(pw_index_inp, indices.PWIndex):
         pw_index = pw_index_inp
     else:

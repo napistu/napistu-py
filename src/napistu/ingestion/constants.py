@@ -10,8 +10,41 @@ from napistu.constants import (
     SBOTERM_NAMES,
 )
 
-# standardization - species
+# aliases and descriptions for major data sources
 
+# high-level sources
+DATA_SOURCES = SimpleNamespace(
+    BIGG="BiGG",
+    REACTOME="Reactome",
+    INTACT="IntAct",
+    STRING="STRING",
+    DOGMA="Dogma",
+    OMNIPATH="OmniPath",
+)
+
+DATA_SOURCE_DESCRIPTIONS = {
+    DATA_SOURCES.BIGG: "UCSD genome-scale metabolic models",
+    DATA_SOURCES.REACTOME: "Reactome pathway database",
+    DATA_SOURCES.INTACT: "IntAct protein-protein interaction database",
+    DATA_SOURCES.STRING: "STRING protein-protein interaction database",
+    DATA_SOURCES.DOGMA: "Napistu gene, transcript, and protein annotations",
+    DATA_SOURCES.OMNIPATH: "Intra- & intercellular signaling knowledge",
+}
+
+# names for specific models within sources
+MODEL_SOURCES = SimpleNamespace(
+    RECON3D="Recon3D",
+    IMM1415="iMM1415",
+    IMM904="iMM904",
+)
+
+MODEL_SOURCE_DESCRIPTIONS = {
+    MODEL_SOURCES.RECON3D: "The Recon3D human metabolic model",
+    MODEL_SOURCES.IMM1415: "The iMM1415 mouse metabolic model",
+    MODEL_SOURCES.IMM904: "The iMM904 yeast metabolic model",
+}
+
+# standardization - species
 LATIN_SPECIES_NAMES = SimpleNamespace(
     HOMO_SAPIENS="Homo sapiens",
     MUS_MUSCULUS="Mus musculus",
@@ -201,17 +234,11 @@ BIGG_MODEL_URLS = {
     LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE: "http://bigg.ucsd.edu/static/models/iMM904.xml",
 }
 
-BIGG_MODEL_FIELD_URL = "url"
-BIGG_MODEL_FIELD_SPECIES = "species"
-
 BIGG_MODEL_KEYS = {
-    LATIN_SPECIES_NAMES.HOMO_SAPIENS: "recon3D",
-    LATIN_SPECIES_NAMES.MUS_MUSCULUS: "iMM1415",
-    LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE: "iMM904",
+    LATIN_SPECIES_NAMES.HOMO_SAPIENS: MODEL_SOURCES.RECON3D,
+    LATIN_SPECIES_NAMES.MUS_MUSCULUS: MODEL_SOURCES.IMM1415,
+    LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE: MODEL_SOURCES.IMM904,
 }
-BIGG_RECON3D_FIELD_ID = "id"
-BIGG_RECON3D_FIELD_TYPE = "type"
-BIGG_RECON3D_FIELD_URI = "uri"
 
 # IDENTIFIERS ETL
 IDENTIFIERS_ETL_YEAST_URL = "https://www.uniprot.org/docs/yeast.txt"
