@@ -25,7 +25,7 @@ def test_source():
     )
 
     source_obj = source.Source(source_example_df)
-    source_init = source.Source(init=True)
+    source_init = source.Source.empty()
 
     assert source.merge_sources([source_init, source_init]) == source_init
 

@@ -249,7 +249,7 @@ class SBML:
                         SBML_DFS.C_ID: comp.getId(),
                         SBML_DFS.C_NAME: comp.getName(),
                         SBML_DFS.C_IDENTIFIERS: identifiers.cv_to_Identifiers(comp),
-                        SBML_DFS.C_SOURCE: source.Source(init=True),
+                        SBML_DFS.C_SOURCE: source.Source.empty(),
                     }
                 )
 
@@ -277,7 +277,7 @@ class SBML:
                 SBML_DFS.SC_NAME: spec.getName(),
                 SBML_DFS.C_ID: spec.getCompartment(),
                 SBML_DFS.S_IDENTIFIERS: identifiers.cv_to_Identifiers(spec),
-                SBML_DFS.SC_SOURCE: source.Source(init=True),
+                SBML_DFS.SC_SOURCE: source.Source.empty(),
             }
 
             comp_species.append(spec_dict)
@@ -313,7 +313,7 @@ class SBML:
                     # Recon3D.xml has both fbc:label and fbc:name attributes, with gene name in fbc:nam
                     SBML_DFS.C_ID: None,
                     SBML_DFS.S_IDENTIFIERS: identifiers.cv_to_Identifiers(gene_product),
-                    SBML_DFS.SC_SOURCE: source.Source(init=True),
+                    SBML_DFS.SC_SOURCE: source.Source.empty(),
                 }
 
                 fbc_gene_products.append(gene_dict)
@@ -412,7 +412,7 @@ class SBML:
             [SBML_DFS.SC_NAME, SBML_DFS.C_ID], axis=1
         )
         consensus_species[SBML_DFS.S_SOURCE] = [
-            source.Source(init=True) for x in range(0, consensus_species.shape[0])
+            source.Source.empty() for x in range(0, consensus_species.shape[0])
         ]
 
         species = consensus_species[SPECIES_VARS]
@@ -518,7 +518,7 @@ class SBML_reaction:
             SBML_DFS.R_ID: sbml_reaction.getId(),
             SBML_DFS.R_NAME: sbml_reaction.getName(),
             SBML_DFS.R_IDENTIFIERS: identifiers.cv_to_Identifiers(sbml_reaction),
-            SBML_DFS.R_SOURCE: source.Source(init=True),
+            SBML_DFS.R_SOURCE: source.Source.empty(),
             SBML_DFS.R_ISREVERSIBLE: sbml_reaction.getReversible(),
         }
 
@@ -637,7 +637,7 @@ def _define_compartments_missing_cvterms(
                     )
                 ]
             ),
-            SBML_DFS.C_SOURCE: source.Source(init=True),
+            SBML_DFS.C_SOURCE: source.Source.empty(),
         }
 
     if len(mapped_compartment_key) > 0:
@@ -660,7 +660,7 @@ def _define_compartments_missing_cvterms(
                     )
                 ]
             ),
-            SBML_DFS.C_SOURCE: source.Source(init=True),
+            SBML_DFS.C_SOURCE: source.Source.empty(),
         }
 
     return compartment_entry

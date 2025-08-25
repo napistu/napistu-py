@@ -135,7 +135,7 @@ def convert_string_to_sbml_dfs(
     )
 
     # Per convention unaggregated models receive an empty source
-    interaction_source = source.Source(init=True)
+    interaction_source = source.Source.empty()
 
     # define identifier mapping from aliases to use:
     alias_to_identifier = {

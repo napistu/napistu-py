@@ -1912,7 +1912,7 @@ def sbml_dfs_from_edgelist(
     interaction_edgelist: pd.DataFrame,
     species_df: pd.DataFrame,
     compartments_df: pd.DataFrame,
-    interaction_source: source.Source = source.Source(init=True),
+    interaction_source: source.Source | None = None,
     interaction_edgelist_defaults: dict[str, Any] = INTERACTION_EDGELIST_DEFAULTS,
     keep_species_data: bool | str = False,
     keep_reactions_data: bool | str = False,
@@ -1960,6 +1960,9 @@ def sbml_dfs_from_edgelist(
         Validated SBML data structure containing compartments, species,
         compartmentalized species, reactions, and reaction species tables.
     """
+
+    if interaction_source is None:
+        interaction_source = source.Source.empty()
 
     # 0. Add defaults to interaction edgelist
     interaction_edgelist_with_defaults = sbml_dfs_utils._add_edgelist_defaults(

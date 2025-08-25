@@ -30,13 +30,24 @@ class Source:
 
     Methods
     -------
+    empty() : classmethod
+        Create an empty Source object
+    validate_single_source() : bool
+        Check whether the Source object contains exactly 1 entry
+    _validate_source_df(source_df) : None
+        Validate that source_df is a pandas DataFrame with required columns
+    _validate_pathway_index(pw_index, source_df) : None
+        Validate pathway index and check for missing pathways
+    _process_source_df(source_df, pw_index) : pd.DataFrame
+        Process source DataFrame by merging with pathway index if provided
+    _validate_final_df(df, required_columns) : None
+        Validate that the final DataFrame has all required columns
 
     """
 
     def __init__(
         self,
-        source_df: pd.DataFrame | None = None,
-        init: bool = False,
+        source_df: pd.DataFrame,
         pw_index: indices.PWIndex | None = None,
     ) -> None:
         """
@@ -51,11 +62,8 @@ class Source:
         ----------
         source_df : pd.DataFrame
             A dataframe containing the model source and other optional variables
-        init : bool
-            Creates an empty source object. This is typically used when creating an SBML_dfs
-            object from a single source.
-        pw_index : indices.PWIndex
-            a pathway index object containing the pathway_id and other metadata
+        pw_index : indices.PWIndex, optional
+            A pathway index object containing the pathway_id and other metadata
 
         Returns
         -------
@@ -64,56 +72,107 @@ class Source:
         Raises
         ------
         ValueError:
-            if pw_index is not a indices.PWIndex
+            If pw_index is not a indices.PWIndex
         ValueError:
-            if SOURCE_SPEC.MODEL is not present in source_df
+            If required columns are not present in source_df
+        TypeError:
+            If source_df is not a pd.DataFrame
         """
+        # Validate inputs
+        self._validate_source_df(source_df)
+        if pw_index is not None:
+            self._validate_pathway_index(pw_index, source_df)
 
-        if init is True:
-            # initialize with an empty Source
-            self.source = None
-        else:
-            if isinstance(source_df, pd.DataFrame):
-                # if pw_index is provided then it will be joined to source_df to add additional metadata
-                if pw_index is not None:
-                    if not isinstance(pw_index, indices.PWIndex):
-                        raise ValueError(
-                            f"pw_index must be a indices.PWIndex or None and was {type(pw_index).__name__}"
-                        )
-                    else:
-                        # check that all models are present in the pathway index
-                        missing_pathways = set(
-                            source_df[SOURCE_SPEC.MODEL].tolist()
-                        ).difference(
-                            set(pw_index.index[SOURCE_SPEC.PATHWAY_ID].tolist())
-                        )
-                        if len(missing_pathways) > 0:
-                            raise ValueError(
-                                f"{len(missing_pathways)} pathway models are present"
-                                f" in source_df but not the pw_index: {', '.join(missing_pathways)}"
-                            )
+        # Process DataFrame (merge with pathway index if provided)
+        processed_df = self._process_source_df(source_df, pw_index)
 
-                        source_df = source_df.merge(
-                            pw_index.index,
-                            left_on=SOURCE_SPEC.MODEL,
-                            right_on=SOURCE_SPEC.PATHWAY_ID,
-                        )
+        # Final validation and assignment
+        required_columns = [SOURCE_SPEC.MODEL, SOURCE_SPEC.PATHWAY_ID]
+        self._validate_final_df(processed_df, required_columns)
+        self.source = processed_df
 
-                self.source = source_df
-            else:
-                raise TypeError(
-                    'source_df must be a pd.DataFrame if "init" is False, but was type '
-                    f"{type(source_df).__name__}"
-                )
+    def validate_single_source(self) -> bool:
+        """
+        Check whether the Source object contains exactly 1 entry.
 
-            if SOURCE_SPEC.MODEL not in source_df.columns.values.tolist():
-                raise ValueError(
-                    f"{SOURCE_SPEC.MODEL} variable was not found, but is required in a Source object"
-                )
-            if SOURCE_SPEC.PATHWAY_ID not in source_df.columns.values.tolist():
-                raise ValueError(
-                    f"{SOURCE_SPEC.PATHWAY_ID} variable was not found, but is required in a Source object"
-                )
+        Returns
+        -------
+        bool
+            True if the Source contains exactly one row, False otherwise
+        """
+        if self.source is None:
+            return False
+        return len(self.source) == 1
+
+    @classmethod
+    def empty(cls) -> "Source":
+        """
+        Create an empty Source object.
+
+        This is typically used when creating an SBML_dfs object from a single source.
+
+        Returns
+        -------
+        Source
+            An empty Source instance with source attribute set to None
+        """
+        instance = cls.__new__(cls)  # Create instance without calling __init__
+        instance.source = None
+        return instance
+
+    def _validate_source_df(self, source_df: pd.DataFrame) -> None:
+        """Validate that source_df is a pandas DataFrame with required columns."""
+        if not isinstance(source_df, pd.DataFrame):
+            raise TypeError(
+                f"source_df must be a pd.DataFrame, but was type {type(source_df).__name__}"
+            )
+
+        if SOURCE_SPEC.MODEL not in source_df.columns:
+            raise ValueError(
+                f"{SOURCE_SPEC.MODEL} variable was not found, but is required in a Source object"
+            )
+
+    def _validate_pathway_index(
+        self, pw_index: indices.PWIndex, source_df: pd.DataFrame
+    ) -> None:
+        """Validate pathway index and check for missing pathways."""
+        if not isinstance(pw_index, indices.PWIndex):
+            raise ValueError(
+                f"pw_index must be a indices.PWIndex or None and was {type(pw_index).__name__}"
+            )
+
+        # Check that all models are present in the pathway index
+        source_models = set(source_df[SOURCE_SPEC.MODEL])
+        index_pathways = set(pw_index.index[SOURCE_SPEC.PATHWAY_ID])
+        missing_pathways = source_models - index_pathways
+
+        if missing_pathways:
+            raise ValueError(
+                f"{len(missing_pathways)} pathway models are present in source_df "
+                f"but not the pw_index: {', '.join(missing_pathways)}"
+            )
+
+    def _process_source_df(
+        self, source_df: pd.DataFrame, pw_index: indices.PWIndex | None
+    ) -> pd.DataFrame:
+        """Process source DataFrame by merging with pathway index if provided."""
+        if pw_index is None:
+            return source_df
+
+        return source_df.merge(
+            pw_index.index,
+            left_on=SOURCE_SPEC.MODEL,
+            right_on=SOURCE_SPEC.PATHWAY_ID,
+        )
+
+    def _validate_final_df(self, df: pd.DataFrame, required_columns: list[str]) -> None:
+        """Validate that the final DataFrame has all required columns."""
+        missing_columns = [col for col in required_columns if col not in df.columns]
+
+        if missing_columns:
+            raise ValueError(
+                f"Required columns {missing_columns} not found in final DataFrame"
+            )
 
 
 def create_source_table(
@@ -122,7 +181,7 @@ def create_source_table(
     """
     Create Source Table
 
-    Create a table with one row per "new_id" and a Source object created from the unionof "old_id" Source objects
+    Create a table with one row per "new_id" and a Source object created from the union of "old_id" Source objects
 
     Parameters
     ----------

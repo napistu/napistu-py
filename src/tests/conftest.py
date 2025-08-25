@@ -70,7 +70,7 @@ def sbml_dfs_glucose_metabolism():
 def minimal_valid_sbml_dfs():
     """Create a minimal valid SBML_dfs object for testing."""
     blank_id = Identifiers([])
-    source = Source(init=True)
+    source = Source.empty()
 
     sbml_dict = {
         SBML_DFS.COMPARTMENTS: pd.DataFrame(

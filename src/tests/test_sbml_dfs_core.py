@@ -693,7 +693,7 @@ def test_validate_table(minimal_valid_sbml_dfs):
                 identifiers.Identifiers([]),
                 identifiers.Identifiers([]),
             ],
-            SBML_DFS.S_SOURCE: [Source(init=True), Source(init=True)],
+            SBML_DFS.S_SOURCE: [Source.empty(), Source.empty()],
         },
         index=pd.Index(["S00001", "S00001"], name=SBML_DFS.S_ID),
     )

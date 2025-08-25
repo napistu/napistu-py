@@ -18,7 +18,7 @@ from napistu.ingestion.constants import EXCHANGE_COMPARTMENT, COMPARTMENTS
 def _create_sbml_dfs_missing_transport_rxns():
 
     blank_id = Identifiers([])
-    blank_source = Source(init=True)
+    blank_source = Source.empty()
 
     compartments = pd.DataFrame(
         {

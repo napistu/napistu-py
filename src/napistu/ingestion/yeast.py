@@ -109,7 +109,7 @@ def convert_idea_kinetics_to_sbml_dfs(
     compartments_df = sbml_dfs_utils.stub_compartments()
 
     # Per convention unaggregated models receive an empty source
-    interaction_source = source.Source(init=True)
+    interaction_source = source.Source.empty()
 
     sbml_dfs = sbml_dfs_core.sbml_dfs_from_edgelist(
         interaction_edgelist=interaction_edgelist,

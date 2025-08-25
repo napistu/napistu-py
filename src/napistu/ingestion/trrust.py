@@ -64,7 +64,7 @@ def convert_trrust_to_sbml_dfs(
 
     # Start building new sbml dfs
     # Per convention unaggregated models receive an empty source
-    interaction_source = source.Source(init=True)
+    interaction_source = source.Source.empty()
 
     # Summarize edges
 

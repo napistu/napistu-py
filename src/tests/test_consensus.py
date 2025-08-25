@@ -69,7 +69,7 @@ def test_source_tracking():
             "new_id": [0, 0, 1, 1],
         }
     )
-    agg_tbl[table_schema["source"]] = source.Source(init=True)
+    agg_tbl[table_schema["source"]] = source.Source.empty()
 
     # define new_ids and the models they came from
     # these models will be matched to the pw_index to flush out metadata
@@ -115,7 +115,7 @@ def test_source_tracking():
     )
 
     agg_tbl2[table_schema["source"]] = consensus_sources.tolist() + [
-        source.Source(init=True) for i in range(0, 2)
+        source.Source.empty() for i in range(0, 2)
     ]
 
     lookup_table2 = pd.DataFrame(
