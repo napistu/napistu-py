@@ -18,8 +18,10 @@ from napistu.ingestion import sbml
 
 from napistu.constants import (
     BQB_DEFINING_ATTRS,
+    EXPECTED_PW_INDEX_COLUMNS,
     IDENTIFIERS,
     SBML_DFS,
+    SBML_DFS_METADATA,
     SBML_DFS_SCHEMA,
     SCHEMA_DEFS,
     SOURCE_SPEC,
@@ -394,6 +396,78 @@ def construct_sbml_dfs_dict(
                 f"{pw_entry[SOURCE_SPEC.NAME]} not successfully loaded:", exc_info=True
             )
     return sbml_dfs_dict
+
+
+def prepare_consensus_model(
+    sbml_dfs_list: list[sbml_dfs_core.SBML_dfs],
+) -> tuple[dict[str, sbml_dfs_core.SBML_dfs], indices.PWIndex]:
+    """
+    Prepare for creating a consensus model using a list of to-be-consolidated sbml_dfs objects.
+
+    This function will extract the core source metadata from a set of SBML_dfs objects and use it to create a pathway index object. The
+    pathway_id from these objects will then be used to key the the sbml_dfs_list objects to create the expected input for `construct_consensus_model`.
+
+    Parameters
+    ----------
+    sbml_dfs_list : list[SBML_dfs]
+        List of sbml_dfs objects to be consolidated.
+
+    Returns
+    -------
+    sbml_dfs_dict : dict[str, SBML_dfs]
+        Dictionary of sbml_dfs objects indexed by pathway_id.
+    pw_index : indices.PWIndex
+        Pathway index object.
+
+    Raises
+    ------
+    ValueError
+        If the sbml_dfs_list is empty.
+        If the sbml_dfs_list contains sbml_dfs objects with more than one row.
+        If the sbml_dfs_list contains sbml_dfs objects with missing columns.
+        If the sbml_dfs_list contains sbml_dfs objects with duplicate pathway_ids.
+        If the sbml_dfs_list contains sbml_dfs objects with invalid pathway_ids.
+    """
+
+    invalid_sbml_dfs = [
+        not isinstance(x, sbml_dfs_core.SBML_dfs) for x in sbml_dfs_list
+    ]
+
+    if sum(invalid_sbml_dfs) > 0:
+        raise ValueError(
+            f"sbml_dfs_list contains {sum(invalid_sbml_dfs)} invalid sbml_dfs objects"
+        )
+
+    if len(sbml_dfs_list) == 0:
+        raise ValueError("sbml_dfs_list is empty")
+
+    sources_dfs = [
+        x.metadata[SBML_DFS_METADATA.SBML_DFS_SOURCE].source for x in sbml_dfs_list
+    ]
+
+    # check that entries have exactly 1 row
+    if not all([x.shape[0] == 1 for x in sources_dfs]):
+        raise ValueError("Each entry in sbml_dfs_dict must have exactly 1 row")
+
+    source_df = pd.concat(sources_dfs)
+
+    missing_columns = EXPECTED_PW_INDEX_COLUMNS - set(source_df.columns.tolist())
+    if missing_columns:
+        raise ValueError(
+            f"Missing columns from sbml_dfs_source objects pulled from the metadata of sbml_dfs_dict: {missing_columns}"
+        )
+
+    # convert to pathway index object which will perform validations like ensuring that all pathway_ids are unique
+    pw_index = indices.PWIndex(
+        source_df[list(EXPECTED_PW_INDEX_COLUMNS)], validate_paths=False
+    )
+
+    sbml_dfs_dict = {
+        x: y
+        for x, y in zip(pw_index.index[SOURCE_SPEC.PATHWAY_ID].tolist(), sbml_dfs_list)
+    }
+
+    return sbml_dfs_dict, pw_index
 
 
 # private functions

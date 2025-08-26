@@ -58,15 +58,25 @@ def sbml_dfs(sbml_model, model_source_stub):
 
 
 @fixture
-def sbml_dfs_metabolism():
+def pw_index_metabolism():
+    """Create a pathway index for metabolism test data."""
     test_path = os.path.abspath(os.path.join(__file__, os.pardir))
     test_data = os.path.join(test_path, "test_data")
+    return indices.PWIndex(os.path.join(test_data, "pw_index_metabolism.tsv"))
 
-    pw_index = indices.PWIndex(os.path.join(test_data, "pw_index_metabolism.tsv"))
-    sbml_dfs_dict = consensus.construct_sbml_dfs_dict(pw_index)
-    sbml_dfs = consensus.construct_consensus_model(sbml_dfs_dict, pw_index)
 
-    return sbml_dfs
+@fixture
+def sbml_dfs_dict_metabolism(pw_index_metabolism):
+    """Create a dictionary of SBML_dfs objects from metabolism test data."""
+    return consensus.construct_sbml_dfs_dict(pw_index_metabolism)
+
+
+@fixture
+def sbml_dfs_metabolism(sbml_dfs_dict_metabolism, pw_index_metabolism):
+    """Create a consensus SBML_dfs model from metabolism test data."""
+    return consensus.construct_consensus_model(
+        sbml_dfs_dict_metabolism, pw_index_metabolism
+    )
 
 
 @fixture

@@ -13,6 +13,7 @@ from napistu.ingestion import sbml
 from napistu.modify import pathwayannot
 from napistu.constants import (
     SBML_DFS,
+    SBML_DFS_METADATA,
     SBML_DFS_SCHEMA,
     SCHEMA_DEFS,
     IDENTIFIERS,
@@ -426,3 +427,79 @@ def test_build_consensus_identifiers_handles_merges_and_missing_ids():
     ]
     assert hasattr(ids_obj_noid, "ids")
     assert len(getattr(ids_obj_noid, "ids", [])) == 0
+
+
+def test_consensus_round_trip_consistency(
+    pw_index_metabolism, sbml_dfs_dict_metabolism, sbml_dfs_metabolism
+):
+    """
+    Test that round-trip conversion between different data structures produces consistent results.
+
+    This test verifies that:
+    1. sbml_dfs_dict -> sbml_dfs_list -> (sbml_dfs_dict, pw_index) -> consensus_model
+    2. pw_index -> sbml_dfs_dict -> consensus_model
+
+    Both paths should produce the same consensus model.
+    """
+
+    # Path 1: pw_index -> sbml_dfs_dict -> consensus_model was already created in conftest.py
+    pw_index = pw_index_metabolism
+    sbml_dfs_dict = sbml_dfs_dict_metabolism
+    sbml_dfs = sbml_dfs_metabolism
+
+    # Path 2: sbml_dfs_dict -> sbml_dfs_list -> (sbml_dfs_dict, pw_index) -> consensus_model
+    sbml_dfs_list = list(sbml_dfs_dict.values())
+    sbml_dfs_dict_from_list, pw_index_from_list = consensus.prepare_consensus_model(
+        sbml_dfs_list
+    )
+    sbml_dfs_from_list = consensus.construct_consensus_model(
+        sbml_dfs_dict_from_list, pw_index_from_list
+    )
+
+    # Verify both paths produce identical consensus models
+    assert (
+        sbml_dfs.species.shape == sbml_dfs_from_list.species.shape
+    ), "Species tables should have same shape"
+    assert (
+        sbml_dfs.reactions.shape == sbml_dfs_from_list.reactions.shape
+    ), "Reactions tables should have same shape"
+    assert (
+        sbml_dfs.reaction_species.shape == sbml_dfs_from_list.reaction_species.shape
+    ), "Reaction species tables should have same shape"
+
+    # Verify the pw_index objects are equivalent
+    assert (
+        pw_index.index.shape == pw_index_from_list.index.shape
+    ), "PWIndex objects should have same shape"
+
+    # Compare columns using set comparison
+    assert set(pw_index.index.columns) == set(
+        pw_index_from_list.index.columns
+    ), "PWIndex objects should have same columns"
+
+    # Compare the actual pw_index data, ignoring row/column order and dtype differences
+    pd.testing.assert_frame_equal(
+        pw_index.index,
+        pw_index_from_list.index,
+        check_like=True,  # Ignore the order of index & columns
+        check_dtype=False,  # Ignore dtype differences (e.g., float64 vs object for date column)
+    )
+
+    # Verify the sbml_dfs_dict objects are equivalent
+    assert len(sbml_dfs_dict) == len(
+        sbml_dfs_dict_from_list
+    ), "SBML_dfs dictionaries should have same number of entries"
+    assert set(sbml_dfs_dict.keys()) == set(
+        sbml_dfs_dict_from_list.keys()
+    ), "SBML_dfs dictionaries should have same keys"
+
+    # Compare the metadata of each paired SBML_dfs object
+    for key in sbml_dfs_dict.keys():
+        original_sbml_dfs = sbml_dfs_dict[key]
+        reconstructed_sbml_dfs = sbml_dfs_dict_from_list[key]
+
+        # Compare metadata using pandas testing
+        pd.testing.assert_frame_equal(
+            original_sbml_dfs.metadata[SBML_DFS_METADATA.SBML_DFS_SOURCE].source,
+            reconstructed_sbml_dfs.metadata[SBML_DFS_METADATA.SBML_DFS_SOURCE].source,
+        )
