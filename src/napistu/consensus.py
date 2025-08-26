@@ -18,6 +18,7 @@ from napistu.ingestion import sbml
 
 from napistu.constants import (
     BQB_DEFINING_ATTRS,
+    ENTITIES_TO_ENTITY_DATA,
     EXPECTED_PW_INDEX_COLUMNS,
     IDENTIFIERS,
     SBML_DFS,
@@ -931,6 +932,30 @@ def _create_consensus_entities(
     return consensus_entities, lookup_tables
 
 
+def _create_consensus_entity_data(
+    combined_entity_data: pd.DataFrame, primary_key: str
+) -> pd.DataFrame:
+    """
+    Create consensus entity data by combining multiple rows with the same index value.
+
+    This function takes a DataFrame that might have multiple rows for the same index value
+    and combines them so there is exactly 1 row per index value using the "first" method.
+
+    Parameters:
+    -----------
+    combined_entity_data : pd.DataFrame
+        Input DataFrame with potentially multiple rows per index value
+    primary_key : str
+        The column name to use as the primary key for grouping
+
+    Returns:
+    --------
+    pd.DataFrame
+        DataFrame with exactly one row per unique primary key value
+    """
+    return combined_entity_data.reset_index().groupby(primary_key).first()
+
+
 def _create_consensus_table(
     agg_primary_table: pd.DataFrame,
     lookup_table: pd.Series,
@@ -1206,17 +1231,25 @@ def _merge_entity_data_create_consensus(
 
     Report cases where a single "new" id is associated with multiple different values of entity_var
 
-    Args
-        entity_data_dict (dict): dictionary containing all model's "an_entity_data_type" dictionaries
-        lookup_table (pd.Series): a series where the index is an old model and primary key and the
-          value is the new consensus id
-        entity_schema (dict): schema for "table"
-        an_entity_data_type (str): data_type from species/reactions_data in entity_data_dict
-        table (str): table whose data is being consolidates (currently species or reactions)
+    Parameters:
+    ----------
+    entity_data_dict: dict
+        Dictionary containing all model's "an_entity_data_type" dictionaries
+    lookup_table: pd.Series
+        A series where the index is an old model and primary key and the
+        value is the new consensus id
+    entity_schema: dict
+        Schema for "table"
+    an_entity_data_type: str
+        data_type from species/reactions_data in entity_data_dict
+    table: str
+        table whose data is being consolidates (currently species or reactions)
 
     Returns:
-        consensus_entity_data (pd.DataFrame) table where index is primary key of "table" and
-          values are all distinct annotations from "an_entity_data_type".
+    ----------
+    pd.DataFrame
+        Table where index is primary key of "table" and
+        values are all distinct annotations from "an_entity_data_type".
 
     """
 
@@ -1225,36 +1258,23 @@ def _merge_entity_data_create_consensus(
     ]
 
     logger.info(
-        f"Merging {len(models_w_entity_data_type)} models with {an_entity_data_type} data in the {table} table"
+        f"Merging {len(models_w_entity_data_type)} models ({', '.join(models_w_entity_data_type)}) with a \"{an_entity_data_type}\" {ENTITIES_TO_ENTITY_DATA[table]} table"
     )
 
     # check that all tables have the same index and column names
-    distinct_indices = {
-        ", ".join(entity_data_dict[x][an_entity_data_type].index.names)
-        for x in models_w_entity_data_type
-    }
-    if len(distinct_indices) > 1:
-        raise ValueError(
-            f"Multiple tables with the same {an_entity_data_type} cannot be combined"
-            " because they have different index names:"
-            f"{' & '.join(list(distinct_indices))}"
-        )
-    distinct_cols = {
-        ", ".join(entity_data_dict[x][an_entity_data_type].columns.tolist())
-        for x in models_w_entity_data_type
-    }
-    if len(distinct_cols) > 1:
-        raise ValueError(
-            f"Multiple tables with the same {an_entity_data_type} cannot be combined"
-            " because they have different column names:"
-            f"{' & '.join(list(distinct_cols))}"
+    if len(models_w_entity_data_type) > 1:
+        _validate_merge_entity_data_create_consensus(
+            entity_data_dict, an_entity_data_type, models_w_entity_data_type
         )
 
     # stack all models
     combined_entity_data = pd.concat(
         {k: entity_data_dict[k][an_entity_data_type] for k in models_w_entity_data_type}
     )
-    combined_entity_data.index.names = ["model", entity_schema["pk"]]
+    combined_entity_data.index.names = [
+        SOURCE_SPEC.MODEL,
+        entity_schema[SCHEMA_DEFS.PK],
+    ]
     if isinstance(combined_entity_data, pd.Series):
         # enforce that atttributes should always be DataFrames
         combined_entity_data = combined_entity_data.to_frame()
@@ -1264,8 +1284,8 @@ def _merge_entity_data_create_consensus(
     combined_entity_data = (
         combined_entity_data.join(lookup_table)
         .reset_index(drop=True)
-        .rename({"new_id": entity_schema["pk"]}, axis=1)
-        .set_index(entity_schema["pk"])
+        .rename({"new_id": entity_schema[SCHEMA_DEFS.PK]}, axis=1)
+        .set_index(entity_schema[SCHEMA_DEFS.PK])
         .sort_index()
     )
 
@@ -1277,7 +1297,9 @@ def _merge_entity_data_create_consensus(
     # save one value for each id-variable combination
     # (this will accept the first value regardless of the above mismatches.)
     consensus_entity_data = (
-        combined_entity_data.reset_index().groupby(entity_schema["pk"]).first()
+        combined_entity_data.reset_index()
+        .groupby(entity_schema[SCHEMA_DEFS.PK])
+        .first()
     )
 
     return consensus_entity_data
@@ -1313,7 +1335,7 @@ def _merge_entity_data(
     """
 
     entity_schema = sbml_dfs_dict[list(sbml_dfs_dict.keys())[0]].schema[table]
-    data_table_name = table + "_data"
+    data_table_name = ENTITIES_TO_ENTITY_DATA[table]
 
     entity_data_dict = {
         k: getattr(sbml_dfs_dict[k], data_table_name) for k in sbml_dfs_dict.keys()
@@ -1360,17 +1382,17 @@ def _merge_entity_data_report_mismatches(
 
     """
 
-    data_table_name = table + "_data"
+    data_table_name = ENTITIES_TO_ENTITY_DATA[table]
 
     entity_vars = combined_entity_data.columns
     for entity_var in entity_vars:
         unique_counts = (
             combined_entity_data.reset_index()
-            .groupby(entity_schema["pk"])
+            .groupby(entity_schema[SCHEMA_DEFS.PK])
             .agg("nunique")
         )
         entities_w_imperfect_matches = unique_counts[
-            unique_counts[entity_var] != 1
+            unique_counts[entity_var] > 1
         ].index.tolist()
 
         if len(entities_w_imperfect_matches) > 0:
@@ -2164,6 +2186,58 @@ def _validate_consensus_table(
             f"Missing in new: {missing_in_new}\n"
             f"Extra in new: {extra_in_new}"
         )
+
+
+def _validate_merge_entity_data_create_consensus(
+    entity_data_dict, an_entity_data_type, models_w_entity_data_type
+):
+    """
+    Validate creating a consensus of entity data tables in cases where the same table is present in multiple models
+
+    This function checks whether tables with the same entity data key can be reasonably merged (same index and column names) or whether they seem like apples-to-oranges.
+
+    Parameters:
+    ----------
+    entity_data_dict: dict
+        Dictionary containing all model's "an_entity_data_type" dictionaries
+    an_entity_data_type: str
+        The type of entity data to merge
+    models_w_entity_data_type: list
+        List of models with the same entity data type
+
+    Returns:
+    -------
+    None
+
+    Raises:
+    ------
+    ValueError:
+        If the tables have different index or column names
+    """
+
+    # check that all tables have the same index and column names
+    distinct_indices = {
+        ", ".join(entity_data_dict[x][an_entity_data_type].index.names)
+        for x in models_w_entity_data_type
+    }
+    if len(distinct_indices) > 1:
+        raise ValueError(
+            f"Multiple tables with the same {an_entity_data_type} cannot be combined"
+            " because they have different index names:"
+            f"{' & '.join(list(distinct_indices))}"
+        )
+    distinct_cols = {
+        ", ".join(entity_data_dict[x][an_entity_data_type].columns.tolist())
+        for x in models_w_entity_data_type
+    }
+    if len(distinct_cols) > 1:
+        raise ValueError(
+            f"Multiple tables with the same {an_entity_data_type} cannot be combined"
+            " because they have different column names:"
+            f"{' & '.join(list(distinct_cols))}"
+        )
+
+    return None
 
 
 def _validate_meta_identifiers(meta_identifiers: pd.DataFrame) -> None:

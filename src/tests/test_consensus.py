@@ -4,6 +4,7 @@ import os
 
 import pandas as pd
 import pytest
+
 from napistu import consensus
 from napistu import identifiers
 from napistu import indices
