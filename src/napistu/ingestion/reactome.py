@@ -6,7 +6,7 @@ import os
 import random
 import warnings
 from io import StringIO
-from typing import Iterable
+from typing import Iterable, Union
 
 import pandas as pd
 import requests
@@ -18,25 +18,41 @@ with warnings.catch_warnings():
 from napistu import indices
 from napistu import sbml_dfs_core
 from napistu import utils
+from napistu.source import Source
 from napistu.consensus import construct_consensus_model
 from napistu.consensus import construct_sbml_dfs_dict
-from napistu.ingestion.constants import REACTOME_PATHWAY_INDEX_COLUMNS
-from napistu.ingestion.constants import REACTOME_PATHWAY_LIST_COLUMNS
-from napistu.ingestion.constants import REACTOME_PATHWAYS_URL
-from napistu.ingestion.constants import REACTOME_SMBL_URL
+from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
+from napistu.constants import (
+    EXPECTED_PW_INDEX_COLUMNS,
+    SOURCE_SPEC,
+)
+from napistu.ingestion.constants import (
+    DATA_SOURCE_DESCRIPTIONS,
+    DATA_SOURCES,
+    REACTOME_PATHWAY_LIST_COLUMNS,
+    REACTOME_PATHWAYS_URL,
+    REACTOME_SMBL_URL,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def reactome_sbml_download(output_dir_path: str, overwrite: bool = False):
+def reactome_sbml_download(output_dir_path: str, overwrite: bool = False) -> None:
     """
     Reactome SBML Download
 
     Download Reactome SBML (systems biology markup language) for all reactome species.
 
-    Args:
-        output_dir_path (str): Paths to a directory where .sbml files should be saved.
-        overwrite (bool): Overwrite an existing output directory. Default: False
+    Parameters
+    ----------
+    output_dir_path : str
+        Paths to a directory where .sbml files should be saved.
+    overwrite : bool
+        Overwrite an existing output directory. Default: False
+
+    Returns
+    -------
+    None
     """
     utils.download_and_extract(
         REACTOME_SMBL_URL,
@@ -48,36 +64,52 @@ def reactome_sbml_download(output_dir_path: str, overwrite: bool = False):
 
     # save as tsv
     out_fs = open_fs(output_dir_path)
-    with out_fs.open("pw_index.tsv", "wb") as index_path:
+    with out_fs.open(SOURCE_SPEC.PW_INDEX_FILE, "wb") as index_path:
         pw_index.to_csv(index_path, sep="\t", index=False)
+
+    return None
 
 
 # Functions useful to integrate reactome pathways into a consensus
 def construct_reactome_consensus(
     pw_index_inp: str | indices.PWIndex,
-    species: str | Iterable[str] | None = None,
+    organismal_species: Union[str, OrganismalSpeciesValidator],
     outdir: str | None = None,
     strict: bool = True,
 ) -> sbml_dfs_core.SBML_dfs:
     """Constructs a basic consensus model by merging all models from a pw_index
 
-    Args:
-        pw_index_inp (str | indices.PWIndex): PWIndex or uri pointing to PWIndex
-        species (str | Iterable[str] | None): one or more species to filter by. Default: no filtering
-        outdir (str | None, optional): output directory used to cache results. Defaults to None.
-        strict (bool): should failure of loading any given model throw an exception? If False a warning is thrown.
+    Parameters
+    ----------
+    pw_index_inp : str | indices.PWIndex
+        PWIndex or uri pointing to PWIndex
+    organismal_species : str | OrganismalSpeciesValidator
+        The species to filter to
+    outdir : str | None, optional
+        output directory used to cache results. Defaults to None.
+    strict : bool
+        should failure of loading any given model throw an exception? If False a warning is thrown.
 
-    Returns:
-        sbml_dfs_core.SBML_dfs: A consensus SBML
+    Returns
+    -------
+    sbml_dfs_core.SBML_dfs: A consensus SBML
     """
+
+    if isinstance(organismal_species, str):
+        organismal_species_validator = OrganismalSpeciesValidator(organismal_species)
+    else:
+        organismal_species_validator = organismal_species
+    latin_species = organismal_species_validator.latin_name
+
     if isinstance(pw_index_inp, str):
         pw_index = indices.adapt_pw_index(
-            pw_index_inp, organismal_species=species, outdir=outdir
+            pw_index_inp, organismal_species=latin_species
         )
     elif isinstance(pw_index_inp, indices.PWIndex):
         pw_index = pw_index_inp
     else:
         raise ValueError("pw_index_inp needs to be a PWIndex or a str to a location.")
+
     if outdir is not None:
         construct_sbml_dfs_dict_fkt = utils.pickle_cache(
             os.path.join(outdir, "model_pool.pkl")
@@ -89,8 +121,23 @@ def construct_reactome_consensus(
         construct_sbml_dfs_dict_fkt = construct_sbml_dfs_dict
         construct_consensus_model_fkt = construct_consensus_model
 
+    # create a dict with all models
     sbml_dfs_dict = construct_sbml_dfs_dict_fkt(pw_index, strict)
-    consensus_model = construct_consensus_model_fkt(sbml_dfs_dict, pw_index)
+
+    # define metadata for the Reactome-level model
+    model_source = Source.single_entry(
+        model=DATA_SOURCES.REACTOME,
+        pathway_id=DATA_SOURCES.REACTOME,
+        data_source=DATA_SOURCES.REACTOME,
+        organismal_species=latin_species,
+        name=DATA_SOURCE_DESCRIPTIONS[DATA_SOURCES.REACTOME],
+        date=datetime.date.today().strftime("%Y%m%d"),
+    )
+
+    consensus_model = construct_consensus_model_fkt(
+        sbml_dfs_dict, pw_index, model_source
+    )
+
     return consensus_model
 
 
@@ -101,17 +148,22 @@ def _build_reactome_pw_index(
 ) -> pd.DataFrame:
     """Build a reactome pathway index
 
-    Builds the index based on available files and cross-checkes it with the
+    Builds the index based on available files and cross-check it with the
     expected reactome pathway list.
 
-    Args:
-        output_dir (str): File directory
-        file_ext (str): File extension
-        species_filter (Optional[Iterable[str]], optional): Filter the expected
-            pathway list based on a list of species. Eg in cases only one species available. Defaults to None.
+    Parameters
+    ----------
+    output_dir : str
+        File directory
+    file_ext : str
+        File extension
+    species_filter : Optional[Iterable[str]], optional
+        Filter the expected pathway list based on a list of species. E.g., in cases where only one species is available. Defaults to None.
 
-    Returns:
-        pd.DataFrame: pathway index
+    Returns
+    -------
+    pd.DataFrame
+        pathway index
     """
     # create the pathway index
     out_fs = open_fs(output_dir)
@@ -120,18 +172,24 @@ def _build_reactome_pw_index(
     if len(all_files) == 0:
         raise ValueError(f"Zero files in {output_dir} have the {file_ext} extension")
 
-    pw_index = pd.DataFrame({"file": all_files}).assign(source="Reactome")
-    pw_index["pathway_id"] = [os.path.splitext(x)[0] for x in pw_index["file"]]
+    pw_index = pd.DataFrame({SOURCE_SPEC.FILE: all_files}).assign(
+        **{SOURCE_SPEC.DATA_SOURCE: DATA_SOURCES.REACTOME}
+    )
+    pw_index[SOURCE_SPEC.PATHWAY_ID] = [
+        os.path.splitext(x)[0] for x in pw_index[SOURCE_SPEC.FILE]
+    ]
 
     # test before merging
     pathway_list = _get_reactome_pathway_list()
     if species_filter is not None:
-        pathway_list = pathway_list.loc[pathway_list["species"].isin(species_filter)]
+        pathway_list = pathway_list.loc[
+            pathway_list[SOURCE_SPEC.ORGANISMAL_SPECIES].isin(species_filter)
+        ]
 
     _check_reactome_pw_index(pw_index, pathway_list)
     pw_index = pw_index.merge(pathway_list)
-    pw_index = pw_index[REACTOME_PATHWAY_INDEX_COLUMNS]
-    pw_index["date"] = datetime.date.today().strftime("%Y%m%d")
+    pw_index[SOURCE_SPEC.DATE] = datetime.date.today().strftime("%Y%m%d")
+    pw_index = pw_index[list(EXPECTED_PW_INDEX_COLUMNS)]
 
     return pw_index
 
@@ -140,7 +198,7 @@ def _check_reactome_pw_index(pw_index: indices.PWIndex, reactome_pathway_list: l
     """Compare local files defined in the pathway index to a list of Reactome's pathways."""
 
     # check extension in pw_index
-    extn = set([os.path.splitext(x)[1] for x in pw_index["file"]])
+    extn = set([os.path.splitext(x)[1] for x in pw_index[SOURCE_SPEC.FILE]])
     if len(extn) != 1:
         raise ValueError(
             f"Expected all files to have the same extension, but found extensions: {extn}"
@@ -151,8 +209,8 @@ def _check_reactome_pw_index(pw_index: indices.PWIndex, reactome_pathway_list: l
         )
     extn_string = extn.pop()
 
-    local_reactome_pws = set(pw_index["pathway_id"])
-    remote_reactome_pws = set(reactome_pathway_list["pathway_id"])
+    local_reactome_pws = set(pw_index[SOURCE_SPEC.PATHWAY_ID])
+    remote_reactome_pws = set(reactome_pathway_list[SOURCE_SPEC.PATHWAY_ID])
 
     extra_local = local_reactome_pws.difference(remote_reactome_pws)
     if len(extra_local) != 0:

@@ -8,6 +8,7 @@ from napistu.constants import (
     ONTOLOGIES,
     SBML_DFS,
     SBOTERM_NAMES,
+    SOURCE_SPEC,
 )
 
 # aliases and descriptions for major data sources
@@ -448,8 +449,11 @@ OMNIPATH_ONTOLOGY_ALIASES = {ONTOLOGIES.CORUM: {"CORUM"}, ONTOLOGIES.SIGNOR: {"S
 # REACTOME
 REACTOME_SMBL_URL = "https://reactome.org/download/current/all_species.3.1.sbml.tgz"
 REACTOME_PATHWAYS_URL = "https://reactome.org/download/current/ReactomePathways.txt"
-REACTOME_PATHWAY_INDEX_COLUMNS = ["file", "source", "species", "pathway_id", "name"]
-REACTOME_PATHWAY_LIST_COLUMNS = ["pathway_id", "name", "species"]
+REACTOME_PATHWAY_LIST_COLUMNS = [
+    SOURCE_SPEC.PATHWAY_ID,
+    SOURCE_SPEC.NAME,
+    SOURCE_SPEC.ORGANISMAL_SPECIES,
+]
 
 # REACTOME FI
 REACTOME_FI_URL = "http://cpws.reactome.org/caBigR3WebApp2025/FIsInGene_04142025_with_annotations.txt.zip"
