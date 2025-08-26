@@ -30,7 +30,6 @@ from napistu.ingestion.constants import (
     DEFAULT_INTACT_RELATIVE_WEIGHTS,
     INTACT_EXPERIMENTAL_ROLES,
     INTACT_PUBLICATION_SCORE_THRESHOLD,
-    INTACT_REACTIONS_DATA_TBL_NAME,
     INTACT_SCORES,
     INTACT_ONTOLOGY_ALIASES,
     INTACT_TERM_SCORES,
@@ -238,7 +237,7 @@ def intact_to_sbml_dfs(
             INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.INTERACTOR,
             SBML_DFS.R_ISREVERSIBLE: True,
         },
-        keep_reactions_data=INTACT_REACTIONS_DATA_TBL_NAME,
+        keep_reactions_data=DATA_SOURCES.INTACT,
     )
 
     return sbml_dfs

@@ -166,7 +166,7 @@ def convert_idea_kinetics_to_sbml_dfs(
         compartments_df=compartments_df,
         model_source=model_source,
         # additional attributes (directness) are added to reactions_data
-        keep_reactions_data="idea",
+        keep_reactions_data=DATA_SOURCES.IDEA_YEAST,
     )
     sbml_dfs.validate()
 

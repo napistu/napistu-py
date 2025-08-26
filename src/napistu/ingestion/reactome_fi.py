@@ -107,7 +107,7 @@ def convert_reactome_fi_to_sbml_dfs(
         species_df=species_df,
         compartments_df=compartments_df,
         model_source=model_source,
-        keep_reactions_data=REACTOME_FI.FI_REACTION_DATA_NAME,
+        keep_reactions_data=DATA_SOURCES.REACTOME_FI,
     )
 
     return sbml_dfs

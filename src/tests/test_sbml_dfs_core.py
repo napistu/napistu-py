@@ -283,7 +283,7 @@ def test_sbml_dfs_remove_reactions_check_species(sbml_dfs):
     # find all r_ids for a species and check if
     # removing all these reactions also removes the species
     s_id = sbml_dfs.species.index[0]
-    dat = sbml_dfs.compartmentalized_species.query("s_id == @s_id").merge(
+    dat = sbml_dfs.compartmentalized_species.query(f"{SBML_DFS.S_ID} == @s_id").merge(
         sbml_dfs.reaction_species, left_index=True, right_on=SBML_DFS.SC_ID
     )
     r_ids = dat[SBML_DFS.R_ID].unique()
@@ -572,7 +572,9 @@ def test_get_characteristic_species_ids(model_source_stub):
     expected_bqbs = BQB_DEFINING_ATTRS + [BQB.HAS_PART]  # noqa: F841
     with patch.object(sbml_dfs, "get_identifiers", return_value=mock_species_ids):
         dogmatic_result = sbml_dfs.get_characteristic_species_ids()
-        expected_dogmatic = mock_species_ids.query("bqb in @expected_bqbs")
+        expected_dogmatic = mock_species_ids.query(
+            f"{IDENTIFIERS.BQB} in @expected_bqbs"
+        )
         pd.testing.assert_frame_equal(
             dogmatic_result, expected_dogmatic, check_like=True
         )
@@ -581,7 +583,9 @@ def test_get_characteristic_species_ids(model_source_stub):
     expected_bqbs = BQB_DEFINING_ATTRS_LOOSE + [BQB.HAS_PART]  # noqa: F841
     with patch.object(sbml_dfs, "get_identifiers", return_value=mock_species_ids):
         non_dogmatic_result = sbml_dfs.get_characteristic_species_ids(dogmatic=False)
-        expected_non_dogmatic = mock_species_ids.query("bqb in @expected_bqbs")
+        expected_non_dogmatic = mock_species_ids.query(
+            f"{IDENTIFIERS.BQB} in @expected_bqbs"
+        )
         pd.testing.assert_frame_equal(
             non_dogmatic_result, expected_non_dogmatic, check_like=True
         )

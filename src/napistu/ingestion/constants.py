@@ -371,8 +371,6 @@ DEFAULT_INTACT_RELATIVE_WEIGHTS = {
 
 INTACT_PUBLICATION_SCORE_THRESHOLD = 7
 
-INTACT_REACTIONS_DATA_TBL_NAME = "intact"
-
 PSI_MI_ONTOLOGY_URL = "https://raw.githubusercontent.com/MICommunity/miscore/refs/heads/master/miscore/src/main/resources/psimiOntology.json"
 
 PSI_MI_SCORED_TERMS = SimpleNamespace(
@@ -475,7 +473,6 @@ REACTOME_FI = SimpleNamespace(
     REVERSE="reverse",
     # scores
     SCORE="Score",  # raw name
-    FI_REACTION_DATA_NAME="reactome_fi",
     FI_REACTION_DATA_SCORE="fi_score",
 )
 

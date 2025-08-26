@@ -222,7 +222,7 @@ def convert_string_to_sbml_dfs(
         compartments_df=compartments_df,
         model_source=model_source,
         interaction_edgelist_defaults=interaction_edgelist_defaults,
-        keep_reactions_data="string",
+        keep_reactions_data=DATA_SOURCES.STRING,
     )
     return sbml_dfs
 

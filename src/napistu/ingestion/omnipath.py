@@ -224,8 +224,8 @@ def format_omnipath_as_sbml_dfs(
         nondegenerate_species_df.drop(columns=[OMNIPATH_INTERACTIONS.INTERACTOR_ID]),
         compartments_df=sbml_dfs_utils.stub_compartments(),
         model_source=model_source,
-        keep_reactions_data=True,
-        keep_species_data=True,
+        keep_reactions_data=DATA_SOURCES.OMNIPATH,
+        keep_species_data=DATA_SOURCES.OMNIPATH,
     )
 
     return sbml_dfs
