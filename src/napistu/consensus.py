@@ -15,6 +15,7 @@ from napistu import sbml_dfs_utils
 from napistu import source
 from napistu import utils
 from napistu.ingestion import sbml
+from napistu.matching.mount import resolve_matches
 
 from napistu.constants import (
     BQB_DEFINING_ATTRS,
@@ -1295,12 +1296,26 @@ def _merge_entity_data_create_consensus(
     )
 
     # save one value for each id-variable combination
-    # (this will accept the first value regardless of the above mismatches.)
-    consensus_entity_data = (
-        combined_entity_data.reset_index()
-        .groupby(entity_schema[SCHEMA_DEFS.PK])
-        .first()
+    # Prepare data for resolve_matches
+    combined_entity_data_reset = combined_entity_data.reset_index()
+    combined_entity_data_reset["feature_id"] = combined_entity_data_reset.index.astype(
+        str
     )
+
+    # TO DO - `resolve_matches` provides a lot of flexibility in terms of aggregating data
+    # but currently, we're just taking the first value to match the old behavior
+    consensus_entity_data = resolve_matches(
+        combined_entity_data_reset,
+        feature_id_var="feature_id",
+        index_col=entity_schema["pk"],
+        numeric_agg="first",
+        keep_id_col=False,
+    )
+
+    if "feature_id_match_count" in consensus_entity_data.columns:
+        consensus_entity_data = consensus_entity_data.drop(
+            "feature_id_match_count", axis=1
+        )
 
     return consensus_entity_data
 
