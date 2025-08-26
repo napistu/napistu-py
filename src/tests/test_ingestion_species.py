@@ -126,3 +126,30 @@ def test_class_methods_and_utilities():
         LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE,
     ]:
         assert latin_name in available["latin_names"]
+
+
+def test_ensure_organismal_species_validator():
+    """Test the OrganismalSpeciesValidator.ensure class method."""
+
+    # Test with string input
+    validator = OrganismalSpeciesValidator.ensure("human")
+    assert isinstance(validator, OrganismalSpeciesValidator)
+    assert validator.latin_name == "Homo sapiens"
+    assert validator.common_name == "human"
+
+    # Test with existing OrganismalSpeciesValidator
+    existing_validator = OrganismalSpeciesValidator("mouse")
+    validator = OrganismalSpeciesValidator.ensure(existing_validator)
+    assert validator is existing_validator
+    assert validator.latin_name == "Mus musculus"
+
+    # Test with invalid input
+    with pytest.raises(
+        ValueError, match="must be a string or OrganismalSpeciesValidator"
+    ):
+        OrganismalSpeciesValidator.ensure(123)
+
+    with pytest.raises(
+        ValueError, match="must be a string or OrganismalSpeciesValidator"
+    ):
+        OrganismalSpeciesValidator.ensure(None)

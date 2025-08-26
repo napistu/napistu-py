@@ -344,3 +344,50 @@ class OrganismalSpeciesValidator:
             f"Table contains {key_type}: {available_keys}. "
             f"Looking for: '{lookup_key}'"
         )
+
+    @classmethod
+    def ensure(
+        cls, organismal_species: Union[str, "OrganismalSpeciesValidator"]
+    ) -> "OrganismalSpeciesValidator":
+        """
+        Ensure that organismal_species is an OrganismalSpeciesValidator object.
+
+        If organismal_species is a string, it will be converted to an OrganismalSpeciesValidator.
+        If it's already an OrganismalSpeciesValidator, it will be returned as-is.
+
+        Parameters
+        ----------
+        organismal_species : Union[str, OrganismalSpeciesValidator]
+            Either a string species name or an OrganismalSpeciesValidator object
+
+        Returns
+        -------
+        OrganismalSpeciesValidator
+            The OrganismalSpeciesValidator object
+
+        Raises
+        ------
+        ValueError
+            If organismal_species is neither a string nor an OrganismalSpeciesValidator
+
+        Examples
+        --------
+        >>> validator = OrganismalSpeciesValidator.ensure("human")
+        >>> isinstance(validator, OrganismalSpeciesValidator)
+        True
+        >>> validator.latin_name
+        'Homo sapiens'
+
+        >>> existing_validator = OrganismalSpeciesValidator("mouse")
+        >>> validator = OrganismalSpeciesValidator.ensure(existing_validator)
+        >>> validator is existing_validator
+        True
+        """
+        if isinstance(organismal_species, str):
+            return cls(organismal_species)
+        elif isinstance(organismal_species, cls):
+            return organismal_species
+        else:
+            raise ValueError(
+                f"organismal_species must be a string or OrganismalSpeciesValidator object, got {type(organismal_species)}"
+            )

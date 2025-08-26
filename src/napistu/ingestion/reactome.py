@@ -95,10 +95,7 @@ def construct_reactome_consensus(
     sbml_dfs_core.SBML_dfs: A consensus SBML
     """
 
-    if isinstance(organismal_species, str):
-        organismal_species_validator = OrganismalSpeciesValidator(organismal_species)
-    else:
-        organismal_species_validator = organismal_species
+    organismal_species_validator = OrganismalSpeciesValidator.ensure(organismal_species)
     latin_species = organismal_species_validator.latin_name
 
     if isinstance(pw_index_inp, str):

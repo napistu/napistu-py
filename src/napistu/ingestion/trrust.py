@@ -1,34 +1,43 @@
 from __future__ import annotations
 
+import datetime
 import os
 import warnings
+from typing import Union
 from itertools import chain
-
-import pandas as pd
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
     from fs import open_fs
+import pandas as pd
 
 from napistu import identifiers
 from napistu import sbml_dfs_core
-from napistu import source
 from napistu import utils
-from napistu.constants import BQB
-from napistu.constants import IDENTIFIERS
-from napistu.constants import MINI_SBO_FROM_NAME
-from napistu.constants import SBOTERM_NAMES
-from napistu.constants import SBML_DFS
-from napistu.ingestion.constants import LATIN_SPECIES_NAMES
-from napistu.ingestion.constants import INTERACTION_EDGELIST_DEFS
-from napistu.ingestion.constants import TRRUST_COMPARTMENT_NUCLEOPLASM
-from napistu.ingestion.constants import TRRUST_COMPARTMENT_NUCLEOPLASM_GO_ID
-from napistu.ingestion.constants import TRRUST_SYMBOL
-from napistu.ingestion.constants import TRRUST_UNIPROT
-from napistu.ingestion.constants import TRRUST_UNIPROT_ID
-from napistu.ingestion.constants import TTRUST_URL_RAW_DATA_HUMAN
-from napistu.ingestion.constants import TRRUST_SIGNS
-from napistu.rpy2 import callr
+from napistu.source import Source
+from napistu.ontologies.genodexito import Genodexito
+from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
+from napistu.constants import (
+    BQB,
+    IDENTIFIERS,
+    SBOTERM_NAMES,
+    SBML_DFS,
+    ONTOLOGIES,
+)
+from napistu.ingestion.constants import (
+    DATA_SOURCES,
+    DATA_SOURCE_DESCRIPTIONS,
+    LATIN_SPECIES_NAMES,
+    INTERACTION_EDGELIST_DEFS,
+    TRRUST_COMPARTMENT_NUCLEOPLASM,
+    TRRUST_COMPARTMENT_NUCLEOPLASM_GO_ID,
+    TRRUST_SYMBOL,
+    TRRUST_UNIPROT,
+    TRRUST_UNIPROT_ID,
+    TTRUST_URL_RAW_DATA_HUMAN,
+    TRRUST_SIGNS,
+)
+from napistu.ontologies.constants import GENODEXITO_DEFS
 
 
 def download_trrust(target_uri: str) -> None:
@@ -47,6 +56,11 @@ def download_trrust(target_uri: str) -> None:
 
 def convert_trrust_to_sbml_dfs(
     trrust_uri: str,
+    organismal_species: Union[
+        str, OrganismalSpeciesValidator
+    ] = LATIN_SPECIES_NAMES.HOMO_SAPIENS,
+    preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
+    allow_fallback: bool = True,
 ) -> sbml_dfs_core.SBML_dfs:
     """Ingests trrust to sbml dfs
 
@@ -56,15 +70,32 @@ def convert_trrust_to_sbml_dfs(
     Returns:
         sbml_dfs
     """
+
     # Read trrust raw data
     trrust_edgelist = _read_trrust(trrust_uri)
 
+    # validate species; not really needed since only the human URI is tracked but
+    # mouse could be added and this creates a relatively consistent interface
+    organismal_species = OrganismalSpeciesValidator.ensure(organismal_species)
+    organismal_species.assert_supported(
+        supported_species=[LATIN_SPECIES_NAMES.HOMO_SAPIENS]
+    )
+
     # Get uniprot to symbol mapping
-    uniprot_2_symbol = _get_uniprot_2_symbol_mapping()
+    uniprot_2_symbol = _get_uniprot_2_symbol_mapping(
+        organismal_species, preferred_method, allow_fallback
+    )
 
     # Start building new sbml dfs
-    # Per convention unaggregated models receive an empty source
-    interaction_source = source.Source.empty()
+    # define model-level metadata
+    model_source = Source.single_entry(
+        model=DATA_SOURCES.TRRUST,
+        pathway_id=DATA_SOURCES.TRRUST,
+        data_source=DATA_SOURCES.TRRUST,
+        organismal_species=organismal_species.latin_name,
+        name=DATA_SOURCE_DESCRIPTIONS[DATA_SOURCES.TRRUST],
+        date=datetime.date.today().strftime("%Y%m%d"),
+    )
 
     # Summarize edges
 
@@ -92,7 +123,8 @@ def convert_trrust_to_sbml_dfs(
 
     # create Identifiers objects for all species with uniprot IDs
     species_w_ids = species_df[~species_df[TRRUST_UNIPROT_ID].isnull()].sort_index()
-    species_w_ids["url"] = [
+
+    species_w_ids[IDENTIFIERS.URL] = [
         identifiers.create_uri_url(ontology=TRRUST_UNIPROT, identifier=x)
         for x in species_w_ids[TRRUST_UNIPROT_ID]
     ]
@@ -139,10 +171,10 @@ def convert_trrust_to_sbml_dfs(
                 [
                     identifiers.format_uri(
                         uri=identifiers.create_uri_url(
-                            ontology="go",
+                            ontology=ONTOLOGIES.GO,
                             identifier=TRRUST_COMPARTMENT_NUCLEOPLASM_GO_ID,
                         ),
-                        biological_qualifier_type="BQB_IS",
+                        biological_qualifier_type=BQB.IS,
                     )
                 ]
             ),
@@ -170,9 +202,9 @@ def convert_trrust_to_sbml_dfs(
     ]
 
     # convert relationships to SBO terms
-    interaction_edgelist = gene_gene_identifier_edgelist.replace(
-        {"sign": MINI_SBO_FROM_NAME}
-    ).rename({"sign": INTERACTION_EDGELIST_DEFS.SBO_TERM_UPSTREAM}, axis=1)
+    interaction_edgelist = gene_gene_identifier_edgelist.rename(
+        {"sign": INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME}, axis=1
+    )
 
     # format pubmed identifiers of interactions
     interaction_edgelist[SBML_DFS.R_IDENTIFIERS] = [
@@ -190,7 +222,7 @@ def convert_trrust_to_sbml_dfs(
             INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT,
             INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT,
             SBML_DFS.R_NAME,
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM,
+            INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
             SBML_DFS.R_IDENTIFIERS,
             SBML_DFS.R_ISREVERSIBLE,
         ]
@@ -201,10 +233,108 @@ def convert_trrust_to_sbml_dfs(
         interaction_edgelist=interaction_edgelist,
         species_df=species_df,
         compartments_df=compartments_df,
-        interaction_source=interaction_source,
+        model_source=model_source,
     )
     sbml_dfs.validate()
     return sbml_dfs
+
+
+# utility functions
+
+
+def _format_pubmed_for_interactions(pubmed_set):
+    """Format a set of pubmed ids as an Identifiers object."""
+
+    ids = list()
+    for p in pubmed_set:
+        # some pubmed IDs are bogus
+        url = identifiers.create_uri_url(ontology="pubmed", identifier=p, strict=False)
+        if url is not None:
+            valid_url = identifiers.format_uri(
+                uri=url, biological_qualifier_type=BQB.IS_DESCRIBED_BY
+            )
+
+            ids.append(valid_url)
+
+    return identifiers.Identifiers(ids)
+
+
+def _get_uniprot_2_symbol_mapping(
+    organismal_species: Union[
+        str, OrganismalSpeciesValidator
+    ] = LATIN_SPECIES_NAMES.HOMO_SAPIENS,
+    preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
+    allow_fallback: bool = True,
+) -> pd.DataFrame:
+    """Create a mapping from Uniprot IDs to gene symbols using Genodexito.
+
+    Parameters
+    ----------
+    species : str, optional
+        The species to create mappings for, by default LATIN_SPECIES_NAMES.HOMO_SAPIENS
+    preferred_method : str, optional
+        Preferred method for identifier mapping, by default GENODEXITO_DEFS.BIOCONDUCTOR
+    allow_fallback : bool, optional
+        Whether to allow fallback to alternative mapping methods, by default True
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with columns for gene symbol and UniProt ID mappings
+    """
+
+    organismal_species = OrganismalSpeciesValidator.ensure(organismal_species)
+
+    genodexito = Genodexito(
+        species=organismal_species.latin_name,
+        preferred_method=preferred_method,
+        allow_fallback=allow_fallback,
+    )
+
+    # Create mapping tables for the required ontologies
+    genodexito.create_mapping_tables(
+        mappings={ONTOLOGIES.SYMBOL, ONTOLOGIES.UNIPROT, ONTOLOGIES.NCBI_ENTREZ_GENE}
+    )
+
+    # Merge mappings to create a combined table
+    genodexito.merge_mappings(
+        [ONTOLOGIES.SYMBOL, ONTOLOGIES.UNIPROT, ONTOLOGIES.NCBI_ENTREZ_GENE]
+    )
+
+    # Get the merged mappings
+    merged_mappings = genodexito.merged_mappings
+
+    # Create entrez to symbol mapping, filtering for unique symbols only
+    entrez_2_symbol = merged_mappings[
+        [ONTOLOGIES.NCBI_ENTREZ_GENE, ONTOLOGIES.SYMBOL]
+    ].dropna()
+
+    # Only look at symbols which uniquely map to a single gene
+    symbol_counts = entrez_2_symbol.value_counts(ONTOLOGIES.SYMBOL)
+    unique_symbols = symbol_counts[symbol_counts == 1].index.tolist()
+    entrez_2_symbol = entrez_2_symbol[
+        entrez_2_symbol[ONTOLOGIES.SYMBOL].isin(unique_symbols)
+    ]
+
+    # Create entrez to uniprot mapping (one entrez -> multiple uniprot IDs is okay)
+    entrez_2_uniprot = merged_mappings[
+        [ONTOLOGIES.NCBI_ENTREZ_GENE, ONTOLOGIES.UNIPROT]
+    ].dropna()
+
+    # Merge to create uniprot to symbol mapping
+    uniprot_2_symbol = entrez_2_symbol.merge(
+        entrez_2_uniprot, on=ONTOLOGIES.NCBI_ENTREZ_GENE
+    ).drop(ONTOLOGIES.NCBI_ENTREZ_GENE, axis=1)
+
+    # Rename columns to match the original function's output format
+    uniprot_2_symbol = uniprot_2_symbol.rename(
+        columns={
+            ONTOLOGIES.SYMBOL: TRRUST_SYMBOL,
+            ONTOLOGIES.UNIPROT: TRRUST_UNIPROT_ID,
+        }
+    )
+
+    return uniprot_2_symbol
 
 
 def _read_trrust(trrust_uri: str) -> pd.DataFrame:
@@ -241,46 +371,3 @@ def _summarize_trrust_pairs(pair_data: pd.DataFrame) -> pd.Series:
 
     refs = set(chain(*[x.split(";") for x in pair_data["reference"]]))
     return pd.Series({"sign": sign, "reference": refs})
-
-
-def _get_uniprot_2_symbol_mapping() -> pd.DataFrame:
-    """Create a mapping from Uniprot IDs to human gene symbols."""
-
-    entrez_2_symbol = callr.r_dataframe_to_pandas(
-        callr.bioconductor_org_r_function(
-            TRRUST_SYMBOL.upper(), species=LATIN_SPECIES_NAMES.HOMO_SAPIENS
-        )
-    )
-    # only look at symbol which uniquely map to a single gene
-    symbol_counts = entrez_2_symbol.value_counts(TRRUST_SYMBOL)
-    unique_symbols = symbol_counts[symbol_counts == 1].index.tolist()
-    entrez_2_symbol = entrez_2_symbol[
-        entrez_2_symbol[TRRUST_SYMBOL].isin(unique_symbols)
-    ]
-
-    # one entrez -> multiple uniprot IDs is okay
-    entrez_2_uniprot = callr.r_dataframe_to_pandas(
-        callr.bioconductor_org_r_function(
-            TRRUST_UNIPROT.upper(), species=LATIN_SPECIES_NAMES.HOMO_SAPIENS
-        )
-    )
-
-    uniprot_2_symbol = entrez_2_symbol.merge(entrez_2_uniprot).drop("gene_id", axis=1)
-    return uniprot_2_symbol
-
-
-def _format_pubmed_for_interactions(pubmed_set):
-    """Format a set of pubmed ids as an Identifiers object."""
-
-    ids = list()
-    for p in pubmed_set:
-        # some pubmed IDs are bogus
-        url = identifiers.create_uri_url(ontology="pubmed", identifier=p, strict=False)
-        if url is not None:
-            valid_url = identifiers.format_uri(
-                uri=url, biological_qualifier_type=BQB.IS_DESCRIBED_BY
-            )
-
-            ids.append(valid_url)
-
-    return identifiers.Identifiers(ids)

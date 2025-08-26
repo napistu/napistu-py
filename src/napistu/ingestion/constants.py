@@ -16,20 +16,22 @@ from napistu.constants import (
 # high-level sources
 DATA_SOURCES = SimpleNamespace(
     BIGG="BiGG",
-    REACTOME="Reactome",
-    INTACT="IntAct",
-    STRING="STRING",
     DOGMA="Dogma",
+    INTACT="IntAct",
     OMNIPATH="OmniPath",
+    REACTOME="Reactome",
+    STRING="STRING",
+    TRRUST="TRRUST",
 )
 
 DATA_SOURCE_DESCRIPTIONS = {
     DATA_SOURCES.BIGG: "UCSD genome-scale metabolic models",
-    DATA_SOURCES.REACTOME: "Reactome pathway database",
-    DATA_SOURCES.INTACT: "IntAct protein-protein interaction database",
-    DATA_SOURCES.STRING: "STRING protein-protein interaction database",
     DATA_SOURCES.DOGMA: "Napistu gene, transcript, and protein annotations",
+    DATA_SOURCES.INTACT: "IntAct protein-protein interaction database",
     DATA_SOURCES.OMNIPATH: "Intra- & intercellular signaling knowledge",
+    DATA_SOURCES.REACTOME: "Reactome pathway database",
+    DATA_SOURCES.STRING: "STRING protein-protein interaction database",
+    DATA_SOURCES.TRRUST: "Transcriptional regulatory interactions database",
 }
 
 # names for specific models within sources

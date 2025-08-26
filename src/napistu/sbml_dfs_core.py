@@ -1947,7 +1947,10 @@ def sbml_dfs_from_edgelist(
         - r_Identifiers : identifiers.Identifiers, supporting identifiers
         - upstream_compartment : str, matches "c_name" from compartments_df
         - downstream_compartment : str, matches "c_name" from compartments_df
-        - sbo_term_upstream : str, SBO term defining interaction type
+        - upstream_sbo_term_name : str, SBO term defining interaction type
+        - downstream_sbo_term_name : str, SBO term defining interaction type
+        - upstream_stoichiometry : float, stoichiometry of upstream species
+        - downstream_stoichiometry : float, stoichiometry of downstream species
         - r_isreversible : bool, whether reaction is reversible
     species_df : pd.DataFrame
         Table defining molecular species with columns:
