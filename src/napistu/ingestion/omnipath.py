@@ -1,3 +1,4 @@
+import datetime
 import itertools
 import logging
 from typing import Any, Dict, List, Tuple, Union
@@ -10,6 +11,7 @@ from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
 from napistu.identifiers import Identifiers
 from napistu.ontologies import renaming
+from napistu.source import Source
 from napistu.ontologies.genodexito import Genodexito
 from napistu.ontologies.pubchem import map_pubchem_ids
 from napistu.ontologies.mirbase import load_mirbase_xrefs
@@ -24,6 +26,8 @@ from napistu.constants import (
     SBOTERM_NAMES,
 )
 from napistu.ingestion.constants import (
+    DATA_SOURCES,
+    DATA_SOURCE_DESCRIPTIONS,
     INTERACTION_EDGELIST_DEFS,
     OMNIPATH_ANNOTATIONS,
     OMNIPATH_COMPLEXES,
@@ -55,7 +59,7 @@ OMNIPATH_FXN_MAP = {
 
 
 def format_omnipath_as_sbml_dfs(
-    organismal_species: str,
+    organismal_species: Union[str, OrganismalSpeciesValidator],
     preferred_method: str,
     allow_fallback: bool,
     **kwargs: Any,
@@ -69,7 +73,7 @@ def format_omnipath_as_sbml_dfs(
 
     Parameters
     ----------
-    organismal_species : str
+    organismal_species : str | OrganismalSpeciesValidator
         The species name (e.g., "human", "mouse", "rat") for which to retrieve interactions.
     preferred_method : str
         Preferred method for identifier mapping (e.g., "bioconductor", "ensembl").
@@ -117,8 +121,18 @@ def format_omnipath_as_sbml_dfs(
     >>> print(f"Reactions: {len(sbml_dfs.reactions)}")
     """
 
-    organismal_species = OrganismalSpeciesValidator(organismal_species)
+    organismal_species = OrganismalSpeciesValidator.ensure(organismal_species)
     organismal_species.assert_supported(VALID_OMNIPATH_SPECIES)
+
+    # format model-level metadata
+    model_source = Source.single_entry(
+        model=DATA_SOURCES.OMNIPATH,
+        pathway_id=DATA_SOURCES.OMNIPATH,
+        data_source=DATA_SOURCES.OMNIPATH,
+        organismal_species=organismal_species.latin_name,
+        name=DATA_SOURCE_DESCRIPTIONS[DATA_SOURCES.OMNIPATH],
+        date=datetime.date.today().strftime("%Y%m%d"),
+    )
 
     interactions = get_interactions(organismal_species=organismal_species, **kwargs)
 
@@ -209,6 +223,7 @@ def format_omnipath_as_sbml_dfs(
         interaction_edgelist,
         nondegenerate_species_df.drop(columns=[OMNIPATH_INTERACTIONS.INTERACTOR_ID]),
         compartments_df=sbml_dfs_utils.stub_compartments(),
+        model_source=model_source,
         keep_reactions_data=True,
         keep_species_data=True,
     )

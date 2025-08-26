@@ -17,9 +17,11 @@ from napistu.constants import (
 DATA_SOURCES = SimpleNamespace(
     BIGG="BiGG",
     DOGMA="Dogma",
+    IDEA_YEAST="IDEA",
     INTACT="IntAct",
     OMNIPATH="OmniPath",
     REACTOME="Reactome",
+    REACTOME_FI="Reactome-FI",
     STRING="STRING",
     TRRUST="TRRUST",
 )
@@ -27,9 +29,11 @@ DATA_SOURCES = SimpleNamespace(
 DATA_SOURCE_DESCRIPTIONS = {
     DATA_SOURCES.BIGG: "UCSD genome-scale metabolic models",
     DATA_SOURCES.DOGMA: "Napistu gene, transcript, and protein annotations",
+    DATA_SOURCES.IDEA_YEAST: "Induction Dynamics Expression Atlas",
     DATA_SOURCES.INTACT: "IntAct protein-protein interaction database",
     DATA_SOURCES.OMNIPATH: "Intra- & intercellular signaling knowledge",
     DATA_SOURCES.REACTOME: "Reactome pathway database",
+    DATA_SOURCES.REACTOME_FI: "Reactome functional interactions",
     DATA_SOURCES.STRING: "STRING protein-protein interaction database",
     DATA_SOURCES.TRRUST: "Transcriptional regulatory interactions database",
 }
@@ -562,12 +566,15 @@ TRRUST_COMPARTMENT_NUCLEOPLASM_GO_ID = "GO:0005654"
 
 TRRUST_SIGNS = SimpleNamespace(ACTIVATION="Activation", REPRESSION="Repression")
 
-# YEAST IDEA
+# IDEA YEAST TF -> targets
 # https://idea.research.calicolabs.com/data
-YEAST_IDEA_KINETICS_URL = "https://storage.googleapis.com/calico-website-pin-public-bucket/datasets/idea_kinetics.zip"
-YEAST_IDEA_SOURCE = "TF"
-YEAST_IDEA_TARGET = "GeneName"
-YEAST_IDEA_PUBMED_ID = "32181581"  # ids are characters by convention
+IDEA_YEAST = SimpleNamespace(
+    KINETICS_URL="https://storage.googleapis.com/calico-website-pin-public-bucket/datasets/idea_kinetics.zip",
+    KINETICS_FILE="idea_kinetics.tsv",
+    SOURCE="TF",
+    TARGET="GeneName",
+    PUBMED_ID="32181581",
+)
 
 # Identifiers ETL
 
