@@ -1981,6 +1981,13 @@ def sbml_dfs_from_edgelist(
     # organize source info
     if not isinstance(model_source, source.Source):
         raise ValueError("model_source must be a source.Source object")
+
+    # Validate that interaction_edgelist_defaults is a dictionary
+    if not isinstance(interaction_edgelist_defaults, dict):
+        raise TypeError(
+            f"interaction_edgelist_defaults must be a dictionary, got {type(interaction_edgelist_defaults)}"
+        )
+
     # set default entity-level source
     interaction_source = source.Source.empty()
 
