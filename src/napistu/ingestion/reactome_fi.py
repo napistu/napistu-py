@@ -87,7 +87,7 @@ def convert_reactome_fi_to_sbml_dfs(
     interaction_edgelist = create_interaction_edgelist(interactions)
     compartments_df = sbml_dfs_utils.stub_compartments()
 
-    sbml_dfs = sbml_dfs_core.sbml_dfs_from_edgelist(
+    sbml_dfs = sbml_dfs_core.SBML_dfs.from_edgelist(
         interaction_edgelist=interaction_edgelist,
         species_df=species_df,
         compartments_df=compartments_df,

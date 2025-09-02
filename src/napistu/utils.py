@@ -1127,8 +1127,6 @@ def safe_fill(x: str, fill_width: int = 15) -> str:
         The wrapped string.
     """
 
-    # TODO - move to non-network utils
-
     if x == "":
         return ""
     else:

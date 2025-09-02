@@ -205,7 +205,7 @@ def format_omnipath_as_sbml_dfs(
     )
 
     # create an SBML_dfs object
-    sbml_dfs = sbml_dfs_core.sbml_dfs_from_edgelist(
+    sbml_dfs = sbml_dfs_core.SBML_dfs.from_edgelist(
         interaction_edgelist,
         nondegenerate_species_df.drop(columns=[OMNIPATH_INTERACTIONS.INTERACTOR_ID]),
         compartments_df=sbml_dfs_utils.stub_compartments(),

@@ -9,11 +9,11 @@ with warnings.catch_warnings():
     from fs import open_fs
 
 from napistu import identifiers
-from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
 from napistu import source
 from napistu import utils
 from napistu.ingestion import napistu_edgelist
+from napistu.sbml_dfs_core import SBML_dfs
 from napistu.constants import (
     BQB,
     SBOTERM_NAMES,
@@ -111,7 +111,7 @@ def download_string_aliases(target_uri: str, species: str) -> None:
 def convert_string_to_sbml_dfs(
     string_uri: str,
     string_aliases_uri: str,
-) -> sbml_dfs_core.SBML_dfs:
+) -> SBML_dfs:
     """Ingests string to sbml dfs
 
     Args:
@@ -119,7 +119,7 @@ def convert_string_to_sbml_dfs(
         string_aliases_uri (str): string aliases uri
 
     Returns:
-        sbml_dfs_core.SBML_dfs: sbml dfs
+        SBML_dfs: sbml dfs
     """
     # Read string raw data
     string_edgelist = _read_string(string_uri)
@@ -167,7 +167,7 @@ def convert_string_to_sbml_dfs(
     interaction_edgelist = _build_interactor_edgelist(uq_string_edgelist)
 
     # build the final object
-    sbml_dfs = sbml_dfs_core.sbml_dfs_from_edgelist(
+    sbml_dfs = SBML_dfs.from_edgelist(
         interaction_edgelist=interaction_edgelist,
         species_df=species_df,
         compartments_df=compartments_df,

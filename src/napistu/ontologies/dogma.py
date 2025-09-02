@@ -57,9 +57,9 @@ def create_dogmatic_sbml_dfs(
         species, preferred_method, allow_fallback, r_paths
     )
 
-    logger.info("Creating inputs for sbml_dfs_from_edgelist()")
+    logger.info("Creating inputs for SBML_dfs.from_edgelist()")
 
-    # format entries for sbml_dfs_from_edgelist()
+    # format entries for SBML_dfs.from_edgelist()
     species_df = dogmatic_mappings["cluster_consensus_identifiers_df"].join(
         dogmatic_mappings["s_name_series"]
     )
@@ -82,7 +82,7 @@ def create_dogmatic_sbml_dfs(
     interaction_edgelist["sbo_term"] = MINI_SBO_FROM_NAME["reactant"]
     interaction_edgelist["r_isreversible"] = False
 
-    dogmatic_sbml_dfs = sbml_dfs_core.sbml_dfs_from_edgelist(
+    dogmatic_sbml_dfs = sbml_dfs_core.SBML_dfs.from_edgelist(
         interaction_edgelist=interaction_edgelist,
         species_df=species_df,
         compartments_df=compartments_df,
@@ -177,7 +177,7 @@ def _connect_dogmatic_mappings(
     ].map(NAME_ONTOLOGIES)
 
     # remove possible names which are present in multiple clusters.
-    # all clusters will need unique names to use sbml_dfs_from_edgelist()
+    # all clusters will need unique names to use SBML_dfs.from_edgelist()
     id_counts = (
         possible_names[["cluster", IDENTIFIERS.IDENTIFIER]]
         .drop_duplicates()

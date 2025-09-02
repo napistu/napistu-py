@@ -2,16 +2,20 @@ from __future__ import annotations
 
 import pandas as pd
 from napistu import identifiers
-from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
 from napistu import source
 from napistu import utils
-from napistu.constants import BQB
-from napistu.constants import MINI_SBO_FROM_NAME
-from napistu.ingestion.constants import YEAST_IDEA_KINETICS_URL
-from napistu.ingestion.constants import YEAST_IDEA_PUBMED_ID
-from napistu.ingestion.constants import YEAST_IDEA_SOURCE
-from napistu.ingestion.constants import YEAST_IDEA_TARGET
+from napistu.sbml_dfs_core import SBML_dfs
+from napistu.constants import (
+    BQB,
+    MINI_SBO_FROM_NAME,
+)
+from napistu.ingestion.constants import (
+    YEAST_IDEA_KINETICS_URL,
+    YEAST_IDEA_PUBMED_ID,
+    YEAST_IDEA_SOURCE,
+    YEAST_IDEA_TARGET,
+)
 
 
 def download_idea(output_dir: str) -> None:
@@ -25,7 +29,7 @@ def download_idea(output_dir: str) -> None:
 
 def convert_idea_kinetics_to_sbml_dfs(
     idea_path: str,
-) -> sbml_dfs_core.SBML_dfs:
+) -> SBML_dfs:
     """
     Convert IDEA Kinetics to SBML DFs
 
@@ -111,7 +115,7 @@ def convert_idea_kinetics_to_sbml_dfs(
     # Per convention unaggregated models receive an empty source
     interaction_source = source.Source(init=True)
 
-    sbml_dfs = sbml_dfs_core.sbml_dfs_from_edgelist(
+    sbml_dfs = SBML_dfs.from_edgelist(
         interaction_edgelist=interaction_edgelist,
         species_df=species_df,
         compartments_df=compartments_df,

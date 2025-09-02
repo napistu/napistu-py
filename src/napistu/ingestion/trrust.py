@@ -11,23 +11,27 @@ with warnings.catch_warnings():
     from fs import open_fs
 
 from napistu import identifiers
-from napistu import sbml_dfs_core
 from napistu import source
 from napistu import utils
-from napistu.constants import BQB
-from napistu.constants import IDENTIFIERS
-from napistu.constants import MINI_SBO_FROM_NAME
-from napistu.constants import SBOTERM_NAMES
-from napistu.constants import SBML_DFS
-from napistu.ingestion.constants import LATIN_SPECIES_NAMES
-from napistu.ingestion.constants import INTERACTION_EDGELIST_DEFS
-from napistu.ingestion.constants import TRRUST_COMPARTMENT_NUCLEOPLASM
-from napistu.ingestion.constants import TRRUST_COMPARTMENT_NUCLEOPLASM_GO_ID
-from napistu.ingestion.constants import TRRUST_SYMBOL
-from napistu.ingestion.constants import TRRUST_UNIPROT
-from napistu.ingestion.constants import TRRUST_UNIPROT_ID
-from napistu.ingestion.constants import TTRUST_URL_RAW_DATA_HUMAN
-from napistu.ingestion.constants import TRRUST_SIGNS
+from napistu.sbml_dfs_core import SBML_dfs
+from napistu.constants import (
+    BQB,
+    IDENTIFIERS,
+    MINI_SBO_FROM_NAME,
+    SBOTERM_NAMES,
+    SBML_DFS,
+)
+from napistu.ingestion.constants import (
+    LATIN_SPECIES_NAMES,
+    INTERACTION_EDGELIST_DEFS,
+    TRRUST_COMPARTMENT_NUCLEOPLASM,
+    TRRUST_COMPARTMENT_NUCLEOPLASM_GO_ID,
+    TRRUST_SYMBOL,
+    TRRUST_UNIPROT,
+    TRRUST_UNIPROT_ID,
+    TTRUST_URL_RAW_DATA_HUMAN,
+    TRRUST_SIGNS,
+)
 from napistu.rpy2 import callr
 
 
@@ -47,7 +51,7 @@ def download_trrust(target_uri: str) -> None:
 
 def convert_trrust_to_sbml_dfs(
     trrust_uri: str,
-) -> sbml_dfs_core.SBML_dfs:
+) -> SBML_dfs:
     """Ingests trrust to sbml dfs
 
     Args:
@@ -197,7 +201,7 @@ def convert_trrust_to_sbml_dfs(
     ]
 
     # Build sbml dfs
-    sbml_dfs = sbml_dfs_core.sbml_dfs_from_edgelist(
+    sbml_dfs = SBML_dfs.from_edgelist(
         interaction_edgelist=interaction_edgelist,
         species_df=species_df,
         compartments_df=compartments_df,

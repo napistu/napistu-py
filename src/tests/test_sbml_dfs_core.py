@@ -10,13 +10,11 @@ import pytest
 from fs.errors import ResourceNotFound
 
 from napistu import identifiers
-from napistu import sbml_dfs_core
-from napistu.sbml_dfs_core import SBML_dfs
-from napistu.source import Source
 from napistu.ingestion import sbml
 from napistu.modify import pathwayannot
-
 from napistu import identifiers as napistu_identifiers
+from napistu.sbml_dfs_core import SBML_dfs
+from napistu.source import Source
 from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS,
@@ -108,7 +106,7 @@ def test_drop_cofactors(sbml_dfs):
 
 def test_sbml_dfs_from_dict_required(sbml_dfs):
     val_dict = {k: getattr(sbml_dfs, k) for k in sbml_dfs._required_entities}
-    sbml_dfs2 = sbml_dfs_core.SBML_dfs(val_dict)
+    sbml_dfs2 = SBML_dfs(val_dict)
     sbml_dfs2.validate()
 
     for k in sbml_dfs._required_entities:
@@ -300,7 +298,7 @@ def test_read_sbml_with_invalid_ids():
 
     # invalid identifiers still create a valid sbml_dfs
     sbml_w_bad_ids = sbml.SBML(sbml_w_bad_ids_path)
-    assert isinstance(sbml_dfs_core.SBML_dfs(sbml_w_bad_ids), sbml_dfs_core.SBML_dfs)
+    assert isinstance(SBML_dfs(sbml_w_bad_ids), SBML_dfs)
 
 
 def test_get_table(sbml_dfs):
@@ -588,9 +586,7 @@ def test_sbml_basic_functionality(test_data):
     """Test basic SBML_dfs creation from edgelist."""
     interaction_edgelist, species_df, compartments_df = test_data
 
-    result = sbml_dfs_core.sbml_dfs_from_edgelist(
-        interaction_edgelist, species_df, compartments_df
-    )
+    result = SBML_dfs.from_edgelist(interaction_edgelist, species_df, compartments_df)
 
     assert isinstance(result, SBML_dfs)
     assert len(result.species) == 3
@@ -606,7 +602,7 @@ def test_sbml_extra_data_preservation(test_data):
     """Test that extra columns are preserved when requested."""
     interaction_edgelist, species_df, compartments_df = test_data
 
-    result = sbml_dfs_core.sbml_dfs_from_edgelist(
+    result = SBML_dfs.from_edgelist(
         interaction_edgelist,
         species_df,
         compartments_df,
@@ -624,9 +620,7 @@ def test_sbml_compartmentalized_naming(test_data):
     """Test compartmentalized species naming convention."""
     interaction_edgelist, species_df, compartments_df = test_data
 
-    result = sbml_dfs_core.sbml_dfs_from_edgelist(
-        interaction_edgelist, species_df, compartments_df
-    )
+    result = SBML_dfs.from_edgelist(interaction_edgelist, species_df, compartments_df)
 
     comp_names = result.compartmentalized_species[SBML_DFS.SC_NAME].tolist()
     assert "TP53 [nucleus]" in comp_names
@@ -648,7 +642,7 @@ def test_sbml_custom_defaults(test_data):
         SBOTERM_NAMES.PRODUCT
     )
 
-    result = sbml_dfs_core.sbml_dfs_from_edgelist(
+    result = SBML_dfs.from_edgelist(
         interaction_edgelist,
         species_df,
         compartments_df,
