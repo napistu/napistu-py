@@ -17,7 +17,22 @@ from napistu.sbml_dfs_core import SBML_dfs
 from napistu.source import Source
 from napistu.ingestion.sbml import SBML
 from napistu.network.net_create import process_napistu_graph
-from napistu.constants import SBML_DFS, MINI_SBO_FROM_NAME, SBOTERM_NAMES
+from napistu.network.precompute import precompute_distances
+from napistu.constants import (
+    EXPECTED_PW_INDEX_COLUMNS,
+    MINI_SBO_FROM_NAME,
+    SBML_DFS,
+    SBOTERM_NAMES,
+    SOURCE_SPEC,
+)
+from napistu.network.constants import NAPISTU_WEIGHTING_STRATEGIES
+
+
+@fixture
+def model_source_stub():
+
+    source_dict = {k: "test" for k in EXPECTED_PW_INDEX_COLUMNS | {SOURCE_SPEC.MODEL}}
+    return Source(pd.DataFrame(source_dict, index=[0]))
 
 
 @fixture
@@ -37,40 +52,50 @@ def sbml_model(sbml_path):
 
 
 @fixture
-def sbml_dfs(sbml_model):
-    sbml_dfs = SBML_dfs(sbml_model)
+def sbml_dfs(sbml_model, model_source_stub):
+    sbml_dfs = SBML_dfs(sbml_model, model_source=model_source_stub)
     return sbml_dfs
 
 
 @fixture
-def sbml_dfs_metabolism():
+def pw_index_metabolism():
+    """Create a pathway index for metabolism test data."""
     test_path = os.path.abspath(os.path.join(__file__, os.pardir))
     test_data = os.path.join(test_path, "test_data")
-
-    pw_index = indices.PWIndex(os.path.join(test_data, "pw_index_metabolism.tsv"))
-    sbml_dfs_dict = consensus.construct_sbml_dfs_dict(pw_index)
-    sbml_dfs = consensus.construct_consensus_model(sbml_dfs_dict, pw_index)
-
-    return sbml_dfs
+    return indices.PWIndex(os.path.join(test_data, "pw_index_metabolism.tsv"))
 
 
 @fixture
-def sbml_dfs_glucose_metabolism():
+def sbml_dfs_dict_metabolism(pw_index_metabolism):
+    """Create a dictionary of SBML_dfs objects from metabolism test data."""
+    return consensus.construct_sbml_dfs_dict(pw_index_metabolism)
+
+
+@fixture
+def sbml_dfs_metabolism(sbml_dfs_dict_metabolism, pw_index_metabolism):
+    """Create a consensus SBML_dfs model from metabolism test data."""
+    return consensus.construct_consensus_model(
+        sbml_dfs_dict_metabolism, pw_index_metabolism
+    )
+
+
+@fixture
+def sbml_dfs_glucose_metabolism(model_source_stub):
     test_path = os.path.abspath(os.path.join(__file__, os.pardir))
     test_data = os.path.join(test_path, "test_data")
     sbml_path = os.path.join(test_data, "reactome_glucose_metabolism.sbml")
 
     sbml_model = SBML(sbml_path)
-    sbml_dfs = SBML_dfs(sbml_model)
+    sbml_dfs = SBML_dfs(sbml_model, model_source_stub)
 
     return sbml_dfs
 
 
 @pytest.fixture
-def minimal_valid_sbml_dfs():
+def minimal_valid_sbml_dfs(model_source_stub):
     """Create a minimal valid SBML_dfs object for testing."""
     blank_id = Identifiers([])
-    source = Source(init=True)
+    source = Source.empty()
 
     sbml_dict = {
         SBML_DFS.COMPARTMENTS: pd.DataFrame(
@@ -118,7 +143,7 @@ def minimal_valid_sbml_dfs():
         ),
     }
 
-    return SBML_dfs(sbml_dict)
+    return SBML_dfs(sbml_dict, model_source_stub)
 
 
 @fixture
@@ -135,7 +160,9 @@ def napistu_graph_undirected(sbml_dfs):
     Pytest fixture to create a NapistuGraph from sbml_dfs with directed=False and topology weighting.
     """
     return process_napistu_graph(
-        sbml_dfs, directed=False, weighting_strategy="topology"
+        sbml_dfs,
+        directed=False,
+        weighting_strategy=NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY,
     )
 
 
@@ -145,7 +172,19 @@ def napistu_graph_metabolism(sbml_dfs_metabolism):
     Pytest fixture to create a NapistuGraph from sbml_dfs_glucose_metabolism with directed=True and topology weighting.
     """
     return process_napistu_graph(
-        sbml_dfs_metabolism, directed=True, weighting_strategy="topology"
+        sbml_dfs_metabolism,
+        directed=True,
+        weighting_strategy=NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY,
+    )
+
+
+@fixture
+def precomputed_distances_metabolism(napistu_graph_metabolism):
+    """
+    Pytest fixture to create precomputed distances from the glucose metabolism napistu_graph.
+    """
+    return precompute_distances(
+        napistu_graph_metabolism, max_steps=30000, max_score_q=1
     )
 
 

@@ -9,17 +9,17 @@ import warnings
 from typing import Sequence
 
 import click
-import click_logging
-import napistu
 import igraph as ig
 import pandas as pd
+from rich.logging import RichHandler
+from rich.console import Console
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
     from fs import open_fs
 
+import napistu
 from napistu import consensus as napistu_consensus
-from napistu import indices
 from napistu.sbml_dfs_core import SBML_dfs
 from napistu import utils
 from napistu.context import filtering
@@ -28,9 +28,12 @@ from napistu.ingestion import bigg
 from napistu.ingestion import gtex
 from napistu.ingestion import hpa
 from napistu.ingestion import reactome
-from napistu.ingestion.sbml import SBML
+from napistu.ingestion import reactome_fi
+from napistu.ingestion import omnipath
 from napistu.ingestion import string
 from napistu.ingestion import trrust
+from napistu.ingestion import intact
+from napistu.ingestion.sbml import SBML
 from napistu.modify.curation import curate_sbml_dfs
 from napistu.modify.gaps import add_transportation_reactions
 from napistu.modify import pathwayannot
@@ -47,12 +50,63 @@ from napistu.constants import ONTOLOGIES
 from napistu.constants import RESOLVE_MATCHES_AGGREGATORS
 from napistu.ingestion.constants import PROTEINATLAS_SUBCELL_LOC_URL
 from napistu.ingestion.constants import GTEX_RNASEQ_EXPRESSION_URL
+from napistu.ingestion.constants import REACTOME_FI_URL
 from napistu.network.constants import NAPISTU_GRAPH_EDGES
 
-logger = logging.getLogger(napistu.__name__)
-click_logging.basic_config(logger)
+# Minimal early logging setup - just silence the most problematic loggers
+logging.getLogger().setLevel(logging.CRITICAL + 1)  # Keep this early
+logging.getLogger("urllib3").setLevel(logging.CRITICAL)  # Keep this early
+logging.getLogger("requests").setLevel(logging.CRITICAL)
 
-ALL = "all"
+# now, configure the advanced logger
+logger = logging.getLogger(napistu.__name__)
+logger.setLevel(logging.INFO)
+logger.propagate = False
+
+# Rich console and handler setup
+console = Console(width=120)
+handler = RichHandler(
+    console=console,
+    rich_tracebacks=True,
+    show_time=True,
+    show_level=True,
+    show_path=True,
+    markup=True,
+    log_time_format="[%m/%d %H:%M]",
+)
+
+formatter = logging.Formatter("%(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+
+def verbosity_option(f):
+    """Decorator that adds --verbosity option for napistu logging"""
+
+    def configure_logging_callback(ctx, param, value):
+        level_map = {
+            "DEBUG": logging.DEBUG,
+            "INFO": logging.INFO,
+            "WARNING": logging.WARNING,
+            "ERROR": logging.ERROR,
+            "CRITICAL": logging.CRITICAL,
+        }
+        level = level_map.get(value.upper(), logging.INFO)
+        logger.setLevel(level)
+        return value
+
+    return click.option(
+        "--verbosity",
+        "-v",
+        type=click.Choice(
+            ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False
+        ),
+        default="INFO",
+        callback=configure_logging_callback,
+        expose_value=False,
+        is_eager=True,
+        help="Set the logging verbosity level for napistu.",
+    )(f)
 
 
 @click.group()
@@ -72,7 +126,7 @@ def ingestion():
 @click.option(
     "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
 )
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def ingest_reactome(base_folder: str, overwrite=True):
     logger.info("Start downloading Reactome to %s", base_folder)
     reactome.reactome_sbml_download(f"{base_folder}/sbml", overwrite=overwrite)
@@ -83,7 +137,7 @@ def ingest_reactome(base_folder: str, overwrite=True):
 @click.option(
     "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
 )
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def ingest_bigg(base_folder: str, overwrite: bool):
     logger.info("Start downloading Bigg to %s", base_folder)
     bigg.bigg_sbml_download(base_folder, overwrite)
@@ -91,13 +145,13 @@ def ingest_bigg(base_folder: str, overwrite: bool):
 
 @ingestion.command(name="trrust")
 @click.argument("target_uri", type=str)
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def ingest_ttrust(target_uri: str):
     logger.info("Start downloading TRRUST to %s", target_uri)
     trrust.download_trrust(target_uri)
 
 
-@ingestion.command(name="proteinatlas-subcell")
+@ingestion.command(name="proteinatlas_subcell")
 @click.argument("target_uri", type=str)
 @click.option(
     "--url",
@@ -105,7 +159,7 @@ def ingest_ttrust(target_uri: str):
     default=PROTEINATLAS_SUBCELL_LOC_URL,
     help="URL to download the zipped protein atlas subcellular localization tsv from.",
 )
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def ingest_proteinatlas_subcell(target_uri: str, url: str):
     hpa.download_hpa_data(target_uri, url)
 
@@ -118,35 +172,72 @@ def ingest_proteinatlas_subcell(target_uri: str, url: str):
     default=GTEX_RNASEQ_EXPRESSION_URL,
     help="URL to download the gtex file from.",
 )
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def ingest_gtex_rnaseq(target_uri: str, url: str):
     gtex.download_gtex_rnaseq(target_uri, url)
 
 
-@ingestion.command(name="string-db")
+@ingestion.command(name="string_db")
 @click.argument("target_uri", type=str)
-@click.option(
-    "--species",
-    type=str,
-    default="Homo sapiens",
-    help="Species name (e.g., Homo sapiens).",
-)
-@click_logging.simple_verbosity_option(logger)
-def ingest_string_db(target_uri: str, species: str):
-    string.download_string(target_uri, species)
+@click.argument("organismal_species", type=str)
+@verbosity_option
+def ingest_string_db(organismal_species: str, target_uri: str):
+    string.download_string(target_uri, organismal_species)
 
 
-@ingestion.command(name="string-aliases")
+@ingestion.command(name="string_aliases")
+@click.argument("target_uri", type=str)
+@click.argument("organismal_species", type=str)
+@verbosity_option
+def ingest_string_aliases(organismal_species: str, target_uri: str):
+    string.download_string_aliases(target_uri, organismal_species)
+
+
+@ingestion.command(name="reactome_fi")
 @click.argument("target_uri", type=str)
 @click.option(
-    "--species",
+    "--url",
     type=str,
-    default="Homo sapiens",
-    help="Species name (e.g., Homo sapiens).",
+    default=REACTOME_FI_URL,
+    help="URL to download the Reactome FI data from. If not provided, uses default URL.",
 )
-@click_logging.simple_verbosity_option(logger)
-def ingest_string_aliases(target_uri: str, species: str):
-    string.download_string_aliases(target_uri, species)
+@click.option(
+    "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
+)
+@verbosity_option
+def ingest_reactome_fi(target_uri: str, url: str, overwrite: bool):
+    """Download Reactome Functional Interactions (FI) dataset as a TSV file."""
+    if overwrite is False and utils.path_exists(target_uri):
+        raise FileExistsError(f"'{target_uri}' exists but overwrite set False.")
+
+    logger.info("Start downloading Reactome FI from %s to %s", url, target_uri)
+    reactome_fi.download_reactome_fi(target_uri, url=url)
+
+
+@ingestion.command(name="intact")
+@click.argument("output_dir_path", type=str)
+@click.argument("organismal_species", type=str)
+@click.option(
+    "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
+)
+@verbosity_option
+def ingest_intact(output_dir_path: str, organismal_species: str, overwrite: bool):
+    """Download IntAct PSI-MI XML files for a specific species.
+
+    OUTPUT_DIR_PATH: Local directory to create and unzip files into
+    ORGANISMAL_SPECIES: The species name (e.g., "Homo sapiens") to work with
+    """
+    if overwrite is False and utils.path_exists(output_dir_path):
+        raise FileExistsError(f"'{output_dir_path}' exists but overwrite set False.")
+
+    logger.info(
+        "Start downloading IntAct PSI-MI XML files for %s to %s",
+        organismal_species,
+        output_dir_path,
+    )
+    intact.download_intact_xmls(
+        output_dir_path, organismal_species, overwrite=overwrite
+    )
 
 
 @click.group()
@@ -157,8 +248,8 @@ def integrate():
 
 @integrate.command(name="reactome")
 @click.argument("pw_index_uri", type=str)
+@click.argument("organismal_species", type=str)
 @click.argument("output_model_uri", type=str)
-@click.option("--species", "-s", multiple=True, default=(ALL,))
 @click.option(
     "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
 )
@@ -169,49 +260,57 @@ def integrate():
     default=False,
     help="Can parsing failures in submodels throw warnings instead of exceptions?",
 )
-@click_logging.simple_verbosity_option(logger)
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    default=False,
+    help="Include detailed logs?",
+)
+@verbosity_option
 def integrate_reactome(
     pw_index_uri: str,
+    organismal_species: str,
     output_model_uri: str,
-    species: Sequence[str] | None,
     overwrite=False,
     permissive=False,
+    verbose=False,
 ):
     """Integrates reactome models based on a pw_index"""
     if overwrite is False and utils.path_exists(output_model_uri):
         raise FileExistsError("'output_model_uri' exists but overwrite set False.")
-    if species is not None and len(species) == 1 and species[0] == ALL:
-        species = None
 
     strict = not permissive
     logger.debug(f"permissive = {permissive}; strict = {strict}")
 
     consensus_model = reactome.construct_reactome_consensus(
-        pw_index_uri, species=species, strict=strict
+        pw_index_uri,
+        organismal_species=organismal_species,
+        strict=strict,
+        verbose=verbose,
     )
     consensus_model.to_pickle(output_model_uri)
 
 
 @integrate.command(name="bigg")
 @click.argument("pw_index_uri", type=str)
+@click.argument("organismal_species", type=str)
 @click.argument("output_model_uri", type=str)
-@click.option("--species", "-s", multiple=True, default=(ALL,))
 @click.option(
     "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
 )
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def integrate_bigg(
     pw_index_uri: str,
+    organismal_species: str,
     output_model_uri: str,
-    species: Sequence[str] | None,
     overwrite=False,
 ):
     """Integrates bigg models based on a pw_index"""
     if overwrite is False and utils.path_exists(output_model_uri):
         raise FileExistsError("'output_model_uri' exists but overwrite set False.")
-    if species is not None and len(species) == 1 and species[0] == ALL:
-        species = None
-    consensus_model = bigg.construct_bigg_consensus(pw_index_uri, species=species)
+
+    consensus_model = bigg.construct_bigg_consensus(pw_index_uri, organismal_species)
     consensus_model.to_pickle(output_model_uri)
 
 
@@ -221,7 +320,7 @@ def integrate_bigg(
 @click.option(
     "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
 )
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def integrate_trrust(
     trrust_csv_uri: str,
     output_model_uri: str,
@@ -236,22 +335,168 @@ def integrate_trrust(
     sbmldfs_model.to_pickle(output_model_uri)
 
 
-@integrate.command(name="string-db")
+@integrate.command(name="reactome_fi")
+@click.argument("reactome_fi_uri", type=str)
+@click.argument("output_model_uri", type=str)
+@click.option(
+    "--preferred-method",
+    type=str,
+    default="bioconductor",
+    help="Preferred Genodexito method for identifier mapping (default: bioconductor).",
+)
+@click.option(
+    "--allow-fallback",
+    is_flag=True,
+    default=False,
+    help="Allow fallback to other Genodexito methods if preferred method fails.",
+)
+@click.option(
+    "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
+)
+@verbosity_option
+def integrate_reactome_fi(
+    reactome_fi_uri: str,
+    output_model_uri: str,
+    preferred_method: str = "bioconductor",
+    allow_fallback: bool = True,
+    overwrite: bool = False,
+):
+    """Converts Reactome FI TSV to SBML_dfs model"""
+    if overwrite is False and utils.path_exists(output_model_uri):
+        raise FileExistsError("'output_model_uri' exists but overwrite set False.")
+
+    logger.info("Start converting Reactome FI TSV to an SBML_dfs model")
+    sbml_dfs = reactome_fi.convert_reactome_fi_to_sbml_dfs(
+        pd.read_csv(reactome_fi_uri, sep="\t"),
+        preferred_method=preferred_method,
+        allow_fallback=allow_fallback,
+    )
+
+    logger.info("Saving the SBML_dfs model to %s", output_model_uri)
+    sbml_dfs.to_pickle(output_model_uri)
+
+
+@integrate.command(name="string_db")
 @click.argument("string_db_uri", type=str)
 @click.argument("string_aliases_uri", type=str)
+@click.argument("organismal_species", type=str)
 @click.argument("output_model_uri", type=str)
 @click.option(
     "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
 )
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def integrate_string_db(
-    string_db_uri: str, string_aliases_uri: str, output_model_uri: str, overwrite=False
+    string_db_uri: str,
+    string_aliases_uri: str,
+    organismal_species: str,
+    output_model_uri: str,
+    overwrite=False,
 ):
-    """Converts string-db to the sbml_dfs format"""
+    """Converts STRING database to the sbml_dfs format"""
     if overwrite is False and utils.path_exists(output_model_uri):
         raise FileExistsError("'output_model_uri' exists but overwrite set False.")
-    logger.info("Start converting string-db to SBML_dfs")
-    sbml_dfs = string.convert_string_to_sbml_dfs(string_db_uri, string_aliases_uri)
+    logger.info("Start converting STRING database to an SBML_dfs model")
+    sbml_dfs = string.convert_string_to_sbml_dfs(
+        string_db_uri, string_aliases_uri, organismal_species
+    )
+    logger.info("Saving the SBML_dfs model to %s", output_model_uri)
+    sbml_dfs.to_pickle(output_model_uri)
+
+
+@integrate.command(name="intact")
+@click.argument("intact_xml_dir", type=str)
+@click.argument("organismal_species", type=str)
+@click.argument("output_model_uri", type=str)
+@click.option(
+    "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
+)
+@verbosity_option
+def integrate_intact(
+    intact_xml_dir: str,
+    organismal_species: str,
+    output_model_uri: str,
+    overwrite: bool = False,
+):
+    """Converts IntAct PSI-MI XML files to SBML_dfs model.
+
+    INTACT_XML_DIR: Directory containing the IntAct PSI-MI XML files
+    ORGANISMAL_SPECIES: The species name (e.g., "Homo sapiens") to work with
+    OUTPUT_MODEL_URI: Output URI for the SBML_dfs model
+    """
+    if overwrite is False and utils.path_exists(output_model_uri):
+        raise FileExistsError("'output_model_uri' exists but overwrite set False.")
+
+    logger.info("Start converting IntAct PSI-MI XML files to an SBML_dfs model")
+
+    # Import PSI-MI formatting functions
+    from napistu.ingestion import psi_mi
+
+    # Format the PSI-MI XML files
+    formatted_psi_mis = psi_mi.format_psi_mis(intact_xml_dir)
+
+    # Aggregate PSI-MI interactions
+    intact_summaries = psi_mi.aggregate_psi_mis(formatted_psi_mis)
+
+    # Convert to SBML_dfs
+    sbml_dfs = intact.intact_to_sbml_dfs(intact_summaries, organismal_species)
+
+    # Validate the model
+    logger.info("Validating SBML_dfs model")
+    sbml_dfs.validate()
+
+    logger.info("Save SBML_dfs model to %s", output_model_uri)
+    sbml_dfs.to_pickle(output_model_uri)
+
+
+@integrate.command(name="omnipath")
+@click.argument("organismal_species", type=str)
+@click.argument("output_model_uri", type=str)
+@click.option(
+    "--preferred-method",
+    type=str,
+    default="bioconductor",
+    help="Preferred Genodexito method for identifier mapping (default: bioconductor).",
+)
+@click.option(
+    "--allow-fallback",
+    is_flag=True,
+    default=True,
+    help="Allow fallback to other Genodexito methods if preferred method fails (default: True).",
+)
+@click.option(
+    "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
+)
+@verbosity_option
+def integrate_omnipath(
+    organismal_species: str,
+    output_model_uri: str,
+    preferred_method: str = "bioconductor",
+    allow_fallback: bool = True,
+    overwrite: bool = False,
+):
+    """Downloads OmniPath data and formats interactions as an SBML_dfs model.
+
+    ORGANISMAL_SPECIES: The species name (e.g., "Homo sapiens") to work with
+    OUTPUT_MODEL_URI: Output URI for the SBML_dfs model
+    """
+    if overwrite is False and utils.path_exists(output_model_uri):
+        raise FileExistsError("'output_model_uri' exists but overwrite set False.")
+
+    logger.info(
+        "Start downloading OmniPath data and formatting interactions as SBML_dfs"
+    )
+
+    # Format OmniPath as SBML_dfs
+    sbml_dfs = omnipath.format_omnipath_as_sbml_dfs(
+        organismal_species=organismal_species,
+        preferred_method=preferred_method,
+        allow_fallback=allow_fallback,
+    )
+
+    # Validate the model
+    logger.info("Validating SBML_dfs model")
+    sbml_dfs.validate()
+
     logger.info("Save SBML_dfs model to %s", output_model_uri)
     sbml_dfs.to_pickle(output_model_uri)
 
@@ -272,7 +517,7 @@ def consensus():
     default=False,
     help="Run in non-dogmatic mode (trying to merge genes and proteins)?",
 )
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def create_consensus(
     sbml_dfs_uris: Sequence[str], output_model_uri: str, nondogmatic: bool
 ):
@@ -284,21 +529,14 @@ def create_consensus(
         f"Creating a consensus from {len(sbml_dfs_uris)} sbml_dfs where dogmatic = {dogmatic}"
     )
 
-    sbml_dfs_dict = {uri: SBML_dfs.from_pickle(uri) for uri in sbml_dfs_uris}
-    pw_index_df = pd.DataFrame(
-        {
-            "file": sbml_dfs_uris,
-            "pathway_id": sbml_dfs_dict.keys(),
-            "source": sbml_dfs_dict.keys(),
-            "name": sbml_dfs_dict.keys(),
-            # TODO: Discuss with Sean how to deal with date in pw_index
-            "date": "1900-01-01",
-        }
-    )
-    pw_index_df["species"] = "unknown"
-    pw_index = indices.PWIndex(pw_index=pw_index_df, validate_paths=False)
+    # create a list of sbml_dfs objects
+    sbml_dfs_list = [SBML_dfs.from_pickle(uri) for uri in sbml_dfs_uris]
+
+    # reorganize as a list and table containing model-level metadata from the individual SBML_dfs
+    sbml_dfs_dict, pw_index = napistu_consensus.prepare_consensus_model(sbml_dfs_list)
+
     consensus_model = napistu_consensus.construct_consensus_model(
-        sbml_dfs_dict, pw_index, dogmatic
+        sbml_dfs_dict, pw_index, dogmatic=dogmatic
     )
     consensus_model.to_pickle(output_model_uri)
 
@@ -401,7 +639,7 @@ def drop_cofactors(model_uri: str, output_model_uri: str):
     default="cytosol",
     help="Exchange compartment for new transport reactions.",
 )
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def add_transportation_reaction(
     model_uri, output_model_uri, exchange_compartment="cytosol"
 ):
@@ -431,8 +669,8 @@ def apply_manual_curations(model_uri: str, curation_dir: str, output_model_uri: 
 
 @refine.command(name="expand_identifiers")
 @click.argument("sbml_dfs_uri", type=str)
+@click.argument("organismal_species", type=str)
 @click.argument("output_model_uri", type=str)
-@click.option("--species", "-s", default="Homo sapiens", type=str)
 @click.option(
     "--ontologies", "-o", multiple=True, type=str, help="Ontologies to add or complete"
 )
@@ -452,19 +690,24 @@ def apply_manual_curations(model_uri: str, curation_dir: str, output_model_uri: 
 )
 def expand_identifiers(
     sbml_dfs_uri: str,
+    organismal_species: str,
     output_model_uri: str,
-    species: str,
     ontologies: set[str],
     preferred_method: str,
     allow_fallback: bool,
 ):
     """Expand identifiers of a model
 
-    Args:
+    Parameters
+    ----------
+    sbml_dfs_uri : str
         sbml_dfs_uri (str): uri of model in sbml dfs format
-        output_model_uri (str): output uri of model in sbml dfs format
-        species (str): Species to use
-        ontologies (set[str]): ontologies to add or update
+    organismal_species : str
+        Species to use
+    output_model_uri : str
+        output uri of model in sbml dfs format
+    ontologies : set[str]
+        ontologies to add or update
 
     Example call:
     > napistu refine expand_identifiers gs://<uri> ./test.pickle -o ensembl_gene
@@ -474,7 +717,7 @@ def expand_identifiers(
         raise ValueError("No ontologies to expand specified.")
 
     Genodexito(
-        species=species,
+        organismal_species=organismal_species,
         preferred_method=preferred_method,
         allow_fallback=allow_fallback,
     ).expand_sbml_dfs_ids(sbml_dfs, ontologies=ontologies)
@@ -483,8 +726,8 @@ def expand_identifiers(
 
 
 @integrate.command(name="dogmatic_scaffold")
+@click.argument("organismal_species", type=str)
 @click.argument("output_model_uri", type=str)
-@click.option("--species", "-s", default="Homo sapiens", type=str)
 @click.option(
     "--preferred_method",
     "-p",
@@ -499,9 +742,10 @@ def expand_identifiers(
     type=bool,
     help="Allow fallback to other methods if preferred method fails",
 )
+@verbosity_option
 def dogmatic_scaffold(
+    organismal_species: str,
     output_model_uri: str,
-    species: str,
     preferred_method: str,
     allow_fallback: bool,
 ):
@@ -509,10 +753,10 @@ def dogmatic_scaffold(
 
     Parameters
     ----------
+    organismal_species : str
+        Species to use
     output_model_uri : str
         output uri of model in sbml dfs format
-    species : str
-        Species to use
     preferred_method : str
         Preferred method to use for identifier expansion
     allow_fallback : bool
@@ -523,7 +767,7 @@ def dogmatic_scaffold(
     """
 
     dogmatic_sbml_dfs = dogma.create_dogmatic_sbml_dfs(
-        species=species,
+        organismal_species=organismal_species,
         preferred_method=preferred_method,
         allow_fallback=allow_fallback,
     )
@@ -536,13 +780,9 @@ def dogmatic_scaffold(
 @click.argument("gtex_file_uri", type=str)
 @click.argument("output_model_uri", type=str)
 @click.argument("tissue", type=str)
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def filter_gtex_tissue(
-    sbml_dfs_uri: str,
-    gtex_file_uri: str,
-    output_model_uri: str,
-    tissue: str,
-    filter_non_genic_reactions: bool,
+    sbml_dfs_uri: str, gtex_file_uri: str, output_model_uri: str, tissue: str
 ):
     """Filter model by the gtex tissue expression
 
@@ -581,7 +821,7 @@ def filter_gtex_tissue(
 @click.argument("sbml_dfs_uri", type=str)
 @click.argument("hpa_file_uri", type=str)
 @click.argument("output_model_uri", type=str)
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def filter_hpa_gene_compartments(
     sbml_dfs_uri: str, hpa_file_uri: str, output_model_uri: str
 ):
@@ -795,7 +1035,7 @@ def export_precomputed_distances(
     default=False,
     help="Run in non-dogmatic mode (trying to merge genes and proteins)?",
 )
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def export_sbml_dfs_tables(
     model_uri: str,
     output_uri: str,
@@ -824,7 +1064,7 @@ def importer():
 @importer.command(name="sbml_dfs")
 @click.argument("input_uri", type=str)
 @click.argument("output_uri", type=str)
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def import_sbml_dfs_from_sbml_dfs_uri(input_uri, output_uri):
     """Import sbml_dfs from an uri, eg another GCS bucket"""
     logger.info("Load sbml_dfs from %s", input_uri)
@@ -837,7 +1077,7 @@ def import_sbml_dfs_from_sbml_dfs_uri(input_uri, output_uri):
 @importer.command(name="sbml")
 @click.argument("input_uri", type=str)
 @click.argument("output_uri", type=str)
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def import_sbml_dfs_from_sbml(input_uri, output_uri):
     """Import sbml_dfs from a sbml file"""
     logger.info("Load sbml from %s", input_uri)
@@ -866,7 +1106,7 @@ def helpers():
 @click.argument("input_uri", type=str)
 @click.argument("output_uri", type=str)
 @click.option("--is-file", type=bool, default=True, help="Is the input a file?")
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def copy_uri(input_uri, output_uri, is_file=True):
     """Copy a uri representing a file or folder from one location to another"""
     logger.info("Copy uri from %s to %s", input_uri, output_uri)
@@ -875,7 +1115,7 @@ def copy_uri(input_uri, output_uri, is_file=True):
 
 @helpers.command(name="validate_sbml_dfs")
 @click.argument("input_uri", type=str)
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def validate_sbml_dfs(input_uri):
     """Validate a sbml_dfs object"""
     sbml_dfs = SBML_dfs.from_pickle(input_uri)
@@ -898,7 +1138,7 @@ def validate_sbml_dfs(input_uri):
 @click.option(
     "--identifiers-df-uri", "-i", type=str, help="URI to identifiers DataFrame TSV file"
 )
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def validate_assets(
     sbml_dfs_uri: str,
     napistu_graph_uri: str = None,

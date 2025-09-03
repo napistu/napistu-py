@@ -87,7 +87,7 @@ def count_fraction_of_reciprocal_interactions(
     extended_edgelist_vars = [*edgelist_vars, *extra_defining_vars]
     logger.info(
         f"{', '.join(extra_defining_vars)} will be used as \"extra_defining_vars\" "
-        "which much match across reciprocal edges for the edge to be identical"
+        "which must match across reciprocal edges for the edge to be identical"
     )
 
     possible_reciprocal_interactions = (

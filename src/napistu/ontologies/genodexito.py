@@ -25,7 +25,7 @@ class Genodexito:
 
     Parameters
     ----------
-    species : str, optional
+    organismal_species : str, optional
         The organismal species to map identifiers for, by default "Homo sapiens"
     preferred_method : str, optional
         Which mapping method to try first ("bioconductor" or "python"), by default "bioconductor"
@@ -85,7 +85,7 @@ class Genodexito:
 
     def __init__(
         self,
-        species: str = "Homo sapiens",
+        organismal_species: str = "Homo sapiens",
         preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
         allow_fallback: bool = True,
         r_paths: Optional[List[str]] = None,
@@ -96,7 +96,7 @@ class Genodexito:
 
         Parameters
         ----------
-        species : str, optional
+        organismal_species : str, optional
             Species name, by default "Homo sapiens"
         preferred_method : str, optional
             Which mapping method to try first ("bioconductor" or "python"), by default "bioconductor"
@@ -109,14 +109,14 @@ class Genodexito:
         """
         # Validate configuration using Pydantic model
         config = GenodexitoConfig(
-            species=species,
+            organismal_species=organismal_species,
             preferred_method=preferred_method,
             allow_fallback=allow_fallback,
             r_paths=r_paths,
             test_mode=test_mode,
         )
 
-        self.species = config.species
+        self.organismal_species = config.organismal_species
         self.preferred_method = config.preferred_method
         self.allow_fallback = config.allow_fallback
         self.r_paths = config.r_paths
@@ -152,7 +152,7 @@ class Genodexito:
         # check for existing mappings
         if self.mappings is not None and not overwrite:
             logger.warning(
-                f"Mapping tables for {self.species} already exist. Use overwrite=True to create new mappings."
+                f"Mapping tables for {self.organismal_species} already exist. Use overwrite=True to create new mappings."
             )
             return None
 
@@ -162,47 +162,53 @@ class Genodexito:
                 from napistu.rpy2.rids import create_bioconductor_mapping_tables
 
                 self.mappings = create_bioconductor_mapping_tables(
-                    mappings=mappings, species=self.species, r_paths=self.r_paths
+                    mappings=mappings,
+                    species=self.organismal_species,
+                    r_paths=self.r_paths,
                 )
                 self.mapper_used = GENODEXITO_DEFS.BIOCONDUCTOR
             except Exception as e:
                 if self.allow_fallback:
                     logger.warning(
-                        f"Error creating bioconductor mapping tables for {self.species} with {mappings}. Falling back to python."
+                        f"Error creating bioconductor mapping tables for {self.organismal_species} with {mappings}. Falling back to python."
                     )
                     self.mappings = create_python_mapping_tables(
                         mappings=mappings,
-                        species=self.species,
+                        species=self.organismal_species,
                         test_mode=self.test_mode,
                     )
                     self.mapper_used = GENODEXITO_DEFS.PYTHON
                 else:
                     logger.error(
-                        f"Error creating bioconductor mapping tables for {self.species} with {mappings} and fallback is disabled."
+                        f"Error creating bioconductor mapping tables for {self.organismal_species} with {mappings} and fallback is disabled."
                     )
                     raise e
 
         elif self.preferred_method == GENODEXITO_DEFS.PYTHON:
             try:
                 self.mappings = create_python_mapping_tables(
-                    mappings=mappings, species=self.species, test_mode=self.test_mode
+                    mappings=mappings,
+                    species=self.organismal_species,
+                    test_mode=self.test_mode,
                 )
                 self.mapper_used = GENODEXITO_DEFS.PYTHON
             except Exception as e:
                 if self.allow_fallback:
                     logger.warning(
-                        f"Error creating mygene Python mapping tables for {self.species} with {mappings}. Trying the bioconductor fallback."
+                        f"Error creating mygene Python mapping tables for {self.organismal_species} with {mappings}. Trying the bioconductor fallback."
                     )
                     # Only import R functionality when needed
                     from napistu.rpy2.rids import create_bioconductor_mapping_tables
 
                     self.mappings = create_bioconductor_mapping_tables(
-                        mappings=mappings, species=self.species, r_paths=self.r_paths
+                        mappings=mappings,
+                        species=self.organismal_species,
+                        r_paths=self.r_paths,
                     )
                     self.mapper_used = GENODEXITO_DEFS.BIOCONDUCTOR
                 else:
                     logger.error(
-                        f"Error creating Python mapping tables for {self.species} with {mappings} and fallback is disabled."
+                        f"Error creating Python mapping tables for {self.organismal_species} with {mappings} and fallback is disabled."
                     )
                     raise e
 
@@ -387,13 +393,13 @@ class Genodexito:
         """
         if self.mappings is None:
             raise ValueError(
-                f"Mapping tables for {self.species} do not exist. Use create_mapping_tables to create new mappings."
+                f"Mapping tables for {self.organismal_species} do not exist. Use create_mapping_tables to create new mappings."
             )
 
         # entrez should always be present if any mappings exist
         if ONTOLOGIES.NCBI_ENTREZ_GENE not in self.mappings.keys():
             raise ValueError(
-                f"Mapping tables for {self.species} do not contain {ONTOLOGIES.NCBI_ENTREZ_GENE}. Use create_mapping_tables to create new mappings."
+                f"Mapping tables for {self.organismal_species} do not contain {ONTOLOGIES.NCBI_ENTREZ_GENE}. Use create_mapping_tables to create new mappings."
             )
 
         # Check that all identifiers are strings
@@ -450,7 +456,7 @@ class Genodexito:
 
         if self.mappings is None:
             raise ValueError(
-                f"Mapping tables for {self.species} do not exist. Use create_mapping_tables to create new mappings."
+                f"Mapping tables for {self.organismal_species} do not exist. Use create_mapping_tables to create new mappings."
             )
 
         if ontologies is None:
@@ -608,15 +614,25 @@ class Genodexito:
 class GenodexitoConfig(BaseModel):
     """Configuration for Genodexito with validation.
 
-    Attributes:
-        species: Species name to use for mapping
-        preferred_method: Which mapping method to try first
+    Attributes
+    ----------
+    organismal_species: str
+        Species name to use for mapping
+    preferred_method: str
+        Which mapping method to try first
+    allow_fallback: bool
+        Whether to allow fallback to other method
+    r_paths: Optional[List[str]]
+        Optional paths to R libraries
+    test_mode: bool
         allow_fallback: Whether to allow fallback to other method
         r_paths: Optional paths to R libraries
         test_mode: Whether to limit queries for testing
     """
 
-    species: str = Field(default="Homo sapiens", description="Species name to use")
+    organismal_species: str = Field(
+        default="Homo sapiens", description="Species name to use"
+    )
     preferred_method: str = Field(
         default=GENODEXITO_DEFS.BIOCONDUCTOR,
         description="Which mapping method to try first",

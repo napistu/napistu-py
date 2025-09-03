@@ -6,11 +6,8 @@ import tempfile
 
 import numpy as np
 import pandas as pd
-from napistu import sbml_dfs_core
 from napistu import utils
-from napistu.ingestion import sbml
 from napistu.network import neighborhoods
-from napistu.network import net_create
 from napistu.network import paths
 from napistu.network import precompute
 from napistu.network.constants import SBML_DFS
@@ -23,19 +20,6 @@ from napistu.network.constants import (
     NEIGHBORHOOD_NETWORK_TYPES,
 )
 
-test_path = os.path.abspath(os.path.join(__file__, os.pardir))
-sbml_path = os.path.join(test_path, "test_data", "reactome_glucose_metabolism.sbml")
-if not os.path.isfile(sbml_path):
-    raise ValueError(f"{sbml_path} not found")
-
-sbml_model = sbml.SBML(sbml_path)
-sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
-sbml_dfs.validate()
-
-napistu_graph = net_create.process_napistu_graph(
-    sbml_dfs, wiring_approach="bipartite", directed=True, weighting_strategy="topology"
-)
-
 # number of species to include when finding all x all paths
 N_SPECIES = 12
 
@@ -44,16 +28,19 @@ NETWORK_TYPE = "hourglass"
 ORDER = 20
 TOP_N = 20
 
-precomputed_distances = precompute.precompute_distances(
-    napistu_graph, max_steps=30000, max_score_q=1
-)
+
+def test_precomputed_distances(precomputed_distances_metabolism):
+    assert precomputed_distances_metabolism.shape == (10243, 5)
 
 
-def test_precomputed_distances():
-    assert precomputed_distances.shape == (3934, 5)
+def test_precomputed_distances_shortest_paths(
+    sbml_dfs_metabolism, napistu_graph_metabolism, precomputed_distances_metabolism
+):
 
+    sbml_dfs = sbml_dfs_metabolism
+    napistu_graph = napistu_graph_metabolism
+    precomputed_distances = precomputed_distances_metabolism
 
-def test_precomputed_distances_shortest_paths():
     cspecies_subset = sbml_dfs.compartmentalized_species.index.tolist()[0:N_SPECIES]
 
     # we should get the same answer for shortest paths whether or not we use pre-computed distances
@@ -150,7 +137,13 @@ def test_precomputed_distances_shortest_paths():
     )
 
 
-def test_precomputed_distances_neighborhoods():
+def test_precomputed_distances_neighborhoods(
+    sbml_dfs_metabolism, napistu_graph_metabolism, precomputed_distances_metabolism
+):
+
+    sbml_dfs = sbml_dfs_metabolism
+    napistu_graph = napistu_graph_metabolism
+    precomputed_distances = precomputed_distances_metabolism
 
     compartmentalized_species = sbml_dfs.compartmentalized_species[
         sbml_dfs.compartmentalized_species[SBML_DFS.S_ID] == "S00000000"
@@ -258,23 +251,23 @@ def test_precomputed_distances_serialization():
     """
     # Create a sample DataFrame that mimics the precomputed distances structure
     sample_data = {
-        "sc_id_origin": {
+        DISTANCES.SC_ID_ORIGIN: {
             1: "SC00000000",
             3: "SC00000003",
             4: "SC00000004",
             5: "SC00000005",
             6: "SC00000011",
         },
-        "sc_id_dest": {
+        DISTANCES.SC_ID_DEST: {
             1: "SC00000001",
             3: "SC00000001",
             4: "SC00000001",
             5: "SC00000001",
             6: "SC00000001",
         },
-        "path_length": {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
-        "path_upstream_weight": {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
-        "path_weight": {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
+        DISTANCES.PATH_LENGTH: {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
+        DISTANCES.PATH_UPSTREAM_WEIGHT: {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
+        DISTANCES.PATH_WEIGHT: {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
     }
 
     # Create original DataFrame
@@ -302,7 +295,9 @@ def test_precomputed_distances_serialization():
             os.remove(temp_path)
 
 
-def test_filter_precomputed_distances_top_n_subset():
+def test_filter_precomputed_distances_top_n_subset(precomputed_distances_metabolism):
+
+    precomputed_distances = precomputed_distances_metabolism
     # Use a small top_n for a quick test
     top_n = 5
     filtered = precompute.filter_precomputed_distances_top_n(

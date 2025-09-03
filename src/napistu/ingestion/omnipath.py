@@ -1,20 +1,26 @@
+import datetime
 import itertools
 import logging
 from typing import Any, Dict, List, Tuple, Union
 
 import pandas as pd
-import omnipath as op
-from omnipath import interactions
+
+# import lazy-loaded omnipath and interactions
+from napistu.ingestion._lazy import (
+    get_omnipath,
+    get_omnipath_interactions,
+    require_omnipath,
+)
 
 from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
 from napistu.identifiers import Identifiers
 from napistu.ontologies import renaming
+from napistu.source import Source
 from napistu.ontologies.genodexito import Genodexito
 from napistu.ontologies.pubchem import map_pubchem_ids
 from napistu.ontologies.mirbase import load_mirbase_xrefs
-from napistu.ingestion.species import SpeciesValidator
-
+from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.constants import (
     BQB,
     SBML_DFS,
@@ -24,6 +30,8 @@ from napistu.constants import (
     SBOTERM_NAMES,
 )
 from napistu.ingestion.constants import (
+    DATA_SOURCES,
+    DATA_SOURCE_DESCRIPTIONS,
     INTERACTION_EDGELIST_DEFS,
     OMNIPATH_ANNOTATIONS,
     OMNIPATH_COMPLEXES,
@@ -36,26 +44,10 @@ from napistu.ontologies.constants import GENODEXITO_DEFS, PUBCHEM_DEFS, MIRBASE_
 
 logger = logging.getLogger(__name__)
 
-# Map dataset names to interaction classes
-OMNIPATH_FXN_MAP = {
-    "all": interactions.AllInteractions,
-    "omnipath": interactions.OmniPath,
-    "dorothea": interactions.Dorothea,
-    "collectri": interactions.CollecTRI,
-    "tf_target": interactions.TFtarget,
-    "transcriptional": interactions.Transcriptional,
-    "post_translational": interactions.PostTranslational,
-    "pathway_extra": interactions.PathwayExtra,
-    "kinase_extra": interactions.KinaseExtra,
-    "ligrec_extra": interactions.LigRecExtra,
-    "tf_mirna": interactions.TFmiRNA,
-    "mirna": interactions.miRNA,
-    "lncrna_mrna": interactions.lncRNAmRNA,
-}
 
-
+@require_omnipath
 def format_omnipath_as_sbml_dfs(
-    organismal_species: str,
+    organismal_species: Union[str, OrganismalSpeciesValidator],
     preferred_method: str,
     allow_fallback: bool,
     **kwargs: Any,
@@ -69,7 +61,7 @@ def format_omnipath_as_sbml_dfs(
 
     Parameters
     ----------
-    organismal_species : str
+    organismal_species : str | OrganismalSpeciesValidator
         The species name (e.g., "human", "mouse", "rat") for which to retrieve interactions.
     preferred_method : str
         Preferred method for identifier mapping (e.g., "bioconductor", "ensembl").
@@ -117,8 +109,18 @@ def format_omnipath_as_sbml_dfs(
     >>> print(f"Reactions: {len(sbml_dfs.reactions)}")
     """
 
-    organismal_species = SpeciesValidator(organismal_species)
+    organismal_species = OrganismalSpeciesValidator.ensure(organismal_species)
     organismal_species.assert_supported(VALID_OMNIPATH_SPECIES)
+
+    # format model-level metadata
+    model_source = Source.single_entry(
+        model=DATA_SOURCES.OMNIPATH,
+        pathway_id=DATA_SOURCES.OMNIPATH,
+        data_source=DATA_SOURCES.OMNIPATH,
+        organismal_species=organismal_species.latin_name,
+        name=DATA_SOURCE_DESCRIPTIONS[DATA_SOURCES.OMNIPATH],
+        date=datetime.date.today().strftime("%Y%m%d"),
+    )
 
     interactions = get_interactions(organismal_species=organismal_species, **kwargs)
 
@@ -209,16 +211,18 @@ def format_omnipath_as_sbml_dfs(
         interaction_edgelist,
         nondegenerate_species_df.drop(columns=[OMNIPATH_INTERACTIONS.INTERACTOR_ID]),
         compartments_df=sbml_dfs_utils.stub_compartments(),
-        keep_reactions_data=True,
-        keep_species_data=True,
+        model_source=model_source,
+        keep_reactions_data=DATA_SOURCES.OMNIPATH,
+        keep_species_data=DATA_SOURCES.OMNIPATH,
     )
 
     return sbml_dfs
 
 
+@require_omnipath
 def get_interactions(
     dataset: Union[str, object] = "all",
-    organismal_species: Union[str, SpeciesValidator] = "human",
+    organismal_species: Union[str, OrganismalSpeciesValidator] = "human",
     **kwargs,
 ) -> pd.DataFrame:
     """
@@ -344,12 +348,14 @@ def get_interactions(
         )
 
     if isinstance(organismal_species, str):
-        organismal_species = SpeciesValidator(organismal_species)
-    if not isinstance(organismal_species, SpeciesValidator):
+        organismal_species = OrganismalSpeciesValidator(organismal_species)
+    if not isinstance(organismal_species, OrganismalSpeciesValidator):
         raise ValueError(f"Invalid organismal_species: {organismal_species}")
     organismal_species.assert_supported(VALID_OMNIPATH_SPECIES)
 
     # Get the interaction class
+    OMNIPATH_FXN_MAP = _get_omnipath_fxn_map()
+
     if isinstance(dataset, str):
         if dataset not in OMNIPATH_FXN_MAP:
             raise ValueError(
@@ -368,6 +374,29 @@ def get_interactions(
     df = _fix_consensus_logic(df)
 
     return df
+
+
+@require_omnipath
+def _get_omnipath_fxn_map():
+    """Get a map of dataset names to interaction classes"""
+    interactions = get_omnipath_interactions()
+
+    # Map dataset names to interaction classes
+    return {
+        "all": interactions.AllInteractions,
+        "omnipath": interactions.OmniPath,
+        "dorothea": interactions.Dorothea,
+        "collectri": interactions.CollecTRI,
+        "tf_target": interactions.TFtarget,
+        "transcriptional": interactions.Transcriptional,
+        "post_translational": interactions.PostTranslational,
+        "pathway_extra": interactions.PathwayExtra,
+        "kinase_extra": interactions.KinaseExtra,
+        "ligrec_extra": interactions.LigRecExtra,
+        "tf_mirna": interactions.TFmiRNA,
+        "mirna": interactions.miRNA,
+        "lncrna_mrna": interactions.lncRNAmRNA,
+    }
 
 
 def _fix_consensus_logic(df: pd.DataFrame) -> pd.DataFrame:
@@ -462,7 +491,7 @@ def _prepare_integer_based_ids(interactor_int_ids: List[str]) -> pd.DataFrame:
 
 def _prepare_omnipath_ids_uniprot(
     interactor_string_ids: List[str],
-    organismal_species: Union[str, SpeciesValidator],
+    organismal_species: Union[str, OrganismalSpeciesValidator],
     preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
     allow_fallback: bool = True,
 ) -> pd.DataFrame:
@@ -473,7 +502,7 @@ def _prepare_omnipath_ids_uniprot(
     ----------
     interactor_string_ids : List[str]
         List of string-based interactor IDs to cross-reference with UniProt.
-    organismal_species : Union[str, SpeciesValidator]
+    organismal_species : Union[str, OrganismalSpeciesValidator]
         The species for which to retrieve UniProt annotations.
     preferred_method : str, optional
         Preferred method for identifier mapping, by default GENODEXITO_DEFS.BIOCONDUCTOR.
@@ -495,8 +524,8 @@ def _prepare_omnipath_ids_uniprot(
     """
 
     if isinstance(organismal_species, str):
-        organismal_species = SpeciesValidator(organismal_species)
-    if not isinstance(organismal_species, SpeciesValidator):
+        organismal_species = OrganismalSpeciesValidator(organismal_species)
+    if not isinstance(organismal_species, OrganismalSpeciesValidator):
         raise ValueError(f"Invalid organismal_species: {organismal_species}")
 
     logger.info(
@@ -504,7 +533,7 @@ def _prepare_omnipath_ids_uniprot(
     )
 
     genodexito = Genodexito(
-        species=organismal_species.latin_name,
+        organismal_species=organismal_species.latin_name,
         preferred_method=preferred_method,
         allow_fallback=allow_fallback,
     )
@@ -602,6 +631,7 @@ def _prepare_omnipath_ids_mirbase(
     return mirbase_species
 
 
+@require_omnipath
 def _prepare_omnipath_ids_complexes(
     interactor_string_ids: List[str],
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -628,7 +658,9 @@ def _prepare_omnipath_ids_complexes(
         - downstream_stoichiometry: Stoichiometry of complex (typically 1)
     """
 
-    complexes = op.requests.Complexes().get()
+    omnipath = get_omnipath()
+
+    complexes = omnipath.requests.Complexes().get()
     complexes[OMNIPATH_INTERACTIONS.INTERACTOR_ID] = [
         OMNIPATH_COMPLEXES.COMPLEX_FSTRING.format(x=x)
         for x in complexes[OMNIPATH_COMPLEXES.COMPONENTS]

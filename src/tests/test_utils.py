@@ -730,3 +730,27 @@ def test_parquet_save_load():
 
         # Verify they're identical
         pd.testing.assert_frame_equal(original_df, result_df)
+
+
+def test_safe_join_set():
+    """Test safe_join_set function with various inputs."""
+    # Test basic functionality and sorting
+    assert utils.safe_join_set([1, 2, 3]) == "1 OR 2 OR 3"
+    assert utils.safe_join_set(["c", "a", "b"]) == "a OR b OR c"
+
+    # Test deduplication
+    assert utils.safe_join_set([1, 1, 2, 3]) == "1 OR 2 OR 3"
+
+    # Test None handling
+    assert utils.safe_join_set([1, None, 3]) == "1 OR 3"
+    assert utils.safe_join_set([None, None]) is None
+
+    # Test pandas Series (use object dtype to preserve None)
+    series = pd.Series([3, 1, None, 2], dtype=object)
+    assert utils.safe_join_set(series) == "1 OR 2 OR 3"
+
+    # Test string as single value
+    assert utils.safe_join_set("hello") == "hello"
+
+    # Test empty inputs
+    assert utils.safe_join_set([]) is None

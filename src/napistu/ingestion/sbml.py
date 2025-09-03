@@ -19,16 +19,20 @@ from napistu import identifiers
 from napistu import sbml_dfs_utils
 from napistu import source
 from napistu import utils
-from napistu.constants import BQB
-from napistu.constants import ONTOLOGIES
-from napistu.constants import SBML_DFS
-from napistu.constants import SBML_DFS_SCHEMA
-from napistu.constants import SCHEMA_DEFS
-from napistu.ingestion.constants import SBML_DEFS
-from napistu.ingestion.constants import COMPARTMENTS_GO_TERMS
-from napistu.ingestion.constants import COMPARTMENT_ALIASES
-from napistu.ingestion.constants import VALID_COMPARTMENTS
-from napistu.ingestion.constants import GENERIC_COMPARTMENT
+from napistu.constants import (
+    BQB,
+    ONTOLOGIES,
+    SBML_DFS,
+    SBML_DFS_SCHEMA,
+    SCHEMA_DEFS,
+)
+from napistu.ingestion.constants import (
+    SBML_DEFS,
+    COMPARTMENTS_GO_TERMS,
+    COMPARTMENT_ALIASES,
+    VALID_COMPARTMENTS,
+    GENERIC_COMPARTMENT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +55,8 @@ class SBML:
         The raw SBML document object from libsbml.
     model : libsbml.Model
         The parsed SBML model object from libsbml.
+    verbose : bool, default=False
+        If True, then include detailed logs.
 
     Methods
     -------
@@ -69,6 +75,7 @@ class SBML:
     def __init__(
         self,
         sbml_path: str,
+        verbose: bool = False,
     ) -> None:
         """Initializes the SBML object by reading and validating an SBML file."""
         reader = libsbml.SBMLReader()
@@ -95,9 +102,10 @@ class SBML:
 
             found_known_errors = known_errors.intersection(critical_errors)
             if len(found_known_errors) > 0:
-                logger.warning(
-                    f"The following known errors were found: {found_known_errors}"
-                )
+                if verbose:
+                    logger.info(
+                        f"The following known errors were found: {found_known_errors}"
+                    )
 
             unknown_critical_errors = critical_errors - known_errors
             if len(unknown_critical_errors) != 0:
@@ -249,7 +257,7 @@ class SBML:
                         SBML_DFS.C_ID: comp.getId(),
                         SBML_DFS.C_NAME: comp.getName(),
                         SBML_DFS.C_IDENTIFIERS: identifiers.cv_to_Identifiers(comp),
-                        SBML_DFS.C_SOURCE: source.Source(init=True),
+                        SBML_DFS.C_SOURCE: source.Source.empty(),
                     }
                 )
 
@@ -277,7 +285,7 @@ class SBML:
                 SBML_DFS.SC_NAME: spec.getName(),
                 SBML_DFS.C_ID: spec.getCompartment(),
                 SBML_DFS.S_IDENTIFIERS: identifiers.cv_to_Identifiers(spec),
-                SBML_DFS.SC_SOURCE: source.Source(init=True),
+                SBML_DFS.SC_SOURCE: source.Source.empty(),
             }
 
             comp_species.append(spec_dict)
@@ -313,7 +321,7 @@ class SBML:
                     # Recon3D.xml has both fbc:label and fbc:name attributes, with gene name in fbc:nam
                     SBML_DFS.C_ID: None,
                     SBML_DFS.S_IDENTIFIERS: identifiers.cv_to_Identifiers(gene_product),
-                    SBML_DFS.SC_SOURCE: source.Source(init=True),
+                    SBML_DFS.SC_SOURCE: source.Source.empty(),
                 }
 
                 fbc_gene_products.append(gene_dict)
@@ -391,7 +399,7 @@ class SBML:
         # find unique species and create a table
         consensus_species_df = comp_species_df.copy()
         consensus_species_df.index.names = [SBML_DFS.S_ID]
-        consensus_species, species_lookup = consensus.reduce_to_consensus_ids(
+        consensus_species, species_lookup = consensus._reduce_to_consensus_ids(
             consensus_species_df,
             # note that this is an incomplete schema because consensus_species_df isn't a
             # normal species table
@@ -412,7 +420,7 @@ class SBML:
             [SBML_DFS.SC_NAME, SBML_DFS.C_ID], axis=1
         )
         consensus_species[SBML_DFS.S_SOURCE] = [
-            source.Source(init=True) for x in range(0, consensus_species.shape[0])
+            source.Source.empty() for x in range(0, consensus_species.shape[0])
         ]
 
         species = consensus_species[SPECIES_VARS]
@@ -518,7 +526,7 @@ class SBML_reaction:
             SBML_DFS.R_ID: sbml_reaction.getId(),
             SBML_DFS.R_NAME: sbml_reaction.getName(),
             SBML_DFS.R_IDENTIFIERS: identifiers.cv_to_Identifiers(sbml_reaction),
-            SBML_DFS.R_SOURCE: source.Source(init=True),
+            SBML_DFS.R_SOURCE: source.Source.empty(),
             SBML_DFS.R_ISREVERSIBLE: sbml_reaction.getReversible(),
         }
 
@@ -637,7 +645,7 @@ def _define_compartments_missing_cvterms(
                     )
                 ]
             ),
-            SBML_DFS.C_SOURCE: source.Source(init=True),
+            SBML_DFS.C_SOURCE: source.Source.empty(),
         }
 
     if len(mapped_compartment_key) > 0:
@@ -660,7 +668,7 @@ def _define_compartments_missing_cvterms(
                     )
                 ]
             ),
-            SBML_DFS.C_SOURCE: source.Source(init=True),
+            SBML_DFS.C_SOURCE: source.Source.empty(),
         }
 
     return compartment_entry

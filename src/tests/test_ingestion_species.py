@@ -4,24 +4,24 @@ from napistu.ingestion.constants import (
     LATIN_SPECIES_NAMES,
     PSI_MI_INTACT_SPECIES_TO_BASENAME,
 )
-from napistu.ingestion.species import SpeciesValidator
+from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 
 
 def test_species_initialization_and_properties():
     """Test species initialization with various inputs and property access."""
     # Test Latin name input
-    human_latin = SpeciesValidator(LATIN_SPECIES_NAMES.HOMO_SAPIENS)
+    human_latin = OrganismalSpeciesValidator(LATIN_SPECIES_NAMES.HOMO_SAPIENS)
     assert human_latin.latin_name == LATIN_SPECIES_NAMES.HOMO_SAPIENS
     assert human_latin.common_name == "human"
 
     # Test common name input
-    mouse_common = SpeciesValidator("mouse")
+    mouse_common = OrganismalSpeciesValidator("mouse")
     assert mouse_common.latin_name == LATIN_SPECIES_NAMES.MUS_MUSCULUS
     assert mouse_common.common_name == "mouse"
 
     # Test case insensitive input
-    human_caps = SpeciesValidator("HUMAN")
-    human_mixed = SpeciesValidator("homo sapiens")
+    human_caps = OrganismalSpeciesValidator("HUMAN")
+    human_mixed = OrganismalSpeciesValidator("homo sapiens")
     assert (
         human_caps.latin_name
         == human_mixed.latin_name
@@ -30,18 +30,18 @@ def test_species_initialization_and_properties():
 
     # Test string representations
     assert str(human_latin) == "human (Homo sapiens)"
-    assert repr(human_latin) == "SpeciesValidator('Homo sapiens')"
+    assert repr(human_latin) == "OrganismalSpeciesValidator('Homo sapiens')"
 
     # Test invalid species raises error
     with pytest.raises(ValueError, match="Unknown species"):
-        SpeciesValidator("invalid_species")
+        OrganismalSpeciesValidator("invalid_species")
 
 
 def test_supported_species_validation():
     """Test validation against lists of supported species."""
-    human = SpeciesValidator("human")
-    mouse = SpeciesValidator(LATIN_SPECIES_NAMES.MUS_MUSCULUS)
-    fly = SpeciesValidator("fly")
+    human = OrganismalSpeciesValidator("human")
+    mouse = OrganismalSpeciesValidator(LATIN_SPECIES_NAMES.MUS_MUSCULUS)
+    fly = OrganismalSpeciesValidator("fly")
 
     mammal_species = ["human", "mouse", "rat"]
     model_organisms = [
@@ -69,9 +69,9 @@ def test_supported_species_validation():
 
 def test_custom_table_lookup():
     """Test lookup functionality with custom species mapping tables."""
-    human = SpeciesValidator("human")
-    worm = SpeciesValidator("worm")
-    fly = SpeciesValidator("fly")
+    human = OrganismalSpeciesValidator("human")
+    worm = OrganismalSpeciesValidator("worm")
+    fly = OrganismalSpeciesValidator("fly")
 
     # Test lookup with Latin names as keys (default)
     assert (
@@ -85,12 +85,12 @@ def test_custom_table_lookup():
 
     # Test lookup with common names as keys
     custom_ids = {"human": "HUMAN_001", "mouse": "MOUSE_001", "yeast": "YEAST_001"}
-    human_from_latin = SpeciesValidator(LATIN_SPECIES_NAMES.HOMO_SAPIENS)
+    human_from_latin = OrganismalSpeciesValidator(LATIN_SPECIES_NAMES.HOMO_SAPIENS)
     assert (
         human_from_latin.lookup_custom_value(custom_ids, is_latin=False) == "HUMAN_001"
     )
 
-    mouse = SpeciesValidator("mouse")
+    mouse = OrganismalSpeciesValidator("mouse")
     assert mouse.lookup_custom_value(custom_ids, is_latin=False) == "MOUSE_001"
 
     # Test species not found in custom table
@@ -104,7 +104,7 @@ def test_custom_table_lookup():
 def test_class_methods_and_utilities():
     """Test class methods and utility functions."""
     # Test get_available_species
-    available = SpeciesValidator.get_available_species()
+    available = OrganismalSpeciesValidator.get_available_species()
 
     assert isinstance(available, dict)
     assert "latin_names" in available
@@ -126,3 +126,30 @@ def test_class_methods_and_utilities():
         LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE,
     ]:
         assert latin_name in available["latin_names"]
+
+
+def test_ensure_organismal_species_validator():
+    """Test the OrganismalSpeciesValidator.ensure class method."""
+
+    # Test with string input
+    validator = OrganismalSpeciesValidator.ensure("human")
+    assert isinstance(validator, OrganismalSpeciesValidator)
+    assert validator.latin_name == "Homo sapiens"
+    assert validator.common_name == "human"
+
+    # Test with existing OrganismalSpeciesValidator
+    existing_validator = OrganismalSpeciesValidator("mouse")
+    validator = OrganismalSpeciesValidator.ensure(existing_validator)
+    assert validator is existing_validator
+    assert validator.latin_name == "Mus musculus"
+
+    # Test with invalid input
+    with pytest.raises(
+        ValueError, match="must be a string or OrganismalSpeciesValidator"
+    ):
+        OrganismalSpeciesValidator.ensure(123)
+
+    with pytest.raises(
+        ValueError, match="must be a string or OrganismalSpeciesValidator"
+    ):
+        OrganismalSpeciesValidator.ensure(None)

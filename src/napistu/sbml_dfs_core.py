@@ -23,8 +23,10 @@ from napistu import identifiers
 from napistu import sbml_dfs_utils
 from napistu import source
 from napistu import utils
-from napistu.ingestion import sbml
 from napistu.ontologies import id_tables
+
+if TYPE_CHECKING:
+    from napistu.ingestion import sbml
 from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS_LOOSE,
@@ -37,6 +39,7 @@ from napistu.constants import (
     NAPISTU_STANDARD_OUTPUTS,
     ONTOLOGY_PRIORITIES,
     SBML_DFS,
+    SBML_DFS_METADATA,
     SBML_DFS_METHOD_DEFS,
     SBML_DFS_SCHEMA,
     SBOTERM_NAMES,
@@ -172,6 +175,7 @@ class SBML_dfs:
         sbml_model: (
             sbml.SBML | MutableMapping[str, pd.DataFrame | dict[str, pd.DataFrame]]
         ),
+        model_source: source.Source,
         validate: bool = True,
         resolve: bool = True,
     ) -> None:
@@ -206,6 +210,18 @@ class SBML_dfs:
             self.reactions = pd.DataFrame()
             self.reaction_species = pd.DataFrame()
 
+        # initialize the model's metadata attribute
+        self.metadata = dict()
+        # validate the model-level source data
+
+        if not isinstance(model_source, source.Source):
+            raise ValueError(
+                f"model_source was a {type(model_source)} and must be a source.Source"
+            )
+
+        model_source.validate_single_source()
+        self.metadata[SBML_DFS_METADATA.SBML_DFS_SOURCE] = model_source
+
         # create a model from dictionary entries
         if isinstance(sbml_model, dict):
             for ent in SBML_DFS_SCHEMA.REQUIRED_ENTITIES:
@@ -214,6 +230,8 @@ class SBML_dfs:
                 if ent in sbml_model:
                     setattr(self, ent, sbml_model[ent])
         else:
+            from napistu.ingestion import sbml
+
             self = sbml.sbml_dfs_from_sbml(self, sbml_model)
 
         for ent in SBML_DFS_SCHEMA.OPTIONAL_ENTITIES:
@@ -327,9 +345,7 @@ class SBML_dfs:
                 f"model_prefix was a {type(model_prefix)} " "and must be a str"
             )
         if not isinstance(self, SBML_dfs):
-            raise TypeError(
-                f"sbml_dfs was a {type(self)} and must" " be an sbml.SBML_dfs"
-            )
+            raise TypeError(f"sbml_dfs was a {type(self)} and must" " be an SBML_dfs")
 
         # filter to identifiers which make sense when mapping from ids -> species
         species_identifiers = self.get_characteristic_species_ids(dogmatic=dogmatic)
@@ -395,7 +411,7 @@ class SBML_dfs:
         interaction_edgelist: pd.DataFrame,
         species_df: pd.DataFrame,
         compartments_df: pd.DataFrame,
-        interaction_source: source.Source = source.Source(init=True),
+        model_source: source.Source,
         interaction_edgelist_defaults: dict[str, Any] = INTERACTION_EDGELIST_DEFAULTS,
         keep_species_data: bool | str = False,
         keep_reactions_data: bool | str = False,
@@ -416,7 +432,10 @@ class SBML_dfs:
             - r_Identifiers : identifiers.Identifiers, supporting identifiers
             - upstream_compartment : str, matches "c_name" from compartments_df
             - downstream_compartment : str, matches "c_name" from compartments_df
-            - sbo_term_upstream : str, SBO term defining interaction type
+            - upstream_sbo_term_name : str, SBO term defining interaction type
+            - downstream_sbo_term_name : str, SBO term defining interaction type
+            - upstream_stoichiometry : float, stoichiometry of upstream species
+            - downstream_stoichiometry : float, stoichiometry of downstream species
             - r_isreversible : bool, whether reaction is reversible
         species_df : pd.DataFrame
             Table defining molecular species with columns:
@@ -426,8 +445,8 @@ class SBML_dfs:
             Table defining compartments with columns:
             - c_name : str, name of compartment
             - c_Identifiers : identifiers.Identifiers, compartment identifiers
-        interaction_source : source.Source
-            Source object linking model entities to interaction source
+        model_source : source.Source
+            Source annotations for the data source
         interaction_edgelist_defaults : dict[str, Any], default INTERACTION_EDGELIST_DEFAULTS
             Default values for interaction edgelist columns
         keep_species_data : bool or str, default False
@@ -443,6 +462,19 @@ class SBML_dfs:
             Validated SBML data structure containing compartments, species,
             compartmentalized species, reactions, and reaction species tables.
         """
+
+        # organize source info
+        if not isinstance(model_source, source.Source):
+            raise ValueError("model_source must be a source.Source object")
+
+        # Validate that interaction_edgelist_defaults is a dictionary
+        if not isinstance(interaction_edgelist_defaults, dict):
+            raise TypeError(
+                f"interaction_edgelist_defaults must be a dictionary, got {type(interaction_edgelist_defaults)}"
+            )
+
+        # set default entity-level source
+        interaction_source = source.Source.empty()
 
         # 0. Add defaults to interaction edgelist
         interaction_edgelist_with_defaults = sbml_dfs_utils._add_edgelist_defaults(
@@ -492,16 +524,17 @@ class SBML_dfs:
 
         # 6. Assemble final SBML_dfs object
         sbml_dfs = cls._edgelist_assemble_sbml_model(
-            processed_compartments,
-            processed_species,
-            comp_species,
-            reactions,
-            reaction_species,
-            species_data,
-            reactions_data,
-            keep_species_data,
-            keep_reactions_data,
-            extra_columns,
+            compartments=processed_compartments,
+            species=processed_species,
+            comp_species=comp_species,
+            reactions=reactions,
+            reaction_species=reaction_species,
+            species_data=species_data,
+            reactions_data=reactions_data,
+            keep_species_data=keep_species_data,
+            keep_reactions_data=keep_reactions_data,
+            extra_columns=extra_columns,
+            model_source=model_source,
         )
 
         return sbml_dfs
@@ -1720,11 +1753,12 @@ class SBML_dfs:
         comp_species: pd.DataFrame,
         reactions: pd.DataFrame,
         reaction_species: pd.DataFrame,
-        species_data,
-        reactions_data,
-        keep_species_data,
-        keep_reactions_data,
+        species_data: pd.DataFrame,
+        reactions_data: pd.DataFrame,
+        keep_species_data: Union[bool, str],
+        keep_reactions_data: Union[bool, str],
         extra_columns: dict[str, list[str]],
+        model_source: source.Source,
     ) -> "SBML_dfs":
         """
         Assemble the final SBML_dfs object.
@@ -1768,9 +1802,7 @@ class SBML_dfs:
         # Add extra data if requested
         if len(extra_columns[SBML_DFS.REACTIONS]) > 0:
             data_label = (
-                keep_reactions_data
-                if isinstance(keep_reactions_data, str)
-                else "source"
+                keep_reactions_data if isinstance(keep_reactions_data, str) else "source"
             )
             sbml_tbl_dict[SBML_DFS.REACTIONS_DATA] = {data_label: reactions_data}
 
@@ -1780,10 +1812,10 @@ class SBML_dfs:
             )
             sbml_tbl_dict[SBML_DFS.SPECIES_DATA] = {data_label: species_data}
 
-        sbml_model = cls(sbml_tbl_dict)
-        sbml_model.validate()
+        sbml_dfs = cls(sbml_tbl_dict, model_source)
+        sbml_dfs.validate()
 
-        return sbml_model
+        return sbml_dfs
 
     def _find_underspecified_reactions_by_scids(
         self, sc_ids: Iterable[str]

@@ -1,27 +1,32 @@
 from __future__ import annotations
+
+import datetime
 import logging
 import warnings
-
-import pandas as pd
+from typing import Union
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
     from fs import open_fs
+import pandas as pd
 
 from napistu import identifiers
 from napistu import sbml_dfs_utils
-from napistu import source
 from napistu import utils
 from napistu.ingestion import napistu_edgelist
 from napistu.sbml_dfs_core import SBML_dfs
+from napistu.source import Source
+from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.constants import (
     BQB,
     SBOTERM_NAMES,
-    MINI_SBO_FROM_NAME,
+    IDENTIFIERS,
     ONTOLOGIES,
     SBML_DFS,
 )
 from napistu.ingestion.constants import (
+    DATA_SOURCES,
+    DATA_SOURCE_DESCRIPTIONS,
     INTERACTION_EDGELIST_DEFS,
     STRING_PROTEIN_ID,
     STRING_PROTEIN_ID_RAW,
@@ -30,29 +35,38 @@ from napistu.ingestion.constants import (
     STRING_TAX_IDS,
     STRING_URL_EXPRESSIONS,
     STRING_VERSION,
-    GENERIC_COMPARTMENT,
 )
 
 logger = logging.getLogger(__name__)
 
 
 def get_string_species_url(
-    species: str, asset: str, version: float = STRING_VERSION
+    organismal_species: Union[str, OrganismalSpeciesValidator],
+    asset: str,
+    version: float = STRING_VERSION,
 ) -> str:
     """
     STRING Species URL
+
     Construct urls for downloading specific STRING tables
-    Args:
-        species (str): A species name: e.g., Homo sapiens.
-        asset (str): The type of table to be downloaded. Currently "interactions" or "aliases".
-        version (float): The version of STRING to work with.
-    Returns:
+
+    Parameters
+    ----------
+    organismal_species : str | OrganismalSpeciesValidator
+        A species name: e.g., Homo sapiens.
+    asset : str
+        The type of table to be downloaded. Currently "interactions" or "aliases".
+    version : float
+        The version of STRING to work with.
+
+    Returns
+    -------
         str: The download url
     """
-    if species not in STRING_TAX_IDS.keys():
-        raise ValueError(
-            f"{species} is not a valid value for species ids, valid ids are: {', '.join(STRING_TAX_IDS.keys())}"
-        )
+
+    organismal_species = OrganismalSpeciesValidator.ensure(organismal_species)
+    organismal_species.assert_supported(STRING_TAX_IDS.keys())
+    tax_id = STRING_TAX_IDS[organismal_species.latin_name]
 
     if asset not in STRING_URL_EXPRESSIONS.keys():
         raise ValueError(
@@ -62,23 +76,27 @@ def get_string_species_url(
 
     url_fstring = STRING_URL_EXPRESSIONS[asset]
 
-    return eval(
-        f'f"{url_fstring}"', {"taxid": STRING_TAX_IDS[species], "version": version}
-    )
+    return eval(f'f"{url_fstring}"', {"taxid": tax_id, "version": version})
 
 
-def download_string(target_uri: str, species: str) -> None:
+def download_string(
+    target_uri: str, organismal_species: Union[str, OrganismalSpeciesValidator]
+) -> None:
     """Downloads string to the target uri
 
-    Args:
-        target_uri (str): target url
-        species (str): A species name: e.g., Homo sapiens
+    Parameters
+    ----------
+    target_uri : str
+        target url
+    organismal_species : str | OrganismalSpeciesValidator
+        A species name: e.g., Homo sapiens
 
-    Returns:
+    Returns
+    -------
         None
     """
     string_url = get_string_species_url(
-        species, asset="interactions", version=STRING_VERSION
+        organismal_species, asset="interactions", version=STRING_VERSION
     )
     logger.info("Start downloading string db %s to %s", string_url, target_uri)
 
@@ -87,18 +105,24 @@ def download_string(target_uri: str, species: str) -> None:
     return None
 
 
-def download_string_aliases(target_uri: str, species: str) -> None:
+def download_string_aliases(
+    target_uri: str, organismal_species: Union[str, OrganismalSpeciesValidator]
+) -> None:
     """Downloads string aliases to the target uri
 
-    Args:
-        target_uri (str): target url
-        species (str): A species name: e.g., Homo sapiens
+    Parameters
+    ----------
+    target_uri : str
+        target url
+    organismal_species : str | OrganismalSpeciesValidator
+        A species name: e.g., Homo sapiens
 
-    Returns:
+    Returns
+    -------
         None
     """
     string_aliases_url = get_string_species_url(
-        species, asset="aliases", version=STRING_VERSION
+        organismal_species, asset="aliases", version=STRING_VERSION
     )
     logger.info(
         "Start downloading string aliases %s to %s", string_aliases_url, target_uri
@@ -111,16 +135,28 @@ def download_string_aliases(target_uri: str, species: str) -> None:
 def convert_string_to_sbml_dfs(
     string_uri: str,
     string_aliases_uri: str,
+    organismal_species: Union[str, OrganismalSpeciesValidator],
 ) -> SBML_dfs:
     """Ingests string to sbml dfs
 
-    Args:
-        string_uri (str): string uri
-        string_aliases_uri (str): string aliases uri
+    Parameters
+    ----------
+    string_uri : str
+        URI for the string interactions file
+    string_aliases_uri : str
+        URI for the string aliases file
+    organismal_species : str | OrganismalSpeciesValidator
+        A species name: e.g., Homo sapiens
 
-    Returns:
-        SBML_dfs: sbml dfs
+    Returns
+    -------
+    SBML_dfs
+        A STRING pathway representation as an SBML_dfs object
     """
+
+    organismal_species = OrganismalSpeciesValidator.ensure(organismal_species)
+    organismal_species.assert_supported(STRING_TAX_IDS.keys())
+
     # Read string raw data
     string_edgelist = _read_string(string_uri)
     string_aliases = _read_string_aliases(string_aliases_uri)
@@ -134,8 +170,15 @@ def convert_string_to_sbml_dfs(
         string_edgelist, extra_defining_vars=["combined_score"]
     )
 
-    # Per convention unaggregated models receive an empty source
-    interaction_source = source.Source(init=True)
+    # define model-level metadata
+    model_source = Source.single_entry(
+        model=DATA_SOURCES.STRING,
+        pathway_id=DATA_SOURCES.STRING,
+        data_source=DATA_SOURCES.STRING,
+        organismal_species=organismal_species.latin_name,
+        name=DATA_SOURCE_DESCRIPTIONS[DATA_SOURCES.STRING],
+        date=datetime.date.today().strftime("%Y%m%d"),
+    )
 
     # define identifier mapping from aliases to use:
     alias_to_identifier = {
@@ -166,16 +209,20 @@ def convert_string_to_sbml_dfs(
     # define interactions
     interaction_edgelist = _build_interactor_edgelist(uq_string_edgelist)
 
+    interaction_edgelist_defaults = {
+        INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.INTERACTOR,
+        INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.INTERACTOR,
+        SBML_DFS.R_ISREVERSIBLE: True,
+    }
+
     # build the final object
     sbml_dfs = SBML_dfs.from_edgelist(
         interaction_edgelist=interaction_edgelist,
         species_df=species_df,
         compartments_df=compartments_df,
-        interaction_source=interaction_source,
-        upstream_stoichiometry=0,
-        downstream_stoichiometry=0,
-        downstream_sbo_name=SBOTERM_NAMES.INTERACTOR,
-        keep_reactions_data="string",
+        model_source=model_source,
+        interaction_edgelist_defaults=interaction_edgelist_defaults,
+        keep_reactions_data=DATA_SOURCES.STRING,
     )
     return sbml_dfs
 
@@ -247,10 +294,10 @@ def _get_identifiers(
             # We are doing it manually here to avoid the overhead of parsing
             # the uri again
             id_dict = {
-                "ontology": ontology,
-                "identifier": identifier,
-                "bqb": qualifier,
-                "url": uri,
+                IDENTIFIERS.ONTOLOGY: ontology,
+                IDENTIFIERS.IDENTIFIER: identifier,
+                IDENTIFIERS.BQB: qualifier,
+                IDENTIFIERS.URL: uri,
             }
             ids.append(id_dict)
     identifier = identifiers.Identifiers(ids)
@@ -299,12 +346,9 @@ def _build_interactor_edgelist(
     upstream_col_name: str = STRING_SOURCE,
     downstream_col_name: str = STRING_TARGET,
     add_reverse_interactions: bool = False,
-    sbo_term: str = SBOTERM_NAMES.INTERACTOR,
-    compartment: str = GENERIC_COMPARTMENT,
 ) -> pd.DataFrame:
     """Format STRING interactions as reactions."""
 
-    sbo_interactor = MINI_SBO_FROM_NAME[sbo_term]
     dat = edgelist.rename(
         columns={
             upstream_col_name: INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
@@ -312,9 +356,6 @@ def _build_interactor_edgelist(
         }
     ).assign(
         **{
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT: compartment,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT: compartment,
-            SBML_DFS.SBO_TERM: sbo_interactor,
             SBML_DFS.R_IDENTIFIERS: lambda x: identifiers.Identifiers([]),
         }
     )
@@ -342,7 +383,6 @@ def _build_interactor_edgelist(
         dat[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME],
         dat[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME],
     )
-    interaction_edgelist[SBML_DFS.R_ISREVERSIBLE] = True
 
     return interaction_edgelist
 

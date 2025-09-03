@@ -6,6 +6,7 @@ import pandas as pd
 from napistu import sbml_dfs_core
 from napistu.ingestion import sbml
 from napistu.modify import curation
+from napistu.constants import SBML_DFS
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 sbml_path = os.path.join(test_path, "test_data", "R-HSA-1237044.sbml")
@@ -82,9 +83,9 @@ curation_dict["remove"] = pd.DataFrame(
 )
 
 
-def test_remove_entities():
+def test_remove_entities(model_source_stub):
     sbml_model = sbml.SBML(sbml_path)
-    sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
+    sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model, model_source_stub)
     sbml_dfs.validate()
 
     invalid_entities_dict = curation._find_invalid_entities(
@@ -92,7 +93,12 @@ def test_remove_entities():
     )
     invalid_pks = set(invalid_entities_dict.keys())
 
-    assert invalid_pks == {"sc_id", "rsc_id", "r_id", "s_id"}
+    assert invalid_pks == {
+        SBML_DFS.SC_ID,
+        SBML_DFS.RSC_ID,
+        SBML_DFS.R_ID,
+        SBML_DFS.S_ID,
+    }
 
     n_species = sbml_dfs.species.shape[0]
     n_reactions = sbml_dfs.reactions.shape[0]
@@ -112,23 +118,14 @@ def test_remove_entities():
     assert n_compartments - sbml_dfs.compartments.shape[0] == 0
 
 
-def test_add_entities():
+def test_add_entities(model_source_stub):
     sbml_model = sbml.SBML(sbml_path)
-    sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
+    sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model, model_source_stub)
     sbml_dfs.validate()
 
     new_entities = curation.format_curations(curation_dict, sbml_dfs)
 
-    assert new_entities["species"].shape == (2, 3)
-    assert new_entities["reactions"].shape == (2, 4)
-    assert new_entities["compartmentalized_species"].shape == (1, 4)
-    assert new_entities["reaction_species"].shape == (5, 4)
-
-
-################################################
-# __main__
-################################################
-
-if __name__ == "__main__":
-    test_remove_entities()
-    test_add_entities()
+    assert new_entities[SBML_DFS.SPECIES].shape == (2, 3)
+    assert new_entities[SBML_DFS.REACTIONS].shape == (2, 4)
+    assert new_entities[SBML_DFS.COMPARTMENTALIZED_SPECIES].shape == (1, 4)
+    assert new_entities[SBML_DFS.REACTION_SPECIES].shape == (5, 4)

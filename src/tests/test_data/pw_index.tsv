@@ -1,4 +1,4 @@
-file	source	species	pathway_id	name	date
+file	data_source	organismal_species	pathway_id	name	date
 R-HSA-1237044.sbml	Reactome	Homo sapiens	R-HSA-1237044	Erythrocytes take up carbon dioxide and release oxygen	20221104
 R-HSA-425381.sbml	Reactome	Homo sapiens	R-HSA-425381	Bicarbonate transporters	20221104
 R-HSA-1247673.sbml	Reactome	Homo sapiens	R-HSA-1247673	Erythrocytes take up oxygen and release carbon dioxide	20221104

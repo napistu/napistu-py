@@ -901,7 +901,7 @@ def update_pathological_names(names: pd.Series, prefix: str) -> pd.Series:
 
 
 def format_identifiers_as_edgelist(
-    df: pd.DataFrame, defining_vars: list[str]
+    df: pd.DataFrame, defining_vars: list[str], verbose: bool = False
 ) -> pd.DataFrame:
     """
     Format Identifiers as Edgelist
@@ -909,16 +909,20 @@ def format_identifiers_as_edgelist(
     Collapse a multiindex to an index (if needed), and similarly collapse multiple variables to a single entry.
     This indexed pd.Sereies of index - ids can be treated as an edgelist for greedy clustering.
 
-    Args:
-        df (pd.DataFrame):
-            Any pd.DataFrame
-        defining_vars (list(str)):
-            A set of attributes which define a distinct entry in df
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Any pd.DataFrame
+    defining_vars : list[str]
+        A set of attributes which define a distinct entry in df
+    verbose : bool, default=False
+        If True, then include detailed logs.
 
-    Returns:
-        df (pd.DataFrame):
-            A pd.DataFrame with an "ind" and "id" variable added indicating rolled up
-            values of the index and defining_vars
+    Returns
+    -------
+    df : pd.DataFrame
+        A pd.DataFrame with an "ind" and "id" variable added indicating rolled up
+        values of the index and defining_vars
     """
 
     # requires a named index by convention
@@ -930,10 +934,11 @@ def format_identifiers_as_edgelist(
     if not isinstance(defining_vars, list):
         raise TypeError("defining_vars must be a list")
 
-    logger.info(
-        f"creating an edgelist linking index levels {', '.join(df.index.names)} and linking it "
-        f"to levels defined by {', '.join(defining_vars)}"
-    )
+    if verbose:
+        logger.info(
+            f"creating an edgelist linking index levels {', '.join(df.index.names)} and linking it "
+            f"to levels defined by {', '.join(defining_vars)}"
+        )
 
     # df is a pd.DataFrame and contains defining_vars
     match_pd_vars(df, req_vars=set(defining_vars), allow_series=False).assert_present()
@@ -1131,6 +1136,51 @@ def safe_fill(x: str, fill_width: int = 15) -> str:
         return ""
     else:
         return fill(x, fill_width)
+
+
+def safe_join_set(values: Any) -> str | None:
+    """
+    Safely join values, filtering out None values.
+
+    Converts input to a set (ensuring uniqueness), removes None values,
+    and joins remaining values with " OR " separator in sorted order.
+
+    Parameters
+    ----------
+    values : Any
+        Values to join. Can be list, tuple, set, pandas Series, string,
+        or other iterable. Strings are treated as single values, not character sequences.
+
+    Returns
+    -------
+    str or None
+        Joined string with " OR " separator in alphabetical order,
+        or None if no valid values remain after filtering.
+
+    Examples
+    --------
+    >>> safe_join_set([1, 2, 3])
+    '1 OR 2 OR 3'
+    >>> safe_join_set([3, 1, 2, 1])  # Removes duplicates and sorts
+    '1 OR 2 OR 3'
+    >>> safe_join_set([1, None, 3])
+    '1 OR 3'
+    >>> safe_join_set([None, None])
+    None
+    >>> safe_join_set("hello")  # String treated as single value
+    'hello'
+    """
+    # Handle pandas Series
+    if hasattr(values, "tolist"):
+        unique_values = set(values.tolist()) - {None}
+    # Handle regular iterables (but not strings)
+    elif hasattr(values, "__iter__") and not isinstance(values, str):
+        unique_values = set(values) - {None}
+    # Handle single values (including strings)
+    else:
+        unique_values = set([values]) - {None}
+
+    return " OR ".join(sorted(str(v) for v in unique_values)) if unique_values else None
 
 
 def match_regex_dict(s: str, regex_dict: Dict[str, any]) -> Optional[any]:

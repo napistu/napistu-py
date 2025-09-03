@@ -6,9 +6,9 @@ import pytest
 from pydantic import ValidationError
 
 
-def test_sbml_dfs(sbml_path):
+def test_sbml_dfs(sbml_path, model_source_stub):
     sbml_model = sbml.SBML(sbml_path)
-    _ = sbml_dfs_core.SBML_dfs(sbml_model)
+    _ = sbml_dfs_core.SBML_dfs(sbml_model, model_source_stub)
 
 
 def test_compartment_aliases_validation_positive():

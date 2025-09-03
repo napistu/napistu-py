@@ -1,3 +1,4 @@
+import datetime
 import logging
 import pandas as pd
 
@@ -6,6 +7,7 @@ from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
 from napistu import utils
 from napistu.ontologies.genodexito import Genodexito
+from napistu.source import Source
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
@@ -15,7 +17,10 @@ from napistu.constants import (
 )
 from napistu.ontologies.constants import GENODEXITO_DEFS
 from napistu.ingestion.constants import (
+    DATA_SOURCES,
+    DATA_SOURCE_DESCRIPTIONS,
     INTERACTION_EDGELIST_DEFS,
+    LATIN_SPECIES_NAMES,
     REACTOME_FI,
     REACTOME_FI_RULES_FORWARD,
     REACTOME_FI_RULES_REVERSE,
@@ -53,7 +58,7 @@ def download_reactome_fi(target_uri: str, url: str = REACTOME_FI_URL) -> None:
 
     file_ext = url.split(".")[-1]
     target_filename = url.split("/")[-1].split(f".{file_ext}")[0]
-    logger.info("Start downloading proteinatlas %s to %s", url, target_uri)
+    logger.info("Start downloading Reactome FI %s to %s", url, target_uri)
     # target_filename is the name of the file in the zip file which will be renamed to target_uri
     utils.download_wget(url, target_uri, target_filename=target_filename)
 
@@ -83,6 +88,16 @@ def convert_reactome_fi_to_sbml_dfs(
         A SBML_dfs object containing the species, compartments, and reactions data.
     """
 
+    # define metadata for the Reactome-level model
+    model_source = Source.single_entry(
+        model=DATA_SOURCES.REACTOME_FI,
+        pathway_id=DATA_SOURCES.REACTOME_FI,
+        data_source=DATA_SOURCES.REACTOME_FI,
+        organismal_species=LATIN_SPECIES_NAMES.HOMO_SAPIENS,
+        name=DATA_SOURCE_DESCRIPTIONS[DATA_SOURCES.REACTOME_FI],
+        date=datetime.date.today().strftime("%Y%m%d"),
+    )
+
     species_df = create_species_df(interactions, preferred_method, allow_fallback)
     interaction_edgelist = create_interaction_edgelist(interactions)
     compartments_df = sbml_dfs_utils.stub_compartments()
@@ -91,7 +106,8 @@ def convert_reactome_fi_to_sbml_dfs(
         interaction_edgelist=interaction_edgelist,
         species_df=species_df,
         compartments_df=compartments_df,
-        keep_reactions_data=REACTOME_FI.FI_REACTION_DATA_NAME,
+        model_source=model_source,
+        keep_reactions_data=DATA_SOURCES.REACTOME_FI,
     )
 
     return sbml_dfs
@@ -399,7 +415,7 @@ def _get_human_symbol_to_entrez_mapping(
     """
 
     genodexito = Genodexito(
-        species="Homo sapiens",
+        organismal_species="Homo sapiens",
         preferred_method=preferred_method,
         allow_fallback=allow_fallback,
     )
