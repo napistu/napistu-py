@@ -901,7 +901,7 @@ def update_pathological_names(names: pd.Series, prefix: str) -> pd.Series:
 
 
 def format_identifiers_as_edgelist(
-    df: pd.DataFrame, defining_vars: list[str]
+    df: pd.DataFrame, defining_vars: list[str], verbose: bool = False
 ) -> pd.DataFrame:
     """
     Format Identifiers as Edgelist
@@ -909,16 +909,20 @@ def format_identifiers_as_edgelist(
     Collapse a multiindex to an index (if needed), and similarly collapse multiple variables to a single entry.
     This indexed pd.Sereies of index - ids can be treated as an edgelist for greedy clustering.
 
-    Args:
-        df (pd.DataFrame):
-            Any pd.DataFrame
-        defining_vars (list(str)):
-            A set of attributes which define a distinct entry in df
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Any pd.DataFrame
+    defining_vars : list[str]
+        A set of attributes which define a distinct entry in df
+    verbose : bool, default=False
+        If True, then include detailed logs.
 
-    Returns:
-        df (pd.DataFrame):
-            A pd.DataFrame with an "ind" and "id" variable added indicating rolled up
-            values of the index and defining_vars
+    Returns
+    -------
+    df : pd.DataFrame
+        A pd.DataFrame with an "ind" and "id" variable added indicating rolled up
+        values of the index and defining_vars
     """
 
     # requires a named index by convention
@@ -930,10 +934,11 @@ def format_identifiers_as_edgelist(
     if not isinstance(defining_vars, list):
         raise TypeError("defining_vars must be a list")
 
-    logger.info(
-        f"creating an edgelist linking index levels {', '.join(df.index.names)} and linking it "
-        f"to levels defined by {', '.join(defining_vars)}"
-    )
+    if verbose:
+        logger.info(
+            f"creating an edgelist linking index levels {', '.join(df.index.names)} and linking it "
+            f"to levels defined by {', '.join(defining_vars)}"
+        )
 
     # df is a pd.DataFrame and contains defining_vars
     match_pd_vars(df, req_vars=set(defining_vars), allow_series=False).assert_present()

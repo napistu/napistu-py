@@ -19,8 +19,7 @@ from napistu import indices
 from napistu import sbml_dfs_core
 from napistu import utils
 from napistu.source import Source
-from napistu.consensus import construct_consensus_model
-from napistu.consensus import construct_sbml_dfs_dict
+from napistu.consensus import construct_consensus_model, construct_sbml_dfs_dict
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.constants import (
     EXPECTED_PW_INDEX_COLUMNS,
@@ -76,6 +75,7 @@ def construct_reactome_consensus(
     organismal_species: Union[str, OrganismalSpeciesValidator],
     outdir: str | None = None,
     strict: bool = True,
+    verbose: bool = False,
 ) -> sbml_dfs_core.SBML_dfs:
     """Constructs a basic consensus model by merging all models from a pw_index
 
@@ -89,6 +89,8 @@ def construct_reactome_consensus(
         output directory used to cache results. Defaults to None.
     strict : bool
         should failure of loading any given model throw an exception? If False a warning is thrown.
+    verbose: bool, default=False
+        If True, then include detailed logs.
 
     Returns
     -------
@@ -119,7 +121,7 @@ def construct_reactome_consensus(
         construct_consensus_model_fkt = construct_consensus_model
 
     # create a dict with all models
-    sbml_dfs_dict = construct_sbml_dfs_dict_fkt(pw_index, strict)
+    sbml_dfs_dict = construct_sbml_dfs_dict_fkt(pw_index, strict, verbose=verbose)
 
     # define metadata for the Reactome-level model
     model_source = Source.single_entry(

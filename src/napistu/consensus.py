@@ -349,7 +349,7 @@ def construct_meta_entities_members(
 
 
 def construct_sbml_dfs_dict(
-    pw_index: pd.DataFrame, strict: bool = True
+    pw_index: pd.DataFrame, strict: bool = True, verbose: bool = False
 ) -> dict[str, sbml_dfs_core.SBML_dfs]:
     """
     Construct a dictionary of SBML_dfs objects from a pathway index.
@@ -363,6 +363,8 @@ def construct_sbml_dfs_dict(
         An index of all tables being aggregated, containing model metadata and file paths.
     strict : bool, default=True
         If True, raise an error on any file that cannot be loaded. If False, skip erroneous files with a warning.
+    verbose: bool, default=False
+        If True, then include detailed logs.
 
     Returns
     -------
@@ -373,7 +375,8 @@ def construct_sbml_dfs_dict(
     sbml_dfs_dict = dict()
     for i in tqdm(pw_index.index.index.tolist()):
         pw_entry = pw_index.index.loc[i]
-        logger.info(f"processing {pw_entry[SOURCE_SPEC.NAME]}")
+        if verbose:
+            logger.info(f"processing {pw_entry[SOURCE_SPEC.NAME]}")
 
         sbml_path = os.path.join(pw_index.base_path, pw_entry[SOURCE_SPEC.FILE])
 
@@ -395,7 +398,8 @@ def construct_sbml_dfs_dict(
             if strict:
                 raise e
             logger.warning(
-                f"{pw_entry[SOURCE_SPEC.NAME]} not successfully loaded:", exc_info=True
+                f"{pw_entry[SOURCE_SPEC.NAME]} was NOT successfully loaded:",
+                exc_info=True,
             )
     return sbml_dfs_dict
 

@@ -14,7 +14,7 @@ def test_genodexito_mapping_operations():
     """Test Genodexito mapping table creation and operations."""
     # Initialize with test mode and Python method to avoid R dependencies
     geno = Genodexito(
-        species="Saccharomyces cerevisiae",
+        organismal_species="Saccharomyces cerevisiae",
         preferred_method=GENODEXITO_DEFS.PYTHON,
         allow_fallback=False,
         test_mode=True,

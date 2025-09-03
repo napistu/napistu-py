@@ -19,16 +19,20 @@ from napistu import identifiers
 from napistu import sbml_dfs_utils
 from napistu import source
 from napistu import utils
-from napistu.constants import BQB
-from napistu.constants import ONTOLOGIES
-from napistu.constants import SBML_DFS
-from napistu.constants import SBML_DFS_SCHEMA
-from napistu.constants import SCHEMA_DEFS
-from napistu.ingestion.constants import SBML_DEFS
-from napistu.ingestion.constants import COMPARTMENTS_GO_TERMS
-from napistu.ingestion.constants import COMPARTMENT_ALIASES
-from napistu.ingestion.constants import VALID_COMPARTMENTS
-from napistu.ingestion.constants import GENERIC_COMPARTMENT
+from napistu.constants import (
+    BQB,
+    ONTOLOGIES,
+    SBML_DFS,
+    SBML_DFS_SCHEMA,
+    SCHEMA_DEFS,
+)
+from napistu.ingestion.constants import (
+    SBML_DEFS,
+    COMPARTMENTS_GO_TERMS,
+    COMPARTMENT_ALIASES,
+    VALID_COMPARTMENTS,
+    GENERIC_COMPARTMENT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +55,8 @@ class SBML:
         The raw SBML document object from libsbml.
     model : libsbml.Model
         The parsed SBML model object from libsbml.
+    verbose : bool, default=False
+        If True, then include detailed logs.
 
     Methods
     -------
@@ -69,6 +75,7 @@ class SBML:
     def __init__(
         self,
         sbml_path: str,
+        verbose: bool = False,
     ) -> None:
         """Initializes the SBML object by reading and validating an SBML file."""
         reader = libsbml.SBMLReader()
@@ -95,9 +102,10 @@ class SBML:
 
             found_known_errors = known_errors.intersection(critical_errors)
             if len(found_known_errors) > 0:
-                logger.warning(
-                    f"The following known errors were found: {found_known_errors}"
-                )
+                if verbose:
+                    logger.info(
+                        f"The following known errors were found: {found_known_errors}"
+                    )
 
             unknown_critical_errors = critical_errors - known_errors
             if len(unknown_critical_errors) != 0:

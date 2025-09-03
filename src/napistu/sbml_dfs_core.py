@@ -23,8 +23,10 @@ from napistu import identifiers
 from napistu import sbml_dfs_utils
 from napistu import source
 from napistu import utils
-from napistu.ingestion import sbml
 from napistu.ontologies import id_tables
+
+if TYPE_CHECKING:
+    from napistu.ingestion import sbml
 from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS_LOOSE,
@@ -225,6 +227,8 @@ class SBML_dfs:
                 if ent in sbml_model:
                     setattr(self, ent, sbml_model[ent])
         else:
+            from napistu.ingestion import sbml
+
             self = sbml.sbml_dfs_from_sbml(self, sbml_model)
 
         for ent in SBML_DFS_SCHEMA.OPTIONAL_ENTITIES:
@@ -338,9 +342,7 @@ class SBML_dfs:
                 f"model_prefix was a {type(model_prefix)} " "and must be a str"
             )
         if not isinstance(self, SBML_dfs):
-            raise TypeError(
-                f"sbml_dfs was a {type(self)} and must" " be an sbml.SBML_dfs"
-            )
+            raise TypeError(f"sbml_dfs was a {type(self)} and must" " be an SBML_dfs")
 
         # filter to identifiers which make sense when mapping from ids -> species
         species_identifiers = self.get_characteristic_species_ids(dogmatic=dogmatic)

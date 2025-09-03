@@ -117,6 +117,18 @@ def test_parsing_ensembl_ids():
         assert identifiers.parse_ensembl_id(k) == v
 
 
+def test_proteinatlas_uri_error():
+    """Test that proteinatlas.org URIs are not supported and raise NotImplementedError."""
+    proteinatlas_uri = "https://www.proteinatlas.org"
+
+    with pytest.raises(NotImplementedError) as exc_info:
+        identifiers.format_uri(proteinatlas_uri, biological_qualifier_type="BQB_IS")
+
+    assert f"{proteinatlas_uri} is not a valid way of specifying a uri" in str(
+        exc_info.value
+    )
+
+
 def test_reciprocal_ensembl_dicts():
     assert len(identifiers.ENSEMBL_SPECIES_TO_CODE) == len(
         identifiers.ENSEMBL_SPECIES_FROM_CODE

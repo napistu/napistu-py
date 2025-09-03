@@ -286,7 +286,7 @@ def _get_uniprot_2_symbol_mapping(
     organismal_species = OrganismalSpeciesValidator.ensure(organismal_species)
 
     genodexito = Genodexito(
-        species=organismal_species.latin_name,
+        organismal_species=organismal_species.latin_name,
         preferred_method=preferred_method,
         allow_fallback=allow_fallback,
     )
