@@ -12,8 +12,8 @@ with warnings.catch_warnings():
 import pandas as pd
 
 from napistu import identifiers
-from napistu import sbml_dfs_core
 from napistu import utils
+from napistu.sbml_dfs_core import SBML_dfs
 from napistu.source import Source
 from napistu.ontologies.genodexito import Genodexito
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
@@ -61,7 +61,7 @@ def convert_trrust_to_sbml_dfs(
     ] = LATIN_SPECIES_NAMES.HOMO_SAPIENS,
     preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
     allow_fallback: bool = True,
-) -> sbml_dfs_core.SBML_dfs:
+) -> SBML_dfs:
     """Ingests trrust to sbml dfs
 
     Args:
@@ -229,7 +229,7 @@ def convert_trrust_to_sbml_dfs(
     ]
 
     # Build sbml dfs
-    sbml_dfs = sbml_dfs_core.sbml_dfs_from_edgelist(
+    sbml_dfs = SBML_dfs.from_edgelist(
         interaction_edgelist=interaction_edgelist,
         species_df=species_df,
         compartments_df=compartments_df,

@@ -85,6 +85,8 @@ class SBML_dfs:
         Return a deep copy of the SBML_dfs object.
     export_sbml_dfs(model_prefix, outdir, overwrite=False, dogmatic=True)
         Export the SBML_dfs model and its tables to files in a specified directory.
+    from_edgelist(interaction_edgelist, species_df, compartments_df, interaction_source=source.Source(init=True), interaction_edgelist_defaults=INTERACTION_EDGELIST_DEFAULTS, keep_species_data=False, keep_reactions_data=False)
+        Create SBML_dfs from interaction edgelist.
     from_pickle(path)
         Load an SBML_dfs from a pickle file.
     get_characteristic_species_ids(dogmatic=True)
@@ -139,6 +141,7 @@ class SBML_dfs:
     Private/Hidden Methods (alphabetical, appear after public methods)
     -----------------------------------------------------------------
     _attempt_resolve(e)
+    _edgelist_assemble_sbml_model(compartments, species, comp_species, reactions, reaction_species, species_data, reactions_data, keep_species_data, keep_reactions_data, extra_columns)
     _find_underspecified_reactions_by_scids(sc_ids)
     _get_unused_cspecies()
     _get_unused_species()
@@ -401,6 +404,140 @@ class SBML_dfs:
                 )
 
         return None
+
+    @classmethod
+    def from_edgelist(
+        cls,
+        interaction_edgelist: pd.DataFrame,
+        species_df: pd.DataFrame,
+        compartments_df: pd.DataFrame,
+        model_source: source.Source,
+        interaction_edgelist_defaults: dict[str, Any] = INTERACTION_EDGELIST_DEFAULTS,
+        keep_species_data: bool | str = False,
+        keep_reactions_data: bool | str = False,
+    ) -> "SBML_dfs":
+        """
+        Create SBML_dfs from interaction edgelist.
+
+        Combines a set of molecular interactions into a mechanistic SBML_dfs model
+        by processing interaction data, species information, and compartment definitions.
+
+        Parameters
+        ----------
+        interaction_edgelist : pd.DataFrame
+            Table containing molecular interactions with columns:
+            - upstream_name : str, matches "s_name" from species_df
+            - downstream_name : str, matches "s_name" from species_df
+            - r_name : str, name for the interaction
+            - r_Identifiers : identifiers.Identifiers, supporting identifiers
+            - upstream_compartment : str, matches "c_name" from compartments_df
+            - downstream_compartment : str, matches "c_name" from compartments_df
+            - upstream_sbo_term_name : str, SBO term defining interaction type
+            - downstream_sbo_term_name : str, SBO term defining interaction type
+            - upstream_stoichiometry : float, stoichiometry of upstream species
+            - downstream_stoichiometry : float, stoichiometry of downstream species
+            - r_isreversible : bool, whether reaction is reversible
+        species_df : pd.DataFrame
+            Table defining molecular species with columns:
+            - s_name : str, name of molecular species
+            - s_Identifiers : identifiers.Identifiers, species identifiers
+        compartments_df : pd.DataFrame
+            Table defining compartments with columns:
+            - c_name : str, name of compartment
+            - c_Identifiers : identifiers.Identifiers, compartment identifiers
+        model_source : source.Source
+            Source annotations for the data source
+        interaction_edgelist_defaults : dict[str, Any], default INTERACTION_EDGELIST_DEFAULTS
+            Default values for interaction edgelist columns
+        keep_species_data : bool or str, default False
+            Whether to preserve extra species columns. If True, saves as 'source' label.
+            If string, uses as custom label. If False, discards extra data.
+        keep_reactions_data : bool or str, default False
+            Whether to preserve extra reaction columns. If True, saves as 'source' label.
+            If string, uses as custom label. If False, discards extra data.
+
+        Returns
+        -------
+        SBML_dfs
+            Validated SBML data structure containing compartments, species,
+            compartmentalized species, reactions, and reaction species tables.
+        """
+
+        # organize source info
+        if not isinstance(model_source, source.Source):
+            raise ValueError("model_source must be a source.Source object")
+
+        # Validate that interaction_edgelist_defaults is a dictionary
+        if not isinstance(interaction_edgelist_defaults, dict):
+            raise TypeError(
+                f"interaction_edgelist_defaults must be a dictionary, got {type(interaction_edgelist_defaults)}"
+            )
+
+        # set default entity-level source
+        interaction_source = source.Source.empty()
+
+        # 0. Add defaults to interaction edgelist
+        interaction_edgelist_with_defaults = sbml_dfs_utils._add_edgelist_defaults(
+            interaction_edgelist, interaction_edgelist_defaults
+        )
+
+        # 1. Validate inputs
+        sbml_dfs_utils._edgelist_validate_inputs(
+            interaction_edgelist_with_defaults, species_df, compartments_df
+        )
+
+        # 2. Identify which extra columns to preserve
+        extra_columns = sbml_dfs_utils._edgelist_identify_extra_columns(
+            interaction_edgelist_with_defaults,
+            species_df,
+            keep_reactions_data,
+            keep_species_data,
+        )
+
+        # 3. Process compartments and species tables
+        processed_compartments = sbml_dfs_utils._edgelist_process_compartments(
+            compartments_df, interaction_source
+        )
+        processed_species, species_data = sbml_dfs_utils._edgelist_process_species(
+            species_df, interaction_source, extra_columns[SBML_DFS.SPECIES]
+        )
+
+        # 4. Create compartmentalized species
+        comp_species = sbml_dfs_utils._edgelist_create_compartmentalized_species(
+            interaction_edgelist_with_defaults,
+            processed_species,
+            processed_compartments,
+            interaction_source,
+        )
+
+        # 5. Create reactions and reaction species
+        reactions, reaction_species, reactions_data = (
+            sbml_dfs_utils._edgelist_create_reactions_and_species(
+                interaction_edgelist_with_defaults,
+                comp_species,
+                processed_species,
+                processed_compartments,
+                interaction_source,
+                extra_columns[SBML_DFS.REACTIONS],
+            )
+        )
+
+        # 6. Assemble final SBML_dfs object
+        sbml_dfs = cls._edgelist_assemble_sbml_model(
+            compartments=processed_compartments,
+            species=processed_species,
+            comp_species=comp_species,
+            reactions=reactions,
+            reaction_species=reaction_species,
+            species_data=species_data,
+            reactions_data=reactions_data,
+            keep_species_data=keep_species_data,
+            keep_reactions_data=keep_reactions_data,
+            extra_columns=extra_columns,
+            model_source=model_source,
+        )
+
+        return sbml_dfs
 
     @classmethod
     def from_pickle(cls, path: str) -> "SBML_dfs":
@@ -1608,6 +1745,80 @@ class SBML_dfs:
             )
             raise e
 
+    @classmethod
+    def _edgelist_assemble_sbml_model(
+        cls,
+        compartments: pd.DataFrame,
+        species: pd.DataFrame,
+        comp_species: pd.DataFrame,
+        reactions: pd.DataFrame,
+        reaction_species: pd.DataFrame,
+        species_data: pd.DataFrame,
+        reactions_data: pd.DataFrame,
+        keep_species_data: Union[bool, str],
+        keep_reactions_data: Union[bool, str],
+        extra_columns: dict[str, list[str]],
+        model_source: source.Source,
+    ) -> "SBML_dfs":
+        """
+        Assemble the final SBML_dfs object.
+
+        Parameters
+        ----------
+        compartments : pd.DataFrame
+            Processed compartments data
+        species : pd.DataFrame
+            Processed species data
+        comp_species : pd.DataFrame
+            Compartmentalized species data
+        reactions : pd.DataFrame
+            Reactions data
+        reaction_species : pd.DataFrame
+            Reaction species relationships
+        species_data : pd.DataFrame
+            Extra species data to include
+        reactions_data : pd.DataFrame
+            Extra reactions data to include
+        keep_species_data : bool or str
+            Label for species extra data
+        keep_reactions_data : bool or str
+            Label for reactions extra data
+        extra_columns : dict
+            Dictionary containing lists of extra column names
+
+        Returns
+        -------
+        SBML_dfs
+            Validated SBML data structure
+        """
+        sbml_tbl_dict = {
+            SBML_DFS.COMPARTMENTS: compartments,
+            SBML_DFS.SPECIES: species,
+            SBML_DFS.COMPARTMENTALIZED_SPECIES: comp_species,
+            SBML_DFS.REACTIONS: reactions,
+            SBML_DFS.REACTION_SPECIES: reaction_species,
+        }
+
+        # Add extra data if requested
+        if len(extra_columns[SBML_DFS.REACTIONS]) > 0:
+            data_label = (
+                keep_reactions_data
+                if isinstance(keep_reactions_data, str)
+                else "source"
+            )
+            sbml_tbl_dict[SBML_DFS.REACTIONS_DATA] = {data_label: reactions_data}
+
+        if len(extra_columns[SBML_DFS.SPECIES]) > 0:
+            data_label = (
+                keep_species_data if isinstance(keep_species_data, str) else "source"
+            )
+            sbml_tbl_dict[SBML_DFS.SPECIES_DATA] = {data_label: species_data}
+
+        sbml_dfs = cls(sbml_tbl_dict, model_source)
+        sbml_dfs.validate()
+
+        return sbml_dfs
+
     def _find_underspecified_reactions_by_scids(
         self, sc_ids: Iterable[str]
     ) -> set[str]:
@@ -1922,207 +2133,3 @@ class SBML_dfs:
         table_data = getattr(self, table_name)
 
         sbml_dfs_utils.validate_sbml_dfs_table(table_data, table_name)
-
-
-def sbml_dfs_from_edgelist(
-    interaction_edgelist: pd.DataFrame,
-    species_df: pd.DataFrame,
-    compartments_df: pd.DataFrame,
-    model_source: source.Source,
-    interaction_edgelist_defaults: dict[str, Any] = INTERACTION_EDGELIST_DEFAULTS,
-    keep_species_data: bool | str = False,
-    keep_reactions_data: bool | str = False,
-) -> SBML_dfs:
-    """
-    Create SBML_dfs from interaction edgelist.
-
-    Combines a set of molecular interactions into a mechanistic SBML_dfs model
-    by processing interaction data, species information, and compartment definitions.
-
-    Parameters
-    ----------
-    interaction_edgelist : pd.DataFrame
-        Table containing molecular interactions with columns:
-        - upstream_name : str, matches "s_name" from species_df
-        - downstream_name : str, matches "s_name" from species_df
-        - r_name : str, name for the interaction
-        - r_Identifiers : identifiers.Identifiers, supporting identifiers
-        - upstream_compartment : str, matches "c_name" from compartments_df
-        - downstream_compartment : str, matches "c_name" from compartments_df
-        - upstream_sbo_term_name : str, SBO term defining interaction type
-        - downstream_sbo_term_name : str, SBO term defining interaction type
-        - upstream_stoichiometry : float, stoichiometry of upstream species
-        - downstream_stoichiometry : float, stoichiometry of downstream species
-        - r_isreversible : bool, whether reaction is reversible
-    species_df : pd.DataFrame
-        Table defining molecular species with columns:
-        - s_name : str, name of molecular species
-        - s_Identifiers : identifiers.Identifiers, species identifiers
-    compartments_df : pd.DataFrame
-        Table defining compartments with columns:
-        - c_name : str, name of compartment
-        - c_Identifiers : identifiers.Identifiers, compartment identifiers
-    model_source : source.Source
-        Source annotations for the data source
-    interaction_edgelist_defaults : dict[str, Any], default INTERACTION_EDGELIST_DEFAULTS
-        Default values for interaction edgelist columns
-    keep_species_data : bool or str, default False
-        Whether to preserve extra species columns. If True, saves as 'source' label.
-        If string, uses as custom label. If False, discards extra data.
-    keep_reactions_data : bool or str, default False
-        Whether to preserve extra reaction columns. If True, saves as 'source' label.
-        If string, uses as custom label. If False, discards extra data.
-
-    Returns
-    -------
-    SBML_dfs
-        Validated SBML data structure containing compartments, species,
-        compartmentalized species, reactions, and reaction species tables.
-    """
-
-    # organize source info
-    if not isinstance(model_source, source.Source):
-        raise ValueError("model_source must be a source.Source object")
-
-    # Validate that interaction_edgelist_defaults is a dictionary
-    if not isinstance(interaction_edgelist_defaults, dict):
-        raise TypeError(
-            f"interaction_edgelist_defaults must be a dictionary, got {type(interaction_edgelist_defaults)}"
-        )
-
-    # set default entity-level source
-    interaction_source = source.Source.empty()
-
-    # 0. Add defaults to interaction edgelist
-    interaction_edgelist_with_defaults = sbml_dfs_utils._add_edgelist_defaults(
-        interaction_edgelist, interaction_edgelist_defaults
-    )
-
-    # 1. Validate inputs
-    sbml_dfs_utils._edgelist_validate_inputs(
-        interaction_edgelist_with_defaults, species_df, compartments_df
-    )
-
-    # 2. Identify which extra columns to preserve
-    extra_columns = sbml_dfs_utils._edgelist_identify_extra_columns(
-        interaction_edgelist_with_defaults,
-        species_df,
-        keep_reactions_data,
-        keep_species_data,
-    )
-
-    # 3. Process compartments and species tables
-    processed_compartments = sbml_dfs_utils._edgelist_process_compartments(
-        compartments_df, interaction_source
-    )
-    processed_species, species_data = sbml_dfs_utils._edgelist_process_species(
-        species_df, interaction_source, extra_columns[SBML_DFS.SPECIES]
-    )
-
-    # 4. Create compartmentalized species
-    comp_species = sbml_dfs_utils._edgelist_create_compartmentalized_species(
-        interaction_edgelist_with_defaults,
-        processed_species,
-        processed_compartments,
-        interaction_source,
-    )
-
-    # 5. Create reactions and reaction species
-    reactions, reaction_species, reactions_data = (
-        sbml_dfs_utils._edgelist_create_reactions_and_species(
-            interaction_edgelist_with_defaults,
-            comp_species,
-            processed_species,
-            processed_compartments,
-            interaction_source,
-            extra_columns[SBML_DFS.REACTIONS],
-        )
-    )
-
-    # 6. Assemble final SBML_dfs object
-    sbml_dfs = _edgelist_assemble_sbml_model(
-        compartments=processed_compartments,
-        species=processed_species,
-        comp_species=comp_species,
-        reactions=reactions,
-        reaction_species=reaction_species,
-        species_data=species_data,
-        reactions_data=reactions_data,
-        keep_species_data=keep_species_data,
-        keep_reactions_data=keep_reactions_data,
-        extra_columns=extra_columns,
-        model_source=model_source,
-    )
-
-    return sbml_dfs
-
-
-def _edgelist_assemble_sbml_model(
-    compartments: pd.DataFrame,
-    species: pd.DataFrame,
-    comp_species: pd.DataFrame,
-    reactions: pd.DataFrame,
-    reaction_species: pd.DataFrame,
-    species_data: pd.DataFrame,
-    reactions_data: pd.DataFrame,
-    keep_species_data: Union[bool, str],
-    keep_reactions_data: Union[bool, str],
-    extra_columns: dict[str, list[str]],
-    model_source: source.Source,
-) -> SBML_dfs:
-    """
-    Assemble the final SBML_dfs object.
-
-    Parameters
-    ----------
-    compartments : pd.DataFrame
-        Processed compartments data
-    species : pd.DataFrame
-        Processed species data
-    comp_species : pd.DataFrame
-        Compartmentalized species data
-    reactions : pd.DataFrame
-        Reactions data
-    reaction_species : pd.DataFrame
-        Reaction species relationships
-    species_data : pd.DataFrame
-        Extra species data to include
-    reactions_data : pd.DataFrame
-        Extra reactions data to include
-    keep_species_data : bool or str
-        Label for species extra data
-    keep_reactions_data : bool or str
-        Label for reactions extra data
-    extra_columns : dict
-        Dictionary containing lists of extra column names
-
-    Returns
-    -------
-    SBML_dfs
-        Validated SBML data structure
-    """
-    sbml_tbl_dict = {
-        SBML_DFS.COMPARTMENTS: compartments,
-        SBML_DFS.SPECIES: species,
-        SBML_DFS.COMPARTMENTALIZED_SPECIES: comp_species,
-        SBML_DFS.REACTIONS: reactions,
-        SBML_DFS.REACTION_SPECIES: reaction_species,
-    }
-
-    # Add extra data if requested
-    if len(extra_columns[SBML_DFS.REACTIONS]) > 0:
-        data_label = (
-            keep_reactions_data if isinstance(keep_reactions_data, str) else "source"
-        )
-        sbml_tbl_dict[SBML_DFS.REACTIONS_DATA] = {data_label: reactions_data}
-
-    if len(extra_columns[SBML_DFS.SPECIES]) > 0:
-        data_label = (
-            keep_species_data if isinstance(keep_species_data, str) else "source"
-        )
-        sbml_tbl_dict[SBML_DFS.SPECIES_DATA] = {data_label: species_data}
-
-    sbml_model = SBML_dfs(sbml_tbl_dict, model_source)
-    sbml_model.validate()
-
-    return sbml_model

@@ -11,10 +11,10 @@ with warnings.catch_warnings():
 import pandas as pd
 
 from napistu import identifiers
-from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
 from napistu import utils
 from napistu.ingestion import napistu_edgelist
+from napistu.sbml_dfs_core import SBML_dfs
 from napistu.source import Source
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.constants import (
@@ -136,7 +136,7 @@ def convert_string_to_sbml_dfs(
     string_uri: str,
     string_aliases_uri: str,
     organismal_species: Union[str, OrganismalSpeciesValidator],
-) -> sbml_dfs_core.SBML_dfs:
+) -> SBML_dfs:
     """Ingests string to sbml dfs
 
     Parameters
@@ -150,8 +150,8 @@ def convert_string_to_sbml_dfs(
 
     Returns
     -------
-    sbml_dfs_core.SBML_dfs
-        sbml dfs
+    SBML_dfs
+        A STRING pathway representation as an SBML_dfs object
     """
 
     organismal_species = OrganismalSpeciesValidator.ensure(organismal_species)
@@ -216,7 +216,7 @@ def convert_string_to_sbml_dfs(
     }
 
     # build the final object
-    sbml_dfs = sbml_dfs_core.sbml_dfs_from_edgelist(
+    sbml_dfs = SBML_dfs.from_edgelist(
         interaction_edgelist=interaction_edgelist,
         species_df=species_df,
         compartments_df=compartments_df,

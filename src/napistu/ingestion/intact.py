@@ -11,10 +11,10 @@ import pandas as pd
 import requests
 
 from napistu import utils
-from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
 from napistu.source import Source
 from napistu.ontologies import renaming
+from napistu.sbml_dfs_core import SBML_dfs
 from napistu.identifiers import Identifiers
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.constants import (
@@ -96,7 +96,7 @@ def download_intact_xmls(
 def intact_to_sbml_dfs(
     intact_summaries: dict[str, pd.DataFrame],
     organismal_species: Union[str, OrganismalSpeciesValidator],
-) -> sbml_dfs_core.SBML_dfs:
+) -> SBML_dfs:
     """
     Convert IntAct summaries to SBML_dfs
 
@@ -109,7 +109,7 @@ def intact_to_sbml_dfs(
 
     Returns
     -------
-    sbml_dfs : sbml_dfs_core.SBML_dfs
+    sbml_dfs : SBML_dfs
         SBML_dfs object containing the converted IntAct data
 
     Raises
@@ -227,7 +227,7 @@ def intact_to_sbml_dfs(
         )
     )
 
-    sbml_dfs = sbml_dfs_core.sbml_dfs_from_edgelist(
+    sbml_dfs = SBML_dfs.from_edgelist(
         interactions_edgelist,
         species_df,
         compartments_df=sbml_dfs_utils.stub_compartments(),
