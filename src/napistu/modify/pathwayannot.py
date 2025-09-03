@@ -12,23 +12,22 @@ with warnings.catch_warnings():
 import numpy as np
 import pandas as pd
 
-from napistu import identifiers
-from napistu import sbml_dfs_core
-from napistu import sbml_dfs_utils
-from napistu import source
-from napistu import utils
-
-from napistu.constants import SBML_DFS
-from napistu.constants import BQB
-from napistu.constants import IDENTIFIERS
-from napistu.constants import SBOTERM_NAMES
-from napistu.constants import MINI_SBO_FROM_NAME
-from napistu.constants import ONTOLOGIES
-from napistu.constants import ENSEMBL_PREFIX_TO_ONTOLOGY
-from napistu.modify.constants import COFACTOR_SCHEMA
-from napistu.modify.constants import COFACTOR_CHEBI_IDS
-from napistu.modify.constants import NEO4_MEMBERS_SET
-from napistu.modify.constants import REACTOME_CROSSREF_SET
+from napistu import identifiers, sbml_dfs_core, sbml_dfs_utils, source, utils
+from napistu.constants import (
+    BQB,
+    ENSEMBL_PREFIX_TO_ONTOLOGY,
+    IDENTIFIERS,
+    MINI_SBO_FROM_NAME,
+    ONTOLOGIES,
+    SBML_DFS,
+    SBOTERM_NAMES,
+)
+from napistu.modify.constants import (
+    COFACTOR_CHEBI_IDS,
+    COFACTOR_SCHEMA,
+    NEO4_MEMBERS_SET,
+    REACTOME_CROSSREF_SET,
+)
 
 logger = logging.getLogger(__name__)
 

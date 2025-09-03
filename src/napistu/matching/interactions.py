@@ -5,23 +5,21 @@ import logging
 import igraph as ig
 import pandas as pd
 
-from napistu import identifiers
-from napistu.network import paths
-from napistu import sbml_dfs_core
-from napistu import utils
-from napistu.matching.species import features_to_pathway_species
+from napistu import identifiers, sbml_dfs_core, utils
 from napistu.constants import (
-    NAPISTU_EDGELIST_REQ_VARS,
     IDENTIFIER_EDGELIST_REQ_VARS,
-    NAPISTU_EDGELIST,
-    SBML_DFS,
     IDENTIFIERS,
+    NAPISTU_EDGELIST,
+    NAPISTU_EDGELIST_REQ_VARS,
+    SBML_DFS,
 )
+from napistu.matching.constants import FEATURE_ID_VAR_DEFAULT
+from napistu.matching.species import features_to_pathway_species
+from napistu.network import paths
 from napistu.network.constants import (
     DISTANCES,
     NAPISTU_GRAPH_EDGES,
 )
-from napistu.matching.constants import FEATURE_ID_VAR_DEFAULT
 
 logger = logging.getLogger(__name__)
 

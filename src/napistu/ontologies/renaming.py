@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Dict, Set
 import logging
+from typing import Dict, Set
+
+import pandas as pd
 from pydantic import BaseModel, field_validator
+
+from napistu import identifiers, sbml_dfs_core
 from napistu.constants import (
-    ONTOLOGY_SPECIES_ALIASES,
-    ONTOLOGIES_LIST,
     IDENTIFIERS,
+    ONTOLOGIES_LIST,
+    ONTOLOGY_SPECIES_ALIASES,
     SBML_DFS,
 )
-import pandas as pd
-from napistu import identifiers, sbml_dfs_core
 
 logger = logging.getLogger(__name__)
 

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import os
-import pytest
 
 import pandas as pd
-from napistu import indices
-from napistu import source
-from napistu.network import ng_utils
+import pytest
+
+from napistu import indices, source
 from napistu.constants import SBML_DFS, SOURCE_SPEC
+from napistu.network import ng_utils
 from napistu.statistics.constants import CONTINGENCY_TABLE
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))

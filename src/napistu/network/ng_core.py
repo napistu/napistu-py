@@ -7,24 +7,23 @@ from typing import Any, Optional, Union
 import igraph as ig
 import pandas as pd
 
-from napistu.sbml_dfs_core import SBML_dfs
-from napistu.network import ng_utils
-from napistu.network import ig_utils
-from napistu.constants import SBML_DFS
 from napistu import utils
+from napistu.constants import SBML_DFS
+from napistu.network import ig_utils, ng_utils
 from napistu.network.constants import (
-    EDGE_REVERSAL_ATTRIBUTE_MAPPING,
     EDGE_DIRECTION_MAPPING,
+    EDGE_REVERSAL_ATTRIBUTE_MAPPING,
     ENTITIES_TO_ATTRS,
     NAPISTU_GRAPH_EDGES,
-    NAPISTU_METADATA_KEYS,
-    WEIGHTING_SPEC,
-    NAPISTU_GRAPH_VERTICES,
     NAPISTU_GRAPH_NODE_TYPES,
+    NAPISTU_GRAPH_VERTICES,
+    NAPISTU_METADATA_KEYS,
     NAPISTU_WEIGHTING_STRATEGIES,
-    VALID_WEIGHTING_STRATEGIES,
     SOURCE_VARS_DICT,
+    VALID_WEIGHTING_STRATEGIES,
+    WEIGHTING_SPEC,
 )
+from napistu.sbml_dfs_core import SBML_dfs
 
 logger = logging.getLogger(__name__)
 

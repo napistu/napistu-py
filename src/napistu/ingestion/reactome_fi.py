@@ -1,13 +1,9 @@
 import datetime
 import logging
+
 import pandas as pd
 
-from napistu import identifiers
-from napistu import sbml_dfs_core
-from napistu import sbml_dfs_utils
-from napistu import utils
-from napistu.ontologies.genodexito import Genodexito
-from napistu.source import Source
+from napistu import identifiers, sbml_dfs_core, sbml_dfs_utils, utils
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
@@ -15,10 +11,9 @@ from napistu.constants import (
     SBML_DFS,
     SBOTERM_NAMES,
 )
-from napistu.ontologies.constants import GENODEXITO_DEFS
 from napistu.ingestion.constants import (
-    DATA_SOURCES,
     DATA_SOURCE_DESCRIPTIONS,
+    DATA_SOURCES,
     INTERACTION_EDGELIST_DEFS,
     LATIN_SPECIES_NAMES,
     REACTOME_FI,
@@ -27,6 +22,9 @@ from napistu.ingestion.constants import (
     REACTOME_FI_URL,
     VALID_REACTOME_FI_DIRECTIONS,
 )
+from napistu.ontologies.constants import GENODEXITO_DEFS
+from napistu.ontologies.genodexito import Genodexito
+from napistu.source import Source
 
 logger = logging.getLogger(__name__)
 

@@ -2,9 +2,9 @@
 Function execution components for the Napistu MCP server.
 """
 
-from typing import Dict, List, Any, Optional
 import inspect
 import logging
+from typing import Any, Dict, List, Optional
 
 from fastmcp import FastMCP
 

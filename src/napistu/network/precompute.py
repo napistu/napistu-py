@@ -6,8 +6,6 @@ import math
 import numpy as np
 import pandas as pd
 
-from napistu.network.ng_core import NapistuGraph
-from napistu.network.ig_utils import validate_edge_attributes
 from napistu.constants import (
     NAPISTU_EDGELIST,
     SBML_DFS,
@@ -18,6 +16,8 @@ from napistu.network.constants import (
     NAPISTU_GRAPH_NODE_TYPES,
     NAPISTU_GRAPH_VERTICES,
 )
+from napistu.network.ig_utils import validate_edge_attributes
+from napistu.network.ng_core import NapistuGraph
 
 logger = logging.getLogger(__name__)
 

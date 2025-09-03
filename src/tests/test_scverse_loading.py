@@ -1,9 +1,8 @@
-import pytest
-
 import anndata
 import mudata
 import numpy as np
 import pandas as pd
+import pytest
 from scipy import sparse
 
 from napistu.scverse import loading

@@ -11,8 +11,8 @@ from typing import Sequence
 import click
 import igraph as ig
 import pandas as pd
-from rich.logging import RichHandler
 from rich.console import Console
+from rich.logging import RichHandler
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
@@ -20,38 +20,41 @@ with warnings.catch_warnings():
 
 import napistu
 from napistu import consensus as napistu_consensus
-from napistu.sbml_dfs_core import SBML_dfs
 from napistu import utils
+from napistu.constants import ONTOLOGIES, RESOLVE_MATCHES_AGGREGATORS
 from napistu.context import filtering
-from napistu.matching.mount import bind_wide_results
-from napistu.ingestion import bigg
-from napistu.ingestion import gtex
-from napistu.ingestion import hpa
-from napistu.ingestion import reactome
-from napistu.ingestion import reactome_fi
-from napistu.ingestion import omnipath
-from napistu.ingestion import string
-from napistu.ingestion import trrust
-from napistu.ingestion import intact
+from napistu.ingestion import (
+    bigg,
+    gtex,
+    hpa,
+    intact,
+    omnipath,
+    reactome,
+    reactome_fi,
+    string,
+    trrust,
+)
+from napistu.ingestion.constants import (
+    GTEX_RNASEQ_EXPRESSION_URL,
+    PROTEINATLAS_SUBCELL_LOC_URL,
+    REACTOME_FI_URL,
+)
 from napistu.ingestion.sbml import SBML
+from napistu.matching.mount import bind_wide_results
+from napistu.modify import pathwayannot
 from napistu.modify.curation import curate_sbml_dfs
 from napistu.modify.gaps import add_transportation_reactions
-from napistu.modify import pathwayannot
 from napistu.modify.uncompartmentalize import uncompartmentalize_sbml_dfs
-from napistu.network.ng_core import NapistuGraph
-from napistu.network.net_create import process_napistu_graph
+from napistu.network.constants import NAPISTU_GRAPH_EDGES
 from napistu.network.ig_utils import get_graph_summary
+from napistu.network.net_create import process_napistu_graph
+from napistu.network.ng_core import NapistuGraph
 from napistu.network.ng_utils import read_graph_attrs_spec
 from napistu.network.ng_utils import validate_assets as validate_assets_func
 from napistu.network.precompute import precompute_distances
-from napistu.ontologies.genodexito import Genodexito
 from napistu.ontologies import dogma
-from napistu.constants import ONTOLOGIES
-from napistu.constants import RESOLVE_MATCHES_AGGREGATORS
-from napistu.ingestion.constants import PROTEINATLAS_SUBCELL_LOC_URL
-from napistu.ingestion.constants import GTEX_RNASEQ_EXPRESSION_URL
-from napistu.ingestion.constants import REACTOME_FI_URL
-from napistu.network.constants import NAPISTU_GRAPH_EDGES
+from napistu.ontologies.genodexito import Genodexito
+from napistu.sbml_dfs_core import SBML_dfs
 
 # Minimal early logging setup - just silence the most problematic loggers
 logging.getLogger().setLevel(logging.CRITICAL + 1)  # Keep this early

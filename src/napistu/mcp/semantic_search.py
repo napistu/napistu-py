@@ -2,10 +2,11 @@
 Semantic search implementation using ChromaDB for Napistu MCP server.
 """
 
+import logging
+from typing import Any, Dict, List
+
 import chromadb
 from chromadb.utils import embedding_functions
-from typing import Dict, List, Any
-import logging
 
 from napistu.mcp import semantic_search_utils
 

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import pandas as pd
+
 from napistu.rpy2 import (
+    get_napistu_r_package,
     get_rpy2_core_modules,
     get_rpy2_extended_modules,
-    get_napistu_r_package,
-    require_rpy2,
     report_r_exceptions,
+    require_rpy2,
 )
 
 

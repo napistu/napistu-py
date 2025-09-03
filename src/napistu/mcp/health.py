@@ -4,8 +4,9 @@ Health check endpoint for the MCP server when deployed to Cloud Run.
 """
 
 import logging
-from typing import Dict, Any, TypeVar
 from datetime import datetime
+from typing import Any, Dict, TypeVar
+
 from fastmcp import FastMCP
 
 logger = logging.getLogger(__name__)

@@ -21,6 +21,14 @@ on:
         required: false
         default: true
         type: boolean
+      docker_platforms:
+        description: 'Docker platforms to build'
+        required: false
+        default: 'linux/amd64'
+        type: choice
+        options:
+          - 'linux/amd64'
+          - 'linux/amd64,linux/arm64'
       create_github_release:
         description: 'Create GitHub release'
         required: false
@@ -156,18 +164,20 @@ jobs:
       with:
         context: .
         file: ./Dockerfile.base
+        platforms: ${{ inputs.docker_platforms || 'linux/amd64' }}
         push: true
         tags: |
           ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:latest
           ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:${{ needs.check-release-needed.outputs.version }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
-
+    
     - name: Build and push MCP server image
       uses: docker/build-push-action@v5
       with:
         context: .
         file: ./Dockerfile.mcp
+        # No platforms line - defaults to linux/amd64 only (fine for Cloud Run)
         build-args: |
           BASE_IMAGE=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:${{ needs.check-release-needed.outputs.version }}
         push: true

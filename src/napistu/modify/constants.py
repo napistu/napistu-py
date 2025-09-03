@@ -6,8 +6,7 @@ from types import SimpleNamespace
 
 import pandas as pd
 
-from napistu.constants import IDENTIFIERS
-from napistu.constants import ONTOLOGIES
+from napistu.constants import IDENTIFIERS, ONTOLOGIES
 
 VALID_ANNOTATION_TYPES = [
     "foci",

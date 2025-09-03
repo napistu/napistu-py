@@ -2,29 +2,27 @@ from __future__ import annotations
 
 import datetime
 import logging
+
 import pandas as pd
 
-from napistu import sbml_dfs_core
-from napistu import sbml_dfs_utils
-from napistu import identifiers
-from napistu import utils
-from napistu.source import Source
-from napistu.ontologies.genodexito import Genodexito
-from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
+from napistu import identifiers, sbml_dfs_core, sbml_dfs_utils, utils
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
     ONTOLOGIES,
     SBML_DFS,
 )
+from napistu.ingestion.constants import DATA_SOURCE_DESCRIPTIONS, DATA_SOURCES
+from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.ontologies.constants import (
-    INTERCONVERTIBLE_GENIC_ONTOLOGIES,
     GENE_ONTOLOGIES,  # noqa: F401
     GENODEXITO_DEFS,
+    INTERCONVERTIBLE_GENIC_ONTOLOGIES,
     NAME_ONTOLOGIES,
     PROTEIN_ONTOLOGIES,
 )
-from napistu.ingestion.constants import DATA_SOURCES, DATA_SOURCE_DESCRIPTIONS
+from napistu.ontologies.genodexito import Genodexito
+from napistu.source import Source
 
 logger = logging.getLogger(__name__)
 

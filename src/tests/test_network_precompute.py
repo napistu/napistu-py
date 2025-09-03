@@ -1,23 +1,21 @@
 from __future__ import annotations
 
-import pytest
 import os
 import tempfile
 
 import numpy as np
 import pandas as pd
-from napistu import utils
-from napistu.network import neighborhoods
-from napistu.network import paths
-from napistu.network import precompute
-from napistu.network.constants import SBML_DFS
+import pytest
 
+from napistu import utils
+from napistu.network import neighborhoods, paths, precompute
 from napistu.network.constants import (
     DISTANCES,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_VERTICES,
     NEIGHBORHOOD_DICT_KEYS,
     NEIGHBORHOOD_NETWORK_TYPES,
+    SBML_DFS,
 )
 
 # number of species to include when finding all x all paths

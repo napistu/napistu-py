@@ -1,15 +1,16 @@
-from typing import Dict, List, Optional, Set
 import logging
+from typing import Dict, List, Optional, Set
 
 import pandas as pd
 from pydantic import BaseModel, Field, field_validator
 
-from napistu import sbml_dfs_core
-from napistu import identifiers
+from napistu import identifiers, sbml_dfs_core
+from napistu.constants import IDENTIFIERS, ONTOLOGIES, SBML_DFS, SBML_DFS_SCHEMA
+from napistu.ontologies.constants import (
+    GENODEXITO_DEFS,
+    INTERCONVERTIBLE_GENIC_ONTOLOGIES,
+)
 from napistu.ontologies.mygene import create_python_mapping_tables
-from napistu.constants import SBML_DFS, ONTOLOGIES, IDENTIFIERS, SBML_DFS_SCHEMA
-from napistu.ontologies.constants import INTERCONVERTIBLE_GENIC_ONTOLOGIES
-from napistu.ontologies.constants import GENODEXITO_DEFS
 
 logger = logging.getLogger(__name__)
 

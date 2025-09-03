@@ -4,9 +4,10 @@ MCP client for testing and interacting with Napistu MCP servers.
 
 import json
 import logging
-from typing import Optional, Dict, Any, Mapping
+from typing import Any, Dict, Mapping, Optional
 
 from fastmcp import Client
+
 from napistu.mcp.config import MCPClientConfig
 
 logger = logging.getLogger(__name__)

@@ -9,8 +9,8 @@ import pandas as pd
 
 from napistu.constants import IDENTIFIERS
 from napistu.ingestion.constants import (
-    PSI_MI_INTACT_XML_NAMESPACE,
     PSI_MI_DEFS,
+    PSI_MI_INTACT_XML_NAMESPACE,
     PSI_MI_MISSING_VALUE_STR,
     PSI_MI_RAW_ATTRS,
     PSI_MI_STUDY_TABLES,

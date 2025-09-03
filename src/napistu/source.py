@@ -1,20 +1,18 @@
 from __future__ import annotations
+
 import logging
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
-from typing import Optional, Union
 
-from napistu import indices
-from napistu import sbml_dfs_core
-from napistu import sbml_dfs_utils
-from napistu import utils
-from napistu.statistics import hypothesis_testing
+from napistu import indices, sbml_dfs_core, sbml_dfs_utils, utils
 from napistu.constants import (
     SBML_DFS_SCHEMA,
     SCHEMA_DEFS,
     SOURCE_SPEC,
 )
+from napistu.statistics import hypothesis_testing
 from napistu.statistics.constants import CONTINGENCY_TABLE
 
 logger = logging.getLogger(__name__)

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import os
+
 import pytest
 
 from napistu.gcs import downloads
-
-from napistu.gcs.constants import GCS_ASSETS_NAMES, GCS_SUBASSET_NAMES, GCS_FILETYPES
+from napistu.gcs.constants import GCS_ASSETS_NAMES, GCS_FILETYPES, GCS_SUBASSET_NAMES
 
 
 @pytest.mark.skip_on_windows

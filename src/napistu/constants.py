@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import libsbml
-
 from types import SimpleNamespace
-import pandas as pd
 
+import libsbml
+import pandas as pd
 
 PACKAGE_DEFS = SimpleNamespace(
     NAPISTU="napistu",

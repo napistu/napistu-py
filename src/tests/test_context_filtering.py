@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import copy
-import pytest
+
 import pandas as pd
+import pytest
+
 from napistu import sbml_dfs_utils
 from napistu.constants import SBML_DFS
 from napistu.context.filtering import (
-    filter_species_by_attribute,
-    find_species_with_attribute,
     _binarize_species_data,
     filter_reactions_with_disconnected_cspecies,
+    filter_species_by_attribute,
+    find_species_with_attribute,
 )
 
 

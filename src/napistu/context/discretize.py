@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
+from typing import NamedTuple, Optional, Union
+
 import numpy as np
 import pandas as pd
-from typing import Optional, Union, NamedTuple
-from scipy.stats import gaussian_kde
 from scipy.signal import find_peaks
+from scipy.stats import gaussian_kde
 
 logger = logging.getLogger(__name__)
 

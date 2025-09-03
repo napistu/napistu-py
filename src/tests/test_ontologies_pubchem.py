@@ -1,6 +1,5 @@
-from napistu.ontologies.pubchem import map_pubchem_ids
-
 from napistu.ontologies.constants import PUBCHEM_DEFS
+from napistu.ontologies.pubchem import map_pubchem_ids
 
 
 def test_map_pubchem_ids_valid():

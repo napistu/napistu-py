@@ -2,10 +2,11 @@
 
 from unittest.mock import patch
 
-import pytest
 import pandas as pd
+import pytest
+
 from napistu import identifiers
-from napistu.constants import IDENTIFIERS, SBML_DFS, ONTOLOGIES
+from napistu.constants import IDENTIFIERS, ONTOLOGIES, SBML_DFS
 from napistu.ontologies import renaming
 
 

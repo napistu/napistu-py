@@ -4,23 +4,21 @@ import datetime
 import logging
 
 import pandas as pd
-from napistu import identifiers
-from napistu import sbml_dfs_core
-from napistu import sbml_dfs_utils
-from napistu.source import Source
-from napistu import utils
+
+from napistu import identifiers, sbml_dfs_core, sbml_dfs_utils, utils
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
     SBML_DFS,
 )
 from napistu.ingestion.constants import (
-    DATA_SOURCES,
     DATA_SOURCE_DESCRIPTIONS,
+    DATA_SOURCES,
     IDEA_YEAST,
     INTERACTION_EDGELIST_DEFS,
     LATIN_SPECIES_NAMES,
 )
+from napistu.source import Source
 
 logger = logging.getLogger(__name__)
 

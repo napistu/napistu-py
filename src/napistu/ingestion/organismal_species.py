@@ -2,7 +2,7 @@
 This module contains the OrganismalSpeciesValidator class, which is used to validate and convert between common and Latin species names.
 """
 
-from typing import Dict, Union, Set, List, Any
+from typing import Any, Dict, List, Set, Union
 
 from napistu.ingestion.constants import LATIN_TO_COMMON_SPECIES_NAMES
 

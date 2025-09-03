@@ -4,11 +4,11 @@ import pytest
 
 from napistu.matching.constants import FEATURE_ID_VAR_DEFAULT
 from napistu.matching.species import (
-    match_features_to_wide_pathway_species,
-    match_by_ontology_and_identifier,
-    _validate_wide_ontologies,
     _ensure_feature_id_var,
+    _validate_wide_ontologies,
     features_to_pathway_species,
+    match_by_ontology_and_identifier,
+    match_features_to_wide_pathway_species,
 )
 
 

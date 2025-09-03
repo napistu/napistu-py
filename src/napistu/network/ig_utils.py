@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import random
-from typing import Any, Optional, Sequence, List, Dict, Union
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 import igraph as ig
 import numpy as np

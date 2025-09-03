@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
-import pandas as pd
 import warnings
+
+import pandas as pd
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="pkg_resources is deprecated")

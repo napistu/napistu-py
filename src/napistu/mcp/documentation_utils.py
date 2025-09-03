@@ -2,8 +2,10 @@
 Utilities for loading and processing documentation.
 """
 
-import httpx
 import os
+
+import httpx
+
 from napistu.constants import PACKAGE_DEFS
 from napistu.mcp.constants import (
     DEFAULT_GITHUB_API,

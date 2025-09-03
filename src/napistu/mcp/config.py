@@ -1,6 +1,8 @@
-from pydantic import BaseModel, Field, computed_field, field_validator
 from typing import Optional
+
 import click
+from pydantic import BaseModel, Field, computed_field, field_validator
+
 from napistu.mcp.constants import MCP_DEFAULTS, MCP_PRODUCTION_URL
 
 

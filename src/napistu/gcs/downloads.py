@@ -4,16 +4,17 @@ import logging
 import os
 import re
 import shutil
+from typing import List, Optional
+
 from pydantic import BaseModel
-from typing import Optional, List
 
 from napistu import utils
-from napistu.gcs.utils import _initialize_data_dir
 from napistu.gcs.constants import (
     GCS_ASSETS,
     GCS_ASSETS_DEFS,
     INIT_DATA_DIR_MSG,
 )
+from napistu.gcs.utils import _initialize_data_dir
 
 logger = logging.getLogger(__name__)
 

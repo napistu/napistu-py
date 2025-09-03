@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from napistu import sbml_dfs_core
-from napistu.ingestion import sbml
 import pytest
 from pydantic import ValidationError
+
+from napistu import sbml_dfs_core
+from napistu.ingestion import sbml
 
 
 def test_sbml_dfs(sbml_path, model_source_stub):

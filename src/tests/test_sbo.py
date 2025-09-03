@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from napistu.constants import MINI_SBO_FROM_NAME
-from napistu.constants import MINI_SBO_TO_NAME
+from napistu.constants import MINI_SBO_FROM_NAME, MINI_SBO_TO_NAME
 
 
 def test_sbo_to_from_name():

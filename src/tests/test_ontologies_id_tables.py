@@ -1,8 +1,8 @@
-import pytest
-import pandas as pd
 from unittest.mock import patch
 
-from napistu.ontologies import id_tables
+import pandas as pd
+import pytest
+
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
@@ -10,6 +10,7 @@ from napistu.constants import (
     SBML_DFS,
     VALID_BQB_TERMS,
 )
+from napistu.ontologies import id_tables
 
 
 @pytest.fixture

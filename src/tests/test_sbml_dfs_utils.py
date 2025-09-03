@@ -9,19 +9,19 @@ from napistu.constants import (
     BQB_DEFINING_ATTRS,
     BQB_DEFINING_ATTRS_LOOSE,
     IDENTIFIERS,
+    MINI_SBO_FROM_NAME,
+    MINI_SBO_TO_NAME,
     POLARITIES,
     POLARITY_TO_SYMBOL,
     SBML_DFS,
     SBOTERM_NAMES,
-    VALID_SBO_TERMS,
     VALID_SBO_TERM_NAMES,
-    MINI_SBO_FROM_NAME,
-    MINI_SBO_TO_NAME,
+    VALID_SBO_TERMS,
 )
 from napistu.ingestion.constants import (
+    INTERACTION_EDGELIST_DEFAULTS,
     INTERACTION_EDGELIST_DEFS,
     INTERACTION_EDGELIST_OPTIONAL_VARS,
-    INTERACTION_EDGELIST_DEFAULTS,
 )
 
 
@@ -346,6 +346,7 @@ def test_infer_entity_type_errors():
 def test_infer_entity_type_multindex_reactions():
     # DataFrame with MultiIndex (r_id, foo), should infer as reactions
     import pandas as pd
+
     from napistu.constants import SBML_DFS
 
     df = pd.DataFrame({"some_col": [1, 2]})

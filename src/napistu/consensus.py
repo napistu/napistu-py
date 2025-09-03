@@ -8,15 +8,7 @@ from typing import Optional
 import pandas as pd
 from tqdm import tqdm
 
-from napistu import identifiers
-from napistu import indices
-from napistu import sbml_dfs_core
-from napistu import sbml_dfs_utils
-from napistu import source
-from napistu import utils
-from napistu.ingestion import sbml
-from napistu.matching.mount import resolve_matches
-
+from napistu import identifiers, indices, sbml_dfs_core, sbml_dfs_utils, source, utils
 from napistu.constants import (
     BQB_DEFINING_ATTRS,
     ENTITIES_TO_ENTITY_DATA,
@@ -29,6 +21,8 @@ from napistu.constants import (
     SOURCE_SPEC,
     VALID_BQB_TERMS,
 )
+from napistu.ingestion import sbml
+from napistu.matching.mount import resolve_matches
 
 logger = logging.getLogger(__name__)
 # set the level to show logger.info message

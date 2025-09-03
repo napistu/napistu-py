@@ -1,20 +1,19 @@
 import copy
 import logging
-from typing import Optional, Union, Set, Dict
+from typing import Dict, Optional, Set, Union
 
 import pandas as pd
 
-from napistu import identifiers
-from napistu import utils
-from napistu.matching.species import match_features_to_wide_pathway_species
-from napistu.constants import SBML_DFS, ONTOLOGIES_LIST
+from napistu import identifiers, utils
+from napistu.constants import ONTOLOGIES_LIST, SBML_DFS
 from napistu.matching.constants import (
+    BIND_DICT_OF_WIDE_RESULTS_STRATEGIES,
+    BIND_DICT_OF_WIDE_RESULTS_STRATEGIES_LIST,
     FEATURE_ID_VAR_DEFAULT,
     RESOLVE_MATCHES_AGGREGATORS,
     RESOLVE_MATCHES_TMP_WEIGHT_COL,
-    BIND_DICT_OF_WIDE_RESULTS_STRATEGIES,
-    BIND_DICT_OF_WIDE_RESULTS_STRATEGIES_LIST,
 )
+from napistu.matching.species import match_features_to_wide_pathway_species
 
 # Type annotations use string literals to avoid circular imports
 

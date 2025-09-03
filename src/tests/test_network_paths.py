@@ -1,8 +1,7 @@
 import pandas as pd
 
-from napistu.network import paths
-from napistu.network import ng_utils
 from napistu.constants import SBML_DFS
+from napistu.network import ng_utils, paths
 from napistu.network.constants import (
     NAPISTU_GRAPH_EDGES,
     NET_POLARITY,

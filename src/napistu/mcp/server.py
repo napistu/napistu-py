@@ -7,15 +7,11 @@ import logging
 
 from mcp.server import FastMCP
 
-from napistu.mcp import codebase
-from napistu.mcp import documentation
-from napistu.mcp import execution
-from napistu.mcp import tutorials
-from napistu.mcp import health
-from napistu.mcp.profiles import ServerProfile, get_profile
+from napistu.mcp import codebase, documentation, execution, health, tutorials
 from napistu.mcp.config import MCPServerConfig
-from napistu.mcp.semantic_search import SemanticSearch
 from napistu.mcp.constants import MCP_DEFAULTS
+from napistu.mcp.profiles import ServerProfile, get_profile
+from napistu.mcp.semantic_search import SemanticSearch
 
 logger = logging.getLogger(__name__)
 

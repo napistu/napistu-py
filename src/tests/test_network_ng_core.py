@@ -1,22 +1,22 @@
 import logging
 import os
 import tempfile
-import pytest
 
 import igraph as ig
 import pandas as pd
+import pytest
 from fs.errors import ResourceNotFound
 
-from napistu.network.ng_core import NapistuGraph
+from napistu.constants import SBML_DFS
 from napistu.network.constants import (
+    GRAPH_WIRING_APPROACHES,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
-    GRAPH_WIRING_APPROACHES,
     NAPISTU_GRAPH_VERTICES,
     NAPISTU_METADATA_KEYS,
     NAPISTU_WEIGHTING_STRATEGIES,
 )
-from napistu.constants import SBML_DFS
+from napistu.network.ng_core import NapistuGraph
 
 logger = logging.getLogger(__name__)
 
@@ -641,9 +641,10 @@ def test_add_degree_attributes_pathological_case(test_graph):
 def test_reverse_edges():
     """Test the reverse_edges method."""
     import igraph as ig
+
     from napistu.network.constants import (
-        NAPISTU_GRAPH_EDGES,
         NAPISTU_GRAPH_EDGE_DIRECTIONS,
+        NAPISTU_GRAPH_EDGES,
     )
 
     # Create test graph with edge attributes
@@ -727,6 +728,7 @@ def test_reverse_edges():
 def test_set_weights():
     """Test the set_weights method."""
     import igraph as ig
+
     from napistu.network.constants import (
         NAPISTU_GRAPH_EDGES,
         NAPISTU_WEIGHTING_STRATEGIES,
@@ -804,6 +806,7 @@ def test_set_weights():
 def test_get_weight_variables():
     """Test the _get_weight_variables utility method."""
     import igraph as ig
+
     from napistu.network.constants import NAPISTU_GRAPH_EDGES
 
     # Create a test graph
@@ -850,10 +853,11 @@ def test_get_weight_variables():
 
 def test_process_napistu_graph_with_reactions_data(sbml_dfs):
     """Test process_napistu_graph with reactions data and graph attributes."""
-    import pandas as pd
     import numpy as np
-    from napistu.network.net_create import process_napistu_graph
+    import pandas as pd
+
     from napistu.network.constants import NAPISTU_WEIGHTING_STRATEGIES
+    from napistu.network.net_create import process_napistu_graph
 
     # Add reactions_data table called "string" with combined_score variable
     # Only add data for a subset of reactions to test source weights

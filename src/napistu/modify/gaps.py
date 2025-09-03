@@ -7,19 +7,16 @@ import igraph as ig
 import numpy as np
 import pandas as pd
 
-from napistu import identifiers
-from napistu import sbml_dfs_core
-from napistu import sbml_dfs_utils
-from napistu import source
-from napistu import utils
-from napistu.network import net_create
-
-from napistu.constants import SBML_DFS
-from napistu.constants import IDENTIFIERS
-from napistu.constants import MINI_SBO_FROM_NAME
-from napistu.constants import SBOTERM_NAMES
-from napistu.constants import SOURCE_SPEC
+from napistu import identifiers, sbml_dfs_core, sbml_dfs_utils, source, utils
+from napistu.constants import (
+    IDENTIFIERS,
+    MINI_SBO_FROM_NAME,
+    SBML_DFS,
+    SBOTERM_NAMES,
+    SOURCE_SPEC,
+)
 from napistu.ingestion.constants import EXCHANGE_COMPARTMENT
+from napistu.network import net_create
 from napistu.network.constants import GRAPH_WIRING_APPROACHES
 
 logger = logging.getLogger(__name__)

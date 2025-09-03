@@ -7,40 +7,35 @@ import logging
 import os
 import pickle
 import re
-import requests
 import shutil
 import urllib.request as request
-import zipfile
 import warnings
+import zipfile
 from contextlib import closing
 from itertools import starmap
-from textwrap import fill
-from typing import Any, Dict, Optional, List, Union
-from urllib.parse import urlparse
 from pathlib import Path
-from requests.adapters import HTTPAdapter
-from requests.adapters import Retry
+from textwrap import fill
+from typing import Any, Dict, List, Optional, Union
+from urllib.parse import urlparse
 
 import igraph as ig
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+import requests
+from requests.adapters import HTTPAdapter, Retry
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
     from fs import open_fs
-    from fs.copy import copy_dir
-    from fs.copy import copy_file
-    from fs.copy import copy_fs
-    from fs.errors import CreateFailed
-    from fs.errors import ResourceNotFound
+    from fs.copy import copy_dir, copy_file, copy_fs
+    from fs.errors import CreateFailed, ResourceNotFound
     from fs.tarfs import TarFS
     from fs.tempfs import TempFS
     from fs.zipfs import ZipFS
 
-from napistu.constants import FILE_EXT_GZ
-from napistu.constants import FILE_EXT_ZIP
+from napistu.constants import FILE_EXT_GZ, FILE_EXT_ZIP
 
 logger = logging.getLogger(__name__)
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import datetime
-import os
 import logging
+import os
 from typing import Dict, Set, Union
 
 import igraph as ig
@@ -10,13 +10,7 @@ import numpy as np
 import pandas as pd
 import requests
 
-from napistu import utils
-from napistu import sbml_dfs_utils
-from napistu.source import Source
-from napistu.ontologies import renaming
-from napistu.sbml_dfs_core import SBML_dfs
-from napistu.identifiers import Identifiers
-from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
+from napistu import sbml_dfs_utils, utils
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
@@ -24,14 +18,15 @@ from napistu.constants import (
     SBML_DFS,
     SBOTERM_NAMES,
 )
+from napistu.identifiers import Identifiers
 from napistu.ingestion.constants import (
-    DATA_SOURCES,
     DATA_SOURCE_DESCRIPTIONS,
+    DATA_SOURCES,
     DEFAULT_INTACT_RELATIVE_WEIGHTS,
     INTACT_EXPERIMENTAL_ROLES,
+    INTACT_ONTOLOGY_ALIASES,
     INTACT_PUBLICATION_SCORE_THRESHOLD,
     INTACT_SCORES,
-    INTACT_ONTOLOGY_ALIASES,
     INTACT_TERM_SCORES,
     INTERACTION_EDGELIST_DEFS,
     PSI_MI_DEFS,
@@ -45,6 +40,10 @@ from napistu.ingestion.constants import (
     VALID_INTACT_EXPERIMENTAL_ROLES,  # noqa: F401
     VALID_INTACT_SECONDARY_ONTOLOGIES,
 )
+from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
+from napistu.ontologies import renaming
+from napistu.sbml_dfs_core import SBML_dfs
+from napistu.source import Source
 
 logger = logging.getLogger(__name__)
 

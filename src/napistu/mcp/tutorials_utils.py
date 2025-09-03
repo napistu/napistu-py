@@ -2,16 +2,15 @@
 Utilities for loading and processing tutorials.
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import Dict
+
 import httpx
-import logging
 
 from napistu.gcs.utils import _initialize_data_dir
-
-from napistu.mcp.constants import TUTORIAL_URLS
-from napistu.mcp.constants import TUTORIALS_CACHE_DIR
+from napistu.mcp.constants import TUTORIAL_URLS, TUTORIALS_CACHE_DIR
 
 logger = logging.getLogger(__name__)
 

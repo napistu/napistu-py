@@ -4,8 +4,7 @@ import igraph as ig
 import numpy as np
 import pytest
 
-from napistu.network import ig_utils
-from napistu.network import net_create
+from napistu.network import ig_utils, net_create
 from napistu.network.constants import NAPISTU_GRAPH_EDGES
 
 

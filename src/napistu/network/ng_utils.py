@@ -9,16 +9,15 @@ from __future__ import annotations
 
 import copy
 import logging
-import yaml
-from typing import Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Union
 
-from pydantic import BaseModel
 import igraph as ig
 import numpy as np
 import pandas as pd
+import yaml
+from pydantic import BaseModel
 
-from napistu import sbml_dfs_core
-from napistu import source
+from napistu import sbml_dfs_core, source
 from napistu.identifiers import _validate_assets_sbml_ids
 
 if TYPE_CHECKING:
