@@ -192,6 +192,9 @@ class CodebaseComponent(MCPComponent):
             self.state.codebase_cache["functions"] = functions
             self.state.codebase_cache["classes"] = classes
 
+            # Add stripped names for easier lookup
+            codebase_utils.add_stripped_names(functions, classes)
+
             logger.info(
                 f"Codebase loading complete: "
                 f"{len(modules)} modules, "
@@ -537,23 +540,34 @@ class CodebaseComponent(MCPComponent):
             Parameters
             ----------
             function_name : str
-                Name of the Napistu function (from codebase search or summary)
+                Name of the Napistu function (can be short name like "create_network"
+                or full path like "napistu.network.create_network")
 
             Returns
             -------
             Dict[str, Any]
                 Complete function documentation including signature, parameters,
-                return type, and detailed description
+                return type, and detailed description, or error message if not found
 
             Examples
             --------
-            After finding a function via search, use this to get complete API details
-            for implementation guidance and parameter understanding.
+            >>> # These all work:
+            >>> get_function_documentation("create_network")
+            >>> get_function_documentation("napistu.network.create_network")
+            >>> get_function_documentation("create_consensus")
             """
-            if function_name not in self.state.codebase_cache["functions"]:
-                return {"error": f"Function {function_name} not found"}
+            result = codebase_utils.find_item_by_name(
+                function_name, self.state.codebase_cache["functions"]
+            )
+            if result is None:
+                return {
+                    "error": f"Function '{function_name}' not found. Try searching for similar names."
+                }
 
-            return self.state.codebase_cache["functions"][function_name]
+            full_name, func_info = result
+            # Add the full name to the response for clarity
+            func_info["full_name"] = full_name
+            return func_info
 
         @mcp.tool()
         async def get_class_documentation(class_name: str) -> Dict[str, Any]:
@@ -573,23 +587,34 @@ class CodebaseComponent(MCPComponent):
             Parameters
             ----------
             class_name : str
-                Name of the Napistu class (from codebase search or summary)
+                Name of the Napistu class (can be short name like "NapistuGraph"
+                or full path like "napistu.network.ng_core.NapistuGraph")
 
             Returns
             -------
             Dict[str, Any]
                 Complete class documentation including methods, attributes,
-                inheritance, and detailed description
+                inheritance, and detailed description, or error message if not found
 
             Examples
             --------
-            After finding a class via search, use this to get complete API details
-            for understanding class structure and method signatures.
+            >>> # These all work:
+            >>> get_class_documentation("NapistuGraph")
+            >>> get_class_documentation("napistu.network.ng_core.NapistuGraph")
+            >>> get_class_documentation("SBML_dfs")
             """
-            if class_name not in self.state.codebase_cache["classes"]:
-                return {"error": f"Class {class_name} not found"}
+            result = codebase_utils.find_item_by_name(
+                class_name, self.state.codebase_cache["classes"]
+            )
+            if result is None:
+                return {
+                    "error": f"Class '{class_name}' not found. Try searching for similar names."
+                }
 
-            return self.state.codebase_cache["classes"][class_name]
+            full_name, class_info = result
+            # Add the full name to the response for clarity
+            class_info["full_name"] = full_name
+            return class_info
 
 
 # Module-level component instance
