@@ -72,6 +72,75 @@ def extract_functions_and_classes_from_modules(modules: dict) -> tuple[dict, dic
     return functions, classes
 
 
+def add_stripped_names(functions: dict, classes: dict) -> None:
+    """
+    Add stripped names to all functions and classes for easier lookup.
+
+    This function modifies the input dictionaries in-place by adding a 'stripped_name'
+    attribute to each item. The stripped name is the last part of the fully qualified
+    name (e.g., "NapistuGraph" from "napistu.network.ng_core.NapistuGraph").
+
+    Parameters
+    ----------
+    functions : dict
+        Dictionary of functions keyed by fully qualified name
+    classes : dict
+        Dictionary of classes keyed by fully qualified name
+
+    Examples
+    --------
+    >>> functions = {"napistu.network.create_network": {...}}
+    >>> classes = {"napistu.network.ng_core.NapistuGraph": {...}}
+    >>> add_stripped_names(functions, classes)
+    >>> print(functions["napistu.network.create_network"]["stripped_name"])
+    'create_network'
+    >>> print(classes["napistu.network.ng_core.NapistuGraph"]["stripped_name"])
+    'NapistuGraph'
+    """
+    for item_type, items_dict in [("functions", functions), ("classes", classes)]:
+        for full_name, item_info in items_dict.items():
+            # Extract the last part of the full name
+            stripped_name = full_name.split(".")[-1]
+            item_info["stripped_name"] = stripped_name
+
+
+def find_item_by_name(name: str, items_dict: dict) -> tuple[str, dict] | None:
+    """
+    Find an item by name using exact matching on both full path and stripped name.
+
+    Parameters
+    ----------
+    name : str
+        Name to search for (can be short name or full path)
+    items_dict : dict
+        Dictionary of items keyed by fully qualified name
+
+    Returns
+    -------
+    tuple[str, dict] | None
+        Tuple of (full_name, item_info) if found, None otherwise
+
+    Examples
+    --------
+    >>> functions = {"napistu.network.create_network": {"stripped_name": "create_network", ...}}
+    >>> result = find_item_by_name("create_network", functions)
+    >>> if result:
+    ...     full_name, func_info = result
+    ...     print(f"Found: {full_name}")
+    'Found: napistu.network.create_network'
+    """
+    # First try exact match on full path
+    if name in items_dict:
+        return name, items_dict[name]
+
+    # Try exact match on stripped name
+    for full_name, item_info in items_dict.items():
+        if item_info.get("stripped_name") == name:
+            return full_name, item_info
+
+    return None
+
+
 def _parse_rtd_module_page(html: str, url: Optional[str] = None) -> dict:
     """
     Parse a ReadTheDocs module HTML page and extract functions, classes, methods, attributes, and submodules.
