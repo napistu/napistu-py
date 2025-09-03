@@ -21,6 +21,14 @@ on:
         required: false
         default: true
         type: boolean
+      docker_platforms:
+        description: 'Docker platforms to build'
+        required: false
+        default: 'linux/amd64'
+        type: choice
+        options:
+          - 'linux/amd64'
+          - 'linux/amd64,linux/arm64'
       create_github_release:
         description: 'Create GitHub release'
         required: false
@@ -156,7 +164,7 @@ jobs:
       with:
         context: .
         file: ./Dockerfile.base
-        platforms: linux/amd64,linux/arm64  # Add ARM64 for local development
+        platforms: ${{ inputs.docker_platforms || 'linux/amd64' }}
         push: true
         tags: |
           ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:latest
