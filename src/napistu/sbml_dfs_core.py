@@ -1802,7 +1802,9 @@ class SBML_dfs:
         # Add extra data if requested
         if len(extra_columns[SBML_DFS.REACTIONS]) > 0:
             data_label = (
-                keep_reactions_data if isinstance(keep_reactions_data, str) else "source"
+                keep_reactions_data
+                if isinstance(keep_reactions_data, str)
+                else "source"
             )
             sbml_tbl_dict[SBML_DFS.REACTIONS_DATA] = {data_label: reactions_data}
 
