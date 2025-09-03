@@ -156,18 +156,20 @@ jobs:
       with:
         context: .
         file: ./Dockerfile.base
+        platforms: linux/amd64,linux/arm64  # Add ARM64 for local development
         push: true
         tags: |
           ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:latest
           ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:${{ needs.check-release-needed.outputs.version }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
-
+    
     - name: Build and push MCP server image
       uses: docker/build-push-action@v5
       with:
         context: .
         file: ./Dockerfile.mcp
+        # No platforms line - defaults to linux/amd64 only (fine for Cloud Run)
         build-args: |
           BASE_IMAGE=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:${{ needs.check-release-needed.outputs.version }}
         push: true

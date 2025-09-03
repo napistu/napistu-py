@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import sys
 from unittest.mock import Mock, patch
-import pytest
 
+import pytest
 
 # Mock all rpy2 dependencies before any imports to prevent ImportErrors
 sys.modules["rpy2"] = Mock()
@@ -60,9 +60,11 @@ def test_caching_behavior():
 
     # Test core modules caching
     with patch("napistu.rpy2.get_rpy2_availability", return_value=True):
-        with patch("rpy2.robjects.conversion"), patch(
-            "rpy2.robjects.default_converter"
-        ), patch("rpy2.robjects.packages.importr"):
+        with (
+            patch("rpy2.robjects.conversion"),
+            patch("rpy2.robjects.default_converter"),
+            patch("rpy2.robjects.packages.importr"),
+        ):
             if hasattr(napistu.rpy2.get_rpy2_core_modules, "cache_clear"):
                 napistu.rpy2.get_rpy2_core_modules.cache_clear()
 

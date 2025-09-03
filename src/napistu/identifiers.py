@@ -11,21 +11,18 @@ import libsbml
 import pandas as pd
 from pydantic import BaseModel
 
-from napistu import sbml_dfs_core
-from napistu import sbml_dfs_utils
-from napistu import utils
-
+from napistu import sbml_dfs_core, sbml_dfs_utils, utils
 from napistu.constants import (
-    IDENTIFIERS,
     BIOLOGICAL_QUALIFIER_CODES,
-    ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY,
     ENSEMBL_MOLECULE_TYPES_FROM_ONTOLOGY,
+    ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY,
     ENSEMBL_SPECIES_FROM_CODE,
     ENSEMBL_SPECIES_TO_CODE,
+    IDENTIFIERS,
+    IDENTIFIERS_REQUIRED_VARS,
     SBML_DFS_SCHEMA,
     SCHEMA_DEFS,
     SPECIES_IDENTIFIERS_REQUIRED_VARS,
-    IDENTIFIERS_REQUIRED_VARS,
 )
 
 logger = logging.getLogger(__name__)

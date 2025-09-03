@@ -1,18 +1,12 @@
-from dataclasses import dataclass
 import logging
-from typing import Optional, Union, List, Dict, Any
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Union
 
-import pandas as pd
-import numpy as np
 import igraph as ig
+import numpy as np
+import pandas as pd
 import scipy.stats as stats
 
-from napistu.network.ig_utils import (
-    _parse_mask_input,
-    _get_attribute_masks,
-    _ensure_valid_attribute,
-)
-from napistu.statistics.quantiles import calculate_quantiles
 from napistu.network.constants import (
     MASK_KEYWORDS,
     NAPISTU_GRAPH_VERTICES,
@@ -21,6 +15,12 @@ from napistu.network.constants import (
     PARAMETRIC_NULL_DEFAULT_DISTRIBUTION,
     VALID_NULL_STRATEGIES,
 )
+from napistu.network.ig_utils import (
+    _ensure_valid_attribute,
+    _get_attribute_masks,
+    _parse_mask_input,
+)
+from napistu.statistics.quantiles import calculate_quantiles
 
 logger = logging.getLogger(__name__)
 

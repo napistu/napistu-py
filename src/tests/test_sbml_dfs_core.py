@@ -10,27 +10,27 @@ import pytest
 from fs.errors import ResourceNotFound
 
 from napistu import identifiers
-from napistu.ingestion import sbml
-from napistu.modify import pathwayannot
 from napistu import identifiers as napistu_identifiers
-from napistu.sbml_dfs_core import SBML_dfs
-from napistu.source import Source
 from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS,
     BQB_DEFINING_ATTRS_LOOSE,
     IDENTIFIERS,
     MINI_SBO_FROM_NAME,
+    ONTOLOGIES,
     SBML_DFS,
     SBML_DFS_SCHEMA,
     SBOTERM_NAMES,
     SCHEMA_DEFS,
-    ONTOLOGIES,
 )
+from napistu.ingestion import sbml
 from napistu.ingestion.constants import (
-    INTERACTION_EDGELIST_DEFS,
     INTERACTION_EDGELIST_DEFAULTS,
+    INTERACTION_EDGELIST_DEFS,
 )
+from napistu.modify import pathwayannot
+from napistu.sbml_dfs_core import SBML_dfs
+from napistu.source import Source
 
 
 @pytest.fixture

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, Union, Set, Dict, List
+from typing import Dict, List, Optional, Set, Union
 
 import numpy as np
 import pandas as pd
 
 from napistu import identifiers
-from napistu.constants import ONTOLOGIES_LIST, SBML_DFS, IDENTIFIERS
+from napistu.constants import IDENTIFIERS, ONTOLOGIES_LIST, SBML_DFS
 from napistu.matching.constants import FEATURE_ID_VAR_DEFAULT
 
 logger = logging.getLogger(__name__)

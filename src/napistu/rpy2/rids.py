@@ -3,17 +3,18 @@ from __future__ import annotations
 import logging
 
 import pandas as pd
-from napistu.rpy2 import (
-    require_rpy2,
-    report_r_exceptions,
-)
-
-from napistu.rpy2.callr import bioconductor_org_r_function, r_dataframe_to_pandas
 
 from napistu.constants import ONTOLOGIES
-from napistu.rpy2.constants import BIOC_VALID_EXPANDED_SPECIES_ONTOLOGIES
-from napistu.rpy2.constants import BIOC_ONTOLOGY_MAPPING
-from napistu.rpy2.constants import BIOC_NOMENCLATURE
+from napistu.rpy2 import (
+    report_r_exceptions,
+    require_rpy2,
+)
+from napistu.rpy2.callr import bioconductor_org_r_function, r_dataframe_to_pandas
+from napistu.rpy2.constants import (
+    BIOC_NOMENCLATURE,
+    BIOC_ONTOLOGY_MAPPING,
+    BIOC_VALID_EXPANDED_SPECIES_ONTOLOGIES,
+)
 
 logger = logging.getLogger(__name__)
 

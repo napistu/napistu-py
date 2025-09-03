@@ -1,9 +1,9 @@
 import logging
-from typing import Optional, Union, Set
+from typing import Optional, Set, Union
 
 import pandas as pd
 
-from napistu import sbml_dfs_utils
+from napistu import sbml_dfs_utils, utils
 from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS_LOOSE,
@@ -12,7 +12,6 @@ from napistu.constants import (
     SCHEMA_DEFS,
     VALID_BQB_TERMS,
 )
-from napistu import utils
 
 logger = logging.getLogger(__name__)
 

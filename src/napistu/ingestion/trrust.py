@@ -3,41 +3,40 @@ from __future__ import annotations
 import datetime
 import os
 import warnings
-from typing import Union
 from itertools import chain
+from typing import Union
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
     from fs import open_fs
 import pandas as pd
 
-from napistu import identifiers
-from napistu import utils
-from napistu.sbml_dfs_core import SBML_dfs
-from napistu.source import Source
-from napistu.ontologies.genodexito import Genodexito
-from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
+from napistu import identifiers, utils
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
-    SBOTERM_NAMES,
-    SBML_DFS,
     ONTOLOGIES,
+    SBML_DFS,
+    SBOTERM_NAMES,
 )
 from napistu.ingestion.constants import (
-    DATA_SOURCES,
     DATA_SOURCE_DESCRIPTIONS,
-    LATIN_SPECIES_NAMES,
+    DATA_SOURCES,
     INTERACTION_EDGELIST_DEFS,
+    LATIN_SPECIES_NAMES,
     TRRUST_COMPARTMENT_NUCLEOPLASM,
     TRRUST_COMPARTMENT_NUCLEOPLASM_GO_ID,
+    TRRUST_SIGNS,
     TRRUST_SYMBOL,
     TRRUST_UNIPROT,
     TRRUST_UNIPROT_ID,
     TTRUST_URL_RAW_DATA_HUMAN,
-    TRRUST_SIGNS,
 )
+from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.ontologies.constants import GENODEXITO_DEFS
+from napistu.ontologies.genodexito import Genodexito
+from napistu.sbml_dfs_core import SBML_dfs
+from napistu.source import Source
 
 
 def download_trrust(target_uri: str) -> None:

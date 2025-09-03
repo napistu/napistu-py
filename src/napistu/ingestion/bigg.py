@@ -8,13 +8,7 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
     from fs import open_fs
 
-from napistu import indices
-from napistu import utils
-from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
-from napistu.ingestion.sbml import SBML
-from napistu.ontologies.renaming import rename_species_ontologies
-from napistu.sbml_dfs_core import SBML_dfs
-from napistu.source import Source
+from napistu import indices, utils
 from napistu.constants import (
     EXPECTED_PW_INDEX_COLUMNS,
     SOURCE_SPEC,
@@ -26,6 +20,11 @@ from napistu.ingestion.constants import (
     LATIN_SPECIES_NAMES,
     MODEL_SOURCE_DESCRIPTIONS,
 )
+from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
+from napistu.ingestion.sbml import SBML
+from napistu.ontologies.renaming import rename_species_ontologies
+from napistu.sbml_dfs_core import SBML_dfs
+from napistu.source import Source
 
 logger = logging.getLogger(__name__)
 

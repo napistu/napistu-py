@@ -6,7 +6,7 @@ pip install napistu[mcp]
 """
 
 import asyncio
-from typing import Dict, Any
+from typing import Any, Dict
 
 __all__ = ["start_server", "register_object", "is_available"]
 
@@ -18,9 +18,9 @@ except ImportError:
     is_available = False
 
 if is_available:
-    from napistu.mcp.server import create_server
-    from napistu.mcp.profiles import get_profile
     from napistu.mcp.constants import MCP_PROFILES
+    from napistu.mcp.profiles import get_profile
+    from napistu.mcp.server import create_server
 
     def start_server(
         profile_name: str = MCP_PROFILES.EXECUTION, **kwargs

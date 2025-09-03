@@ -1,19 +1,20 @@
-import pytest
+import igraph as ig
 import numpy as np
 import pandas as pd
-import igraph as ig
-from napistu.network.net_propagation import (
-    net_propagate_attributes,
-    uniform_null,
-    parametric_null,
-    vertex_permutation_null,
-    edge_permutation_null,
-    NULL_GENERATORS,
-    network_propagation_with_null,
-)
+import pytest
+
 from napistu.network.constants import (
     NAPISTU_GRAPH_VERTICES,
     NULL_STRATEGIES,
+)
+from napistu.network.net_propagation import (
+    NULL_GENERATORS,
+    edge_permutation_null,
+    net_propagate_attributes,
+    network_propagation_with_null,
+    parametric_null,
+    uniform_null,
+    vertex_permutation_null,
 )
 
 

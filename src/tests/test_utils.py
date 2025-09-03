@@ -17,8 +17,8 @@ from pytest import fixture
 from testcontainers.core.container import DockerContainer
 
 from napistu import utils
-from napistu.utils import drop_extra_cols
 from napistu.network.constants import DISTANCES
+from napistu.utils import drop_extra_cols
 
 
 @fixture(scope="session")

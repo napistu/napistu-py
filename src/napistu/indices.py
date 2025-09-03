@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import copy
+import datetime
 import os
 import re
-import datetime
 import warnings
 from os import PathLike
 from typing import Iterable, Optional
@@ -13,11 +13,11 @@ with warnings.catch_warnings():
     from fs import open_fs
 import pandas as pd
 
-from napistu.utils import path_exists
 from napistu.constants import (
     EXPECTED_PW_INDEX_COLUMNS,
     SOURCE_SPEC,
 )
+from napistu.utils import path_exists
 
 
 class PWIndex:

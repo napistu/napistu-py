@@ -5,22 +5,18 @@ import os
 import pandas as pd
 import pytest
 
-from napistu import consensus
-from napistu import identifiers
-from napistu import indices
-from napistu import source
-from napistu import sbml_dfs_core
-from napistu.ingestion import sbml
-from napistu.modify import pathwayannot
+from napistu import consensus, identifiers, indices, sbml_dfs_core, source
 from napistu.constants import (
+    BQB,
+    IDENTIFIERS,
     SBML_DFS,
     SBML_DFS_METADATA,
     SBML_DFS_SCHEMA,
     SCHEMA_DEFS,
-    IDENTIFIERS,
-    BQB,
     SOURCE_SPEC,
 )
+from napistu.ingestion import sbml
+from napistu.modify import pathwayannot
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")

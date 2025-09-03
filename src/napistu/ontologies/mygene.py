@@ -1,19 +1,19 @@
-import logging
-from typing import Dict, List, Set, Union
-from types import GeneratorType
 import itertools
+import logging
+from types import GeneratorType
+from typing import Dict, List, Set, Union
 
 import mygene
 import pandas as pd
 
 from napistu.constants import ONTOLOGIES
 from napistu.ontologies.constants import (
+    INTERCONVERTIBLE_GENIC_ONTOLOGIES,
+    MYGENE_DEFAULT_QUERIES,
     MYGENE_DEFS,
+    MYGENE_QUERY_DEFS_LIST,
     NAPISTU_FROM_MYGENE_FIELDS,
     NAPISTU_TO_MYGENE_FIELDS,
-    INTERCONVERTIBLE_GENIC_ONTOLOGIES,
-    MYGENE_QUERY_DEFS_LIST,
-    MYGENE_DEFAULT_QUERIES,
     SPECIES_TO_TAXID,
 )
 

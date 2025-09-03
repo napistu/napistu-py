@@ -3,10 +3,11 @@ from __future__ import annotations
 import os
 
 import pandas as pd
+
 from napistu import sbml_dfs_core
+from napistu.constants import SBML_DFS
 from napistu.ingestion import sbml
 from napistu.modify import curation
-from napistu.constants import SBML_DFS
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 sbml_path = os.path.join(test_path, "test_data", "R-HSA-1237044.sbml")

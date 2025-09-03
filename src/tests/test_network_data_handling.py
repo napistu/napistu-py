@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import pytest
-
 import igraph as ig
 import pandas as pd
+import pytest
 
 from napistu.network import data_handling, net_create
 from napistu.network.constants import GRAPH_WIRING_APPROACHES

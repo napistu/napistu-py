@@ -1,10 +1,11 @@
 import logging
+from typing import Dict, Optional
+
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-from typing import Dict, Optional
 
-from napistu.ontologies.constants import MIRBASE_TABLES, MIRBASE_TABLE_SPECS
+from napistu.ontologies.constants import MIRBASE_TABLE_SPECS, MIRBASE_TABLES
 
 logger = logging.getLogger(__name__)
 

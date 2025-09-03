@@ -2,16 +2,16 @@
 Documentation components for the Napistu MCP server.
 """
 
-from typing import Dict, Any
 import logging
+from typing import Any, Dict
 
 from fastmcp import FastMCP
 
 from napistu.mcp import documentation_utils
 from napistu.mcp import utils as mcp_utils
 from napistu.mcp.component_base import ComponentState, MCPComponent
-from napistu.mcp.semantic_search import SemanticSearch
 from napistu.mcp.constants import DOCUMENTATION, READMES, REPOS_WITH_ISSUES, WIKI_PAGES
+from napistu.mcp.semantic_search import SemanticSearch
 
 logger = logging.getLogger(__name__)
 

@@ -1,22 +1,22 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, List, Union, Set, Dict
+from typing import Dict, List, Optional, Set, Union
 
 import anndata
-import pandas as pd
 import mudata
 import numpy as np
+import pandas as pd
 from pydantic import BaseModel, Field, RootModel
 
-from napistu.matching import species
 from napistu.constants import ONTOLOGIES_LIST
+from napistu.matching import species
 from napistu.scverse.constants import (
     ADATA,
-    ADATA_DICTLIKE_ATTRS,
-    ADATA_IDENTITY_ATTRS,
-    ADATA_FEATURELEVEL_ATTRS,
     ADATA_ARRAY_ATTRS,
+    ADATA_DICTLIKE_ATTRS,
+    ADATA_FEATURELEVEL_ATTRS,
+    ADATA_IDENTITY_ATTRS,
     SCVERSE_DEFS,
     VALID_MUDATA_LEVELS,
 )

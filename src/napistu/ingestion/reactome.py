@@ -15,12 +15,8 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
     from fs import open_fs
 
-from napistu import indices
-from napistu import sbml_dfs_core
-from napistu import utils
-from napistu.source import Source
+from napistu import indices, sbml_dfs_core, utils
 from napistu.consensus import construct_consensus_model, construct_sbml_dfs_dict
-from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.constants import (
     EXPECTED_PW_INDEX_COLUMNS,
     SOURCE_SPEC,
@@ -32,6 +28,8 @@ from napistu.ingestion.constants import (
     REACTOME_PATHWAYS_URL,
     REACTOME_SMBL_URL,
 )
+from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
+from napistu.source import Source
 
 logger = logging.getLogger(__name__)
 

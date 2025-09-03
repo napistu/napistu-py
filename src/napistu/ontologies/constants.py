@@ -1,7 +1,7 @@
 import logging
-
-from typing import Dict
 from types import SimpleNamespace
+from typing import Dict
+
 from napistu.constants import ONTOLOGIES
 
 logger = logging.getLogger(__name__)

@@ -11,8 +11,6 @@ import numpy as np
 import pandas as pd
 
 from napistu import sbml_dfs_core
-from napistu.network import ng_utils
-from napistu.network import paths
 from napistu.constants import (
     MINI_SBO_NAME_TO_POLARITY,
     MINI_SBO_TO_NAME,
@@ -20,6 +18,7 @@ from napistu.constants import (
     ONTOLOGIES,
     SBML_DFS,
 )
+from napistu.network import ng_utils, paths
 from napistu.network.constants import (
     DISTANCES,
     GRAPH_RELATIONSHIPS,

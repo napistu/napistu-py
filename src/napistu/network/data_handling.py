@@ -1,16 +1,14 @@
 import logging
 import re
-from typing import Union, List, Optional, Callable, Dict
+from typing import Callable, Dict, List, Optional, Union
 
 import pandas as pd
 
 from napistu import sbml_dfs_core
-from napistu.network import ng_utils
-from napistu.network import net_create
+from napistu.constants import ENTITIES_W_DATA, SBML_DFS
+from napistu.network import net_create, ng_utils
+from napistu.network.constants import DEFAULT_WT_TRANS, NAPISTU_GRAPH, WEIGHTING_SPEC
 from napistu.network.ng_core import NapistuGraph
-
-from napistu.constants import SBML_DFS, ENTITIES_W_DATA
-from napistu.network.constants import NAPISTU_GRAPH, DEFAULT_WT_TRANS, WEIGHTING_SPEC
 
 logger = logging.getLogger(__name__)
 

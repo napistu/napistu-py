@@ -1,7 +1,7 @@
 import pytest
 
-from napistu.ontologies.mygene import create_python_mapping_tables
 from napistu.ontologies.constants import INTERCONVERTIBLE_GENIC_ONTOLOGIES
+from napistu.ontologies.mygene import create_python_mapping_tables
 
 
 @pytest.skip_on_timeout(5)

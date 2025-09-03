@@ -3,28 +3,29 @@ MCP (Model Context Protocol) Server CLI for Napistu.
 """
 
 import asyncio
-import click
-import click_logging
 import logging
 
+import click
+import click_logging
+
 import napistu
-from napistu.mcp.server import start_mcp_server
 from napistu.mcp.client import (
     check_server_health,
-    print_health_status,
     list_server_resources,
+    print_health_status,
     read_server_resource,
     search_component,
 )
 from napistu.mcp.config import (
-    validate_server_config_flags,
-    validate_client_config_flags,
-    server_config_options,
     client_config_options,
-    local_server_config,
     local_client_config,
+    local_server_config,
     production_client_config,
+    server_config_options,
+    validate_client_config_flags,
+    validate_server_config_flags,
 )
+from napistu.mcp.server import start_mcp_server
 
 logger = logging.getLogger(napistu.__name__)
 click_logging.basic_config(logger)

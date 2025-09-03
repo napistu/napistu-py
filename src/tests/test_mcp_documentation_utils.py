@@ -1,6 +1,7 @@
 import pytest
-from napistu.mcp.documentation_utils import load_readme_content, fetch_wiki_page
+
 from napistu.mcp.constants import READMES, WIKI_PAGES
+from napistu.mcp.documentation_utils import fetch_wiki_page, load_readme_content
 
 
 @pytest.mark.asyncio

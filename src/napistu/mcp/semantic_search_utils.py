@@ -6,9 +6,9 @@ on any specific class state. They can be easily tested, reused, and maintained
 independently of the SemanticSearch class.
 """
 
-import re
 import logging
-from typing import List, Dict, Any, Tuple
+import re
+from typing import Any, Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 

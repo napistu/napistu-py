@@ -11,8 +11,7 @@ with warnings.catch_warnings():
 
 from napistu import utils
 from napistu.constants import ONTOLOGIES
-from napistu.ingestion.constants import PROTEINATLAS_SUBCELL_LOC_URL, PROTEINATLAS_DEFS
-
+from napistu.ingestion.constants import PROTEINATLAS_DEFS, PROTEINATLAS_SUBCELL_LOC_URL
 
 logger = logging.getLogger(__name__)
 

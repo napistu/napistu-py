@@ -4,9 +4,10 @@ import os
 
 import numpy as np
 import pandas as pd
+import pytest
+
 from napistu import identifiers
 from napistu.constants import IDENTIFIERS
-import pytest
 
 # logger = logging.getLogger()
 # logger.setLevel("DEBUG")

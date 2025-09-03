@@ -1,11 +1,11 @@
 """Tests for network utility functions."""
 
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pytest
 
-from napistu.network import ng_utils
 from napistu.constants import SBML_DFS
+from napistu.network import ng_utils
 from napistu.network.constants import DEFAULT_WT_TRANS, WEIGHTING_SPEC
 
 

@@ -1,13 +1,11 @@
 import pandas as pd
 import pytest
 
-from napistu.network import ng_utils
-from napistu.network import neighborhoods
-
 from napistu.constants import SBML_DFS
+from napistu.network import neighborhoods, ng_utils
 from napistu.network.constants import (
-    NAPISTU_GRAPH_VERTICES,
     NAPISTU_GRAPH_NODE_TYPES,
+    NAPISTU_GRAPH_VERTICES,
     NEIGHBORHOOD_DICT_KEYS,
     NEIGHBORHOOD_NETWORK_TYPES,
 )

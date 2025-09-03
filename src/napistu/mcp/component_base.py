@@ -2,9 +2,9 @@
 Base classes for MCP server components.
 """
 
-from abc import ABC, abstractmethod
-from typing import Dict, Any
 import logging
+from abc import ABC, abstractmethod
+from typing import Any, Dict
 
 from fastmcp import FastMCP
 

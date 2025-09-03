@@ -1,13 +1,12 @@
 import pandas as pd
 
-from napistu.network import net_create
-from napistu.network import precompute
 from napistu.matching.interactions import (
     edgelist_to_pathway_species,
     edgelist_to_scids,
     filter_to_direct_mechanistic_interactions,
     filter_to_indirect_mechanistic_interactions,
 )
+from napistu.network import net_create, precompute
 from napistu.network.constants import NAPISTU_GRAPH_EDGES
 
 

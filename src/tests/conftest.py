@@ -7,17 +7,9 @@ import threading
 
 import pandas as pd
 import pytest
-from pytest import fixture
-from pytest import skip
+from pytest import fixture, skip
 
-from napistu import consensus
-from napistu import indices
-from napistu.identifiers import Identifiers
-from napistu.sbml_dfs_core import SBML_dfs
-from napistu.source import Source
-from napistu.ingestion.sbml import SBML
-from napistu.network.net_create import process_napistu_graph
-from napistu.network.precompute import precompute_distances
+from napistu import consensus, indices
 from napistu.constants import (
     EXPECTED_PW_INDEX_COLUMNS,
     MINI_SBO_FROM_NAME,
@@ -25,7 +17,13 @@ from napistu.constants import (
     SBOTERM_NAMES,
     SOURCE_SPEC,
 )
+from napistu.identifiers import Identifiers
+from napistu.ingestion.sbml import SBML
 from napistu.network.constants import NAPISTU_WEIGHTING_STRATEGIES
+from napistu.network.net_create import process_napistu_graph
+from napistu.network.precompute import precompute_distances
+from napistu.sbml_dfs_core import SBML_dfs
+from napistu.source import Source
 
 
 @fixture

@@ -7,10 +7,7 @@ from typing import Any
 
 import pandas as pd
 
-from napistu import sbml_dfs_core
-from napistu import utils
-from napistu.network.ng_core import NapistuGraph
-from napistu.network.ng_utils import get_minimal_sources_edges
+from napistu import sbml_dfs_core, utils
 from napistu.constants import (
     MINI_SBO_NAME_TO_POLARITY,
     MINI_SBO_TO_NAME,
@@ -24,6 +21,8 @@ from napistu.network.constants import (
     NET_POLARITY,
     VALID_LINK_POLARITIES,
 )
+from napistu.network.ng_core import NapistuGraph
+from napistu.network.ng_utils import get_minimal_sources_edges
 
 logger = logging.getLogger(__name__)
 

@@ -2,19 +2,19 @@
 Tests for MCP configuration validation, presets, and Pydantic models.
 """
 
+import click
 import pytest
 from pydantic import ValidationError
-import click
 
 from napistu.mcp.config import (
-    MCPServerConfig,
     MCPClientConfig,
-    local_server_config,
-    production_server_config,
+    MCPServerConfig,
     local_client_config,
+    local_server_config,
     production_client_config,
-    validate_server_config_flags,
+    production_server_config,
     validate_client_config_flags,
+    validate_server_config_flags,
 )
 from napistu.mcp.constants import MCP_DEFAULTS
 

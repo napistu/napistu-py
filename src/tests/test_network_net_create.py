@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import pandas.testing as pdt
 
-from napistu.network import net_create
-from napistu.network import net_create_utils
+from napistu.network import net_create, net_create_utils
 from napistu.network.constants import (
     DROP_REACTIONS_WHEN,
     GRAPH_WIRING_APPROACHES,

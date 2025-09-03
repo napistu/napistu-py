@@ -8,29 +8,27 @@ from typing import Optional
 import igraph as ig
 import pandas as pd
 
-from napistu import sbml_dfs_core
-from napistu import utils
-from napistu.network import ng_utils
-from napistu.network import net_create_utils
-from napistu.network.ng_core import NapistuGraph
+from napistu import sbml_dfs_core, utils
 from napistu.constants import (
     MINI_SBO_FROM_NAME,
-    SBO_MODIFIER_NAMES,
-    SBOTERM_NAMES,
     SBML_DFS,
     SBML_DFS_METHOD_DEFS,
+    SBO_MODIFIER_NAMES,
+    SBOTERM_NAMES,
 )
+from napistu.network import net_create_utils, ng_utils
 from napistu.network.constants import (
+    DROP_REACTIONS_WHEN,
     GRAPH_WIRING_APPROACHES,
-    NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_EDGE_DIRECTIONS,
+    NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS,
     NAPISTU_GRAPH_NODE_TYPES,
     NAPISTU_GRAPH_VERTICES,
     NAPISTU_WEIGHTING_STRATEGIES,
     VALID_GRAPH_WIRING_APPROACHES,
-    DROP_REACTIONS_WHEN,
 )
+from napistu.network.ng_core import NapistuGraph
 
 logger = logging.getLogger(__name__)
 

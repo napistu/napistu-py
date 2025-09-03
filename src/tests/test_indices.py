@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import os
 import datetime
+import os
 
 import pandas as pd
 import pytest
+
 from napistu import indices
 from napistu.constants import SOURCE_SPEC
 

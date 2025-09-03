@@ -1,16 +1,15 @@
 from __future__ import annotations
 
+import pandas as pd
 import pytest
 
-import pandas as pd
-
-from napistu.network import net_create_utils
 from napistu.constants import (
     MINI_SBO_FROM_NAME,
     SBML_DFS,
     SBOTERM_NAMES,
     VALID_SBO_TERM_NAMES,
 )
+from napistu.network import net_create_utils
 from napistu.network.constants import (
     DROP_REACTIONS_WHEN,
     NAPISTU_GRAPH_EDGES,

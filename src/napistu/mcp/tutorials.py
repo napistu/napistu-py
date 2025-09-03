@@ -2,14 +2,14 @@
 Tutorial components for the Napistu MCP server.
 """
 
-from typing import Dict, List, Any
 import logging
+from typing import Any, Dict, List
 
 from fastmcp import FastMCP
 
-from napistu.mcp.component_base import ComponentState, MCPComponent
 from napistu.mcp import tutorials_utils
 from napistu.mcp import utils as mcp_utils
+from napistu.mcp.component_base import ComponentState, MCPComponent
 from napistu.mcp.constants import TUTORIAL_URLS
 from napistu.mcp.semantic_search import SemanticSearch
 

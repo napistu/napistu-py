@@ -18,15 +18,15 @@ import logging
 import os
 import sys
 from functools import lru_cache
-from typing import Any, Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
-    import rpy2.robjects.conversion
+    import pyarrow
     import rpy2.robjects
+    import rpy2.robjects.conversion
+    import rpy2.robjects.ListVector
     import rpy2.robjects.packages
     import rpy2.robjects.pandas2ri
-    import rpy2.robjects.ListVector
-    import pyarrow
     import rpy2_arrow.arrow
 
 logger = logging.getLogger(__name__)
@@ -116,8 +116,8 @@ def get_rpy2_extended_modules() -> tuple[
             "For example: `pip install napistu[rpy2]`"
         )
     try:
-        from rpy2.robjects import pandas2ri
         import pyarrow
+        from rpy2.robjects import pandas2ri
 
         # loading rpy2_arrow checks whether the R arrow package is found
         # this is the first time when a non-standard R package is loaded
@@ -127,9 +127,9 @@ def get_rpy2_extended_modules() -> tuple[
         except Exception as e:
             rsession_info()
             raise e
-        import rpy2.robjects.conversion  # noqa: F401 - needed for R conversion setup
         import rpy2.rinterface  # noqa: F401 - needed for R interface initialization
         import rpy2.robjects as ro
+        import rpy2.robjects.conversion  # noqa: F401 - needed for R conversion setup
         from rpy2.robjects import ListVector
 
         return pandas2ri, pyarrow, pyra, ro, ListVector

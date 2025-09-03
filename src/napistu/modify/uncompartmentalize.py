@@ -3,15 +3,16 @@ from __future__ import annotations
 import logging
 
 import pandas as pd
-from napistu import consensus
-from napistu import identifiers
-from napistu import indices
-from napistu import sbml_dfs_core
-from napistu import sbml_dfs_utils
-from napistu import source
 
-from napistu.constants import SBML_DFS
-from napistu.constants import SOURCE_SPEC
+from napistu import (
+    consensus,
+    identifiers,
+    indices,
+    sbml_dfs_core,
+    sbml_dfs_utils,
+    source,
+)
+from napistu.constants import SBML_DFS, SOURCE_SPEC
 
 logger = logging.getLogger(__name__)
 

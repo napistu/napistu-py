@@ -5,11 +5,11 @@ import logging
 import re
 import warnings
 from typing import (
+    TYPE_CHECKING,
     Any,
     Iterable,
     Mapping,
     MutableMapping,
-    TYPE_CHECKING,
     Optional,
     Union,
 )
@@ -19,10 +19,7 @@ with warnings.catch_warnings():
     from fs import open_fs
 import pandas as pd
 
-from napistu import identifiers
-from napistu import sbml_dfs_utils
-from napistu import source
-from napistu import utils
+from napistu import identifiers, sbml_dfs_utils, source, utils
 from napistu.ontologies import id_tables
 
 if TYPE_CHECKING:
@@ -31,8 +28,8 @@ from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS_LOOSE,
     BQB_PRIORITIES,
-    ENTITIES_W_DATA,
     ENTITIES_TO_ENTITY_DATA,
+    ENTITIES_W_DATA,
     IDENTIFIERS,
     MINI_SBO_FROM_NAME,
     MINI_SBO_TO_NAME,

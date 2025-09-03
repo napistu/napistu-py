@@ -12,13 +12,9 @@ import pandas as pd
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
     from fs import open_fs
-from pydantic import field_validator, RootModel
+from pydantic import RootModel, field_validator
 
-from napistu import consensus
-from napistu import identifiers
-from napistu import sbml_dfs_utils
-from napistu import source
-from napistu import utils
+from napistu import consensus, identifiers, sbml_dfs_utils, source, utils
 from napistu.constants import (
     BQB,
     ONTOLOGIES,
@@ -27,11 +23,11 @@ from napistu.constants import (
     SCHEMA_DEFS,
 )
 from napistu.ingestion.constants import (
-    SBML_DEFS,
-    COMPARTMENTS_GO_TERMS,
     COMPARTMENT_ALIASES,
-    VALID_COMPARTMENTS,
+    COMPARTMENTS_GO_TERMS,
     GENERIC_COMPARTMENT,
+    SBML_DEFS,
+    VALID_COMPARTMENTS,
 )
 
 logger = logging.getLogger(__name__)

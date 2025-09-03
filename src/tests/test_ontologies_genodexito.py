@@ -1,12 +1,12 @@
 import pandas as pd
 import pytest
 
-from napistu.ontologies.genodexito import Genodexito
 from napistu.ontologies.constants import (
     GENODEXITO_DEFS,
     INTERCONVERTIBLE_GENIC_ONTOLOGIES,
     PROTEIN_ONTOLOGIES,
 )
+from napistu.ontologies.genodexito import Genodexito
 
 
 @pytest.skip_on_timeout(5)

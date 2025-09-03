@@ -4,14 +4,15 @@ Tests to validate MCP tool and resource naming conventions.
 
 import re
 from typing import List, Tuple
+
 from fastmcp import FastMCP
 
 from napistu.mcp import (
-    documentation,
     codebase,
-    tutorials,
+    documentation,
     execution,
     health,
+    tutorials,
 )
 
 # Regex patterns for validation

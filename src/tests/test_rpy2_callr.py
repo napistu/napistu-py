@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import sys
 from unittest.mock import Mock, patch
+
 import pandas as pd
 import pytest
-
 
 # Mock all rpy2 dependencies before any imports to prevent ImportErrors
 sys.modules["rpy2"] = Mock()

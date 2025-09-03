@@ -10,23 +10,18 @@ with warnings.catch_warnings():
     from fs import open_fs
 import pandas as pd
 
-from napistu import identifiers
-from napistu import sbml_dfs_utils
-from napistu import utils
-from napistu.ingestion import napistu_edgelist
-from napistu.sbml_dfs_core import SBML_dfs
-from napistu.source import Source
-from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
+from napistu import identifiers, sbml_dfs_utils, utils
 from napistu.constants import (
     BQB,
-    SBOTERM_NAMES,
     IDENTIFIERS,
     ONTOLOGIES,
     SBML_DFS,
+    SBOTERM_NAMES,
 )
+from napistu.ingestion import napistu_edgelist
 from napistu.ingestion.constants import (
-    DATA_SOURCES,
     DATA_SOURCE_DESCRIPTIONS,
+    DATA_SOURCES,
     INTERACTION_EDGELIST_DEFS,
     STRING_PROTEIN_ID,
     STRING_PROTEIN_ID_RAW,
@@ -36,6 +31,9 @@ from napistu.ingestion.constants import (
     STRING_URL_EXPRESSIONS,
     STRING_VERSION,
 )
+from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
+from napistu.sbml_dfs_core import SBML_dfs
+from napistu.source import Source
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,8 @@
 import logging
 import time
-import requests
 from typing import Dict, List, Tuple
+
+import requests
 
 from napistu.ontologies.constants import (
     PUBCHEM_DEFS,

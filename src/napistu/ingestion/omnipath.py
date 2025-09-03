@@ -5,33 +5,26 @@ from typing import Any, Dict, List, Tuple, Union
 
 import pandas as pd
 
+from napistu import sbml_dfs_core, sbml_dfs_utils
+from napistu.constants import (
+    BQB,
+    IDENTIFIERS,
+    ONTOLOGIES,
+    ONTOLOGIES_LIST,  # noqa: F401
+    SBML_DFS,
+    SBOTERM_NAMES,
+)
+from napistu.identifiers import Identifiers
+
 # import lazy-loaded omnipath and interactions
 from napistu.ingestion._lazy import (
     get_omnipath,
     get_omnipath_interactions,
     require_omnipath,
 )
-
-from napistu import sbml_dfs_core
-from napistu import sbml_dfs_utils
-from napistu.identifiers import Identifiers
-from napistu.ontologies import renaming
-from napistu.source import Source
-from napistu.ontologies.genodexito import Genodexito
-from napistu.ontologies.pubchem import map_pubchem_ids
-from napistu.ontologies.mirbase import load_mirbase_xrefs
-from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
-from napistu.constants import (
-    BQB,
-    SBML_DFS,
-    IDENTIFIERS,
-    ONTOLOGIES,
-    ONTOLOGIES_LIST,  # noqa: F401
-    SBOTERM_NAMES,
-)
 from napistu.ingestion.constants import (
-    DATA_SOURCES,
     DATA_SOURCE_DESCRIPTIONS,
+    DATA_SOURCES,
     INTERACTION_EDGELIST_DEFS,
     OMNIPATH_ANNOTATIONS,
     OMNIPATH_COMPLEXES,
@@ -40,7 +33,13 @@ from napistu.ingestion.constants import (
     REACTOME_FI,
     VALID_OMNIPATH_SPECIES,
 )
-from napistu.ontologies.constants import GENODEXITO_DEFS, PUBCHEM_DEFS, MIRBASE_TABLES
+from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
+from napistu.ontologies import renaming
+from napistu.ontologies.constants import GENODEXITO_DEFS, MIRBASE_TABLES, PUBCHEM_DEFS
+from napistu.ontologies.genodexito import Genodexito
+from napistu.ontologies.mirbase import load_mirbase_xrefs
+from napistu.ontologies.pubchem import map_pubchem_ids
+from napistu.source import Source
 
 logger = logging.getLogger(__name__)
 

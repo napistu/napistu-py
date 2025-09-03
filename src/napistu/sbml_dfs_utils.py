@@ -2,30 +2,28 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Optional, Iterable
+from typing import Any, Iterable, Optional
 
 import numpy as np
 import pandas as pd
 
-from napistu import utils
-from napistu import identifiers
-
+from napistu import identifiers, utils
 from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS,
     BQB_DEFINING_ATTRS_LOOSE,
-    SBML_DFS,
-    SBML_DFS_SCHEMA,
-    SCHEMA_DEFS,
     IDENTIFIERS,
-    ONTOLOGIES,
     MINI_SBO_FROM_NAME,
     MINI_SBO_NAME_TO_POLARITY,
     MINI_SBO_TO_NAME,
+    ONTOLOGIES,
     POLARITY_TO_SYMBOL,
-    SBO_ROLES_DEFS,
+    SBML_DFS,
+    SBML_DFS_SCHEMA,
     SBO_NAME_TO_ROLE,
+    SBO_ROLES_DEFS,
     SBOTERM_NAMES,
+    SCHEMA_DEFS,
     VALID_SBO_TERM_NAMES,
     VALID_SBO_TERMS,
 )

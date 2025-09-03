@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-
-from napistu.constants import SBML_DFS, SBML_DFS_METHOD_DEFS
-from napistu.constants import SBOTERM_NAMES
+from napistu.constants import SBML_DFS, SBML_DFS_METHOD_DEFS, SBOTERM_NAMES
 
 NAPISTU_GRAPH = SimpleNamespace(VERTICES="vertices", EDGES="edges", METADATA="metadata")
 

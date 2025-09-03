@@ -1,12 +1,10 @@
 import copy
 import logging
-from typing import Union, List, Optional
+from typing import List, Optional, Union
 
 import pandas as pd
 
-from napistu import sbml_dfs_core
-from napistu import sbml_dfs_utils
-from napistu import utils
+from napistu import sbml_dfs_core, sbml_dfs_utils, utils
 from napistu.constants import SBML_DFS
 
 logger = logging.getLogger(__name__)
