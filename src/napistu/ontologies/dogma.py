@@ -1,19 +1,19 @@
 from __future__ import annotations
 
+import datetime
 import logging
 import pandas as pd
 
 from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
-from napistu import source
 from napistu import identifiers
 from napistu import utils
+from napistu.source import Source
 from napistu.ontologies.genodexito import Genodexito
+from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.constants import (
     BQB,
-    SBOTERM_NAMES,
     IDENTIFIERS,
-    MINI_SBO_FROM_NAME,
     ONTOLOGIES,
     SBML_DFS,
 )
@@ -24,12 +24,13 @@ from napistu.ontologies.constants import (
     NAME_ONTOLOGIES,
     PROTEIN_ONTOLOGIES,
 )
+from napistu.ingestion.constants import DATA_SOURCES, DATA_SOURCE_DESCRIPTIONS
 
 logger = logging.getLogger(__name__)
 
 
 def create_dogmatic_sbml_dfs(
-    species: str,
+    organismal_species: str | OrganismalSpeciesValidator,
     preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
     allow_fallback: bool = True,
     r_paths: str | None = None,
@@ -41,11 +42,12 @@ def create_dogmatic_sbml_dfs(
     reactions, as well as annotations linking proteins to genes, and
     creating nice labels for genes/proteins.
 
-    Args:
-        species (str):
-            An organismal species (e.g., Homo sapiens)
-        r_paths (str or None)
-            Optional, p]ath to an R packages directory
+    Parameters
+    ----------
+    organismal_species : str | OrganismalSpeciesValidator
+        An organismal species (e.g., Homo sapiens)
+    r_paths : str or None
+        Optional, p]ath to an R packages directory
 
     Returns:
         dogmatic_sbml_dfs (sbml.SBML_dfs)
@@ -53,8 +55,10 @@ def create_dogmatic_sbml_dfs(
             diverse identifiers
     """
 
+    organismal_species = OrganismalSpeciesValidator.ensure(organismal_species)
+
     dogmatic_mappings = _connect_dogmatic_mappings(
-        species, preferred_method, allow_fallback, r_paths
+        organismal_species.latin_name, preferred_method, allow_fallback, r_paths
     )
 
     logger.info("Creating inputs for sbml_dfs_from_edgelist()")
@@ -66,7 +70,15 @@ def create_dogmatic_sbml_dfs(
 
     # stub required but invariant variables
     compartments_df = sbml_dfs_utils.stub_compartments()
-    interaction_source = source.Source.empty()
+
+    model_source = Source.single_entry(
+        model=DATA_SOURCES.DOGMA,
+        pathway_id=DATA_SOURCES.DOGMA,
+        data_source=DATA_SOURCES.DOGMA,
+        organismal_species=organismal_species.latin_name,
+        name=DATA_SOURCE_DESCRIPTIONS[DATA_SOURCES.DOGMA],
+        date=datetime.date.today().strftime("%Y%m%d"),
+    )
 
     # interactions table. This is required to create the sbml_dfs but we'll drop the info later
     interaction_edgelist = species_df.rename(
@@ -76,20 +88,13 @@ def create_dogmatic_sbml_dfs(
         }
     )
     interaction_edgelist["downstream_name"] = interaction_edgelist["upstream_name"]
-    interaction_edgelist["upstream_compartment"] = "cellular_component"
-    interaction_edgelist["downstream_compartment"] = "cellular_component"
     interaction_edgelist["r_name"] = interaction_edgelist["upstream_name"]
-    interaction_edgelist["sbo_term"] = MINI_SBO_FROM_NAME["reactant"]
-    interaction_edgelist["r_isreversible"] = False
 
     dogmatic_sbml_dfs = sbml_dfs_core.sbml_dfs_from_edgelist(
         interaction_edgelist=interaction_edgelist,
         species_df=species_df,
         compartments_df=compartments_df,
-        interaction_source=interaction_source,
-        upstream_stoichiometry=-1,
-        downstream_stoichiometry=1,
-        downstream_sbo_name=SBOTERM_NAMES.PRODUCT,
+        model_source=model_source,
     )
 
     # remove all reactions except 1 (so it still passes sbml_dfs.validate())
@@ -100,7 +105,7 @@ def create_dogmatic_sbml_dfs(
 
 
 def _connect_dogmatic_mappings(
-    species: str,
+    organismal_species: str,
     preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
     allow_fallback: bool = True,
     r_paths: str | None = None,
@@ -110,11 +115,12 @@ def _connect_dogmatic_mappings(
 
     Merge all ontologies into greedy clusters based on shared associations to entrez ids
 
-    Args:
-        species (str):
-            An organismal species (e.g., Homo sapiens)
-        r_paths (str or None)
-            Optional, p]ath to an R packages directory
+    Parameters
+    ----------
+    organismal_species : str
+        An organismal species (e.g., Homo sapiens)
+    r_paths : str or None
+        Optional, p]ath to an R packages directory
 
     Returns:
         dict with:
@@ -124,7 +130,7 @@ def _connect_dogmatic_mappings(
     """
 
     genodexito = Genodexito(
-        species=species,
+        organismal_species=organismal_species,
         preferred_method=preferred_method,
         allow_fallback=allow_fallback,
         r_paths=r_paths,

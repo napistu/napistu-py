@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import os
 import warnings
-from typing import Iterable
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
@@ -76,7 +75,7 @@ def bigg_sbml_download(bg_pathway_root: str, overwrite: bool = False) -> None:
 
 def construct_bigg_consensus(
     pw_index_inp: str | indices.PWIndex,
-    organismal_species: str | Iterable[str] | None = None,
+    organismal_species: str | None = None,
 ) -> SBML_dfs:
     """Construct a BiGG SBML DFs pathway representation.
 
@@ -84,7 +83,7 @@ def construct_bigg_consensus(
     ----------
     pw_index_inp : str or indices.PWIndex
         PWIndex object or URI pointing to PWIndex
-    species : str or Iterable[str] or None, optional
+    organismal_species : str or None, optional
         One or more species to filter by, by default None (no filtering)
     outdir : str or None, optional
         Output directory used to cache results, by default None

@@ -4,6 +4,9 @@ from typing import Optional, Union, Set, Dict
 
 import pandas as pd
 
+from napistu import identifiers
+from napistu import utils
+from napistu.matching.species import match_features_to_wide_pathway_species
 from napistu.constants import SBML_DFS, ONTOLOGIES_LIST
 from napistu.matching.constants import (
     FEATURE_ID_VAR_DEFAULT,
@@ -12,15 +15,14 @@ from napistu.matching.constants import (
     BIND_DICT_OF_WIDE_RESULTS_STRATEGIES,
     BIND_DICT_OF_WIDE_RESULTS_STRATEGIES_LIST,
 )
-from napistu import identifiers, utils
-from napistu.matching.species import match_features_to_wide_pathway_species
-from napistu import sbml_dfs_core
+
+# Type annotations use string literals to avoid circular imports
 
 logger = logging.getLogger(__name__)
 
 
 def bind_wide_results(
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    sbml_dfs: "SBML_dfs",  # noqa: F821
     results_df: pd.DataFrame,
     results_name: str,
     ontologies: Optional[Union[Set[str], Dict[str, str]]] = None,
@@ -31,7 +33,7 @@ def bind_wide_results(
     keep_id_col: bool = True,
     verbose: bool = False,
     inplace: bool = True,
-) -> Optional[sbml_dfs_core.SBML_dfs]:
+) -> Optional["SBML_dfs"]:  # noqa: F821
     """
     Binds wide results to a sbml_dfs object.
 
@@ -39,7 +41,7 @@ def bind_wide_results(
 
     Parameters
     ----------
-    sbml_dfs : sbml_dfs_core.SBML_dfs
+    sbml_dfs : "SBML_dfs"  # noqa: F821
         The sbml_dfs object to bind the results to.
     results_df : pd.DataFrame
         The table containing the results to bind.
@@ -67,7 +69,7 @@ def bind_wide_results(
 
     Returns
     -------
-    sbml_dfs : sbml_dfs_core.SBML_dfs
+    sbml_dfs : "SBML_dfs"  # noqa: F821
         The sbml_dfs object with the results bound.
     """
 
@@ -104,7 +106,7 @@ def bind_wide_results(
 
 
 def bind_dict_of_wide_results(
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    sbml_dfs: "SBML_dfs",  # noqa: F821
     results_dict: dict,
     results_name: str,
     strategy: str = BIND_DICT_OF_WIDE_RESULTS_STRATEGIES.CONTATENATE,
@@ -123,7 +125,7 @@ def bind_dict_of_wide_results(
 
     Parameters
     ----------
-    sbml_dfs : SBML_dfs
+    sbml_dfs : "SBML_dfs"  # noqa: F821
         The SBML_dfs object to bind the results to.
     results_dict : dict
         A dictionary of results dataframes with modality names as keys.
@@ -150,7 +152,7 @@ def bind_dict_of_wide_results(
 
     Returns
     -------
-    Optional[SBML_dfs]
+    Optional["SBML_dfs"]  # noqa: F821
         If inplace=True, returns None. Otherwise returns the modified copy of sbml_dfs.
     """
 

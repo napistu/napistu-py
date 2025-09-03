@@ -58,7 +58,7 @@ def download_reactome_fi(target_uri: str, url: str = REACTOME_FI_URL) -> None:
 
     file_ext = url.split(".")[-1]
     target_filename = url.split("/")[-1].split(f".{file_ext}")[0]
-    logger.info("Start downloading proteinatlas %s to %s", url, target_uri)
+    logger.info("Start downloading Reactome FI %s to %s", url, target_uri)
     # target_filename is the name of the file in the zip file which will be renamed to target_uri
     utils.download_wget(url, target_uri, target_filename=target_filename)
 
@@ -415,7 +415,7 @@ def _get_human_symbol_to_entrez_mapping(
     """
 
     genodexito = Genodexito(
-        species="Homo sapiens",
+        organismal_species="Homo sapiens",
         preferred_method=preferred_method,
         allow_fallback=allow_fallback,
     )
