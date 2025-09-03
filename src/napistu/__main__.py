@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 import pickle
 import warnings
@@ -11,16 +10,14 @@ from typing import Sequence
 import click
 import igraph as ig
 import pandas as pd
-from rich.console import Console
-from rich.logging import RichHandler
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
     from fs import open_fs
 
-import napistu
 from napistu import consensus as napistu_consensus
 from napistu import utils
+from napistu._cli import overwrite_option, setup_logging, verbosity_option
 from napistu.constants import ONTOLOGIES, RESOLVE_MATCHES_AGGREGATORS
 from napistu.context import filtering
 from napistu.ingestion import (
@@ -56,60 +53,8 @@ from napistu.ontologies import dogma
 from napistu.ontologies.genodexito import Genodexito
 from napistu.sbml_dfs_core import SBML_dfs
 
-# Minimal early logging setup - just silence the most problematic loggers
-logging.getLogger().setLevel(logging.CRITICAL + 1)  # Keep this early
-logging.getLogger("urllib3").setLevel(logging.CRITICAL)  # Keep this early
-logging.getLogger("requests").setLevel(logging.CRITICAL)
-
-# now, configure the advanced logger
-logger = logging.getLogger(napistu.__name__)
-logger.setLevel(logging.INFO)
-logger.propagate = False
-
-# Rich console and handler setup
-console = Console(width=120)
-handler = RichHandler(
-    console=console,
-    rich_tracebacks=True,
-    show_time=True,
-    show_level=True,
-    show_path=True,
-    markup=True,
-    log_time_format="[%m/%d %H:%M]",
-)
-
-formatter = logging.Formatter("%(message)s")
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-
-
-def verbosity_option(f):
-    """Decorator that adds --verbosity option for napistu logging"""
-
-    def configure_logging_callback(ctx, param, value):
-        level_map = {
-            "DEBUG": logging.DEBUG,
-            "INFO": logging.INFO,
-            "WARNING": logging.WARNING,
-            "ERROR": logging.ERROR,
-            "CRITICAL": logging.CRITICAL,
-        }
-        level = level_map.get(value.upper(), logging.INFO)
-        logger.setLevel(level)
-        return value
-
-    return click.option(
-        "--verbosity",
-        "-v",
-        type=click.Choice(
-            ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False
-        ),
-        default="INFO",
-        callback=configure_logging_callback,
-        expose_value=False,
-        is_eager=True,
-        help="Set the logging verbosity level for napistu.",
-    )(f)
+# Set up logging using shared configuration
+logger, console = setup_logging()
 
 
 @click.group()
@@ -204,9 +149,7 @@ def ingest_string_aliases(organismal_species: str, target_uri: str):
     default=REACTOME_FI_URL,
     help="URL to download the Reactome FI data from. If not provided, uses default URL.",
 )
-@click.option(
-    "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
-)
+@overwrite_option
 @verbosity_option
 def ingest_reactome_fi(target_uri: str, url: str, overwrite: bool):
     """Download Reactome Functional Interactions (FI) dataset as a TSV file."""
@@ -220,9 +163,7 @@ def ingest_reactome_fi(target_uri: str, url: str, overwrite: bool):
 @ingestion.command(name="intact")
 @click.argument("output_dir_path", type=str)
 @click.argument("organismal_species", type=str)
-@click.option(
-    "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
-)
+@overwrite_option
 @verbosity_option
 def ingest_intact(output_dir_path: str, organismal_species: str, overwrite: bool):
     """Download IntAct PSI-MI XML files for a specific species.
@@ -253,9 +194,7 @@ def integrate():
 @click.argument("pw_index_uri", type=str)
 @click.argument("organismal_species", type=str)
 @click.argument("output_model_uri", type=str)
-@click.option(
-    "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
-)
+@overwrite_option
 @click.option(
     "--permissive",
     "-p",
@@ -299,9 +238,7 @@ def integrate_reactome(
 @click.argument("pw_index_uri", type=str)
 @click.argument("organismal_species", type=str)
 @click.argument("output_model_uri", type=str)
-@click.option(
-    "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
-)
+@overwrite_option
 @verbosity_option
 def integrate_bigg(
     pw_index_uri: str,
@@ -320,9 +257,7 @@ def integrate_bigg(
 @integrate.command(name="trrust")
 @click.argument("trrust_csv_uri", type=str)
 @click.argument("output_model_uri", type=str)
-@click.option(
-    "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
-)
+@overwrite_option
 @verbosity_option
 def integrate_trrust(
     trrust_csv_uri: str,
@@ -353,9 +288,7 @@ def integrate_trrust(
     default=False,
     help="Allow fallback to other Genodexito methods if preferred method fails.",
 )
-@click.option(
-    "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
-)
+@overwrite_option
 @verbosity_option
 def integrate_reactome_fi(
     reactome_fi_uri: str,
@@ -384,9 +317,7 @@ def integrate_reactome_fi(
 @click.argument("string_aliases_uri", type=str)
 @click.argument("organismal_species", type=str)
 @click.argument("output_model_uri", type=str)
-@click.option(
-    "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
-)
+@overwrite_option
 @verbosity_option
 def integrate_string_db(
     string_db_uri: str,
@@ -410,9 +341,7 @@ def integrate_string_db(
 @click.argument("intact_xml_dir", type=str)
 @click.argument("organismal_species", type=str)
 @click.argument("output_model_uri", type=str)
-@click.option(
-    "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
-)
+@overwrite_option
 @verbosity_option
 def integrate_intact(
     intact_xml_dir: str,
@@ -425,6 +354,7 @@ def integrate_intact(
     INTACT_XML_DIR: Directory containing the IntAct PSI-MI XML files
     ORGANISMAL_SPECIES: The species name (e.g., "Homo sapiens") to work with
     OUTPUT_MODEL_URI: Output URI for the SBML_dfs model
+    OVERWRITE: Overwrite existing files?
     """
     if overwrite is False and utils.path_exists(output_model_uri):
         raise FileExistsError("'output_model_uri' exists but overwrite set False.")
@@ -466,9 +396,7 @@ def integrate_intact(
     default=True,
     help="Allow fallback to other Genodexito methods if preferred method fails (default: True).",
 )
-@click.option(
-    "--overwrite", "-o", is_flag=True, default=False, help="Overwrite existing files?"
-)
+@overwrite_option
 @verbosity_option
 def integrate_omnipath(
     organismal_species: str,
@@ -481,6 +409,9 @@ def integrate_omnipath(
 
     ORGANISMAL_SPECIES: The species name (e.g., "Homo sapiens") to work with
     OUTPUT_MODEL_URI: Output URI for the SBML_dfs model
+    PREFERRED_METHOD: Preferred Genodexito method for identifier mapping (default: bioconductor).
+    ALLOW_FALLBACK: Allow fallback to other Genodexito methods if preferred method fails (default: True).
+    OVERWRITE: Overwrite existing files?
     """
     if overwrite is False and utils.path_exists(output_model_uri):
         raise FileExistsError("'output_model_uri' exists but overwrite set False.")
