@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import os
-
 import pandas.testing as pdt
 
-from napistu import sbml_dfs_core
-from napistu.ingestion import sbml
 from napistu.network import net_create
 from napistu.network import net_create_utils
 from napistu.network.constants import (
@@ -13,15 +9,8 @@ from napistu.network.constants import (
     GRAPH_WIRING_APPROACHES,
 )
 
-test_path = os.path.abspath(os.path.join(__file__, os.pardir))
-test_data = os.path.join(test_path, "test_data")
 
-sbml_path = os.path.join(test_data, "R-HSA-1237044.sbml")
-sbml_model = sbml.SBML(sbml_path)
-sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
-
-
-def test_create_napistu_graph():
+def test_create_napistu_graph(sbml_dfs):
     _ = net_create.create_napistu_graph(
         sbml_dfs, wiring_approach=GRAPH_WIRING_APPROACHES.BIPARTITE
     )
@@ -33,7 +22,7 @@ def test_create_napistu_graph():
     )
 
 
-def test_bipartite_regression():
+def test_bipartite_regression(sbml_dfs):
     bipartite_og = net_create.create_napistu_graph(
         sbml_dfs, wiring_approach="bipartite_og"
     )

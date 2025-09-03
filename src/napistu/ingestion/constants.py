@@ -8,10 +8,50 @@ from napistu.constants import (
     ONTOLOGIES,
     SBML_DFS,
     SBOTERM_NAMES,
+    SOURCE_SPEC,
 )
 
-# standardization - species
+# aliases and descriptions for major data sources
 
+# high-level sources
+DATA_SOURCES = SimpleNamespace(
+    BIGG="BiGG",
+    DOGMA="Dogma",
+    IDEA_YEAST="IDEA",
+    INTACT="IntAct",
+    OMNIPATH="OmniPath",
+    REACTOME="Reactome",
+    REACTOME_FI="Reactome-FI",
+    STRING="STRING",
+    TRRUST="TRRUST",
+)
+
+DATA_SOURCE_DESCRIPTIONS = {
+    DATA_SOURCES.BIGG: "UCSD genome-scale metabolic models",
+    DATA_SOURCES.DOGMA: "Napistu gene, transcript, and protein annotations",
+    DATA_SOURCES.IDEA_YEAST: "Induction Dynamics Expression Atlas",
+    DATA_SOURCES.INTACT: "IntAct protein-protein interaction database",
+    DATA_SOURCES.OMNIPATH: "Intra- & intercellular signaling knowledge",
+    DATA_SOURCES.REACTOME: "Reactome pathway database",
+    DATA_SOURCES.REACTOME_FI: "Reactome functional interactions",
+    DATA_SOURCES.STRING: "STRING protein-protein interaction database",
+    DATA_SOURCES.TRRUST: "Transcriptional regulatory interactions database",
+}
+
+# names for specific models within sources
+MODEL_SOURCES = SimpleNamespace(
+    RECON3D="Recon3D",
+    IMM1415="iMM1415",
+    IMM904="iMM904",
+)
+
+MODEL_SOURCE_DESCRIPTIONS = {
+    MODEL_SOURCES.RECON3D: "The Recon3D human metabolic model",
+    MODEL_SOURCES.IMM1415: "The iMM1415 mouse metabolic model",
+    MODEL_SOURCES.IMM904: "The iMM904 yeast metabolic model",
+}
+
+# standardization - species
 LATIN_SPECIES_NAMES = SimpleNamespace(
     HOMO_SAPIENS="Homo sapiens",
     MUS_MUSCULUS="Mus musculus",
@@ -201,17 +241,11 @@ BIGG_MODEL_URLS = {
     LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE: "http://bigg.ucsd.edu/static/models/iMM904.xml",
 }
 
-BIGG_MODEL_FIELD_URL = "url"
-BIGG_MODEL_FIELD_SPECIES = "species"
-
 BIGG_MODEL_KEYS = {
-    LATIN_SPECIES_NAMES.HOMO_SAPIENS: "recon3D",
-    LATIN_SPECIES_NAMES.MUS_MUSCULUS: "iMM1415",
-    LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE: "iMM904",
+    LATIN_SPECIES_NAMES.HOMO_SAPIENS: MODEL_SOURCES.RECON3D,
+    LATIN_SPECIES_NAMES.MUS_MUSCULUS: MODEL_SOURCES.IMM1415,
+    LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE: MODEL_SOURCES.IMM904,
 }
-BIGG_RECON3D_FIELD_ID = "id"
-BIGG_RECON3D_FIELD_TYPE = "type"
-BIGG_RECON3D_FIELD_URI = "uri"
 
 # IDENTIFIERS ETL
 IDENTIFIERS_ETL_YEAST_URL = "https://www.uniprot.org/docs/yeast.txt"
@@ -337,8 +371,6 @@ DEFAULT_INTACT_RELATIVE_WEIGHTS = {
 
 INTACT_PUBLICATION_SCORE_THRESHOLD = 7
 
-INTACT_REACTIONS_DATA_TBL_NAME = "intact"
-
 PSI_MI_ONTOLOGY_URL = "https://raw.githubusercontent.com/MICommunity/miscore/refs/heads/master/miscore/src/main/resources/psimiOntology.json"
 
 PSI_MI_SCORED_TERMS = SimpleNamespace(
@@ -421,8 +453,11 @@ OMNIPATH_ONTOLOGY_ALIASES = {ONTOLOGIES.CORUM: {"CORUM"}, ONTOLOGIES.SIGNOR: {"S
 # REACTOME
 REACTOME_SMBL_URL = "https://reactome.org/download/current/all_species.3.1.sbml.tgz"
 REACTOME_PATHWAYS_URL = "https://reactome.org/download/current/ReactomePathways.txt"
-REACTOME_PATHWAY_INDEX_COLUMNS = ["file", "source", "species", "pathway_id", "name"]
-REACTOME_PATHWAY_LIST_COLUMNS = ["pathway_id", "name", "species"]
+REACTOME_PATHWAY_LIST_COLUMNS = [
+    SOURCE_SPEC.PATHWAY_ID,
+    SOURCE_SPEC.NAME,
+    SOURCE_SPEC.ORGANISMAL_SPECIES,
+]
 
 # REACTOME FI
 REACTOME_FI_URL = "http://cpws.reactome.org/caBigR3WebApp2025/FIsInGene_04142025_with_annotations.txt.zip"
@@ -438,7 +473,6 @@ REACTOME_FI = SimpleNamespace(
     REVERSE="reverse",
     # scores
     SCORE="Score",  # raw name
-    FI_REACTION_DATA_NAME="reactome_fi",
     FI_REACTION_DATA_SCORE="fi_score",
 )
 
@@ -529,12 +563,15 @@ TRRUST_COMPARTMENT_NUCLEOPLASM_GO_ID = "GO:0005654"
 
 TRRUST_SIGNS = SimpleNamespace(ACTIVATION="Activation", REPRESSION="Repression")
 
-# YEAST IDEA
+# IDEA YEAST TF -> targets
 # https://idea.research.calicolabs.com/data
-YEAST_IDEA_KINETICS_URL = "https://storage.googleapis.com/calico-website-pin-public-bucket/datasets/idea_kinetics.zip"
-YEAST_IDEA_SOURCE = "TF"
-YEAST_IDEA_TARGET = "GeneName"
-YEAST_IDEA_PUBMED_ID = "32181581"  # ids are characters by convention
+IDEA_YEAST = SimpleNamespace(
+    KINETICS_URL="https://storage.googleapis.com/calico-website-pin-public-bucket/datasets/idea_kinetics.zip",
+    KINETICS_FILE="idea_kinetics.tsv",
+    SOURCE="TF",
+    TARGET="GeneName",
+    PUBMED_ID="32181581",
+)
 
 # Identifiers ETL
 

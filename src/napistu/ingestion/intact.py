@@ -1,7 +1,9 @@
 from __future__ import annotations
+
+import datetime
 import os
 import logging
-from typing import Dict, Set
+from typing import Dict, Set, Union
 
 import igraph as ig
 import numpy as np
@@ -11,8 +13,10 @@ import requests
 from napistu import utils
 from napistu import sbml_dfs_core
 from napistu import sbml_dfs_utils
+from napistu.source import Source
 from napistu.ontologies import renaming
 from napistu.identifiers import Identifiers
+from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
@@ -21,10 +25,11 @@ from napistu.constants import (
     SBOTERM_NAMES,
 )
 from napistu.ingestion.constants import (
+    DATA_SOURCES,
+    DATA_SOURCE_DESCRIPTIONS,
     DEFAULT_INTACT_RELATIVE_WEIGHTS,
     INTACT_EXPERIMENTAL_ROLES,
     INTACT_PUBLICATION_SCORE_THRESHOLD,
-    INTACT_REACTIONS_DATA_TBL_NAME,
     INTACT_SCORES,
     INTACT_ONTOLOGY_ALIASES,
     INTACT_TERM_SCORES,
@@ -46,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 def download_intact_xmls(
     output_dir_path: str,
-    latin_species: str,
+    organismal_species: Union[str, OrganismalSpeciesValidator],
     overwrite: bool = False,
 ) -> None:
     """
@@ -69,7 +74,10 @@ def download_intact_xmls(
         Files are downloaded and extracted to the specified directory
     """
 
-    intact_species_basename = _get_intact_species_basename(latin_species)
+    organismal_species = OrganismalSpeciesValidator.ensure(organismal_species)
+    intact_species_basename = _get_intact_species_basename(
+        organismal_species.latin_name
+    )
 
     intact_species_url = os.path.join(
         PSI_MI_INTACT_FTP_URL, f"{intact_species_basename}.zip"
@@ -86,7 +94,8 @@ def download_intact_xmls(
 
 
 def intact_to_sbml_dfs(
-    intact_summaries: dict[str, pd.DataFrame], latin_species: str
+    intact_summaries: dict[str, pd.DataFrame],
+    organismal_species: Union[str, OrganismalSpeciesValidator],
 ) -> sbml_dfs_core.SBML_dfs:
     """
     Convert IntAct summaries to SBML_dfs
@@ -95,8 +104,8 @@ def intact_to_sbml_dfs(
     ----------
     intact_summaries : dict[str, pd.DataFrame]
         A dictionary of IntAct summaries.
-    latin_species : str
-        The latin species name (e.g. "Homo sapiens") pertaining to the IntAct interactions
+    organismal_species : str | OrganismalSpeciesValidator
+        The organismal species pertaining to the IntAct interactions
 
     Returns
     -------
@@ -113,10 +122,22 @@ def intact_to_sbml_dfs(
         If ontologies listed as valid secondary references are not in the Napistu controlled vocabulary
     """
 
+    organismal_species = OrganismalSpeciesValidator.ensure(organismal_species)
+
     if set(intact_summaries.keys()) != set(PSI_MI_STUDY_TABLES_LIST):
         raise ValueError(
             f"IntAct summaries must contain the following tables: {PSI_MI_STUDY_TABLES_LIST}"
         )
+
+    # format model-level metadata
+    model_source = Source.single_entry(
+        model=DATA_SOURCES.INTACT,
+        pathway_id=DATA_SOURCES.INTACT,
+        data_source=DATA_SOURCES.INTACT,
+        organismal_species=organismal_species.latin_name,
+        name=DATA_SOURCE_DESCRIPTIONS[DATA_SOURCES.INTACT],
+        date=datetime.date.today().strftime("%Y%m%d"),
+    )
 
     aliases = renaming.OntologySet(ontologies=INTACT_ONTOLOGY_ALIASES).ontologies
     alias_mapping = renaming._create_alias_mapping(aliases)
@@ -134,7 +155,7 @@ def intact_to_sbml_dfs(
     )
 
     lookup_table, species_df = create_species_df(
-        valid_interactors, valid_intact_xrefs, latin_species
+        valid_interactors, valid_intact_xrefs, organismal_species.latin_name
     )
 
     # turn reaction_species into a bait <-> prey edgelist
@@ -210,12 +231,13 @@ def intact_to_sbml_dfs(
         interactions_edgelist,
         species_df,
         compartments_df=sbml_dfs_utils.stub_compartments(),
+        model_source=model_source,
         interaction_edgelist_defaults={
             INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.INTERACTOR,
             INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.INTERACTOR,
             SBML_DFS.R_ISREVERSIBLE: True,
         },
-        keep_reactions_data=INTACT_REACTIONS_DATA_TBL_NAME,
+        keep_reactions_data=DATA_SOURCES.INTACT,
     )
 
     return sbml_dfs
@@ -224,7 +246,7 @@ def intact_to_sbml_dfs(
 def create_species_df(
     raw_species_df: pd.DataFrame,
     raw_species_identifiers_df: pd.DataFrame,
-    latin_species: str,
+    organismal_species: Union[str, OrganismalSpeciesValidator],
 ):
     """
     Create a species dataframe from the raw species dataframe and the raw species identifiers dataframe.
@@ -235,8 +257,8 @@ def create_species_df(
         The raw species dataframe.
     raw_species_identifiers_df : pd.DataFrame
         The raw species identifiers dataframe.
-    latin_species : str
-        The latin species name in the format "Genus species".
+    organismal_species : str | OrganismalSpeciesValidator
+        The organismal species pertaining to the IntAct interactions
 
     Returns
     -------
@@ -252,7 +274,10 @@ def create_species_df(
     """
 
     # filter to just matchees within the same species
-    intact_species_basename = _get_intact_species_basename(latin_species)
+    organismal_species = OrganismalSpeciesValidator.ensure(organismal_species)
+    intact_species_basename = _get_intact_species_basename(
+        organismal_species.latin_name
+    )
 
     # all partipants
     valid_species_mask = raw_species_df[PSI_MI_DEFS.INTERACTOR_LABEL].str.endswith(

@@ -10,13 +10,23 @@ with warnings.catch_warnings():
     from fs import open_fs
 
 from napistu import indices
-from napistu import sbml_dfs_core
 from napistu import utils
-from napistu.consensus import construct_sbml_dfs_dict
+from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
+from napistu.ingestion.sbml import SBML
 from napistu.ontologies.renaming import rename_species_ontologies
-from napistu.ingestion.constants import BIGG_MODEL_KEYS
-from napistu.ingestion.constants import BIGG_MODEL_URLS
-from napistu.ingestion.constants import LATIN_SPECIES_NAMES
+from napistu.sbml_dfs_core import SBML_dfs
+from napistu.source import Source
+from napistu.constants import (
+    EXPECTED_PW_INDEX_COLUMNS,
+    SOURCE_SPEC,
+)
+from napistu.ingestion.constants import (
+    BIGG_MODEL_KEYS,
+    BIGG_MODEL_URLS,
+    DATA_SOURCES,
+    LATIN_SPECIES_NAMES,
+    MODEL_SOURCE_DESCRIPTIONS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,26 +50,25 @@ def bigg_sbml_download(bg_pathway_root: str, overwrite: bool = False) -> None:
     bigg_models_df = indices.create_pathway_index_df(
         model_keys=BIGG_MODEL_KEYS,
         model_urls=BIGG_MODEL_URLS,
-        model_species={
+        model_organismal_species={
             LATIN_SPECIES_NAMES.HOMO_SAPIENS: LATIN_SPECIES_NAMES.HOMO_SAPIENS,
             LATIN_SPECIES_NAMES.MUS_MUSCULUS: LATIN_SPECIES_NAMES.MUS_MUSCULUS,
             LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE: LATIN_SPECIES_NAMES.SACCHAROMYCES_CEREVISIAE,
         },
         base_path=bg_pathway_root,
-        source_name="BiGG",
+        data_source=DATA_SOURCES.BIGG,
+        model_names=MODEL_SOURCE_DESCRIPTIONS,
     )
 
     with open_fs(bg_pathway_root, create=True) as bg_fs:
         for _, row in bigg_models_df.iterrows():
-            with bg_fs.open(row["file"], "wb") as f:
-                utils.download_wget(row["url"], f)  # type: ignore
+            with bg_fs.open(row[SOURCE_SPEC.FILE], "wb") as f:
+                utils.download_wget(row[SOURCE_SPEC.URL], f)  # type: ignore
 
-        pw_index = bigg_models_df[
-            ["file", "source", "species", "pathway_id", "name", "date"]
-        ]
+        pw_index = bigg_models_df[[c for c in EXPECTED_PW_INDEX_COLUMNS]]
 
         # save index to sbml dir
-        with bg_fs.open("pw_index.tsv", "wb") as f:
+        with bg_fs.open(SOURCE_SPEC.PW_INDEX_FILE, "wb") as f:
             pw_index.to_csv(f, sep="\t", index=False)
 
     return None
@@ -67,9 +76,8 @@ def bigg_sbml_download(bg_pathway_root: str, overwrite: bool = False) -> None:
 
 def construct_bigg_consensus(
     pw_index_inp: str | indices.PWIndex,
-    species: str | Iterable[str] | None = None,
-    outdir: str | None = None,
-) -> sbml_dfs_core.SBML_dfs:
+    organismal_species: str | Iterable[str] | None = None,
+) -> SBML_dfs:
     """Construct a BiGG SBML DFs pathway representation.
 
     Parameters
@@ -106,28 +114,47 @@ def construct_bigg_consensus(
     NotImplementedError
         If attempting to merge multiple models
     """
+
+    # select the model assocaited with the organismal species
     if isinstance(pw_index_inp, str):
-        pw_index = indices.adapt_pw_index(pw_index_inp, species=species, outdir=outdir)
+
+        # sannitize organismal species name and validate against supported species
+        organismal_species_validator = OrganismalSpeciesValidator(organismal_species)
+        organismal_species_validator.assert_supported(
+            supported_species=list(BIGG_MODEL_URLS.keys())
+        )
+
+        pw_index = indices.adapt_pw_index(
+            pw_index_inp, organismal_species=organismal_species_validator.latin_name
+        )
+
+        if SOURCE_SPEC.MODEL not in pw_index.index.columns:
+            pw_index.index = pw_index.index.assign(
+                model=pw_index.index[SOURCE_SPEC.PATHWAY_ID]
+            )
+
     elif isinstance(pw_index_inp, indices.PWIndex):
         pw_index = pw_index_inp
     else:
         raise ValueError("pw_index_inp needs to be a PWIndex or a str to a location.")
-    if outdir is not None:
-        construct_sbml_dfs_dict_fkt = utils.pickle_cache(
-            os.path.join(outdir, "model_pool.pkl")
-        )(construct_sbml_dfs_dict)
+
+    if pw_index.index.shape[0] != 1:
+        raise ValueError(
+            f"The filtered pw_index contained {pw_index.index.shape[0]} rows, expected 1"
+        )
+
+    model_file = pw_index.index.iloc[0][SOURCE_SPEC.FILE]
+    if isinstance(pw_index_inp, str):
+        sbml_dfs_path = os.path.join(os.path.dirname(pw_index_inp), model_file)
     else:
-        construct_sbml_dfs_dict_fkt = construct_sbml_dfs_dict
+        # if a PWIndex is provided, assume that the file field is the full path to the model file
+        sbml_dfs_path = model_file
 
-    sbml_dfs_dict = construct_sbml_dfs_dict_fkt(pw_index)
-    if len(sbml_dfs_dict) > 1:
-        raise NotImplementedError("Merging of models not implemented yet for BiGG")
+    model_source = Source(pw_index.index)
 
-    # In Bigg there should be only one model
-    sbml_dfs = list(sbml_dfs_dict.values())[0]
-    # fix missing compartimentalization
-    sbml_dfs.infer_uncompartmentalized_species_location()
-    sbml_dfs.name_compartmentalized_species()
+    sbml = SBML(sbml_dfs_path)
+    sbml_dfs = SBML_dfs(sbml, model_source)
     rename_species_ontologies(sbml_dfs)
     sbml_dfs.validate()
+
     return sbml_dfs

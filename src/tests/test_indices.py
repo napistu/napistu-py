@@ -6,6 +6,7 @@ import datetime
 import pandas as pd
 import pytest
 from napistu import indices
+from napistu.constants import SOURCE_SPEC
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")
@@ -19,17 +20,17 @@ def test_create_pathway_index_df():
         "human": "http://example.com/model1.xml",
         "mouse": "http://example.com/model2.xml",
     }
-    model_species = {"human": "Homo sapiens", "mouse": "Mus musculus"}
+    model_organismal_species = {"human": "Homo sapiens", "mouse": "Mus musculus"}
     base_path = "/test/path"
-    source_name = "TestSource"
+    data_source = "TestSource"
 
     # Create pathway index
     result = indices.create_pathway_index_df(
         model_keys=model_keys,
         model_urls=model_urls,
-        model_species=model_species,
+        model_organismal_species=model_organismal_species,
         base_path=base_path,
-        source_name=source_name,
+        data_source=data_source,
     )
 
     # Expected date in YYYYMMDD format
@@ -41,36 +42,36 @@ def test_create_pathway_index_df():
 
     # Check required columns exist
     required_columns = {
-        "url",
-        "species",
-        "sbml_path",
-        "file",
-        "date",
-        "pathway_id",
-        "name",
-        "source",
+        SOURCE_SPEC.URL,
+        SOURCE_SPEC.ORGANISMAL_SPECIES,
+        SOURCE_SPEC.SBML_PATH,
+        SOURCE_SPEC.FILE,
+        SOURCE_SPEC.DATE,
+        SOURCE_SPEC.PATHWAY_ID,
+        SOURCE_SPEC.NAME,
+        SOURCE_SPEC.DATA_SOURCE,
     }
     assert set(result.columns) == required_columns, "Missing required columns"
 
     # Check content for first model (human)
-    human_row = result[result["pathway_id"] == "model1"].iloc[0]
-    assert human_row["url"] == "http://example.com/model1.xml"
-    assert human_row["species"] == "Homo sapiens"
-    assert human_row["file"] == "model1.sbml"
-    assert human_row["date"] == expected_date
-    assert human_row["source"] == "TestSource"
-    assert human_row["sbml_path"] == os.path.join(base_path, "model1.sbml")
+    human_row = result[result[SOURCE_SPEC.PATHWAY_ID] == "model1"].iloc[0]
+    assert human_row[SOURCE_SPEC.URL] == "http://example.com/model1.xml"
+    assert human_row[SOURCE_SPEC.ORGANISMAL_SPECIES] == "Homo sapiens"
+    assert human_row[SOURCE_SPEC.FILE] == "model1.sbml"
+    assert human_row[SOURCE_SPEC.DATE] == expected_date
+    assert human_row[SOURCE_SPEC.DATA_SOURCE] == "TestSource"
+    assert human_row[SOURCE_SPEC.SBML_PATH] == os.path.join(base_path, "model1.sbml")
 
     # Test with custom file extension
     result_custom_ext = indices.create_pathway_index_df(
         model_keys=model_keys,
         model_urls=model_urls,
-        model_species=model_species,
+        model_organismal_species=model_organismal_species,
         base_path=base_path,
-        source_name=source_name,
+        data_source=data_source,
         file_extension=".xml",
     )
-    assert result_custom_ext.iloc[0]["file"].endswith(
+    assert result_custom_ext.iloc[0][SOURCE_SPEC.FILE].endswith(
         ".xml"
     ), "Custom extension not applied"
 
@@ -85,12 +86,12 @@ def test_pwindex_from_file():
 def test_pwindex_from_df():
     stub_pw_df = pd.DataFrame(
         {
-            "file": "DNE",
-            "source": "The farm",
-            "species": "Gallus gallus",
-            "pathway_id": "chickens",
-            "name": "Chickens",
-            "date": "2020-01-01",
+            SOURCE_SPEC.FILE: "DNE",
+            SOURCE_SPEC.DATA_SOURCE: "The farm",
+            SOURCE_SPEC.ORGANISMAL_SPECIES: "Gallus gallus",
+            SOURCE_SPEC.PATHWAY_ID: "chickens",
+            SOURCE_SPEC.NAME: "Chickens",
+            SOURCE_SPEC.DATE: "2020-01-01",
         },
         index=[0],
     )
@@ -118,23 +119,23 @@ def test_index(pw_testindex):
     assert pw_index.index.shape == full_index_shape
 
     ref_index = pw_index.index.copy()
-    pw_index.filter(sources="Reactome")
+    pw_index.filter(data_sources="Reactome")
     assert pw_index.index.shape == full_index_shape
 
-    pw_index.filter(species="Homo sapiens")
+    pw_index.filter(organismal_species="Homo sapiens")
     assert pw_index.index.shape == full_index_shape
 
-    pw_index.filter(sources=("Reactome",))
+    pw_index.filter(data_sources=("Reactome",))
     assert pw_index.index.shape == full_index_shape
 
-    pw_index.filter(species=("Homo sapiens",))
+    pw_index.filter(organismal_species=("Homo sapiens",))
     assert pw_index.index.shape == full_index_shape
 
-    pw_index.filter(sources="NotValid")
+    pw_index.filter(data_sources="NotValid")
     assert pw_index.index.shape == (0, full_index_shape[1])
     pw_index.index = ref_index.copy()
 
-    pw_index.filter(species="NotValid")
+    pw_index.filter(organismal_species="NotValid")
     assert pw_index.index.shape == (0, full_index_shape[1])
     pw_index.index = ref_index.copy()
 

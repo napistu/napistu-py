@@ -66,7 +66,7 @@ def create_dogmatic_sbml_dfs(
 
     # stub required but invariant variables
     compartments_df = sbml_dfs_utils.stub_compartments()
-    interaction_source = source.Source(init=True)
+    interaction_source = source.Source.empty()
 
     # interactions table. This is required to create the sbml_dfs but we'll drop the info later
     interaction_edgelist = species_df.rename(

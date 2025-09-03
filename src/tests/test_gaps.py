@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import warnings
+import pytest
 
 from napistu.sbml_dfs_core import SBML_dfs
 from napistu.identifiers import Identifiers
@@ -14,11 +15,12 @@ from napistu.constants import SBML_DFS
 from napistu.ingestion.constants import EXCHANGE_COMPARTMENT, COMPARTMENTS
 
 
-# Minimal compartments table
-def _create_sbml_dfs_missing_transport_rxns():
+@pytest.fixture
+def sbml_dfs_missing_transport_rxns(model_source_stub):
+    """Create a minimal SBML_dfs object missing transport reactions."""
 
     blank_id = Identifiers([])
-    blank_source = Source(init=True)
+    blank_source = Source.empty()
 
     compartments = pd.DataFrame(
         {
@@ -107,16 +109,17 @@ def _create_sbml_dfs_missing_transport_rxns():
     }
 
     # Create the SBML_dfs object
-    sbml_dfs = SBML_dfs(sbml_dict)
+    sbml_dfs = SBML_dfs(sbml_dict, model_source_stub)
 
     return sbml_dfs
 
 
-def test_add_transportation_reactions():
+def test_add_transportation_reactions(sbml_dfs_missing_transport_rxns):
 
-    sbml_dfs = _create_sbml_dfs_missing_transport_rxns()
     sbml_dfs_w_transport = gaps.update_sbml_df_with_exchange(
-        np.array(["s_A"]), sbml_dfs, exchange_compartment=EXCHANGE_COMPARTMENT
+        np.array(["s_A"]),
+        sbml_dfs_missing_transport_rxns,
+        exchange_compartment=EXCHANGE_COMPARTMENT,
     )
     assert sbml_dfs_w_transport.reactions.shape[0] == 4, "Should add 2 reactions"
     assert sbml_dfs_w_transport.reactions[
@@ -124,15 +127,18 @@ def test_add_transportation_reactions():
     ].all(), "Should be reversible"
 
 
-def test_identify_species_needing_transport_reactions(sbml_dfs):
+def test_identify_species_needing_transport_reactions(
+    sbml_dfs, sbml_dfs_missing_transport_rxns
+):
     result = gaps._identify_species_needing_transport_reactions(sbml_dfs)
     assert isinstance(result, np.ndarray)
     assert result.size == 0
 
-    sbml_dfs = _create_sbml_dfs_missing_transport_rxns()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
-        result = gaps._identify_species_needing_transport_reactions(sbml_dfs)
+        result = gaps._identify_species_needing_transport_reactions(
+            sbml_dfs_missing_transport_rxns
+        )
     assert isinstance(result, np.ndarray)
     assert result.size == 1
     assert result[0] == "s_A"

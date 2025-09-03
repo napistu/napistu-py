@@ -274,14 +274,6 @@ def resolve_matches(
     # Make a copy to avoid modifying input
     df = matched_data.copy()
 
-    # Check for unsupported data types
-    unsupported_dtypes = df.select_dtypes(include=["bool", "datetime64"]).columns
-    if not unsupported_dtypes.empty:
-        raise TypeError(
-            f"Unsupported data types found in columns: {list(unsupported_dtypes)}. "
-            "Boolean and datetime columns are not supported."
-        )
-
     # Always require feature_id_var
     if feature_id_var not in df.columns:
         raise KeyError(feature_id_var)
@@ -307,19 +299,22 @@ def resolve_matches(
 
     # Use utility to split columns
     always_non_numeric = [feature_id_var] if keep_id_col else []
-    numeric_cols, non_numeric_cols = _split_numeric_non_numeric_columns(
-        df, always_non_numeric=always_non_numeric
+
+    column_types = _classify_columns_modify_types(
+        df, always_string=always_non_numeric  # renamed parameter
     )
 
-    # Get aggregator function
+    # Get aggregator functions
     numeric_aggregator = _get_numeric_aggregator(
         method=numeric_agg, feature_id_var=feature_id_var
     )
+    boolean_aggregator = _get_boolean_aggregator(method=numeric_agg)
+
     resolved = _aggregate_grouped_columns(
         df,
-        numeric_cols,
-        non_numeric_cols,
+        column_types,
         numeric_aggregator,
+        boolean_aggregator,
         feature_id_var=feature_id_var,
         numeric_agg=numeric_agg,
     )
@@ -337,48 +332,99 @@ def resolve_matches(
     return resolved
 
 
-def _get_wide_results_valid_ontologies(
-    results_df: pd.DataFrame, ontologies: Optional[Union[str, list]] = None
-) -> list:
-    """
-    Get the valid ontologies for a wide results dataframe.
+# private utils
 
-    If ontologies is a string, it will be converted to a list.
-    If ontologies is None, the column names of the results dataframe which match ONTOLOGIES_LIST will be used.
+
+def _classify_columns_modify_types(df: pd.DataFrame, always_string=None):
+    """
+    Classify DataFrame columns into modify types for consensus operations.
 
     Parameters
     ----------
-    results_df : pd.DataFrame
-        The results dataframe to get the valid ontologies for.
-    ontologies : optional str, list
-        The ontology to use for the species identifiers. If not provided, the column names of the results dataframes which match ONTOLOGIES_LIST will be used.
+    df : pd.DataFrame
+        The DataFrame to classify.
+    always_string : list or set, optional
+        Columns to always treat as string type (e.g., ['feature_id']).
 
     Returns
     -------
-    list
-        The valid ontologies for the results dataframe.
+    dict
+        Dictionary with keys 'numeric', 'boolean', 'string' and values being
+        pd.Index of columns in those categories.
+    """
+    if always_string is None:
+        always_string = []
+    always_string = set(always_string)
+
+    # Get boolean columns first
+    boolean_cols = df.select_dtypes(include=["bool"]).columns.difference(always_string)
+
+    # Get numeric columns (excluding always_string and boolean)
+    numeric_cols = df.select_dtypes(include=["int64", "float64"]).columns.difference(
+        always_string.union(boolean_cols)
+    )
+
+    # Get obviously string columns (object, string dtypes)
+    obvious_string_cols = df.select_dtypes(include=["object", "string"]).columns
+
+    # Add always_string to obvious strings
+    explicit_string_cols = obvious_string_cols.union(always_string)
+
+    # Find columns that aren't numeric, boolean, or obviously strings
+    classified_standard_cols = (
+        set(numeric_cols).union(set(boolean_cols)).union(set(explicit_string_cols))
+    )
+    original_cols = set(df.columns)
+    other_cols = original_cols - classified_standard_cols
+
+    if other_cols:
+        other_dtypes = {col: str(df[col].dtype) for col in other_cols}
+        logger.warning(
+            f"Some columns have non-standard dtypes and will be treated as strings: "
+            f"{other_dtypes}. Consider converting these explicitly if different handling is needed."
+        )
+
+    # All string columns = explicit strings + other columns
+    string_cols = explicit_string_cols.union(other_cols)
+
+    return {"numeric": numeric_cols, "boolean": boolean_cols, "string": string_cols}
+
+
+def _get_boolean_aggregator(
+    method: str = RESOLVE_MATCHES_AGGREGATORS.FIRST,
+    feature_id_var: str = FEATURE_ID_VAR_DEFAULT,
+) -> callable:
+    """
+    Get aggregation function for boolean columns.
+
+    Parameters
+    ----------
+    method : str, default="first"
+        Aggregation method to use:
+        - "first": first value after sorting by feature_id (default)
+        - "weighted_mean": treat as first (booleans don't support weighted averaging)
+        - "mean": treat as first (booleans don't support arithmetic mean)
+        - "max": treat as first (boolean max is ambiguous)
+    feature_id_var : str, default="feature_id"
+        Name of the column specifying a measured feature - used for sorting
+
+    Returns
+    -------
+    callable
+        Aggregation function to use with groupby for boolean columns
     """
 
-    if isinstance(ontologies, str):
-        ontologies = [ontologies]  # now, it will be None or list
+    def first_by_id(df: pd.DataFrame) -> bool:
+        # Sort by feature_id and take first value
+        return df.sort_values(feature_id_var).iloc[0]["value"]
 
-    if ontologies is None:
-        ontologies = [col for col in results_df.columns if col in ONTOLOGIES_LIST]
-        if len(ontologies) == 0:
-            raise ValueError(
-                "No valid ontologies found in results dataframe. Columns are: "
-                + str(results_df.columns)
-            )
+    # For now, all methods use first_by_id approach
+    # Could extend this in the future with:
+    # - "any": True if any value is True
+    # - "all": True only if all values are True
+    # - "most_common": mode (most frequent value)
 
-    if isinstance(ontologies, list):
-        invalid_ontologies = set(ontologies) - set(ONTOLOGIES_LIST)
-        if len(invalid_ontologies) > 0:
-            raise ValueError(
-                "Invalid ontologies found in ontologies list: "
-                + str(invalid_ontologies)
-            )
-
-    return ontologies
+    return first_by_id
 
 
 def _get_numeric_aggregator(
@@ -442,6 +488,50 @@ def _get_numeric_aggregator(
     return aggregators[method]
 
 
+def _get_wide_results_valid_ontologies(
+    results_df: pd.DataFrame, ontologies: Optional[Union[str, list]] = None
+) -> list:
+    """
+    Get the valid ontologies for a wide results dataframe.
+
+    If ontologies is a string, it will be converted to a list.
+    If ontologies is None, the column names of the results dataframe which match ONTOLOGIES_LIST will be used.
+
+    Parameters
+    ----------
+    results_df : pd.DataFrame
+        The results dataframe to get the valid ontologies for.
+    ontologies : optional str, list
+        The ontology to use for the species identifiers. If not provided, the column names of the results dataframes which match ONTOLOGIES_LIST will be used.
+
+    Returns
+    -------
+    list
+        The valid ontologies for the results dataframe.
+    """
+
+    if isinstance(ontologies, str):
+        ontologies = [ontologies]  # now, it will be None or list
+
+    if ontologies is None:
+        ontologies = [col for col in results_df.columns if col in ONTOLOGIES_LIST]
+        if len(ontologies) == 0:
+            raise ValueError(
+                "No valid ontologies found in results dataframe. Columns are: "
+                + str(results_df.columns)
+            )
+
+    if isinstance(ontologies, list):
+        invalid_ontologies = set(ontologies) - set(ONTOLOGIES_LIST)
+        if len(invalid_ontologies) > 0:
+            raise ValueError(
+                "Invalid ontologies found in ontologies list: "
+                + str(invalid_ontologies)
+            )
+
+    return ontologies
+
+
 def _split_numeric_non_numeric_columns(df: pd.DataFrame, always_non_numeric=None):
     """
     Utility to split DataFrame columns into numeric and non-numeric, always treating specified columns as non-numeric.
@@ -472,31 +562,45 @@ def _split_numeric_non_numeric_columns(df: pd.DataFrame, always_non_numeric=None
 
 def _aggregate_grouped_columns(
     df: pd.DataFrame,
-    numeric_cols,
-    non_numeric_cols,
-    numeric_aggregator,
+    column_types: dict,
+    numeric_aggregator: callable,
+    boolean_aggregator: callable,
     feature_id_var: str = FEATURE_ID_VAR_DEFAULT,
     numeric_agg: str = RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN,
 ) -> pd.DataFrame:
     """
-    Aggregate numeric and non-numeric columns for grouped DataFrame.
+    Aggregate numeric, boolean, and string columns for grouped DataFrame.
     Assumes deduplication by feature_id within each s_id has already been performed.
     Returns the combined DataFrame.
     """
     results = []
 
-    # Handle non-numeric columns
-    if len(non_numeric_cols) > 0:
-        non_numeric_agg = (
-            df[non_numeric_cols]
+    # Handle string columns (same as old non_numeric_cols logic)
+    if len(column_types["string"]) > 0:
+        string_agg = (
+            df[column_types["string"]]
             .groupby(level=0)
             .agg(lambda x: ",".join(sorted(set(x.astype(str)))))
         )
-        results.append(non_numeric_agg)
-    # Handle numeric columns
-    if len(numeric_cols) > 0:
+        results.append(string_agg)
+
+    # Handle boolean columns
+    if len(column_types["boolean"]) > 0:
+        boolean_results = {}
+        for col in column_types["boolean"]:
+            agg_df = pd.DataFrame(
+                {"value": df[col], feature_id_var: df[feature_id_var]}
+            )
+            boolean_results[col] = agg_df.groupby(level=0).apply(
+                lambda x: boolean_aggregator(x)
+            )
+        boolean_agg_df = pd.DataFrame(boolean_results)
+        results.append(boolean_agg_df)
+
+    # Handle numeric columns (same as existing logic)
+    if len(column_types["numeric"]) > 0:
         numeric_results = {}
-        for col in numeric_cols:
+        for col in column_types["numeric"]:
             if numeric_agg in [
                 RESOLVE_MATCHES_AGGREGATORS.FIRST,
                 RESOLVE_MATCHES_AGGREGATORS.WEIGHTED_MEAN,
@@ -521,9 +625,11 @@ def _aggregate_grouped_columns(
                 numeric_results[col] = df[col].groupby(level=0).agg(numeric_aggregator)
         numeric_agg_df = pd.DataFrame(numeric_results)
         results.append(numeric_agg_df)
+
     # Combine results
     if results:
         resolved = pd.concat(results, axis=1)
     else:
         resolved = pd.DataFrame(index=df.index)
+
     return resolved

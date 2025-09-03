@@ -25,7 +25,7 @@ def test_source():
     )
 
     source_obj = source.Source(source_example_df)
-    source_init = source.Source(init=True)
+    source_init = source.Source.empty()
 
     assert source.merge_sources([source_init, source_init]) == source_init
 
@@ -218,3 +218,59 @@ def test_source_set_coverage_min_pw_size_filtering(sbml_dfs_metabolism):
                 assert (
                     len(pathway_members) >= min_size
                 ), f"Pathway {pathway_id} has {len(pathway_members)} members, less than min_pw_size={min_size}"
+
+
+def test_single_entry():
+    """Test the single_entry class method of Source class."""
+    # Test basic functionality
+    source_obj = source.Source.single_entry(
+        model="test_model",
+        pathway_id="test_pathway",
+        data_source="test_source",
+        organismal_species="human",
+        name="Test Pathway",
+        file="test.sbml",
+        date="20231201",
+    )
+
+    # Verify it's a Source object
+    assert isinstance(source_obj, source.Source)
+
+    # Verify it has exactly one row
+    assert len(source_obj.source) == 1
+
+    # Verify the data is correct
+    row = source_obj.source.iloc[0]
+    assert row[SOURCE_SPEC.MODEL] == "test_model"
+    assert row[SOURCE_SPEC.PATHWAY_ID] == "test_pathway"
+    assert row[SOURCE_SPEC.DATA_SOURCE] == "test_source"
+    assert row[SOURCE_SPEC.ORGANISMAL_SPECIES] == "human"
+    assert row[SOURCE_SPEC.NAME] == "Test Pathway"
+    assert row[SOURCE_SPEC.FILE] == "test.sbml"
+    assert row[SOURCE_SPEC.DATE] == "20231201"
+
+    # Test with None values (should still include the fields)
+    source_obj_with_none = source.Source.single_entry(
+        model="test_model",
+        pathway_id="test_pathway",
+        data_source=None,
+        organismal_species=None,
+        name=None,
+        file="test.sbml",
+        date="20231201",
+    )
+
+    # Verify None fields are included
+    row_with_none = source_obj_with_none.source.iloc[0]
+    assert SOURCE_SPEC.DATA_SOURCE in row_with_none.index
+    assert row_with_none[SOURCE_SPEC.DATA_SOURCE] is None
+    assert SOURCE_SPEC.ORGANISMAL_SPECIES in row_with_none.index
+    assert row_with_none[SOURCE_SPEC.ORGANISMAL_SPECIES] is None
+
+    # Test default pathway_id behavior
+    source_obj_default = source.Source.single_entry(
+        model="test_model", data_source="test_source"
+    )
+
+    # pathway_id should default to model when not provided
+    assert source_obj_default.source.iloc[0][SOURCE_SPEC.PATHWAY_ID] == "test_model"

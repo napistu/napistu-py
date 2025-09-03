@@ -2,7 +2,6 @@ import copy
 import numpy as np
 import pandas as pd
 import pytest
-from datetime import datetime
 
 from napistu.matching import mount
 from napistu.constants import IDENTIFIERS, SBML_DFS, ONTOLOGIES
@@ -122,6 +121,8 @@ def test_resolve_matches_with_example_data():
                 "not",
                 "not",
             ],
+            # Add boolean column
+            "is_active": [True, False, True, False, True, False, True, False, True],
         }
     )
 
@@ -158,6 +159,16 @@ def test_resolve_matches_with_example_data():
     assert "results_a" in result_without_id.columns
     assert "results_b" in result_without_id.columns
     assert "feature_id_match_count" in result_without_id.columns
+
+    # Test that boolean columns are handled correctly with first method
+    first_result = mount.resolve_matches(
+        example_data, numeric_agg=RESOLVE_MATCHES_AGGREGATORS.FIRST
+    )
+
+    # Verify boolean aggregation (should take first value after sorting by feature_id)
+    assert first_result.loc["s_id_1", "is_active"]  # A comes first, has True
+    assert not first_result.loc["s_id_3", "is_active"]  # B comes first, has False
+    assert isinstance(first_result.loc["s_id_1", "is_active"], (bool, np.bool_))
 
     # Verify numeric aggregation still works
     actual_mean = result_without_id.loc["s_id_1", "results_a"]
@@ -245,28 +256,6 @@ def test_resolve_matches_with_example_data():
     )
     pd.testing.assert_index_equal(result_with_id.index, expected_index)
     pd.testing.assert_index_equal(result_without_id.index, expected_index)
-
-
-def test_resolve_matches_invalid_dtypes():
-    """Test that resolve_matches raises an error for unsupported dtypes."""
-    # Setup data with boolean and datetime columns
-    data = pd.DataFrame(
-        {
-            FEATURE_ID_VAR_DEFAULT: ["A", "B", "B", "C"],
-            "bool_col": [True, False, True, False],
-            "datetime_col": [
-                datetime(2024, 1, 1),
-                datetime(2024, 1, 2),
-                datetime(2024, 1, 3),
-                datetime(2024, 1, 4),
-            ],
-            "s_id": ["s1", "s1", "s2", "s2"],
-        }
-    )
-
-    # Should raise TypeError for unsupported dtypes
-    with pytest.raises(TypeError, match="Unsupported data types"):
-        mount.resolve_matches(data)
 
 
 def test_resolve_matches_first_method():

@@ -13,9 +13,9 @@ if not os.path.isfile(sbml_path):
     raise ValueError(f"{sbml_path} not found")
 
 
-def test_uncompartmentalize():
+def test_uncompartmentalize(model_source_stub):
     sbml_model = sbml.SBML(sbml_path)
-    sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model)
+    sbml_dfs = sbml_dfs_core.SBML_dfs(sbml_model, model_source_stub)
     sbml_dfs.validate()
 
     assert sbml_dfs.compartmentalized_species.shape[0] == 107

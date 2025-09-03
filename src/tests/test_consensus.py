@@ -4,6 +4,7 @@ import os
 
 import pandas as pd
 import pytest
+
 from napistu import consensus
 from napistu import identifiers
 from napistu import indices
@@ -11,7 +12,15 @@ from napistu import source
 from napistu import sbml_dfs_core
 from napistu.ingestion import sbml
 from napistu.modify import pathwayannot
-from napistu.constants import SBML_DFS, SBML_DFS_SCHEMA, SCHEMA_DEFS, IDENTIFIERS, BQB
+from napistu.constants import (
+    SBML_DFS,
+    SBML_DFS_METADATA,
+    SBML_DFS_SCHEMA,
+    SCHEMA_DEFS,
+    IDENTIFIERS,
+    BQB,
+    SOURCE_SPEC,
+)
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")
@@ -25,7 +34,7 @@ def test_reduce_to_consensus_ids():
     sbml_model = sbml.SBML(sbml_path)
     comp_species_df = sbml_model._define_cspecies()
     comp_species_df.index.names = [SBML_DFS.S_ID]
-    consensus_species, species_lookup = consensus.reduce_to_consensus_ids(
+    consensus_species, species_lookup = consensus._reduce_to_consensus_ids(
         comp_species_df,
         {
             SCHEMA_DEFS.PK: SBML_DFS.S_ID,
@@ -41,7 +50,7 @@ def test_reduce_to_consensus_ids():
 
 
 def test_consensus():
-    pw_index = indices.PWIndex(os.path.join(test_data, "pw_index.tsv"))
+    pw_index = indices.PWIndex(os.path.join(test_data, SOURCE_SPEC.PW_INDEX_FILE))
     sbml_dfs_dict = consensus.construct_sbml_dfs_dict(pw_index)
 
     consensus_model = consensus.construct_consensus_model(sbml_dfs_dict, pw_index)
@@ -59,7 +68,7 @@ def test_consensus():
 
 def test_source_tracking():
     # create input data
-    table_schema = {"source": "source_var", "pk": "primary_key"}
+    table_schema = {SCHEMA_DEFS.SOURCE: "source_var", SCHEMA_DEFS.PK: "primary_key"}
 
     # define existing sources and the new_id entity they belong to
     # here, we are assuming that each model has a blank source object
@@ -69,14 +78,19 @@ def test_source_tracking():
             "new_id": [0, 0, 1, 1],
         }
     )
-    agg_tbl[table_schema["source"]] = source.Source(init=True)
+    agg_tbl[table_schema[SCHEMA_DEFS.SOURCE]] = source.Source.empty()
 
     # define new_ids and the models they came from
     # these models will be matched to the pw_index to flush out metadata
     lookup_table = pd.DataFrame(
         {
             "new_id": [0, 0, 1, 1],
-            "model": ["R-HSA-1237044", "R-HSA-425381", "R-HSA-1237044", "R-HSA-425381"],
+            SOURCE_SPEC.MODEL: [
+                "R-HSA-1237044",
+                "R-HSA-425381",
+                "R-HSA-1237044",
+                "R-HSA-425381",
+            ],
         }
     )
 
@@ -88,7 +102,7 @@ def test_source_tracking():
     assert source_table["source_var"][0].source.shape == (2, 8)
 
     # test create_consensus_sources
-    consensus_sources = consensus.create_consensus_sources(
+    consensus_sources = consensus._create_consensus_sources(
         agg_tbl, lookup_table, table_schema, pw_index
     )
     assert consensus_sources[0].source.shape == (2, 8)
@@ -97,7 +111,12 @@ def test_source_tracking():
     invalid_lookup_table = pd.DataFrame(
         {
             "new_id": [0, 0, 1, 1],
-            "model": ["R-HSA-1237044", "R-HSA-425381", "R-HSA-1237044", "typo"],
+            SOURCE_SPEC.MODEL: [
+                "R-HSA-1237044",
+                "R-HSA-425381",
+                "R-HSA-1237044",
+                "typo",
+            ],
         }
     )
 
@@ -114,8 +133,8 @@ def test_source_tracking():
         }
     )
 
-    agg_tbl2[table_schema["source"]] = consensus_sources.tolist() + [
-        source.Source(init=True) for i in range(0, 2)
+    agg_tbl2[table_schema[SCHEMA_DEFS.SOURCE]] = consensus_sources.tolist() + [
+        source.Source.empty() for i in range(0, 2)
     ]
 
     lookup_table2 = pd.DataFrame(
@@ -139,7 +158,7 @@ def test_source_tracking():
         for i in range(0, source_table.shape[0])
     ] == [(1, 8), (2, 8), (1, 8)]
 
-    consensus_sources = consensus.create_consensus_sources(
+    consensus_sources = consensus._create_consensus_sources(
         agg_tbl2, lookup_table2, table_schema, pw_index
     )
     assert [
@@ -198,7 +217,9 @@ def test_passing_entity_data():
     minimal_pw_index.index = minimal_pw_index.index.iloc[0:2]
 
     # Since we're working with a DataFrame, we can use loc to update the file value directly
-    minimal_pw_index.index.loc[1, "file"] = minimal_pw_index.index.loc[0, "file"]
+    minimal_pw_index.index.loc[1, SOURCE_SPEC.FILE] = minimal_pw_index.index.loc[
+        0, SOURCE_SPEC.FILE
+    ]
 
     duplicated_sbml_dfs_dict = consensus.construct_sbml_dfs_dict(minimal_pw_index)
     # explicitely define the order we'll loop through models so that
@@ -232,29 +253,29 @@ def test_passing_entity_data():
         duplicated_sbml_dfs_dict, pw_index
     )
     assert consensus_model.reactions_data["my_mismatched_data"].shape == (5, 3)
-    assert consensus_model.reactions["r_isreversible"].eq(True).all()
+    assert consensus_model.reactions[SBML_DFS.R_ISREVERSIBLE].eq(True).all()
 
 
 def test_consensus_ontology_check():
-    pw_index = indices.PWIndex(os.path.join(test_data, "pw_index.tsv"))
+    pw_index = indices.PWIndex(os.path.join(test_data, SOURCE_SPEC.PW_INDEX_FILE))
 
     test_sbml_dfs_dict = consensus.construct_sbml_dfs_dict(pw_index)
     test_consensus_model = consensus.construct_consensus_model(
         test_sbml_dfs_dict, pw_index
     )
 
-    pre_shared_onto_sp_list, pre_onto_df = consensus.pre_consensus_ontology_check(
-        test_sbml_dfs_dict, "species"
+    pre_shared_onto_sp_list, pre_onto_df = consensus._pre_consensus_ontology_check(
+        test_sbml_dfs_dict, SBML_DFS.SPECIES
     )
     assert set(pre_shared_onto_sp_list) == {"chebi", "reactome", "uniprot"}
 
-    post_shared_onto_sp_set = consensus.post_consensus_species_ontology_check(
+    post_shared_onto_sp_set = consensus._post_consensus_species_ontology_check(
         test_consensus_model
     )
     assert post_shared_onto_sp_set == {"chebi", "reactome", "uniprot"}
 
 
-def test_report_consensus_merges_reactions(tmp_path):
+def test_report_consensus_merges_reactions(tmp_path, model_source_stub):
     # Create two minimal SBML_dfs objects with a single reaction each, same r_id
     r_id = "R00000001"
     reactions = pd.DataFrame(
@@ -312,15 +333,19 @@ def test_report_consensus_merges_reactions(tmp_path):
         SBML_DFS.REACTIONS: reactions,
         SBML_DFS.REACTION_SPECIES: reaction_species,
     }
-    sbml1 = sbml_dfs_core.SBML_dfs(sbml_dict, validate=False, resolve=False)
-    sbml2 = sbml_dfs_core.SBML_dfs(sbml_dict, validate=False, resolve=False)
+    sbml1 = sbml_dfs_core.SBML_dfs(
+        sbml_dict, model_source_stub, validate=False, resolve=False
+    )
+    sbml2 = sbml_dfs_core.SBML_dfs(
+        sbml_dict, model_source_stub, validate=False, resolve=False
+    )
     sbml_dfs_dict = {"mod1": sbml1, "mod2": sbml2}
 
     # Create a lookup_table that merges both reactions into a new_id
     lookup_table = pd.DataFrame(
         {
-            "model": ["mod1", "mod2"],
-            "r_id": [r_id, r_id],
+            SOURCE_SPEC.MODEL: ["mod1", "mod2"],
+            SBML_DFS.R_ID: [r_id, r_id],
             "new_id": ["merged_rid", "merged_rid"],
         }
     )
@@ -328,8 +353,8 @@ def test_report_consensus_merges_reactions(tmp_path):
     table_schema = SBML_DFS_SCHEMA.SCHEMA[SBML_DFS.REACTIONS]
 
     # Call the function and check that it runs and the merge_labels are as expected
-    consensus.report_consensus_merges(
-        lookup_table.set_index(["model", "r_id"])[
+    consensus._report_consensus_merges(
+        lookup_table.set_index([SOURCE_SPEC.MODEL, SBML_DFS.R_ID])[
             "new_id"
         ],  # this is a Series with name 'new_id'
         table_schema,
@@ -370,12 +395,12 @@ def test_build_consensus_identifiers_handles_merges_and_missing_ids():
                 ),
             ],
         }
-    ).set_index("s_id")
+    ).set_index(SBML_DFS.S_ID)
 
     schema = SBML_DFS_SCHEMA.SCHEMA[SBML_DFS.SPECIES]
 
     indexed_cluster, cluster_consensus_identifiers = (
-        consensus.build_consensus_identifiers(df, schema)
+        consensus._build_consensus_identifiers(df, schema)
     )
 
     # All entities should be assigned to a cluster
@@ -391,25 +416,91 @@ def test_build_consensus_identifiers_handles_merges_and_missing_ids():
 
     # The consensus identifier for the merged cluster should include identifier X
     merged_cluster_id = indexed_cluster.loc["A"]
-    ids_obj = cluster_consensus_identifiers.loc[merged_cluster_id, schema["id"]]
-    assert any(i["identifier"] == "X" for i in getattr(ids_obj, "ids", []))
+    ids_obj = cluster_consensus_identifiers.loc[
+        merged_cluster_id, schema[SCHEMA_DEFS.ID]
+    ]
+    assert any(i[IDENTIFIERS.IDENTIFIER] == "X" for i in getattr(ids_obj, "ids", []))
 
     # The consensus identifier for the entity with no identifiers should be empty
     noid_cluster_id = indexed_cluster.loc["B"]
-    ids_obj_noid = cluster_consensus_identifiers.loc[noid_cluster_id, schema["id"]]
+    ids_obj_noid = cluster_consensus_identifiers.loc[
+        noid_cluster_id, schema[SCHEMA_DEFS.ID]
+    ]
     assert hasattr(ids_obj_noid, "ids")
     assert len(getattr(ids_obj_noid, "ids", [])) == 0
 
 
-################################################
-# __main__
-################################################
+def test_consensus_round_trip_consistency(
+    pw_index_metabolism, sbml_dfs_dict_metabolism, sbml_dfs_metabolism
+):
+    """
+    Test that round-trip conversion between different data structures produces consistent results.
 
-if __name__ == "__main__":
-    test_reduce_to_consensus_ids()
-    test_consensus()
-    test_source_tracking()
-    test_passing_entity_data()
-    test_consensus_ontology_check()
-    test_report_consensus_merges_reactions()
-    test_build_consensus_identifiers_handles_merges_and_missing_ids()
+    This test verifies that:
+    1. sbml_dfs_dict -> sbml_dfs_list -> (sbml_dfs_dict, pw_index) -> consensus_model
+    2. pw_index -> sbml_dfs_dict -> consensus_model
+
+    Both paths should produce the same consensus model.
+    """
+
+    # Path 1: pw_index -> sbml_dfs_dict -> consensus_model was already created in conftest.py
+    pw_index = pw_index_metabolism
+    sbml_dfs_dict = sbml_dfs_dict_metabolism
+    sbml_dfs = sbml_dfs_metabolism
+
+    # Path 2: sbml_dfs_dict -> sbml_dfs_list -> (sbml_dfs_dict, pw_index) -> consensus_model
+    sbml_dfs_list = list(sbml_dfs_dict.values())
+    sbml_dfs_dict_from_list, pw_index_from_list = consensus.prepare_consensus_model(
+        sbml_dfs_list
+    )
+    sbml_dfs_from_list = consensus.construct_consensus_model(
+        sbml_dfs_dict_from_list, pw_index_from_list
+    )
+
+    # Verify both paths produce identical consensus models
+    assert (
+        sbml_dfs.species.shape == sbml_dfs_from_list.species.shape
+    ), "Species tables should have same shape"
+    assert (
+        sbml_dfs.reactions.shape == sbml_dfs_from_list.reactions.shape
+    ), "Reactions tables should have same shape"
+    assert (
+        sbml_dfs.reaction_species.shape == sbml_dfs_from_list.reaction_species.shape
+    ), "Reaction species tables should have same shape"
+
+    # Verify the pw_index objects are equivalent
+    assert (
+        pw_index.index.shape == pw_index_from_list.index.shape
+    ), "PWIndex objects should have same shape"
+
+    # Compare columns using set comparison
+    assert set(pw_index.index.columns) == set(
+        pw_index_from_list.index.columns
+    ), "PWIndex objects should have same columns"
+
+    # Compare the actual pw_index data, ignoring row/column order and dtype differences
+    pd.testing.assert_frame_equal(
+        pw_index.index,
+        pw_index_from_list.index,
+        check_like=True,  # Ignore the order of index & columns
+        check_dtype=False,  # Ignore dtype differences (e.g., float64 vs object for date column)
+    )
+
+    # Verify the sbml_dfs_dict objects are equivalent
+    assert len(sbml_dfs_dict) == len(
+        sbml_dfs_dict_from_list
+    ), "SBML_dfs dictionaries should have same number of entries"
+    assert set(sbml_dfs_dict.keys()) == set(
+        sbml_dfs_dict_from_list.keys()
+    ), "SBML_dfs dictionaries should have same keys"
+
+    # Compare the metadata of each paired SBML_dfs object
+    for key in sbml_dfs_dict.keys():
+        original_sbml_dfs = sbml_dfs_dict[key]
+        reconstructed_sbml_dfs = sbml_dfs_dict_from_list[key]
+
+        # Compare metadata using pandas testing
+        pd.testing.assert_frame_equal(
+            original_sbml_dfs.metadata[SBML_DFS_METADATA.SBML_DFS_SOURCE].source,
+            reconstructed_sbml_dfs.metadata[SBML_DFS_METADATA.SBML_DFS_SOURCE].source,
+        )
