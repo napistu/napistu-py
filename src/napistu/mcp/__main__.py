@@ -3,12 +3,10 @@ MCP (Model Context Protocol) Server CLI for Napistu.
 """
 
 import asyncio
-import logging
 
 import click
-import click_logging
 
-import napistu
+from napistu._cli import setup_logging, verbosity_option
 from napistu.mcp.client import (
     check_server_health,
     list_server_resources,
@@ -27,8 +25,8 @@ from napistu.mcp.config import (
 )
 from napistu.mcp.server import start_mcp_server
 
-logger = logging.getLogger(napistu.__name__)
-click_logging.basic_config(logger)
+# Set up logging using shared configuration
+logger, console = setup_logging()
 
 
 @click.group()
@@ -48,7 +46,7 @@ def server():
     "--profile", type=click.Choice(["execution", "docs", "full"]), default="docs"
 )
 @server_config_options
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def start_server(profile, production, local, host, port, server_name):
     """Start an MCP server with the specified profile."""
     try:
@@ -69,7 +67,7 @@ def start_server(profile, production, local, host, port, server_name):
 
 
 @server.command(name="local")
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def start_local():
     """Start a local MCP server optimized for function execution."""
     config = local_server_config()
@@ -82,7 +80,7 @@ def start_local():
 
 
 @server.command(name="full")
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def start_full():
     """Start a full MCP server with all components enabled (local debugging)."""
     config = local_server_config()
@@ -99,7 +97,7 @@ def start_full():
 
 @cli.command()
 @client_config_options
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def health(production, local, host, port, https):
     """Quick health check of MCP server."""
 
@@ -123,7 +121,7 @@ def health(production, local, host, port, https):
 
 @cli.command()
 @client_config_options
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def resources(production, local, host, port, https):
     """List all available resources on the MCP server."""
 
@@ -162,7 +160,7 @@ def resources(production, local, host, port, https):
 @click.option(
     "--output", type=click.File("w"), default="-", help="Output file (default: stdout)"
 )
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def read(resource_uri, production, local, host, port, https, output):
     """Read a specific resource from the MCP server."""
 
@@ -197,7 +195,7 @@ def read(resource_uri, production, local, host, port, https, output):
 
 
 @cli.command()
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def compare():
     """Compare health between local development and production servers."""
 
@@ -268,7 +266,7 @@ def compare():
     help="Show similarity scores for semantic search results",
 )
 @client_config_options
-@click_logging.simple_verbosity_option(logger)
+@verbosity_option
 def search(
     component, query, search_type, show_scores, production, local, host, port, https
 ):
