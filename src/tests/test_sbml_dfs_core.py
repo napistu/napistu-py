@@ -1040,3 +1040,54 @@ def test_get_ontology_occurrence_characteristic_only(sbml_dfs_characteristic_tes
     assert isinstance(occurrence_df_all, pd.DataFrame)
     assert occurrence_df_all.shape[0] == 1
     assert occurrence_df_all.shape[1] == 5
+
+
+def test_get_ontology_x_source_cooccurrence(sbml_dfs_metabolism):
+    """
+    Test get_ontology_x_source_cooccurrence method with metabolism data.
+
+    This test verifies that the method correctly creates a co-occurrence matrix
+    between ontologies and sources using the metabolism fixture.
+    """
+    # Test basic functionality
+    cooccurrence_matrix = sbml_dfs_metabolism.get_ontology_x_source_cooccurrence(
+        SBML_DFS.SPECIES
+    )
+
+    # Verify the result is a DataFrame with correct data types
+    assert isinstance(cooccurrence_matrix, pd.DataFrame)
+    assert (cooccurrence_matrix >= 0).all().all(), "All values should be non-negative"
+    assert cooccurrence_matrix.dtypes.apply(
+        lambda x: pd.api.types.is_integer_dtype(x)
+    ).all(), "All values should be integers"
+
+    # Test with characteristic_only=True
+    char_cooccurrence = sbml_dfs_metabolism.get_ontology_x_source_cooccurrence(
+        SBML_DFS.SPECIES, characteristic_only=True
+    )
+    assert isinstance(char_cooccurrence, pd.DataFrame)
+
+    # Test with custom priority pathways (use actual pathway names from the data)
+    custom_pathways = cooccurrence_matrix.columns[
+        :2
+    ].tolist()  # Use first 2 pathways from the data
+    custom_cooccurrence = sbml_dfs_metabolism.get_ontology_x_source_cooccurrence(
+        SBML_DFS.SPECIES, priority_pathways=custom_pathways
+    )
+    assert isinstance(custom_cooccurrence, pd.DataFrame)
+
+    # Test with reactions
+    reaction_cooccurrence = sbml_dfs_metabolism.get_ontology_x_source_cooccurrence(
+        SBML_DFS.REACTIONS
+    )
+    assert isinstance(reaction_cooccurrence, pd.DataFrame)
+
+    # Test exact dimensions
+    assert cooccurrence_matrix.shape == (
+        7,
+        4,
+    ), f"Expected species co-occurrence shape (7, 4), got {cooccurrence_matrix.shape}"
+    assert reaction_cooccurrence.shape == (
+        4,
+        4,
+    ), f"Expected reaction co-occurrence shape (4, 4), got {reaction_cooccurrence.shape}"

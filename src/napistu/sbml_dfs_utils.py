@@ -63,11 +63,15 @@ def add_missing_ids_column(
         The contingency table with binary values (subset of IDs)
     reference_table : pd.DataFrame
         The reference table containing all possible IDs
+    other_column_name : str, optional
+        Name for the 'other' column, by default "other"
 
     Returns:
     --------
     pd.DataFrame
-        Updated contingency table with 'other' column(s) added
+        Updated contingency table with 'other' column(s) added if there are missing IDs.
+        If no IDs are missing, returns a copy of the original contingency table without
+        adding an 'other' column.
 
     Raises:
     -------
@@ -109,6 +113,10 @@ def add_missing_ids_column(
 
     # Create a copy of the contingency table to avoid modifying the original
     result_table = contingency_table.copy()
+
+    # If no missing IDs, return the original table without adding 'other' column
+    if len(missing_ids) == 0:
+        return result_table
 
     # Create 'other' column name based on column structure
     if isinstance(result_table.columns, pd.MultiIndex):
@@ -1641,11 +1649,11 @@ def _summarize_ontology_cooccurrence(
     )
 
     # Convert to binary (1 if compound is in pathway, 0 otherwise)
-    entity_ontology__matrix = (entity_ontology_occurrences > 0).astype(int)
+    entity_ontology_matrix = (entity_ontology_occurrences > 0).astype(int)
 
     # Calculate co-occurrence matrix: pathways × pathways
     # This gives us the number of compounds shared between each pair of pathways
-    cooccurrences = entity_ontology__matrix.T @ entity_ontology__matrix
+    cooccurrences = entity_ontology_matrix.T @ entity_ontology_matrix
 
     return cooccurrences
 

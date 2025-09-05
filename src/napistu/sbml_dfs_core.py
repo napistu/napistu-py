@@ -951,6 +951,92 @@ class SBML_dfs:
 
         return result
 
+    def get_ontology_x_source_cooccurrence(
+        self,
+        entity_type: str,
+        # Parameters from get_ontology_occurrence
+        stratify_by_bqb: bool = True,
+        allow_col_multindex: bool = False,
+        characteristic_only: bool = False,
+        dogmatic: bool = True,
+        # Parameters from get_source_occurrence
+        priority_pathways: list[str] = DATA_SOURCES_LIST,
+    ) -> pd.DataFrame:
+        """
+        Get ontology × source co-occurrence matrix for a specific entity type.
+
+        This method creates a co-occurrence matrix showing the relationship between
+        ontologies and sources (pathways) by calculating how many entities of the
+        specified type are shared between each ontology-source pair.
+
+        The method combines ontology occurrence data with source occurrence data to
+        create a cross-tabulation matrix where:
+        - Rows represent ontologies
+        - Columns represent sources/pathways
+        - Values represent the number of entities shared between each ontology-source pair
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
+        stratify_by_bqb : bool, optional
+            Whether to stratify by BQB (Biological Qualifier) terms in ontology analysis, by default True
+        allow_col_multindex : bool, optional
+            Whether to allow column multi-index in ontology analysis, by default False
+        characteristic_only : bool, optional
+            Whether to use only characteristic identifiers in ontology analysis (only supported for species), by default False
+        dogmatic : bool, optional
+            Whether to use dogmatic identifier filtering in ontology analysis, by default True
+        priority_pathways : list[str], optional
+            List of pathway IDs to prioritize in the source analysis, by default DATA_SOURCES_LIST
+
+        Returns
+        -------
+        pd.DataFrame
+            Co-occurrence matrix with ontologies as rows and sources as columns.
+            Values represent the number of entities shared between each ontology-source pair.
+
+        Raises
+        ------
+        ValueError
+            If the entity type is invalid, identifiers are malformed, or source tables are empty
+
+        Examples
+        --------
+        >>> # Get ontology × source co-occurrence for species
+        >>> cooccurrence_matrix = sbml_dfs.get_ontology_x_source_cooccurrence(SBML_DFS.SPECIES)
+        >>>
+        >>> # Use characteristic species only
+        >>> char_cooccurrence = sbml_dfs.get_ontology_x_source_cooccurrence(
+        ...     SBML_DFS.SPECIES, characteristic_only=True
+        ... )
+        >>>
+        >>> # Custom pathway priority
+        >>> custom_cooccurrence = sbml_dfs.get_ontology_x_source_cooccurrence(
+        ...     SBML_DFS.SPECIES, priority_pathways=['reactome', 'kegg']
+        ... )
+        """
+        sources = self.get_source_occurrence(
+            entity_type, priority_pathways=priority_pathways, include_missing=True
+        )
+        ontologies = self.get_ontology_occurrence(
+            entity_type,
+            stratify_by_bqb=stratify_by_bqb,
+            allow_col_multindex=allow_col_multindex,
+            characteristic_only=characteristic_only,
+            dogmatic=dogmatic,
+            include_missing=True,
+        )
+
+        ontologies_matrix = (ontologies > 0).astype(int)
+        sources_matrix = (sources > 0).astype(int)
+
+        # Calculate co-occurrence matrix: ontologies × sources
+        # This gives us the number of entities shared between each ontology-source pair
+        cooccurrences = ontologies_matrix.T @ sources_matrix
+
+        return cooccurrences
+
     def get_source_cooccurrence(
         self, entity_type: str, priority_pathways: list[str] = DATA_SOURCES_LIST
     ) -> pd.DataFrame:
