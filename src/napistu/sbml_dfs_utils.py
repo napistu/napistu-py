@@ -24,11 +24,13 @@ from napistu.constants import (
     SBO_ROLES_DEFS,
     SBOTERM_NAMES,
     SCHEMA_DEFS,
+    SOURCE_SPEC,
     VALID_SBO_TERM_NAMES,
     VALID_SBO_TERMS,
 )
 from napistu.ingestion.constants import (
     COMPARTMENTS_GO_TERMS,
+    DATA_SOURCES_LIST,
     GENERIC_COMPARTMENT,
     INTERACTION_EDGELIST_DEFAULTS,
     INTERACTION_EDGELIST_DEFS,
@@ -1254,6 +1256,15 @@ def _filter_promiscuous_components(
     return filtered_bqb_has_parts
 
 
+def _filter_to_pathways(df: pd.DataFrame, pathways: list[str]) -> pd.DataFrame:
+    """
+    Filter a table to only include pathways in the list.
+    """
+
+    pathway_mask = df[SOURCE_SPEC.PATHWAY_ID].isin(pathways)
+    return df.loc[pathway_mask]
+
+
 def _find_underspecified_reactions(
     reaction_species_w_roles: pd.DataFrame,
 ) -> pd.DataFrame:
@@ -1478,6 +1489,102 @@ def _sbml_dfs_from_edgelist_check_cspecies_merge(
         )
 
     return None
+
+
+def _select_priority_pathway_sources(
+    source_table: pd.DataFrame, priority_pathways: list[str] = DATA_SOURCES_LIST
+) -> pd.DataFrame:
+    """
+    Filter the source table to only include pathways in the list. If 0 or 1 priority pathways are found, return the source table.
+
+    Parameters
+    ----------
+    source_table (pd.DataFrame)
+        The source table to filter
+    priority_pathways (list[str])
+        The list of pathways to filter to
+
+    Returns
+    -------
+    pd.DataFrame
+        The filtered source table
+    """
+
+    # filter to pathways of interest
+    priority_source_table = _filter_to_pathways(source_table, priority_pathways)
+    n_priority_pathways = priority_source_table[SOURCE_SPEC.PATHWAY_ID].nunique()
+
+    if n_priority_pathways > 1:
+        filtered_sources = priority_source_table
+    else:
+        logger.debug("1 or fewer priority pathways found, using all pathways")
+        filtered_sources = source_table
+
+    return filtered_sources
+
+
+def _summarize_pathway_cooccurrence(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Create a cooccurrence matrix of pathways based on the presence of entities in pathways.
+
+    Parameters
+    ----------
+    df (pd.DataFrame)
+        a table generated using `sbml_dfs.get_sources`
+
+    Returns
+    -------
+    pd.DataFrame
+        Square matrix with pathways as both rows and columns
+    """
+
+    entity_pathway_occurrences = _summarize_pathway_occurrence(df)
+
+    # Convert to binary (1 if compound is in pathway, 0 otherwise)
+    compound_pathway_matrix = (entity_pathway_occurrences > 0).astype(int)
+
+    # Calculate co-occurrence matrix: pathways × pathways
+    # This gives us the number of compounds shared between each pair of pathways
+    cooccurrences = compound_pathway_matrix.T @ compound_pathway_matrix
+
+    return cooccurrences
+
+
+def _summarize_pathway_occurrence(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Summarize the occurrence of entities in pathways.
+
+    Parameters
+    ----------
+    df (pd.DataFrame)
+        a table generated using `sbml_dfs.get_sources`
+
+    Returns
+    -------
+    pd.DataFrame
+        a table with entities as rows and pathways as columns
+
+    """
+
+    entity_type = infer_entity_type(df)
+    pk = SBML_DFS_SCHEMA.SCHEMA[entity_type][SCHEMA_DEFS.PK]
+
+    expected_multindex = [pk, SOURCE_SPEC.ENTRY]
+    if expected_multindex != df.index.names:
+        raise ValueError(
+            f"Expected multindex {expected_multindex} but got {df.index.names}. `df` should be generated using `sbml_dfs.get_sources`"
+        )
+
+    # Create a binary matrix: compounds × pathways
+    entity_pathway_occurrences = df.reset_index().pivot_table(
+        index=pk,
+        columns=SOURCE_SPEC.PATHWAY_ID,
+        values=SOURCE_SPEC.ENTRY,  # Using 'entry' column as indicator
+        fill_value=0,
+        aggfunc="count",  # Count occurrences
+    )
+
+    return entity_pathway_occurrences
 
 
 def _validate_non_null_values(

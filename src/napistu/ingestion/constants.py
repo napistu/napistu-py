@@ -26,6 +26,8 @@ DATA_SOURCES = SimpleNamespace(
     TRRUST="TRRUST",
 )
 
+DATA_SOURCES_LIST = list(DATA_SOURCES.__dict__.values())
+
 DATA_SOURCE_DESCRIPTIONS = {
     DATA_SOURCES.BIGG: "UCSD genome-scale metabolic models",
     DATA_SOURCES.DOGMA: "Napistu gene, transcript, and protein annotations",

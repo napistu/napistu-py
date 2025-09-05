@@ -22,6 +22,7 @@ from napistu.constants import (
     SBML_DFS_SCHEMA,
     SBOTERM_NAMES,
     SCHEMA_DEFS,
+    SOURCE_SPEC,
 )
 from napistu.ingestion import sbml
 from napistu.ingestion.constants import (
@@ -921,3 +922,88 @@ def test_pickle_with_species_data(sbml_dfs):
         # Clean up
         if os.path.exists(pickle_path):
             os.unlink(pickle_path)
+
+
+def test_get_sources(sbml_dfs_metabolism):
+    """Test get_sources method returns unnest sources table."""
+    # Test with species
+    sources_df = sbml_dfs_metabolism.get_sources(SBML_DFS.SPECIES)
+    assert sources_df is not None
+    assert SOURCE_SPEC.PATHWAY_ID in sources_df.columns
+
+    # Test with reactions
+    sources_df = sbml_dfs_metabolism.get_sources(SBML_DFS.REACTIONS)
+    assert sources_df is not None
+    assert SOURCE_SPEC.PATHWAY_ID in sources_df.columns
+
+    # Test invalid entity type raises error
+    with pytest.raises(
+        ValueError, match="reaction_species does not have a source attribute"
+    ):
+        sbml_dfs_metabolism.get_sources(SBML_DFS.REACTION_SPECIES)
+
+
+def test_get_pathway_occurrence(sbml_dfs_metabolism):
+    """Test get_pathway_occurrence method returns pathway occurrence summary."""
+    # Test with species
+    occurrence_df = sbml_dfs_metabolism.get_pathway_occurrence(SBML_DFS.SPECIES)
+    assert isinstance(occurrence_df, pd.DataFrame)
+    print(f"Species pathway occurrence shape: {occurrence_df.shape}")
+    assert occurrence_df.shape == (129, 4)  # Expected: 129 pathways, 4 columns
+
+    # Test with reactions
+    occurrence_df = sbml_dfs_metabolism.get_pathway_occurrence(SBML_DFS.REACTIONS)
+    assert isinstance(occurrence_df, pd.DataFrame)
+    print(f"Reactions pathway occurrence shape: {occurrence_df.shape}")
+    assert occurrence_df.shape == (86, 4)  # Expected: 86 pathways, 4 columns
+
+
+def test_get_pathway_cooccurrence(sbml_dfs_metabolism):
+    """Test get_pathway_cooccurrence method returns co-occurrence matrix."""
+    # Test with species
+    cooccurrence_df = sbml_dfs_metabolism.get_pathway_cooccurrence(SBML_DFS.SPECIES)
+    assert isinstance(cooccurrence_df, pd.DataFrame)
+    print(f"Species pathway co-occurrence shape: {cooccurrence_df.shape}")
+    assert cooccurrence_df.shape == (4, 4)  # Expected: 4x4 square matrix
+
+    # Test with reactions
+    cooccurrence_df = sbml_dfs_metabolism.get_pathway_cooccurrence(SBML_DFS.REACTIONS)
+    assert isinstance(cooccurrence_df, pd.DataFrame)
+    print(f"Reactions pathway co-occurrence shape: {cooccurrence_df.shape}")
+    assert cooccurrence_df.shape == (4, 4)  # Expected: 4x4 square matrix
+
+
+def test_pathway_methods_single_source_error(sbml_dfs):
+    """Test that pathway methods raise error for single-source models."""
+    # Test get_pathway_occurrence raises error for single-source model
+    with pytest.raises(ValueError, match="The Source tables for species were empty"):
+        sbml_dfs.get_pathway_occurrence(SBML_DFS.SPECIES)
+
+    with pytest.raises(ValueError, match="The Source tables for reactions were empty"):
+        sbml_dfs.get_pathway_occurrence(SBML_DFS.REACTIONS)
+
+    # Test get_pathway_cooccurrence raises error for single-source model
+    with pytest.raises(ValueError, match="The Source tables for species were empty"):
+        sbml_dfs.get_pathway_cooccurrence(SBML_DFS.SPECIES)
+
+    with pytest.raises(ValueError, match="The Source tables for reactions were empty"):
+        sbml_dfs.get_pathway_cooccurrence(SBML_DFS.REACTIONS)
+
+
+def test_priority_pathways_filtering(sbml_dfs_metabolism):
+    """Test that priority_pathways parameter correctly filters pathways."""
+    # First, get the full co-occurrence matrix to see pathway names
+    full_cooccurrence = sbml_dfs_metabolism.get_pathway_cooccurrence(SBML_DFS.SPECIES)
+
+    # Select first 2 pathways for testing
+    priority_pathways = list(full_cooccurrence.index)[:2]
+
+    # Test with filtered pathways
+    filtered_cooccurrence = sbml_dfs_metabolism.get_pathway_cooccurrence(
+        SBML_DFS.SPECIES, priority_pathways=priority_pathways
+    )
+
+    # Verify the filtered result is (2,2)
+    assert filtered_cooccurrence.shape == (2, 2)
+    assert list(filtered_cooccurrence.index) == priority_pathways
+    assert list(filtered_cooccurrence.columns) == priority_pathways

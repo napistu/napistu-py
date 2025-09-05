@@ -42,7 +42,7 @@ from napistu.constants import (
     SBOTERM_NAMES,
     SCHEMA_DEFS,
 )
-from napistu.ingestion.constants import INTERACTION_EDGELIST_DEFAULTS
+from napistu.ingestion.constants import DATA_SOURCES_LIST, INTERACTION_EDGELIST_DEFAULTS
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +94,12 @@ class SBML_dfs:
         Retrieve a table of identifiers for a specified entity type (e.g., species or reactions).
     get_network_summary()
         Return a dictionary of diagnostic statistics summarizing the network structure.
+    get_pathway_cooccurrence(entity_type, priority_pathways=DATA_SOURCES_LIST)
+        Get pathway co-occurrence matrix for a specific entity type.
+    get_pathway_occurrence(entity_type, priority_pathways=DATA_SOURCES_LIST)
+        Get pathway occurrence summary for a specific entity type.
+    get_sources(entity_type)
+        Get the unnest sources table for a given entity type.
     get_source_total_counts(entity_type)
         Get the total counts of each source for a given entity type.
     get_species_features()
@@ -793,6 +799,56 @@ class SBML_dfs:
 
         return stats
 
+    def get_sources(self, entity_type: str) -> pd.DataFrame | None:
+        """
+        Get the unnest sources table for a given entity type.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to get sources for (e.g., 'species', 'reactions')
+
+        Returns
+        -------
+        pd.DataFrame | None
+            DataFrame containing the unnest sources table, or None if no sources found
+
+        Raises
+        ------
+        ValueError
+            If entity_type is invalid or does not have a source attribute
+        """
+        # Validate that the entity_type exists in the schema
+        if entity_type not in SBML_DFS_SCHEMA.SCHEMA:
+            raise ValueError(
+                f"{entity_type} is not a valid entity type. "
+                f"Valid types are: {', '.join(SBML_DFS_SCHEMA.SCHEMA.keys())}"
+            )
+
+        # Check if the entity_type has a source attribute
+        entity_schema = SBML_DFS_SCHEMA.SCHEMA[entity_type]
+        if SCHEMA_DEFS.SOURCE not in entity_schema:
+            raise ValueError(f"{entity_type} does not have a source attribute")
+
+        entity_table = self.get_table(entity_type)
+
+        if entity_type == SBML_DFS.REACTIONS:
+            logger.info(
+                "Excluding reactions which are all interactors from reaction source counts"
+            )
+
+            interactor_sbo_term = MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
+            reaction_species = self.get_table(SBML_DFS.REACTION_SPECIES)
+            valid_reactions = reaction_species[
+                ~reaction_species[SBML_DFS.SBO_TERM].isin([interactor_sbo_term])
+            ][SBML_DFS.R_ID].unique()
+
+            entity_table = entity_table.loc[valid_reactions]
+
+        all_sources_table = source.unnest_sources(entity_table)
+
+        return all_sources_table
+
     def get_source_total_counts(self, entity_type: str) -> pd.Series:
         """
         Get the total counts of each source for a given entity type.
@@ -812,22 +868,7 @@ class SBML_dfs:
         ValueError
             If entity_type is invalid
         """
-        entity_table = self.get_table(entity_type)
-
-        if entity_type == SBML_DFS.REACTIONS:
-            logger.info(
-                "Excluding reactions which are all interactors from reaction source counts"
-            )
-
-            interactor_sbo_term = MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
-            reaction_species = self.get_table(SBML_DFS.REACTION_SPECIES)
-            valid_reactions = reaction_species[
-                ~reaction_species[SBML_DFS.SBO_TERM].isin([interactor_sbo_term])
-            ][SBML_DFS.R_ID].unique()
-
-            entity_table = entity_table.loc[valid_reactions]
-
-        all_sources_table = source.unnest_sources(entity_table)
+        all_sources_table = self.get_sources(entity_type)
 
         if all_sources_table is None:
             logger.warning(
@@ -2130,3 +2171,81 @@ class SBML_dfs:
         table_data = getattr(self, table_name)
 
         sbml_dfs_utils.validate_sbml_dfs_table(table_data, table_name)
+
+    def get_pathway_occurrence(
+        self, entity_type: str, priority_pathways: list[str] = DATA_SOURCES_LIST
+    ) -> pd.DataFrame:
+        """
+        Get pathway occurrence summary for a specific entity type.
+
+        This method analyzes which pathways contain entities of the specified type,
+        providing a summary of pathway occurrence patterns.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
+        priority_pathways : list[str], optional
+            List of pathway IDs to prioritize in the analysis. Defaults to DATA_SOURCES_LIST.
+
+        Returns
+        -------
+        pd.DataFrame
+            Summary of pathway occurrence patterns
+
+        Raises
+        ------
+        ValueError
+            If the source tables for the entity type are empty (indicating single-source model)
+        """
+        source_table = self.get_sources(entity_type)
+        if source_table is None:
+            raise ValueError(
+                f"The Source tables for {entity_type} were empty, this indicates that the sbml_dfs is from a single source. "
+                "Only sbml_dfs which have been merged with consensus should use this method."
+            )
+
+        filtered_sources = sbml_dfs_utils._select_priority_pathway_sources(
+            source_table, priority_pathways
+        )
+
+        return sbml_dfs_utils._summarize_pathway_occurrence(filtered_sources)
+
+    def get_pathway_cooccurrence(
+        self, entity_type: str, priority_pathways: list[str] = DATA_SOURCES_LIST
+    ) -> pd.DataFrame:
+        """
+        Get pathway co-occurrence matrix for a specific entity type.
+
+        This method creates a co-occurrence matrix showing which pathways share entities
+        of the specified type, indicating pathway relationships and overlaps.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
+        priority_pathways : list[str], optional
+            List of pathway IDs to prioritize in the analysis. Defaults to DATA_SOURCES_LIST.
+
+        Returns
+        -------
+        pd.DataFrame
+            Co-occurrence matrix with pathways as both rows and columns
+
+        Raises
+        ------
+        ValueError
+            If the source tables for the entity type are empty (indicating single-source model)
+        """
+        source_table = self.get_sources(entity_type)
+        if source_table is None:
+            raise ValueError(
+                f"The Source tables for {entity_type} were empty, this indicates that the sbml_dfs is from a single source. "
+                "Only sbml_dfs which have been merged with consensus should use this method."
+            )
+
+        filtered_sources = sbml_dfs_utils._select_priority_pathway_sources(
+            source_table, priority_pathways
+        )
+
+        return sbml_dfs_utils._summarize_pathway_cooccurrence(filtered_sources)
