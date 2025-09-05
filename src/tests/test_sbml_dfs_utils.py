@@ -641,3 +641,66 @@ def test_reaction_formulas(sbml_dfs):
     # Test invalid IDs
     with pytest.raises(ValueError, match="Reaction IDs.*not found"):
         sbml_dfs.reaction_formulas(r_ids=["invalid_id"])
+
+
+def test_add_missing_ids_column(sbml_dfs):
+    """
+    Test add_missing_ids_column function with species IDs contingency table.
+
+    This test generates a species IDs contingency table, drops some roles,
+    and then uses add_missing_ids_column to add defaults for missing IDs.
+    """
+
+    # Generate a species IDs contingency table using get_ontology_occurrence
+    # This creates a binary table where 1 indicates presence of an ontology for a species
+    full_contingency_table = sbml_dfs.get_ontology_occurrence(SBML_DFS.SPECIES)
+
+    # Verify we have a contingency table with binary values
+    assert isinstance(full_contingency_table, pd.DataFrame)
+    assert full_contingency_table.shape[0] > 0  # Should have some species
+    assert full_contingency_table.shape[1] > 0  # Should have some ontologies
+
+    # Create a subset contingency table by dropping some rows (simulating missing IDs)
+    # Drop the last row to simulate missing data
+    subset_contingency_table = full_contingency_table.iloc[:-1, :].copy()
+
+    # Verify the subset is smaller than the full table
+    assert subset_contingency_table.shape[0] <= full_contingency_table.shape[0]
+
+    # Use add_missing_ids_column to add missing IDs back with defaults
+    result_table = sbml_dfs_utils.add_missing_ids_column(
+        subset_contingency_table, sbml_dfs.species
+    )
+
+    # Verify the result has the same number of rows as the reference table
+    # and one additional column (the 'other' column)
+    assert result_table.shape[0] == full_contingency_table.shape[0]
+    assert result_table.shape[1] == full_contingency_table.shape[1] + 1
+    assert result_table.index.equals(full_contingency_table.index)
+
+    # Verify that missing IDs were added with 'other' column
+    if "other" in result_table.columns:
+        # Check that 'other' column exists and has values for previously missing rows
+        other_column = result_table["other"]
+        assert other_column.sum() > 0  # Should have some 1s in the 'other' column
+
+        # Verify that rows that were missing now have 1 in the 'other' column
+        missing_rows = full_contingency_table.index.difference(
+            subset_contingency_table.index
+        )
+        if len(missing_rows) > 0:
+            for missing_row in missing_rows:
+                assert result_table.loc[missing_row, "other"] == 1
+
+    # Verify that existing data is preserved
+    for idx in subset_contingency_table.index:
+        for col in subset_contingency_table.columns:
+            if col in result_table.columns:
+                assert (
+                    result_table.loc[idx, col] == subset_contingency_table.loc[idx, col]
+                )
+
+    # Verify the result is a proper contingency table (integer values)
+    assert result_table.dtypes.apply(
+        lambda x: pd.api.types.is_integer_dtype(x)
+    ).all(), "Result should contain only integer values"

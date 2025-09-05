@@ -48,6 +48,93 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
+def add_missing_ids_column(
+    contingency_table: pd.DataFrame, reference_table: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Add an 'other' column to a contingency table for IDs that exist in a reference table
+    but are missing from the contingency table.
+
+    Parameters:
+    -----------
+    contingency_table : pd.DataFrame
+        The contingency table with binary values (subset of IDs)
+    reference_table : pd.DataFrame
+        The reference table containing all possible IDs
+
+    Returns:
+    --------
+    pd.DataFrame
+        Updated contingency table with 'other' column(s) added
+
+    Raises:
+    -------
+    ValueError
+        If the index names don't match between the two tables
+    """
+
+    # Check that index names match
+    if contingency_table.index.name != reference_table.index.name:
+        raise ValueError(
+            f"Index names must match. Contingency table index name: '{contingency_table.index.name}', "
+            f"Reference table index name: '{reference_table.index.name}'"
+        )
+
+    # Check that all index values are unique in both tables
+    for name, table in [
+        ("Contingency", contingency_table),
+        ("Reference", reference_table),
+    ]:
+        if table.index.duplicated().any():
+            duplicates = table.index[table.index.duplicated()].unique()
+            raise ValueError(
+                f"{name} table has duplicate index values: {sorted(duplicates)}"
+            )
+
+    # Get the indices
+    contingency_ids = set(contingency_table.index)
+    reference_ids = set(reference_table.index)
+
+    # Check that contingency_ids is a subset of reference_ids
+    if not contingency_ids.issubset(reference_ids):
+        extra_ids = contingency_ids - reference_ids
+        raise ValueError(
+            f"Contingency table contains IDs not found in reference table: {sorted(extra_ids)}"
+        )
+
+    # Find missing IDs
+    missing_ids = reference_ids - contingency_ids
+
+    # Create a copy of the contingency table to avoid modifying the original
+    result_table = contingency_table.copy()
+
+    # Create 'other' column name based on column structure
+    if isinstance(result_table.columns, pd.MultiIndex):
+        other_column = tuple(["other"] * result_table.columns.nlevels)
+    else:
+        other_column = "other"
+
+    # Add the 'other' column
+    result_table[other_column] = 0
+
+    # Add missing IDs as new rows
+    for missing_id in missing_ids:
+        new_row = pd.Series(0, index=result_table.columns, name=missing_id)
+        new_row[other_column] = 1
+        result_table = pd.concat([result_table, new_row.to_frame().T])
+
+    # Sort the index to maintain order
+    result_table = result_table.sort_index()
+
+    # Verify that the result index equals the reference table index
+    if not result_table.index.equals(reference_table.index.sort_values()):
+        raise ValueError(
+            "Result table index does not match reference table index. This is an internal error."
+        )
+
+    return result_table
+
+
 def add_sbo_role(reaction_species: pd.DataFrame) -> pd.DataFrame:
     """
     Add an sbo_role column to the reaction_species table.
