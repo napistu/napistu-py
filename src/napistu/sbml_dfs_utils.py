@@ -49,7 +49,9 @@ logger = logging.getLogger(__name__)
 
 
 def add_missing_ids_column(
-    contingency_table: pd.DataFrame, reference_table: pd.DataFrame
+    contingency_table: pd.DataFrame,
+    reference_table: pd.DataFrame,
+    other_column_name: str = "other",
 ) -> pd.DataFrame:
     """
     Add an 'other' column to a contingency table for IDs that exist in a reference table
@@ -110,9 +112,9 @@ def add_missing_ids_column(
 
     # Create 'other' column name based on column structure
     if isinstance(result_table.columns, pd.MultiIndex):
-        other_column = tuple(["other"] * result_table.columns.nlevels)
+        other_column = tuple([other_column_name] * result_table.columns.nlevels)
     else:
-        other_column = "other"
+        other_column = other_column_name
 
     # Add the 'other' column
     result_table[other_column] = 0

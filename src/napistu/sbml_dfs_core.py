@@ -900,6 +900,7 @@ class SBML_dfs:
         allow_col_multindex: bool = False,
         characteristic_only: bool = False,
         dogmatic: bool = True,
+        include_missing: bool = False,
     ) -> pd.DataFrame:
         """
         Get ontology occurrence summary for a specific entity type.
@@ -921,6 +922,8 @@ class SBML_dfs:
                 false - returns all identifiers
         dogmatic: bool, optional
             Whether to use a strict or loose definition of characteristic identifiers. Only applicable if `characteristic_only` is True and `entity_type` is SBML_DFS.SPECIES.
+        include_missing: bool, optional
+            Whether to include missing entities in the result using add_missing_ids_column, by default False
 
         Returns
         -------
@@ -937,9 +940,16 @@ class SBML_dfs:
             entity_type, characteristic_only, dogmatic
         )
 
-        return sbml_dfs_utils._summarize_ontology_occurrence(
+        result = sbml_dfs_utils._summarize_ontology_occurrence(
             identifiers_table, stratify_by_bqb, allow_col_multindex
         )
+
+        if include_missing:
+            # Get the reference table (all entities of this type)
+            reference_table = self.get_table(entity_type)
+            result = sbml_dfs_utils.add_missing_ids_column(result, reference_table)
+
+        return result
 
     def get_source_cooccurrence(
         self, entity_type: str, priority_pathways: list[str] = DATA_SOURCES_LIST
@@ -981,7 +991,10 @@ class SBML_dfs:
         return sbml_dfs_utils._summarize_source_cooccurrence(filtered_sources)
 
     def get_source_occurrence(
-        self, entity_type: str, priority_pathways: list[str] = DATA_SOURCES_LIST
+        self,
+        entity_type: str,
+        priority_pathways: list[str] = DATA_SOURCES_LIST,
+        include_missing: bool = False,
     ) -> pd.DataFrame:
         """
         Get pathway occurrence summary for a specific entity type.
@@ -995,6 +1008,8 @@ class SBML_dfs:
             The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
         priority_pathways : list[str], optional
             List of pathway IDs to prioritize in the analysis. Defaults to DATA_SOURCES_LIST.
+        include_missing: bool, optional
+            Whether to include missing entities in the result using add_missing_ids_column, by default False
 
         Returns
         -------
@@ -1017,7 +1032,14 @@ class SBML_dfs:
             source_table, priority_pathways
         )
 
-        return sbml_dfs_utils._summarize_source_occurrence(filtered_sources)
+        result = sbml_dfs_utils._summarize_source_occurrence(filtered_sources)
+
+        if include_missing:
+            # Get the reference table (all entities of this type)
+            reference_table = self.get_table(entity_type)
+            result = sbml_dfs_utils.add_missing_ids_column(result, reference_table)
+
+        return result
 
     def get_sources(self, entity_type: str) -> pd.DataFrame | None:
         """
