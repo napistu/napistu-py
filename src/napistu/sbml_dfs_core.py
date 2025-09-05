@@ -94,6 +94,10 @@ class SBML_dfs:
         Retrieve a table of identifiers for a specified entity type (e.g., species or reactions).
     get_network_summary()
         Return a dictionary of diagnostic statistics summarizing the network structure.
+    get_ontology_cooccurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False)
+        Get ontology co-occurrence matrix for a specific entity type.
+    get_ontology_occurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False)
+        Get ontology occurrence summary for a specific entity type.
     get_pathway_cooccurrence(entity_type, priority_pathways=DATA_SOURCES_LIST)
         Get pathway co-occurrence matrix for a specific entity type.
     get_pathway_occurrence(entity_type, priority_pathways=DATA_SOURCES_LIST)
@@ -573,8 +577,6 @@ class SBML_dfs:
 
         Parameters
         ----------
-        sbml_dfs : sbml_dfs_core.SBML_dfs
-            The SBML_dfs object.
         dogmatic : bool, default=True
             Whether to use the dogmatic flag to determine which BQB attributes are valid.
 
@@ -700,6 +702,53 @@ class SBML_dfs:
 
         return named_identifiers
 
+    def get_identifiers_table_for_ontology_occurrence(
+        self, entity_type: str, characteristic_only: bool = False, dogmatic: bool = True
+    ) -> pd.DataFrame:
+        """
+        Get the appropriate identifiers table for ontology analysis.
+
+        This method handles the common logic for determining which identifiers
+        table to use based on the characteristic_only and dogmatic parameters.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
+        characteristic_only : bool, optional
+            Whether to use only characteristic identifiers (only supported for species), by default False
+        dogmatic : bool, optional
+            Whether to use dogmatic identifier filtering, by default True
+
+        Returns
+        -------
+        pd.DataFrame
+            The appropriate identifiers table for ontology analysis
+
+        Raises
+        ------
+        ValueError
+            If the entity type is invalid
+        """
+        import logging
+
+        from napistu.constants import SBML_DFS
+
+        logger = logging.getLogger(__name__)
+
+        if characteristic_only and entity_type == SBML_DFS.SPECIES:
+            logger.debug("loading characteristic species ids")
+            identifiers_table = self.get_characteristic_species_ids(dogmatic)
+        else:
+            logger.debug("loading all identifiers")
+            if characteristic_only:
+                logger.warning(
+                    f"Characteristic only is only supported for species. Returning all ontologies for {entity_type}."
+                )
+            identifiers_table = self.get_identifiers(entity_type)
+
+        return identifiers_table
+
     def get_network_summary(self) -> Mapping[str, Any]:
         """
         Get diagnostic statistics about the network.
@@ -798,6 +847,177 @@ class SBML_dfs:
         )
 
         return stats
+
+    def get_ontology_cooccurrence(
+        self,
+        entity_type: str,
+        stratify_by_bqb: bool = True,
+        allow_col_multindex: bool = False,
+        characteristic_only: bool = False,
+        dogmatic: bool = True,
+    ) -> pd.DataFrame:
+        """
+        Get ontology co-occurrence matrix for a specific entity type.
+
+        This method creates a co-occurrence matrix showing which ontologies share entities
+        of the specified type, indicating ontology relationships and overlaps.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
+        stratify_by_bqb : bool, optional
+            Whether to stratify by BQB (Biological Qualifier) terms, by default True
+        allow_col_multindex : bool, optional
+            Whether to allow column multi-index, by default False
+        characteristic_only : bool, optional
+            Whether to use only characteristic identifiers (only supported for species), by default False
+        dogmatic : bool, optional
+            Whether to use dogmatic identifier filtering, by default True
+
+        Returns
+        -------
+        pd.DataFrame
+            Co-occurrence matrix with ontologies as both rows and columns
+
+        Raises
+        ------
+        ValueError
+            If the entity type is invalid or identifiers are malformed
+        """
+        identifiers_table = self.get_identifiers_table_for_ontology_occurrence(
+            entity_type, characteristic_only, dogmatic
+        )
+
+        return sbml_dfs_utils._summarize_ontology_cooccurrence(
+            identifiers_table, stratify_by_bqb, allow_col_multindex
+        )
+
+    def get_ontology_occurrence(
+        self,
+        entity_type: str,
+        stratify_by_bqb: bool = True,
+        allow_col_multindex: bool = False,
+        characteristic_only: bool = False,
+        dogmatic: bool = True,
+    ) -> pd.DataFrame:
+        """
+        Get ontology occurrence summary for a specific entity type.
+
+        This method analyzes which ontologies are associated with entities of the specified type,
+        providing a summary of ontology occurrence patterns.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
+        stratify_by_bqb : bool, optional
+            Whether to stratify by BQB (Biological Qualifier) terms, by default True
+        allow_col_multindex : bool, optional
+            Whether to allow column multi-index, by default False
+        characteristic_only: bool, optional
+            Whether to only include characteristic identifiers. Only supported for species. If,
+                true - returns only the characteristic identifiers (BQB_IS, and small complex BQB_HAS_PART annotations)
+                false - returns all identifiers
+        dogmatic: bool, optional
+            Whether to use a strict or loose definition of characteristic identifiers. Only applicable if `characteristic_only` is True and `entity_type` is SBML_DFS.SPECIES.
+
+        Returns
+        -------
+        pd.DataFrame
+            Summary of ontology occurrence patterns with entities as rows and ontologies as columns
+
+        Raises
+        ------
+        ValueError
+            If the entity type is invalid or identifiers are malformed
+        """
+
+        identifiers_table = self.get_identifiers_table_for_ontology_occurrence(
+            entity_type, characteristic_only, dogmatic
+        )
+
+        return sbml_dfs_utils._summarize_ontology_occurrence(
+            identifiers_table, stratify_by_bqb, allow_col_multindex
+        )
+
+    def get_source_cooccurrence(
+        self, entity_type: str, priority_pathways: list[str] = DATA_SOURCES_LIST
+    ) -> pd.DataFrame:
+        """
+        Get pathway co-occurrence matrix for a specific entity type.
+
+        This method creates a co-occurrence matrix showing which pathways share entities
+        of the specified type, indicating pathway relationships and overlaps.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
+        priority_pathways : list[str], optional
+            List of pathway IDs to prioritize in the analysis. Defaults to DATA_SOURCES_LIST.
+
+        Returns
+        -------
+        pd.DataFrame
+            Co-occurrence matrix with pathways as both rows and columns
+
+        Raises
+        ------
+        ValueError
+            If the source tables for the entity type are empty (indicating single-source model)
+        """
+        source_table = self.get_sources(entity_type)
+        if source_table is None:
+            raise ValueError(
+                f"The Source tables for {entity_type} were empty, this indicates that the sbml_dfs is from a single source. "
+                "Only sbml_dfs which have been merged with consensus should use this method."
+            )
+
+        filtered_sources = sbml_dfs_utils._select_priority_pathway_sources(
+            source_table, priority_pathways
+        )
+
+        return sbml_dfs_utils._summarize_source_cooccurrence(filtered_sources)
+
+    def get_source_occurrence(
+        self, entity_type: str, priority_pathways: list[str] = DATA_SOURCES_LIST
+    ) -> pd.DataFrame:
+        """
+        Get pathway occurrence summary for a specific entity type.
+
+        This method analyzes which pathways contain entities of the specified type,
+        providing a summary of pathway occurrence patterns.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
+        priority_pathways : list[str], optional
+            List of pathway IDs to prioritize in the analysis. Defaults to DATA_SOURCES_LIST.
+
+        Returns
+        -------
+        pd.DataFrame
+            Summary of pathway occurrence patterns
+
+        Raises
+        ------
+        ValueError
+            If the source tables for the entity type are empty (indicating single-source model)
+        """
+        source_table = self.get_sources(entity_type)
+        if source_table is None:
+            raise ValueError(
+                f"The Source tables for {entity_type} were empty, this indicates that the sbml_dfs is from a single source. "
+                "Only sbml_dfs which have been merged with consensus should use this method."
+            )
+
+        filtered_sources = sbml_dfs_utils._select_priority_pathway_sources(
+            source_table, priority_pathways
+        )
+
+        return sbml_dfs_utils._summarize_source_occurrence(filtered_sources)
 
     def get_sources(self, entity_type: str) -> pd.DataFrame | None:
         """
@@ -2171,81 +2391,3 @@ class SBML_dfs:
         table_data = getattr(self, table_name)
 
         sbml_dfs_utils.validate_sbml_dfs_table(table_data, table_name)
-
-    def get_pathway_occurrence(
-        self, entity_type: str, priority_pathways: list[str] = DATA_SOURCES_LIST
-    ) -> pd.DataFrame:
-        """
-        Get pathway occurrence summary for a specific entity type.
-
-        This method analyzes which pathways contain entities of the specified type,
-        providing a summary of pathway occurrence patterns.
-
-        Parameters
-        ----------
-        entity_type : str
-            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
-        priority_pathways : list[str], optional
-            List of pathway IDs to prioritize in the analysis. Defaults to DATA_SOURCES_LIST.
-
-        Returns
-        -------
-        pd.DataFrame
-            Summary of pathway occurrence patterns
-
-        Raises
-        ------
-        ValueError
-            If the source tables for the entity type are empty (indicating single-source model)
-        """
-        source_table = self.get_sources(entity_type)
-        if source_table is None:
-            raise ValueError(
-                f"The Source tables for {entity_type} were empty, this indicates that the sbml_dfs is from a single source. "
-                "Only sbml_dfs which have been merged with consensus should use this method."
-            )
-
-        filtered_sources = sbml_dfs_utils._select_priority_pathway_sources(
-            source_table, priority_pathways
-        )
-
-        return sbml_dfs_utils._summarize_pathway_occurrence(filtered_sources)
-
-    def get_pathway_cooccurrence(
-        self, entity_type: str, priority_pathways: list[str] = DATA_SOURCES_LIST
-    ) -> pd.DataFrame:
-        """
-        Get pathway co-occurrence matrix for a specific entity type.
-
-        This method creates a co-occurrence matrix showing which pathways share entities
-        of the specified type, indicating pathway relationships and overlaps.
-
-        Parameters
-        ----------
-        entity_type : str
-            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
-        priority_pathways : list[str], optional
-            List of pathway IDs to prioritize in the analysis. Defaults to DATA_SOURCES_LIST.
-
-        Returns
-        -------
-        pd.DataFrame
-            Co-occurrence matrix with pathways as both rows and columns
-
-        Raises
-        ------
-        ValueError
-            If the source tables for the entity type are empty (indicating single-source model)
-        """
-        source_table = self.get_sources(entity_type)
-        if source_table is None:
-            raise ValueError(
-                f"The Source tables for {entity_type} were empty, this indicates that the sbml_dfs is from a single source. "
-                "Only sbml_dfs which have been merged with consensus should use this method."
-            )
-
-        filtered_sources = sbml_dfs_utils._select_priority_pathway_sources(
-            source_table, priority_pathways
-        )
-
-        return sbml_dfs_utils._summarize_pathway_cooccurrence(filtered_sources)

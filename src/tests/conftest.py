@@ -11,7 +11,9 @@ from pytest import fixture, skip
 
 from napistu import consensus, indices
 from napistu.constants import (
+    BQB,
     EXPECTED_PW_INDEX_COLUMNS,
+    IDENTIFIERS,
     MINI_SBO_FROM_NAME,
     SBML_DFS,
     SBOTERM_NAMES,
@@ -357,3 +359,110 @@ def skip_on_timeout(timeout_seconds):
 
 
 pytest.skip_on_timeout = skip_on_timeout
+
+
+@pytest.fixture
+def sbml_dfs_characteristic_test_data(model_source_stub):
+    """
+    Create an SBML_dfs object with test data specifically designed for testing
+    characteristic species functionality.
+    """
+    # Create mock species identifiers data with different BQB types
+    # This matches the structure returned by get_identifiers method
+    # Based on actual test results: characteristic_only=True gives (1,3), characteristic_only=False gives (1,5)
+    mock_species_ids = pd.DataFrame(
+        {
+            SBML_DFS.S_ID: ["s1", "s1", "s1", "s1", "s1"],
+            IDENTIFIERS.IDENTIFIER: [
+                "P12345",  # uniprot - IS (characteristic)
+                "CHEBI:15377",  # chebi - IS (characteristic)
+                "GO:12345",  # go - HAS_PART (characteristic)
+                "P67890",  # uniprot - HAS_VERSION (non-characteristic)
+                "P67890",  # chebi - ENCODES (non-characteristic)
+            ],
+            IDENTIFIERS.ONTOLOGY: ["uniprot", "chebi", "go", "uniprot", "chebi"],
+            IDENTIFIERS.BQB: [
+                BQB.IS,  # characteristic
+                BQB.IS,  # characteristic
+                BQB.HAS_PART,  # characteristic
+                BQB.HAS_VERSION,  # non-characteristic
+                BQB.ENCODES,  # non-characteristic
+            ],
+        }
+    )
+
+    # Create minimal required tables for SBML_dfs
+    compartments = pd.DataFrame(
+        {SBML_DFS.C_NAME: ["cytosol"], SBML_DFS.C_IDENTIFIERS: [None]}, index=["C1"]
+    )
+    compartments.index.name = SBML_DFS.C_ID
+
+    # Create proper identifiers for the species from the mock data
+    identifiers_list = []
+    for _, row in mock_species_ids.iterrows():
+        identifiers_list.append(
+            {
+                "identifier": row[IDENTIFIERS.IDENTIFIER],
+                "ontology": row[IDENTIFIERS.ONTOLOGY],
+                "bqb": row[IDENTIFIERS.BQB],
+            }
+        )
+    species_identifiers = Identifiers(identifiers_list)
+
+    species = pd.DataFrame(
+        {
+            SBML_DFS.S_NAME: ["A"],
+            SBML_DFS.S_IDENTIFIERS: [species_identifiers],
+            SBML_DFS.S_SOURCE: [None],
+        },
+        index=["s1"],
+    )
+    species.index.name = SBML_DFS.S_ID
+
+    compartmentalized_species = pd.DataFrame(
+        {
+            SBML_DFS.SC_NAME: ["A [cytosol]"],
+            SBML_DFS.S_ID: ["s1"],
+            SBML_DFS.C_ID: ["C1"],
+            SBML_DFS.SC_SOURCE: [None],
+        },
+        index=["SC1"],
+    )
+    compartmentalized_species.index.name = SBML_DFS.SC_ID
+
+    reactions = pd.DataFrame(
+        {
+            SBML_DFS.R_NAME: ["rxn1"],
+            SBML_DFS.R_IDENTIFIERS: [None],
+            SBML_DFS.R_SOURCE: [None],
+            SBML_DFS.R_ISREVERSIBLE: [False],
+        },
+        index=["R1"],
+    )
+    reactions.index.name = SBML_DFS.R_ID
+
+    reaction_species = pd.DataFrame(
+        {
+            SBML_DFS.R_ID: ["R1"],
+            SBML_DFS.SC_ID: ["SC1"],
+            SBML_DFS.STOICHIOMETRY: [1],
+            SBML_DFS.SBO_TERM: ["SBO:0000459"],
+        },
+        index=["RSC1"],
+    )
+    reaction_species.index.name = SBML_DFS.RSC_ID
+
+    sbml_dict = {
+        SBML_DFS.COMPARTMENTS: compartments,
+        SBML_DFS.SPECIES: species,
+        SBML_DFS.COMPARTMENTALIZED_SPECIES: compartmentalized_species,
+        SBML_DFS.REACTIONS: reactions,
+        SBML_DFS.REACTION_SPECIES: reaction_species,
+    }
+
+    sbml_dfs = SBML_dfs(sbml_dict, model_source_stub, validate=False, resolve=False)
+
+    # Store the mock data for use in tests
+    sbml_dfs._mock_species_ids = mock_species_ids
+
+    return sbml_dfs

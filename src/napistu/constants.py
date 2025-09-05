@@ -406,6 +406,7 @@ EXPECTED_PW_INDEX_COLUMNS = {
 ONTOLOGIES = SimpleNamespace(
     CHEBI="chebi",
     CORUM="corum",
+    EC_CODE="ec-code",
     ENSEMBL_GENE="ensembl_gene",
     ENSEMBL_GENE_VERSION="ensembl_gene_version",
     ENSEMBL_TRANSCRIPT="ensembl_transcript",

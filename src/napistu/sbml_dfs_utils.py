@@ -13,6 +13,7 @@ from napistu.constants import (
     BQB_DEFINING_ATTRS,
     BQB_DEFINING_ATTRS_LOOSE,
     IDENTIFIERS,
+    IDENTIFIERS_REQUIRED_VARS,
     MINI_SBO_FROM_NAME,
     MINI_SBO_NAME_TO_POLARITY,
     MINI_SBO_TO_NAME,
@@ -1523,7 +1524,96 @@ def _select_priority_pathway_sources(
     return filtered_sources
 
 
-def _summarize_pathway_cooccurrence(df: pd.DataFrame) -> pd.DataFrame:
+def _summarize_ontology_cooccurrence(
+    df: pd.DataFrame, stratify_by_bqb: bool = True, allow_col_multindex: bool = False
+) -> pd.DataFrame:
+    """
+    Create a cooccurrence matrix of ontologies based entities sharing the same ontology.
+
+    This can be used to identify ontologies which are associated with the same types of entities.
+
+    Parameters
+    ----------
+    df (pd.DataFrame)
+        a table generated using `sbml_dfs.get_sources`
+    stratify_by_bqb (bool)
+        whether to stratify by bqb
+    allow_col_multindex (bool)
+        whether to allow the column multindex
+
+    Returns
+    -------
+    pd.DataFrame
+        Square matrix with pathways as both rows and columns
+    """
+
+    entity_ontology_occurrences = _summarize_ontology_occurrence(
+        df, stratify_by_bqb, allow_col_multindex
+    )
+
+    # Convert to binary (1 if compound is in pathway, 0 otherwise)
+    entity_ontology__matrix = (entity_ontology_occurrences > 0).astype(int)
+
+    # Calculate co-occurrence matrix: pathways × pathways
+    # This gives us the number of compounds shared between each pair of pathways
+    cooccurrences = entity_ontology__matrix.T @ entity_ontology__matrix
+
+    return cooccurrences
+
+
+def _summarize_ontology_occurrence(
+    df: pd.DataFrame, stratify_by_bqb: bool = True, allow_col_multindex: bool = False
+) -> pd.DataFrame:
+    """
+    Summarize the types of identifiers associated with each entity.
+
+    Parameters
+    ----------
+    df (pd.DataFrame)
+        a table generated using `sbml_dfs.get_identifiers` or `sbml_dfs.get_characteristic_species_ids`
+    stratify_by_bqb (bool)
+        whether to stratify by bqb
+    allow_col_multindex (bool)
+        whether to allow the column multindex
+
+    Returns
+    -------
+    pd.DataFrame
+        a table with entities as rows and ontologies as columns
+    """
+
+    entity_type = infer_entity_type(df)
+    pk = SBML_DFS_SCHEMA.SCHEMA[entity_type][SCHEMA_DEFS.PK]
+
+    required_vars = {pk, SOURCE_SPEC.ENTRY} | IDENTIFIERS_REQUIRED_VARS
+    utils.match_pd_vars(
+        df, req_vars=set(required_vars), allow_series=False
+    ).assert_present()
+
+    if stratify_by_bqb:
+        if allow_col_multindex:
+            pivot_cols = [IDENTIFIERS.ONTOLOGY, IDENTIFIERS.BQB]
+        else:
+            # combine bqb and ontology into a single column
+            df["bqb_ontology"] = (
+                df[IDENTIFIERS.BQB].astype(str)
+                + "::"
+                + df[IDENTIFIERS.ONTOLOGY].astype(str)
+            )
+            pivot_cols = ["bqb_ontology"]
+    else:
+        pivot_cols = [IDENTIFIERS.ONTOLOGY]
+
+    return df.pivot_table(
+        index=pk,
+        columns=pivot_cols,
+        values=SOURCE_SPEC.ENTRY,  # Using 'entry' column as indicator
+        fill_value=0,
+        aggfunc="count",  # Count occurrences
+    )
+
+
+def _summarize_source_cooccurrence(df: pd.DataFrame) -> pd.DataFrame:
     """
     Create a cooccurrence matrix of pathways based on the presence of entities in pathways.
 
@@ -1538,19 +1628,19 @@ def _summarize_pathway_cooccurrence(df: pd.DataFrame) -> pd.DataFrame:
         Square matrix with pathways as both rows and columns
     """
 
-    entity_pathway_occurrences = _summarize_pathway_occurrence(df)
+    entity_pathway_occurrences = _summarize_source_occurrence(df)
 
     # Convert to binary (1 if compound is in pathway, 0 otherwise)
-    compound_pathway_matrix = (entity_pathway_occurrences > 0).astype(int)
+    entity_source_matrix = (entity_pathway_occurrences > 0).astype(int)
 
     # Calculate co-occurrence matrix: pathways × pathways
     # This gives us the number of compounds shared between each pair of pathways
-    cooccurrences = compound_pathway_matrix.T @ compound_pathway_matrix
+    cooccurrences = entity_source_matrix.T @ entity_source_matrix
 
     return cooccurrences
 
 
-def _summarize_pathway_occurrence(df: pd.DataFrame) -> pd.DataFrame:
+def _summarize_source_occurrence(df: pd.DataFrame) -> pd.DataFrame:
     """
     Summarize the occurrence of entities in pathways.
 
@@ -1576,7 +1666,7 @@ def _summarize_pathway_occurrence(df: pd.DataFrame) -> pd.DataFrame:
         )
 
     # Create a binary matrix: compounds × pathways
-    entity_pathway_occurrences = df.reset_index().pivot_table(
+    entity_source_occurrences = df.reset_index().pivot_table(
         index=pk,
         columns=SOURCE_SPEC.PATHWAY_ID,
         values=SOURCE_SPEC.ENTRY,  # Using 'entry' column as indicator
@@ -1584,7 +1674,7 @@ def _summarize_pathway_occurrence(df: pd.DataFrame) -> pd.DataFrame:
         aggfunc="count",  # Count occurrences
     )
 
-    return entity_pathway_occurrences
+    return entity_source_occurrences
 
 
 def _validate_non_null_values(
@@ -1696,5 +1786,3 @@ def _validate_sbo_values(sbo_series: pd.Series, validate: str = "names") -> None
             raise TypeError("invalid_counts must be a pandas DataFrame")
         print(invalid_counts)
         raise ValueError("Some reaction species have unusable SBO terms")
-
-    return None
