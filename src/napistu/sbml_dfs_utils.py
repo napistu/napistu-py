@@ -7,6 +7,14 @@ from typing import Any, Iterable, Optional
 import numpy as np
 import pandas as pd
 
+try:
+    from IPython.display import display
+except ImportError:
+    # Fallback for non-Jupyter environments
+    def display(obj):
+        print(obj)
+
+
 from napistu import identifiers, utils
 from napistu.constants import (
     BQB,
@@ -300,6 +308,31 @@ def construct_formula_string(
         modifiers = f" ---- modifiers: {modifiers}]"
 
     return f"{substrates}{arrow_type}{products}{modifiers}"
+
+
+def display_post_consensus_checks(checks_results: dict) -> None:
+    """
+    Display the results of post_consensus_checks in a formatted way.
+
+    This function takes the results from the post_consensus_checks method and displays
+    them using the same formatting as shown in the sandbox notebook.
+
+    Parameters
+    ----------
+    checks_results : dict
+        Dictionary returned by the post_consensus_checks method, containing nested
+        dictionaries with entity types and check types as keys, and DataFrames as values.
+
+    Returns
+    -------
+    None
+        This function displays results but doesn't return anything.
+    """
+    for entity_type, entity_results in checks_results.items():
+        for check_type, cooccurrences in entity_results.items():
+            display(f"Entity type: {entity_type}, Check type: {check_type}")
+            display(utils.style_df(cooccurrences))
+            display("\n")
 
 
 def find_underspecified_reactions(

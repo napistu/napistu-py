@@ -15,6 +15,7 @@ from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS,
     BQB_DEFINING_ATTRS_LOOSE,
+    CONSENSUS_CHECKS,
     IDENTIFIERS,
     MINI_SBO_FROM_NAME,
     ONTOLOGIES,
@@ -1091,3 +1092,103 @@ def test_get_ontology_x_source_cooccurrence(sbml_dfs_metabolism):
         4,
         4,
     ), f"Expected reaction co-occurrence shape (4, 4), got {reaction_cooccurrence.shape}"
+
+
+def test_post_consensus_checks(sbml_dfs_metabolism):
+    """Test the post_consensus_checks method with a consensus model."""
+
+    # Test with default parameters
+    results = sbml_dfs_metabolism.post_consensus_checks()
+
+    # Verify the structure of the results
+    assert isinstance(results, dict), "Results should be a dictionary"
+
+    # Check that we have results for the default entity types
+    expected_entity_types = [SBML_DFS.SPECIES, SBML_DFS.COMPARTMENTS]
+    for entity_type in expected_entity_types:
+        assert entity_type in results, f"Results should contain {entity_type}"
+        assert isinstance(
+            results[entity_type], dict
+        ), f"Results for {entity_type} should be a dictionary"
+
+    # Check that we have results for the default check types
+    expected_check_types = [
+        CONSENSUS_CHECKS.SOURCE_COOCCURRENCE,
+        CONSENSUS_CHECKS.ONTOLOGY_X_SOURCE_COOCCURRENCE,
+    ]
+    for entity_type in expected_entity_types:
+        for check_type in expected_check_types:
+            assert (
+                check_type in results[entity_type]
+            ), f"Results should contain {check_type} for {entity_type}"
+            assert isinstance(
+                results[entity_type][check_type], pd.DataFrame
+            ), f"Result for {entity_type}/{check_type} should be a DataFrame"
+
+    # Test with custom entity types
+    custom_results = sbml_dfs_metabolism.post_consensus_checks(
+        entity_types=[SBML_DFS.SPECIES],
+        check_types=[CONSENSUS_CHECKS.SOURCE_COOCCURRENCE],
+    )
+
+    assert SBML_DFS.SPECIES in custom_results, "Custom results should contain species"
+    assert (
+        SBML_DFS.COMPARTMENTS not in custom_results
+    ), "Custom results should not contain compartments when not requested"
+    assert (
+        CONSENSUS_CHECKS.SOURCE_COOCCURRENCE in custom_results[SBML_DFS.SPECIES]
+    ), "Custom results should contain source_cooccurrence"
+    assert (
+        CONSENSUS_CHECKS.ONTOLOGY_X_SOURCE_COOCCURRENCE
+        not in custom_results[SBML_DFS.SPECIES]
+    ), "Custom results should not contain ontology_x_source_cooccurrence when not requested"
+
+    # Test with invalid check types
+    with pytest.raises(ValueError, match="Invalid check types"):
+        sbml_dfs_metabolism.post_consensus_checks(check_types=["invalid_check_type"])
+
+    # Test exact dimensions based on the output
+    species_source_cooccurrence = results[SBML_DFS.SPECIES][
+        CONSENSUS_CHECKS.SOURCE_COOCCURRENCE
+    ]
+    species_ontology_cooccurrence = results[SBML_DFS.SPECIES][
+        CONSENSUS_CHECKS.ONTOLOGY_X_SOURCE_COOCCURRENCE
+    ]
+    compartments_source_cooccurrence = results[SBML_DFS.COMPARTMENTS][
+        CONSENSUS_CHECKS.SOURCE_COOCCURRENCE
+    ]
+    compartments_ontology_cooccurrence = results[SBML_DFS.COMPARTMENTS][
+        CONSENSUS_CHECKS.ONTOLOGY_X_SOURCE_COOCCURRENCE
+    ]
+
+    # Test exact dimensions
+    assert species_source_cooccurrence.shape == (
+        4,
+        4,
+    ), f"Expected species source co-occurrence shape (4, 4), got {species_source_cooccurrence.shape}"
+    assert species_ontology_cooccurrence.shape == (
+        7,
+        4,
+    ), f"Expected species ontology co-occurrence shape (7, 4), got {species_ontology_cooccurrence.shape}"
+    assert compartments_source_cooccurrence.shape == (
+        4,
+        4,
+    ), f"Expected compartments source co-occurrence shape (4, 4), got {compartments_source_cooccurrence.shape}"
+    assert compartments_ontology_cooccurrence.shape == (
+        1,
+        4,
+    ), f"Expected compartments ontology co-occurrence shape (1, 4), got {compartments_ontology_cooccurrence.shape}"
+
+    # Test that all results are numeric and not empty
+    for entity_type in [SBML_DFS.SPECIES, SBML_DFS.COMPARTMENTS]:
+        for check_type in [
+            CONSENSUS_CHECKS.SOURCE_COOCCURRENCE,
+            CONSENSUS_CHECKS.ONTOLOGY_X_SOURCE_COOCCURRENCE,
+        ]:
+            df = results[entity_type][check_type]
+            assert (
+                not df.empty
+            ), f"DataFrame for {entity_type}/{check_type} should not be empty"
+            assert pd.api.types.is_numeric_dtype(
+                df.values
+            ), f"Values for {entity_type}/{check_type} should be numeric"

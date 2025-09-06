@@ -28,6 +28,8 @@ from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS_LOOSE,
     BQB_PRIORITIES,
+    CONSENSUS_CHECKS,
+    CONSENSUS_CHECKS_LIST,
     ENTITIES_TO_ENTITY_DATA,
     ENTITIES_W_DATA,
     IDENTIFIERS,
@@ -1608,9 +1610,51 @@ class SBML_dfs:
         ]
 
         self.compartmentalized_species = augmented_cspecies.loc[
-            :, self.schema[SBML_DFS.COMPARTMENTALIZED_SPECIES]["vars"]
+            :, self.schema[SBML_DFS.COMPARTMENTALIZED_SPECIES][SCHEMA_DEFS.VARS]
         ]
         return
+
+    def post_consensus_checks(
+        self,
+        entity_types: list[str] = [SBML_DFS.SPECIES, SBML_DFS.COMPARTMENTS],
+        check_types: list[str] = [
+            CONSENSUS_CHECKS.SOURCE_COOCCURRENCE,
+            CONSENSUS_CHECKS.ONTOLOGY_X_SOURCE_COOCCURRENCE,
+        ],
+    ) -> None:
+        """
+        Post-consensus checks
+
+        Perform checks on the SBML_dfs object after consensus building.
+
+        Parameters
+        ----------
+        entity_types: list[str], optional
+            Entity types to check
+        check_types: list[str], optional
+            Check types to perform
+
+        Returns
+        -------
+        None
+        """
+
+        invalid_checks = set(check_types).difference(CONSENSUS_CHECKS_LIST)
+        if len(invalid_checks) > 0:
+            raise ValueError(f"Invalid check types: {invalid_checks}")
+
+        checks_results = {}
+        for entity_type in entity_types:
+            checks_results[entity_type] = {}
+            for check_type in check_types:
+                if check_type == CONSENSUS_CHECKS.SOURCE_COOCCURRENCE:
+                    cooccurrences = self.get_source_cooccurrence(entity_type)
+                elif check_type == CONSENSUS_CHECKS.ONTOLOGY_X_SOURCE_COOCCURRENCE:
+                    cooccurrences = self.get_ontology_x_source_cooccurrence(entity_type)
+
+                checks_results[entity_type][check_type] = cooccurrences
+
+        return checks_results
 
     def reaction_formulas(
         self, r_ids: Optional[Union[str, list[str]]] = None

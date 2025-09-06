@@ -22,7 +22,6 @@ PACKAGE_DEFS = SimpleNamespace(
 
 FILE_EXT_ZIP = "zip"
 FILE_EXT_GZ = "gz"
-
 # SBML_dfs
 
 SBML_DFS = SimpleNamespace(
@@ -168,6 +167,13 @@ NAPISTU_STANDARD_OUTPUTS = SimpleNamespace(
     COMPARTMENTS="compartments.json",
     COMPARTMENTALIZED_SPECIES="compartmentalized_species.json",
 )
+
+CONSENSUS_CHECKS = SimpleNamespace(
+    SOURCE_COOCCURRENCE="source_cooccurrence",
+    ONTOLOGY_X_SOURCE_COOCCURRENCE="ontology_x_source_cooccurrence",
+)
+
+CONSENSUS_CHECKS_LIST = list(CONSENSUS_CHECKS.__dict__.values())
 
 # SBML
 # Biological qualifiers
