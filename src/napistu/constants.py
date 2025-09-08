@@ -20,6 +20,12 @@ PACKAGE_DEFS = SimpleNamespace(
     CACHE_DIR="napistu_data",
 )
 
+NAPISTU_CLI = SimpleNamespace(
+    SBML_DFS_URI="sbml_dfs_uri",
+    OUTPUT_MODEL_URI="output_model_uri",
+    OVERWRITE="overwrite",
+)
+
 FILE_EXT_ZIP = "zip"
 FILE_EXT_GZ = "gz"
 # SBML_dfs

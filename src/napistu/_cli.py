@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 import napistu
+from napistu.constants import NAPISTU_CLI
 
 
 def setup_logging() -> tuple[logging.Logger, Console]:
@@ -109,3 +110,79 @@ def overwrite_option(f: Callable) -> Callable:
         default=False,
         help="Overwrite existing files.",
     )(f)
+
+
+def sbml_dfs_input(f: Callable) -> Callable:
+    """
+    Decorator that adds a standardized model_uri argument.
+
+    Common pattern for CLI commands that take a model file as input.
+    """
+    return click.argument(NAPISTU_CLI.SBML_DFS_URI, type=str)(f)
+
+
+def sbml_dfs_output(f: Callable) -> Callable:
+    """
+    Decorator that adds a standardized output_model_uri argument.
+
+    Common pattern for CLI commands that create a new model file as output.
+    """
+    return click.argument(NAPISTU_CLI.OUTPUT_MODEL_URI, type=str)(f)
+
+
+def sbml_dfs_io(f: Callable) -> Callable:
+    """
+    Decorator that adds both model_uri and output_model_uri arguments.
+
+    Common pattern for CLI commands that read a model and write a new one.
+    """
+    return click.argument(NAPISTU_CLI.SBML_DFS_URI, type=str)(
+        click.argument(NAPISTU_CLI.OUTPUT_MODEL_URI, type=str)(f)
+    )
+
+
+def organismal_species_argument(f: Callable) -> Callable:
+    """
+    Decorator that adds a standardized organismal_species argument.
+
+    Common pattern for CLI commands that work with specific species.
+    """
+    return click.argument("organismal_species", type=str)(f)
+
+
+def nondogmatic_option(f: Callable) -> Callable:
+    """
+    Decorator that adds a standardized --nondogmatic option.
+
+    Common pattern for CLI commands that can run in non-dogmatic mode.
+    """
+    return click.option(
+        "--nondogmatic",
+        "-n",
+        is_flag=True,
+        default=False,
+        help="Run in non-dogmatic mode (trying to merge genes and proteins)?",
+    )(f)
+
+
+def genodexito_options(f: Callable) -> Callable:
+    """
+    Decorator that adds standardized Genodexito method options.
+
+    Common pattern for CLI commands that use Genodexito for identifier mapping.
+    """
+    return click.option(
+        "--preferred-method",
+        "-p",
+        default="bioconductor",
+        type=str,
+        help="Preferred method to use for identifier expansion",
+    )(
+        click.option(
+            "--allow-fallback",
+            "-a",
+            default=True,
+            type=bool,
+            help="Allow fallback to other methods if preferred method fails",
+        )(f)
+    )
