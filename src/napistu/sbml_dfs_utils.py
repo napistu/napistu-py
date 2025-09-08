@@ -250,7 +250,7 @@ def construct_formula_string(
 
     """
 
-    reaction_species_df["label"] = [
+    reaction_species_df[SCHEMA_DEFS.LABEL] = [
         _add_stoi_to_species_name(x, y)
         for x, y in zip(
             reaction_species_df[SBML_DFS.STOICHIOMETRY], reaction_species_df[name_var]
@@ -261,7 +261,7 @@ def construct_formula_string(
         reaction_species_df[SBML_DFS.SBO_TERM]
         == MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
     ):
-        labels = reaction_species_df["label"].tolist()
+        labels = reaction_species_df[SCHEMA_DEFS.LABEL].tolist()
         if len(labels) != 2:
             logger.warning(
                 f"Reaction {reaction_species_df[SBML_DFS.R_ID].iloc[0]} has {len(labels)} species, expected 2"
@@ -332,7 +332,6 @@ def display_post_consensus_checks(checks_results: dict) -> None:
         for check_type, cooccurrences in entity_results.items():
             display(f"Entity type: {entity_type}, Check type: {check_type}")
             display(utils.style_df(cooccurrences))
-            display("\n")
 
 
 def find_underspecified_reactions(

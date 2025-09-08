@@ -252,25 +252,6 @@ def test_passing_entity_data():
     assert consensus_model.reactions[SBML_DFS.R_ISREVERSIBLE].eq(True).all()
 
 
-def test_consensus_ontology_check():
-    pw_index = indices.PWIndex(os.path.join(test_data, SOURCE_SPEC.PW_INDEX_FILE))
-
-    test_sbml_dfs_dict = consensus.construct_sbml_dfs_dict(pw_index)
-    test_consensus_model = consensus.construct_consensus_model(
-        test_sbml_dfs_dict, pw_index
-    )
-
-    pre_shared_onto_sp_list, pre_onto_df = consensus._pre_consensus_ontology_check(
-        test_sbml_dfs_dict, SBML_DFS.SPECIES
-    )
-    assert set(pre_shared_onto_sp_list) == {"chebi", "reactome", "uniprot"}
-
-    post_shared_onto_sp_set = consensus._post_consensus_species_ontology_check(
-        test_consensus_model
-    )
-    assert post_shared_onto_sp_set == {"chebi", "reactome", "uniprot"}
-
-
 def test_report_consensus_merges_reactions(tmp_path, model_source_stub):
     # Create two minimal SBML_dfs objects with a single reaction each, same r_id
     r_id = "R00000001"
@@ -368,8 +349,8 @@ def test_build_consensus_identifiers_handles_merges_and_missing_ids():
     # - 'C' with identifier X (should merge with 'A')
     df = pd.DataFrame(
         {
-            "s_id": ["A", "B", "C"],
-            "s_Identifiers": [
+            SBML_DFS.S_ID: ["A", "B", "C"],
+            SBML_DFS.S_IDENTIFIERS: [
                 identifiers.Identifiers(
                     [
                         {
@@ -500,3 +481,47 @@ def test_consensus_round_trip_consistency(
             original_sbml_dfs.metadata[SBML_DFS_METADATA.SBML_DFS_SOURCE].source,
             reconstructed_sbml_dfs.metadata[SBML_DFS_METADATA.SBML_DFS_SOURCE].source,
         )
+
+
+def test_pre_consensus_compartment_check_compatible(
+    sbml_dfs_dict_metabolism, pw_index_metabolism
+):
+    """Test that compatible models with overlapping compartments pass the check."""
+    # This should not raise any errors or log warnings
+    consensus._pre_consensus_compartment_check(
+        sbml_dfs_dict_metabolism, pw_index_metabolism
+    )
+
+
+def test_pre_consensus_compartment_check_incompatible(
+    caplog, minimal_valid_sbml_dfs, sbml_dfs
+):
+    """Test that incompatible models with non-overlapping compartments are detected."""
+    import logging
+
+    # Create a pathway index with both models
+    pw_index_data = pd.DataFrame(
+        {
+            "file": ["fake_model", "real_model"],
+            "data_source": ["Test", "Reactome"],
+            "organismal_species": ["Homo sapiens", "Homo sapiens"],
+            "pathway_id": ["fake_model", "real_model"],
+            "name": ["Fake Pathway", "Real Pathway"],
+            "date": ["2023-01-01", "2023-01-01"],
+        }
+    )
+
+    # Create SBML_dfs dictionary with incompatible models
+    # minimal_valid_sbml_dfs has no identifiers, so no merging will occur
+    sbml_dfs_dict = {"fake_model": minimal_valid_sbml_dfs, "real_model": sbml_dfs}
+
+    # Create pathway index object
+    pw_index = indices.PWIndex(pw_index_data, validate_paths=False)
+
+    # Capture log messages
+    with caplog.at_level(logging.ERROR):
+        consensus._pre_consensus_compartment_check(sbml_dfs_dict, pw_index)
+
+    # Check that an error was logged about incompatible compartments
+    assert len(caplog.records) > 0
+    assert any("incompatible" in record.message.lower() for record in caplog.records)

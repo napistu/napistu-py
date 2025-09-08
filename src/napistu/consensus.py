@@ -5,6 +5,7 @@ import os
 import random
 from typing import Optional
 
+import igraph as ig
 import pandas as pd
 from tqdm import tqdm
 
@@ -1134,6 +1135,18 @@ def _create_membership_lookup(
     return membership_df.reset_index()
 
 
+def _create_vertex_category(
+    df: pd.DataFrame, column: str, category: str
+) -> pd.DataFrame:
+    """Create vertex dataframe for a specific category from a source column."""
+    return (
+        df.copy()
+        .assign(category=category)
+        .rename(columns={column: "name"})[["name", "category"]]
+        .drop_duplicates()
+    )
+
+
 def _filter_identifiers_by_qualifier(
     meta_identifiers: pd.DataFrame, defining_biological_qualifiers: list[str]
 ) -> pd.DataFrame:
@@ -1467,165 +1480,101 @@ def _merge_entity_identifiers(
     return indexed_old_identifiers.agg(identifiers.merge_identifiers)
 
 
-def _post_consensus_compartment_check(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, table_name: str
-) -> pd.DataFrame:
-    """Provide sources of tables in a consensus model; the output df will be used to determine whether models are merged."""
-
-    table_pk = sbml_dfs.schema[table_name][SCHEMA_DEFS.PK]
-
-    sbml_dfs_tbl = getattr(sbml_dfs, table_name)
-    sbml_dfs_tbl_pathway_source = (
-        source.unnest_sources(sbml_dfs_tbl, verbose=False)
-        .reset_index()
-        .sort_values(["name"])
-    )
-
-    sbml_dfs_tbl_pathway_source["pathway"] = sbml_dfs_tbl_pathway_source.groupby(
-        [table_pk]
-    )["name"].transform(lambda x: " + ".join(set(x)))
-
-    sbml_dfs_tbl_pathway_source = (
-        sbml_dfs_tbl_pathway_source[[table_pk, "pathway"]]
-        .drop_duplicates()
-        .set_index(table_pk)
-    )
-
-    tbl_pathway_source_df = pd.DataFrame(
-        sbml_dfs_tbl_pathway_source["pathway"].value_counts()
-    )
-
-    return tbl_pathway_source_df
-
-
-def _post_consensus_source_check(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, table_name: str
-) -> pd.DataFrame:
-    """Provide sources of tables in a consensus model; the output df will be used to determine whether models are merged."""
-
-    table_pk = sbml_dfs.schema[table_name][SCHEMA_DEFS.PK]
-
-    sbml_dfs_tbl = getattr(sbml_dfs, table_name)
-    sbml_dfs_tbl_pathway_source = (
-        source.unnest_sources(sbml_dfs_tbl, verbose=False)
-        .reset_index()
-        .sort_values(["name"])
-    )
-
-    sbml_dfs_tbl_pathway_source["pathway"] = sbml_dfs_tbl_pathway_source.groupby(
-        [table_pk]
-    )["name"].transform(lambda x: " + ".join(set(x)))
-
-    sbml_dfs_tbl_pathway_source = (
-        sbml_dfs_tbl_pathway_source[[table_pk, "pathway"]]
-        .drop_duplicates()
-        .set_index(table_pk)
-    )
-
-    tbl_pathway_source_df = pd.DataFrame(
-        sbml_dfs_tbl_pathway_source["pathway"].value_counts()
-    )
-
-    return tbl_pathway_source_df
-
-
-def _post_consensus_species_ontology_check(
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
-) -> set[str]:
+def _pre_consensus_compartment_check(
+    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs], pw_index: indices.PWIndex
+) -> None:
     """
-    Check and return the set of ontologies shared by different sources in a consensus model's species table.
+    Check for compartment compatibility across models before consensus building.
 
-    This function examines the species table in a consensus SBML_dfs object, determines the ontologies
-    present for each source model, and returns the intersection of ontologies shared by all sources.
+    This function identifies models that won't mix well in a consensus because they
+    contain non-overlapping sets of compartments. It constructs a bipartite graph
+    connecting models to their compartments and identifies disconnected components,
+    which indicate incompatible compartment structures.
 
     Parameters
     ----------
-    sbml_dfs : sbml_dfs_core.SBML_dfs
-        The consensus SBML_dfs object containing merged species from multiple models.
+    sbml_dfs_dict : dict
+        Dictionary containing SBML dataframes for each model, keyed by model name.
+    pw_index : pandas.DataFrame
+        Pathway index dataframe containing model metadata and pathway information.
 
     Returns
     -------
-    set[str]
-        Set of ontology terms shared by all sources in the consensus model's species table.
+    None
+        This function returns None but logs error messages if incompatible
+        compartment structures are detected.
+
+    Notes
+    -----
+    The function builds a graph where:
+    - Models are connected to their compartments via shared identifiers
+    - Compartments are connected to their model-specific labels
+    - Disconnected components indicate models with non-overlapping compartment sets
+
+    If multiple disconnected components are found, an error is logged listing
+    the incompatible compartment groups that would result in an unmixed consensus.
+
+    Examples
+    --------
+    >>> sbml_dfs_dict = {"model1": sbml_dfs1, "model2": sbml_dfs2}
+    >>> pw_index = pd.DataFrame({"model": ["model1", "model2"], ...})
+    >>> _pre_consensus_compartment_check(sbml_dfs_dict, pw_index)
+    # Logs error if models have incompatible compartment structures
     """
-    # Checking the ontology in "species" shared by different sources in a consensus model
-    # returns a set of shared ontologies by different sources
 
-    consensus_sbmldf_tbl_var = sbml_dfs.get_identifiers(SBML_DFS.SPECIES)
-
-    # get the sources of species in the consensus model
-    consensus_sbmldf_tbl_var_sc = (
-        source.unnest_sources(sbml_dfs.species, verbose=False)
-        .reset_index()
-        .sort_values([SOURCE_SPEC.NAME])
+    _, compartments_df = construct_meta_entities_identifiers(
+        sbml_dfs_dict, pw_index, table=SBML_DFS.COMPARTMENTS
+    )
+    models_to_compartments = (
+        compartments_df.reset_index()
+        .merge(
+            _unnest_SBML_df(sbml_dfs_dict, SBML_DFS.COMPARTMENTS)[SBML_DFS.C_NAME],
+            left_on=["model", SBML_DFS.C_ID],
+            right_index=True,
+        )
+        .assign(model_c_name=lambda x: x["model"] + ": " + x[SBML_DFS.C_NAME])
     )
 
-    # merge columns with source info to the model's species identifiers df.
-    consensus_sbmldf_tbl_var_w_sc = consensus_sbmldf_tbl_var.merge(
-        consensus_sbmldf_tbl_var_sc.loc[
-            :,
-            [
-                SBML_DFS.S_ID,
-                SOURCE_SPEC.MODEL,
-                SOURCE_SPEC.FILE,
-                SOURCE_SPEC.PATHWAY_ID,
-                SOURCE_SPEC.DATA_SOURCE,
-                SOURCE_SPEC.NAME,
-            ],
-        ],
-        on=SBML_DFS.S_ID,
+    edges_df = pd.concat(
+        [
+            models_to_compartments[["model", "new_id"]].rename(
+                columns={"model": "source", "new_id": "target"}
+            ),
+            models_to_compartments[["new_id", "model_c_name"]].rename(
+                columns={"new_id": "source", "model_c_name": "target"}
+            ),
+        ]
     )
 
-    # get the model/source and its ontology set to a separate df
-    shared_ontology_df = (
-        consensus_sbmldf_tbl_var_w_sc.groupby(SOURCE_SPEC.NAME)[IDENTIFIERS.ONTOLOGY]
-        .apply(set)
-        .reset_index(name="onto_expanded")
+    vertices_df = pd.concat(
+        [
+            _create_vertex_category(models_to_compartments, "model", "model"),
+            _create_vertex_category(models_to_compartments, "new_id", "new_id"),
+            _create_vertex_category(models_to_compartments, "model_c_name", "label"),
+        ]
     )
 
-    # the intersection set among ontology sets of all sources
-    shared_onto_set = shared_ontology_df.onto_expanded[0]
-    for i in range(1, len(shared_ontology_df.onto_expanded)):
-        shared_onto_set = shared_onto_set.intersection(
-            shared_ontology_df.onto_expanded[i]
+    g = ig.Graph.DictList(
+        vertices=vertices_df.to_dict("records"), edges=edges_df.to_dict("records")
+    )
+
+    components = g.components(mode="weak")
+
+    if len(components) > 1:
+
+        full_label = list()
+        for c in components:
+            label = ", ".join(
+                vertices_df.iloc[c].query("category == 'label'")["name"].to_list()
+            )
+            full_label.append(label)
+        full_label = "\n".join(full_label)
+
+        logger.error(
+            f"The compartments shared across models are incompatible and will result in an-unmixed consensus model:\n{full_label}"
         )
 
-    logger.info(f"shared ontologies in the consesus model are: {shared_onto_set}")
-
-    return shared_onto_set
-
-
-def _pre_consensus_compartment_check(
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs], tablename: str
-) -> tuple[list, dict]:
-    """Find compartments shared across models."""
-
-    # tablename: compartments only
-    # returns shared c_name in compartments of sbml_dfs in sbml_dfs_dict for
-
-    if tablename in [SBML_DFS.COMPARTMENTS]:
-        sbml_cname_list = []
-        for df_key, sbml_dfs_ind in sbml_dfs_dict.items():
-            sbml_df_ind_cname = sbml_dfs_ind.get_identifiers(tablename).value_counts(
-                SBML_DFS.C_NAME
-            )
-            sbml_cname_list.append(sbml_df_ind_cname.index.to_list())
-
-        shared_cname_set = set.intersection(*map(set, sbml_cname_list))
-        shared_cname_list = list(shared_cname_set)
-
-        sbml_name_list = list(sbml_dfs_dict.keys())
-        sbml_dict_cname_df = pd.DataFrame({"single_sbml_dfs": sbml_name_list})
-        sbml_dict_cname_df["c_names"] = sbml_cname_list
-
-    else:
-        logger.error(f"{tablename} entry doesn't have c_name")
-
-    logger.info(
-        f"Shared compartments for {tablename} are {shared_cname_list} before building a consensus model."
-    )
-
-    return shared_cname_list, sbml_dict_cname_df
+    return None
 
 
 def _pre_consensus_ontology_check(
@@ -1711,15 +1660,15 @@ def _prepare_consensus_table(
     agg_table_reduced = (
         agg_table_harmonized.reset_index(drop=True)
         .sort_values(["nameness_score"])
-        .rename(columns={"new_id": table_schema["pk"]})
-        .groupby(table_schema["pk"])
+        .rename(columns={"new_id": table_schema[SCHEMA_DEFS.PK]})
+        .groupby(table_schema[SCHEMA_DEFS.PK])
         .first()
         .drop("nameness_score", axis=1)
     )
 
     # Join in the consensus identifiers and drop the temporary cluster column
     new_id_table = (
-        agg_table_reduced.drop(table_schema["id"], axis=1)
+        agg_table_reduced.drop(table_schema[SCHEMA_DEFS.ID], axis=1)
         .merge(cluster_consensus_identifiers, left_on="cluster", right_index=True)
         .drop("cluster", axis=1)
     )
@@ -1958,22 +1907,22 @@ def _report_consensus_merges(
     merged_entities = entity_merge_num[entity_merge_num != 1]
 
     if merged_entities.shape[0] == 0:
-        logger.warning(f"No merging occurred for {table_schema['pk']}")
+        logger.warning(f"No merging occurred for {table_schema[SCHEMA_DEFS.PK]}")
         return None
 
-    if "label" not in table_schema.keys():
+    if SCHEMA_DEFS.LABEL not in table_schema.keys():
         # we dont need to track unnamed species
         return None
 
     logger.info(
-        f">>>> {merged_entities.sum()} {table_schema['pk']} entries merged into {merged_entities.shape[0]}"
+        f">>>> {merged_entities.sum()} {table_schema[SCHEMA_DEFS.PK]} entries merged into {merged_entities.shape[0]}"
     )
 
     merges_lookup = lookup_table[
         lookup_table.isin(merged_entities.index.tolist())
     ].reset_index()
 
-    if table_schema["pk"] == "r_id":
+    if table_schema[SCHEMA_DEFS.PK] == SBML_DFS.R_ID:
         logger.info(
             "Creating formulas for to-be-merged reactions to help with reporting merges of reactions"
             " with inconsistently named reactants"
@@ -1987,14 +1936,16 @@ def _report_consensus_merges(
         merges_dict = dict()
         for mod in indexed_models.index.unique():
             merges_dict[mod] = sbml_dfs_dict[mod].reaction_formulas(
-                indexed_models.loc[mod]["r_id"]
+                indexed_models.loc[mod][SBML_DFS.R_ID]
             )
 
-        merge_labels = pd.concat(merges_dict, names=["model", "r_id"]).rename("label")
+        merge_labels = pd.concat(merges_dict, names=["model", SBML_DFS.R_ID]).rename(
+            SCHEMA_DEFS.LABEL
+        )
 
         # add labels to models + r_id
         merges_lookup = merges_lookup.merge(
-            merge_labels, how="left", left_on=["model", "r_id"], right_index=True
+            merge_labels, how="left", left_on=["model", SBML_DFS.R_ID], right_index=True
         )
 
         logger.info("Done creating reaction formulas")
@@ -2006,10 +1957,10 @@ def _report_consensus_merges(
             )
 
         merges_lookup = merges_lookup.merge(
-            agg_tbl[table_schema["label"]],
-            left_on=["model", table_schema["pk"]],
+            agg_tbl[table_schema[SCHEMA_DEFS.LABEL]],
+            left_on=["model", table_schema[SCHEMA_DEFS.PK]],
             right_index=True,
-        ).rename(columns={table_schema["label"]: "label"})
+        ).rename(columns={table_schema[SCHEMA_DEFS.LABEL]: SCHEMA_DEFS.LABEL})
 
     indexed_merges_lookup = merges_lookup.set_index("new_id")
 
@@ -2034,7 +1985,7 @@ def _report_consensus_merges(
         )
 
         inexact_merge_collapses = (
-            indexed_merges_lookup.loc[inexact_merges_samples]["label"]
+            indexed_merges_lookup.loc[inexact_merges_samples][SCHEMA_DEFS.LABEL]
             .drop_duplicates()
             .groupby(level=0)
             .agg(" & ".join)
