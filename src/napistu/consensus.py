@@ -1135,14 +1135,12 @@ def _create_membership_lookup(
     return membership_df.reset_index()
 
 
-def _create_vertex_category(
-    df: pd.DataFrame, column: str, category: str
-) -> pd.DataFrame:
+def _create_vertex_category(df: pd.DataFrame, category: str) -> pd.DataFrame:
     """Create vertex dataframe for a specific category from a source column."""
     return (
         df.copy()
         .assign(category=category)
-        .rename(columns={column: "name"})[["name", "category"]]
+        .rename(columns={category: "name"})[["name", "category"]]
         .drop_duplicates()
     )
 
@@ -1548,9 +1546,9 @@ def _pre_consensus_compartment_check(
 
     vertices_df = pd.concat(
         [
-            _create_vertex_category(models_to_compartments, "model", "model"),
-            _create_vertex_category(models_to_compartments, "new_id", "new_id"),
-            _create_vertex_category(models_to_compartments, "model_c_name", "label"),
+            _create_vertex_category(models_to_compartments, "model"),
+            _create_vertex_category(models_to_compartments, "new_id"),
+            _create_vertex_category(models_to_compartments, "model_c_name"),
         ]
     )
 
@@ -1565,7 +1563,9 @@ def _pre_consensus_compartment_check(
         full_label = list()
         for c in components:
             label = ", ".join(
-                vertices_df.iloc[c].query("category == 'label'")["name"].to_list()
+                vertices_df.iloc[c]
+                .query("category == 'model_c_name'")["name"]
+                .to_list()
             )
             full_label.append(label)
         full_label = "\n".join(full_label)
@@ -1578,60 +1578,101 @@ def _pre_consensus_compartment_check(
 
 
 def _pre_consensus_ontology_check(
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs], tablename: str
-) -> tuple[list, pd.DataFrame]:
+    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs], entity_type: str
+) -> None:
     """
-    Check for shared ontologies across source models for a given table.
+    Check for ontology compatibility across models before consensus building.
 
-    For compartments, species, or reactions tables, this function returns the set of ontologies
-    shared among all SBML_dfs in the input dictionary, as well as a DataFrame summarizing ontologies per model.
+    This function determines whether any models possess disjoint sets of ontologies
+    for a given entity type (compartments, or species). It constructs a
+    bipartite graph connecting models to their ontologies and identifies disconnected
+    components, which indicate models with non-overlapping ontology structures.
 
     Parameters
     ----------
-    sbml_dfs_dict : dict[str, sbml_dfs_core.SBML_dfs]
-        Dictionary of SBML_dfs objects from different models, keyed by model name.
-    tablename : str
-        Name of the table to check (should be one of 'compartments', 'species', or 'reactions').
+    sbml_dfs_dict : dict[str, SBML_dfs]
+        Dictionary containing SBML dataframes for each model, keyed by model name.
+    entity_type : str
+        The type of entity to check ontologies for. Must be one of 'compartments',
+        'species', or 'reactions'.
 
     Returns
     -------
-    shared_onto_list : list
-        List of ontologies shared by all models for the specified table.
-    sbml_dict_onto_df : pd.DataFrame
-        DataFrame summarizing ontologies present in each model for the specified table.
+    None
+        This function returns None but logs error messages if incompatible
+        ontology structures are detected.
+
+    Notes
+    -----
+    The function builds a graph where:
+    - Models are connected to ontologies they contain for the specified entity type
+    - Disconnected components indicate models with non-overlapping ontology sets
+
+    If multiple disconnected components are found, an error is logged listing
+    the incompatible ontology groups that would result in an unmixed consensus.
+
+    Examples
+    --------
+    >>> sbml_dfs_dict = {"model1": sbml_dfs1, "model2": sbml_dfs2}
+    >>> _pre_consensus_ontology_check(sbml_dfs_dict, "compartments")
+    # Logs error if models have incompatible compartment ontologies
     """
 
-    # tablename: compartments/species/reactions tables with Identifiers
-    # returns shared ontologies among sbml_dfs in sbml_dfs_dict for
-    # compartments/species/reactions tables
-
-    if tablename in [SBML_DFS.COMPARTMENTS, SBML_DFS.SPECIES, SBML_DFS.REACTIONS]:
-        sbml_onto_lists = []
-        for df_key, sbml_dfs_ind in sbml_dfs_dict.items():
-            sbml_onto_df_ind = sbml_dfs_ind.get_identifiers(tablename).value_counts(
-                IDENTIFIERS.ONTOLOGY
-            )
-            sbml_onto_lists.append(sbml_onto_df_ind.index.to_list())
-
-        shared_onto_set = set.intersection(*map(set, sbml_onto_lists))
-        shared_onto_list = list(shared_onto_set)
-
-        sbml_name_list = list(sbml_dfs_dict.keys())
-        sbml_dict_onto_df = pd.DataFrame({"single_sbml_dfs": sbml_name_list})
-        sbml_dict_onto_df[IDENTIFIERS.ONTOLOGY] = sbml_onto_lists
-
-    else:
-        logger.error(
-            f"{tablename} entry doesn't have identifiers and thus cannot check its ontology"
+    VALID_ENTITY_TYPES = [SBML_DFS.COMPARTMENTS, SBML_DFS.SPECIES]
+    if entity_type not in VALID_ENTITY_TYPES:
+        raise ValueError(
+            f"Invalid entity type: {entity_type}. Only {VALID_ENTITY_TYPES} are supported since they use identifier-based entity resolution."
         )
-        shared_onto_list = []
-        sbml_dict_onto_df = []
 
-    logger.info(
-        f"Shared ontologies for {tablename} are {shared_onto_list} before building a consensus model."
+    ontology_counts = pd.concat(
+        {
+            k: (
+                v.get_identifiers_table_for_ontology_occurrence(
+                    entity_type
+                ).value_counts(["ontology"])
+            )
+            for k, v in sbml_dfs_dict.items()
+        },
+        axis=0,
+        names=["model"],
+    ).reset_index()
+
+    edges_df = ontology_counts[["model", "ontology"]].rename(
+        columns={"model": "source", "ontology": "target"}
     )
 
-    return shared_onto_list, sbml_dict_onto_df
+    vertices_df = pd.concat(
+        [
+            _create_vertex_category(ontology_counts, "model"),
+            _create_vertex_category(ontology_counts, "ontology"),
+        ]
+    )
+
+    g = ig.Graph.DictList(
+        vertices=vertices_df.to_dict("records"), edges=edges_df.to_dict("records")
+    )
+
+    components = g.components(mode="weak")
+
+    if len(components) > 1:
+
+        full_label = list()
+        for c in components:
+            models = vertices_df.iloc[c].query("category == 'model'")["name"].to_list()
+            ontologies = (
+                vertices_df.iloc[c].query("category == 'ontology'")["name"].to_list()
+            )
+
+            label = f"models: {models}\nontologies: {ontologies}"
+
+            full_label.append(label)
+        full_label = "\n\n".join(full_label)
+
+        logger.error(
+            f"The {entity_type} ontologies shared across models do not overlap and will result in an-unmixed consensus model:\n{full_label}"
+        )
+
+    return None
 
 
 def _prepare_consensus_table(

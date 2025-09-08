@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import logging
 import os
 
 import pandas as pd
 import pytest
 
-from napistu import consensus, identifiers, indices, sbml_dfs_core, source
+from napistu import consensus, indices, sbml_dfs_core, source
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
@@ -15,6 +16,7 @@ from napistu.constants import (
     SCHEMA_DEFS,
     SOURCE_SPEC,
 )
+from napistu.identifiers import Identifiers
 from napistu.ingestion import sbml
 from napistu.modify import pathwayannot
 
@@ -351,7 +353,7 @@ def test_build_consensus_identifiers_handles_merges_and_missing_ids():
         {
             SBML_DFS.S_ID: ["A", "B", "C"],
             SBML_DFS.S_IDENTIFIERS: [
-                identifiers.Identifiers(
+                Identifiers(
                     [
                         {
                             IDENTIFIERS.ONTOLOGY: "test",
@@ -360,8 +362,8 @@ def test_build_consensus_identifiers_handles_merges_and_missing_ids():
                         }
                     ]
                 ),
-                identifiers.Identifiers([]),
-                identifiers.Identifiers(
+                Identifiers([]),
+                Identifiers(
                     [
                         {
                             IDENTIFIERS.ONTOLOGY: "test",
@@ -497,17 +499,16 @@ def test_pre_consensus_compartment_check_incompatible(
     caplog, minimal_valid_sbml_dfs, sbml_dfs
 ):
     """Test that incompatible models with non-overlapping compartments are detected."""
-    import logging
 
     # Create a pathway index with both models
     pw_index_data = pd.DataFrame(
         {
-            "file": ["fake_model", "real_model"],
-            "data_source": ["Test", "Reactome"],
-            "organismal_species": ["Homo sapiens", "Homo sapiens"],
-            "pathway_id": ["fake_model", "real_model"],
-            "name": ["Fake Pathway", "Real Pathway"],
-            "date": ["2023-01-01", "2023-01-01"],
+            SOURCE_SPEC.FILE: ["fake_model", "real_model"],
+            SOURCE_SPEC.DATA_SOURCE: ["Test", "Reactome"],
+            SOURCE_SPEC.ORGANISMAL_SPECIES: ["Homo sapiens", "Homo sapiens"],
+            SOURCE_SPEC.PATHWAY_ID: ["fake_model", "real_model"],
+            SOURCE_SPEC.NAME: ["Fake Pathway", "Real Pathway"],
+            SOURCE_SPEC.DATE: ["2023-01-01", "2023-01-01"],
         }
     )
 
@@ -525,3 +526,49 @@ def test_pre_consensus_compartment_check_incompatible(
     # Check that an error was logged about incompatible compartments
     assert len(caplog.records) > 0
     assert any("incompatible" in record.message.lower() for record in caplog.records)
+
+
+def test_pre_consensus_ontology_check_compatible(sbml_dfs_dict_metabolism):
+    """Test that compatible models with overlapping ontologies pass the check."""
+    # This should not raise any errors or log warnings
+    consensus._pre_consensus_ontology_check(sbml_dfs_dict_metabolism, SBML_DFS.SPECIES)
+
+
+def test_pre_consensus_ontology_check_incompatible(
+    caplog, minimal_valid_sbml_dfs, sbml_dfs
+):
+    """Test that incompatible models with non-overlapping ontologies are detected."""
+
+    # Create a modified minimal SBML_dfs with fake ontology identifiers
+    fake_sbml_dfs = minimal_valid_sbml_dfs.copy()
+
+    # Create fake identifiers with a fake ontology
+    fake_identifiers = Identifiers(
+        [
+            {
+                IDENTIFIERS.ONTOLOGY: "FAKE_ONTOLOGY",
+                IDENTIFIERS.IDENTIFIER: "FAKE_ID",
+                IDENTIFIERS.BQB: BQB.IS,
+            }
+        ]
+    )
+
+    # Update the species identifiers to use the fake ontology
+    fake_species = fake_sbml_dfs.species.copy()
+    fake_species[SBML_DFS.S_IDENTIFIERS] = [fake_identifiers]
+    fake_sbml_dfs.species = fake_species
+
+    # Create SBML_dfs dictionary with incompatible models
+    sbml_dfs_dict = {"fake_model": fake_sbml_dfs, "real_model": sbml_dfs}
+
+    # Capture log messages
+    with caplog.at_level(logging.ERROR):
+        consensus._pre_consensus_ontology_check(sbml_dfs_dict, SBML_DFS.SPECIES)
+
+    # Check that an error was logged about incompatible ontologies
+    assert len(caplog.records) > 0
+    assert any("ontologies" in record.message.lower() for record in caplog.records)
+    assert any(
+        "incompatible" in record.message.lower() or "overlap" in record.message.lower()
+        for record in caplog.records
+    )
