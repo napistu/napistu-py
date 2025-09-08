@@ -36,6 +36,7 @@ def construct_consensus_model(
     pw_index: indices.PWIndex,
     model_source: Optional[source.Source] = None,
     dogmatic: bool = True,
+    check_mergeability: bool = True,
 ) -> SBML_dfs:
     """
     Construct a Consensus Model by merging shared entities across pathway models.
@@ -53,6 +54,8 @@ def construct_consensus_model(
         A source object for the consensus model.
     dogmatic : bool, default=True
         If True, preserve genes, transcripts, and proteins as separate species. If False, merge them when possible.
+    check_mergeability : bool, default=True
+        whether to check for issues which will prevent merging across models
 
     Returns
     -------
@@ -61,8 +64,8 @@ def construct_consensus_model(
     """
     # Validate inputs
     logger.info("Reporting possible issues in component models")
-    _check_sbml_dfs_dict(sbml_dfs_dict)
     assert isinstance(pw_index, indices.PWIndex)
+    _check_sbml_dfs_dict(sbml_dfs_dict, pw_index, check_mergeability)
 
     if model_source is None:
         model_source = _create_default_consensus_source(sbml_dfs_dict)
@@ -676,20 +679,66 @@ def _check_sbml_dfs(
     return None
 
 
-def _check_sbml_dfs_dict(sbml_dfs_dict: dict[str, SBML_dfs]) -> None:
+def _check_sbml_dfs_dict(
+    sbml_dfs_dict: dict[str, SBML_dfs],
+    pw_index: indices.PWIndex,
+    check_mergeability: bool = True,
+) -> None:
     """Check models in SBML_dfs for problems which can be reported up-front
 
-    Args:
-        sbml_dfs_dict (dict(pd.DataFrame)): a dict of sbml_dfs models;
-        primarily used as an input for construct_consensus_model
+    Parameters
+    ----------
+    sbml_dfs_dict : dict[str, SBML_dfs]
+        a dict of sbml_dfs models;
+    pw_index : indices.PWIndex
+        an index of all tables being aggregated
+    check_mergeability : bool, default=True
+        whether to check for issues which will prevent merging across models
 
-    Returns:
-        None
-
+    Returns
+    -------
+    None
+        This function returns None but logs error messages if incompatible
+        ontology structures are detected.
     """
 
     for k, v in sbml_dfs_dict.items():
         _check_sbml_dfs(sbml_dfs=v, model_label=k)
+
+    if check_mergeability:
+        _check_sbml_dfs_mergeability(sbml_dfs_dict, pw_index)
+
+    return None
+
+
+def _check_sbml_dfs_mergeability(
+    sbml_dfs_dict: dict[str, SBML_dfs],
+    pw_index: indices.PWIndex,
+) -> None:
+    """Check SBML_dfs for obvious issues which will prevent merging across models.
+
+    Parameters
+    ----------
+    sbml_dfs_dict : dict[str, SBML_dfs]
+        a dict of sbml_dfs models;
+    pw_index : indices.PWIndex
+        an index of all tables being aggregated
+
+    Returns
+    -------
+    None
+        This function returns None but logs error messages if incompatible
+        ontology structures are detected.
+    """
+
+    logger.info("Evaluating compartment compatibility")
+    _pre_consensus_compartment_check(sbml_dfs_dict, pw_index)
+
+    logger.info("Evaluating ontology compatibility")
+    _pre_consensus_ontology_check(sbml_dfs_dict, "species")
+
+    logger.debug("Pre-consensus checks complete")
+
     return None
 
 
