@@ -9,7 +9,7 @@ import igraph as ig
 import pandas as pd
 from tqdm import tqdm
 
-from napistu import identifiers, indices, sbml_dfs_core, sbml_dfs_utils, source, utils
+from napistu import identifiers, indices, sbml_dfs_utils, source, utils
 from napistu.constants import (
     BQB_DEFINING_ATTRS,
     ENTITIES_TO_ENTITY_DATA,
@@ -24,6 +24,7 @@ from napistu.constants import (
 )
 from napistu.ingestion import sbml
 from napistu.matching.mount import resolve_matches
+from napistu.sbml_dfs_core import SBML_dfs
 
 logger = logging.getLogger(__name__)
 # set the level to show logger.info message
@@ -31,11 +32,11 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 def construct_consensus_model(
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs],
+    sbml_dfs_dict: dict[str, SBML_dfs],
     pw_index: indices.PWIndex,
     model_source: Optional[source.Source] = None,
     dogmatic: bool = True,
-) -> sbml_dfs_core.SBML_dfs:
+) -> SBML_dfs:
     """
     Construct a Consensus Model by merging shared entities across pathway models.
 
@@ -44,7 +45,7 @@ def construct_consensus_model(
 
     Parameters
     ----------
-    sbml_dfs_dict : dict[str, sbml_dfs_core.SBML_dfs]
+    sbml_dfs_dict : dict[str, SBML_dfs]
         A dictionary of SBML_dfs objects from different models, keyed by model name.
     pw_index : indices.PWIndex
         An index of all tables being aggregated, used for cross-referencing entities.
@@ -55,7 +56,7 @@ def construct_consensus_model(
 
     Returns
     -------
-    sbml_dfs_core.SBML_dfs
+    SBML_dfs
         A consensus SBML_dfs object containing the merged model.
     """
     # Validate inputs
@@ -78,7 +79,7 @@ def construct_consensus_model(
     )
 
     # Step 2: Create the consensus SBML_dfs object
-    sbml_dfs = sbml_dfs_core.SBML_dfs(consensus_entities, model_source)  # type: ignore
+    sbml_dfs = SBML_dfs(consensus_entities, model_source)  # type: ignore
 
     # Step 3: Add entity data from component models
     sbml_dfs = _add_entity_data(sbml_dfs, sbml_dfs_dict, lookup_tables)
@@ -87,7 +88,7 @@ def construct_consensus_model(
 
 
 def construct_meta_entities_fk(
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs],
+    sbml_dfs_dict: dict[str, SBML_dfs],
     pw_index: pd.DataFrame,
     table: str = SBML_DFS.COMPARTMENTALIZED_SPECIES,
     fk_lookup_tables: dict = {},
@@ -101,7 +102,7 @@ def construct_meta_entities_fk(
 
     Parameters:
     ----------
-    sbml_df_dict: dict{"model": cpr.SBML_dfs}
+    sbml_df_dict: dict{"model": SBML_dfs}
         A dictionary of cpr.SBML_dfs
     pw_index: indices.PWIndex
         An index of all tables being aggregated
@@ -188,7 +189,7 @@ def construct_meta_entities_fk(
 
 
 def construct_meta_entities_identifiers(
-    sbml_dfs_dict: dict,
+    sbml_dfs_dict: dict[str, SBML_dfs],
     pw_index: indices.PWIndex,
     table: str,
     fk_lookup_tables: dict = {},
@@ -202,7 +203,7 @@ def construct_meta_entities_identifiers(
 
     Parameters
     ----------
-    sbml_dfs_dict : dict[str, sbml_dfs_core.SBML_dfs]
+    sbml_dfs_dict : dict[str, SBML_dfs]
         A dictionary of SBML_dfs objects from different models, keyed by model name.
     pw_index : indices.PWIndex
         An index of all tables being aggregated.
@@ -247,7 +248,7 @@ def construct_meta_entities_identifiers(
 
 
 def construct_meta_entities_members(
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs],
+    sbml_dfs_dict: dict[str, SBML_dfs],
     pw_index: indices.PWIndex | None,
     table: str = SBML_DFS.REACTIONS,
     defined_by: str = SBML_DFS.REACTION_SPECIES,
@@ -261,8 +262,8 @@ def construct_meta_entities_members(
 
     Parameters:
     ----------
-    sbml_df_dict: dict{"model": cpr.SBML_dfs}
-        A dictionary of cpr.SBML_dfs
+    sbml_df_dict: dict{"model": SBML_dfs}
+        A dictionary of SBML_dfs
     pw_index: indices.PWIndex
         An index of all tables being aggregated
     table: str
@@ -345,7 +346,7 @@ def construct_meta_entities_members(
 
 def construct_sbml_dfs_dict(
     pw_index: pd.DataFrame, strict: bool = True, verbose: bool = False
-) -> dict[str, sbml_dfs_core.SBML_dfs]:
+) -> dict[str, SBML_dfs]:
     """
     Construct a dictionary of SBML_dfs objects from a pathway index.
 
@@ -363,7 +364,7 @@ def construct_sbml_dfs_dict(
 
     Returns
     -------
-    dict[str, sbml_dfs_core.SBML_dfs]
+    dict[str, SBML_dfs]
         A dictionary mapping model names to SBML_dfs objects.
     """
 
@@ -386,7 +387,7 @@ def construct_sbml_dfs_dict(
 
         try:
             sbml_obj = sbml.SBML(sbml_path)
-            sbml_dfs_dict[pw_entry[SOURCE_SPEC.PATHWAY_ID]] = sbml_dfs_core.SBML_dfs(
+            sbml_dfs_dict[pw_entry[SOURCE_SPEC.PATHWAY_ID]] = SBML_dfs(
                 sbml_obj, model_source
             )
         except ValueError as e:
@@ -400,8 +401,8 @@ def construct_sbml_dfs_dict(
 
 
 def prepare_consensus_model(
-    sbml_dfs_list: list[sbml_dfs_core.SBML_dfs],
-) -> tuple[dict[str, sbml_dfs_core.SBML_dfs], indices.PWIndex]:
+    sbml_dfs_list: list[SBML_dfs],
+) -> tuple[dict[str, SBML_dfs], indices.PWIndex]:
     """
     Prepare for creating a consensus model using a list of to-be-consolidated sbml_dfs objects.
 
@@ -430,9 +431,7 @@ def prepare_consensus_model(
         If the sbml_dfs_list contains sbml_dfs objects with invalid pathway_ids.
     """
 
-    invalid_sbml_dfs = [
-        not isinstance(x, sbml_dfs_core.SBML_dfs) for x in sbml_dfs_list
-    ]
+    invalid_sbml_dfs = [not isinstance(x, SBML_dfs) for x in sbml_dfs_list]
 
     if sum(invalid_sbml_dfs) > 0:
         raise ValueError(
@@ -522,25 +521,25 @@ def _add_consensus_sources(
 
 
 def _add_entity_data(
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs],
+    sbml_dfs: SBML_dfs,
+    sbml_dfs_dict: dict[str, SBML_dfs],
     lookup_tables: dict,
-) -> sbml_dfs_core.SBML_dfs:
+) -> SBML_dfs:
     """
     Add entity data from component models to the consensus model.
 
     Parameters:
     ----------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    sbml_dfs: SBML_dfs
         The consensus model being built
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs]
+    sbml_dfs_dict: dict[str, SBML_dfs]
         A dictionary of SBML_dfs from different models
     lookup_tables: dict
         Dictionary of lookup tables for translating between old and new entity IDs
 
     Returns:
     ----------
-    sbml_dfs_core.SBML_dfs
+    SBML_dfs
         The updated consensus model
     """
     # Add species data
@@ -629,7 +628,7 @@ def _build_consensus_identifiers(
 
 
 def _check_sbml_dfs(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, model_label: str, N_examples: int | str = 5
+    sbml_dfs: SBML_dfs, model_label: str, N_examples: int | str = 5
 ) -> None:
     """Check SBML_dfs for identifiers which are associated with different entities before a merge."""
 
@@ -677,7 +676,7 @@ def _check_sbml_dfs(
     return None
 
 
-def _check_sbml_dfs_dict(sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs]) -> None:
+def _check_sbml_dfs_dict(sbml_dfs_dict: dict[str, SBML_dfs]) -> None:
     """Check models in SBML_dfs for problems which can be reported up-front
 
     Args:
@@ -827,7 +826,7 @@ def _create_consensus_sources(
 
 
 def _create_consensus_entities(
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs],
+    sbml_dfs_dict: dict[str, SBML_dfs],
     pw_index: indices.PWIndex,
     defining_biological_qualifiers: list[str],
 ) -> tuple[dict, dict]:
@@ -839,7 +838,7 @@ def _create_consensus_entities(
 
     Parameters:
     ----------
-    sbml_dfs_dict: dict{cpr.SBML_dfs}
+    sbml_dfs_dict: dict{SBML_dfs}
         A dictionary of SBML_dfs from different models
     pw_index: indices.PWIndex
         An index of all tables being aggregated
@@ -1005,14 +1004,14 @@ def _create_consensus_table(
 
 
 def _create_default_consensus_source(
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs],
+    sbml_dfs_dict: dict[str, SBML_dfs],
 ) -> source.Source:
     """
     A default consensus source is created when no model source object is provided.
 
     Parameters
     ----------
-    sbml_dfs_dict : dict[str, sbml_dfs_core.SBML_dfs]
+    sbml_dfs_dict : dict[str, SBML_dfs]
         A dictionary of SBML_dfs objects from different models, keyed by model name.
 
     Returns
@@ -1330,7 +1329,7 @@ def _merge_entity_data_create_consensus(
 
 
 def _merge_entity_data(
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs],
+    sbml_dfs_dict: dict[str, SBML_dfs],
     lookup_table: pd.Series,
     table: str,
 ) -> dict:
@@ -1343,7 +1342,7 @@ def _merge_entity_data(
     ----------
         sbml_dfs_dict : dict
             dictionary where values are to-be-merged model nnames and values
-            are sbml_dfs_core.SBML_dfs
+            are SBML_dfs
         lookup_table : pd.Series
             a series where the index is an old model and primary key and the
             value is the new consensus id
@@ -1470,8 +1469,8 @@ def _merge_entity_identifiers(
     indexed_old_identifiers = (
         agg_primary_table.join(lookup_table)
         .reset_index(drop=True)
-        .rename(columns={"new_id": table_schema["pk"]})
-        .groupby(table_schema["pk"])[table_schema["id"]]
+        .rename(columns={"new_id": table_schema[SCHEMA_DEFS.PK]})
+        .groupby(table_schema[SCHEMA_DEFS.PK])[table_schema[SCHEMA_DEFS.ID]]
     )
 
     # Merge identifier objects
@@ -1479,7 +1478,7 @@ def _merge_entity_identifiers(
 
 
 def _pre_consensus_compartment_check(
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs], pw_index: indices.PWIndex
+    sbml_dfs_dict: dict[str, SBML_dfs], pw_index: indices.PWIndex
 ) -> None:
     """
     Check for compartment compatibility across models before consensus building.
@@ -1527,16 +1526,16 @@ def _pre_consensus_compartment_check(
         compartments_df.reset_index()
         .merge(
             _unnest_SBML_df(sbml_dfs_dict, SBML_DFS.COMPARTMENTS)[SBML_DFS.C_NAME],
-            left_on=["model", SBML_DFS.C_ID],
+            left_on=[SOURCE_SPEC.MODEL, SBML_DFS.C_ID],
             right_index=True,
         )
-        .assign(model_c_name=lambda x: x["model"] + ": " + x[SBML_DFS.C_NAME])
+        .assign(model_c_name=lambda x: x[SOURCE_SPEC.MODEL] + ": " + x[SBML_DFS.C_NAME])
     )
 
     edges_df = pd.concat(
         [
-            models_to_compartments[["model", "new_id"]].rename(
-                columns={"model": "source", "new_id": "target"}
+            models_to_compartments[[SOURCE_SPEC.MODEL, "new_id"]].rename(
+                columns={SOURCE_SPEC.MODEL: "source", "new_id": "target"}
             ),
             models_to_compartments[["new_id", "model_c_name"]].rename(
                 columns={"new_id": "source", "model_c_name": "target"}
@@ -1546,7 +1545,7 @@ def _pre_consensus_compartment_check(
 
     vertices_df = pd.concat(
         [
-            _create_vertex_category(models_to_compartments, "model"),
+            _create_vertex_category(models_to_compartments, SOURCE_SPEC.MODEL),
             _create_vertex_category(models_to_compartments, "new_id"),
             _create_vertex_category(models_to_compartments, "model_c_name"),
         ]
@@ -1578,7 +1577,7 @@ def _pre_consensus_compartment_check(
 
 
 def _pre_consensus_ontology_check(
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs], entity_type: str
+    sbml_dfs_dict: dict[str, SBML_dfs], entity_type: str
 ) -> None:
     """
     Check for ontology compatibility across models before consensus building.
@@ -1629,22 +1628,22 @@ def _pre_consensus_ontology_check(
             k: (
                 v.get_identifiers_table_for_ontology_occurrence(
                     entity_type
-                ).value_counts(["ontology"])
+                ).value_counts([IDENTIFIERS.ONTOLOGY])
             )
             for k, v in sbml_dfs_dict.items()
         },
         axis=0,
-        names=["model"],
+        names=[SOURCE_SPEC.MODEL],
     ).reset_index()
 
-    edges_df = ontology_counts[["model", "ontology"]].rename(
-        columns={"model": "source", "ontology": "target"}
+    edges_df = ontology_counts[[SOURCE_SPEC.MODEL, IDENTIFIERS.ONTOLOGY]].rename(
+        columns={SOURCE_SPEC.MODEL: "source", IDENTIFIERS.ONTOLOGY: "target"}
     )
 
     vertices_df = pd.concat(
         [
-            _create_vertex_category(ontology_counts, "model"),
-            _create_vertex_category(ontology_counts, "ontology"),
+            _create_vertex_category(ontology_counts, SOURCE_SPEC.MODEL),
+            _create_vertex_category(ontology_counts, IDENTIFIERS.ONTOLOGY),
         ]
     )
 
@@ -1658,9 +1657,15 @@ def _pre_consensus_ontology_check(
 
         full_label = list()
         for c in components:
-            models = vertices_df.iloc[c].query("category == 'model'")["name"].to_list()
+            models = (
+                vertices_df.iloc[c]
+                .query(f"category == '{SOURCE_SPEC.MODEL}'")["name"]
+                .to_list()
+            )
             ontologies = (
-                vertices_df.iloc[c].query("category == 'ontology'")["name"].to_list()
+                vertices_df.iloc[c]
+                .query(f"category == '{IDENTIFIERS.ONTOLOGY}'")["name"]
+                .to_list()
             )
 
             label = f"models: {models}\nontologies: {ontologies}"
@@ -1764,7 +1769,7 @@ def _prepare_identifier_edgelist(
 
 
 def _prepare_member_table(
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs],
+    sbml_dfs_dict: dict[str, SBML_dfs],
     defined_by: str,
     defined_lookup_tables: dict,
     table_schema: dict,
@@ -1777,7 +1782,7 @@ def _prepare_member_table(
 
     Parameters:
     ----------
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs]
+    sbml_dfs_dict: dict[str, SBML_dfs]
         Dictionary of SBML_dfs from different models
     defined_by: str
         Name of the table whose entries define membership
@@ -1918,7 +1923,7 @@ def _report_consensus_merges(
     lookup_table: pd.Series,
     table_schema: dict,
     agg_tbl: pd.DataFrame | None = None,
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs] | None = None,
+    sbml_dfs_dict: dict[str, SBML_dfs] | None = None,
     n_example_merges: int = 3,
 ) -> None:
     """
@@ -2036,7 +2041,7 @@ def _report_consensus_merges(
 
 
 def _resolve_reversibility(
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs],
+    sbml_dfs_dict: dict[str, SBML_dfs],
     rxn_consensus_species: pd.DataFrame,
     rxn_lookup_table: pd.Series,
 ) -> pd.DataFrame:
@@ -2113,9 +2118,7 @@ def _update_foreign_keys(
     return agg_tbl
 
 
-def _unnest_SBML_df(
-    sbml_dfs_dict: dict[str, sbml_dfs_core.SBML_dfs], table: str
-) -> pd.DataFrame:
+def _unnest_SBML_df(sbml_dfs_dict: dict[str, SBML_dfs], table: str) -> pd.DataFrame:
     """
     Unnest and concatenate a specific table from multiple SBML_dfs models.
 
@@ -2124,7 +2127,7 @@ def _unnest_SBML_df(
 
     Parameters
     ----------
-    sbml_dfs_dict : dict[str, sbml_dfs_core.SBML_dfs]
+    sbml_dfs_dict : dict[str, SBML_dfs]
         A dictionary of SBML_dfs objects from different models, keyed by model name.
     table : str
         The name of the table to aggregate (e.g., 'species', 'reactions', 'compartments').
