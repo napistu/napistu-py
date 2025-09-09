@@ -231,7 +231,7 @@ def create_napistu_graph(
             logger.warning(utils.style_df(example_duplicates, headers="keys"))
 
     # convert nodes and edgelist into an igraph network
-    logger.info("Formatting cpr_graph output")
+    logger.info("Formatting NapistuGraph output")
     napistu_ig_graph = ig.Graph.DictList(
         vertices=network_nodes_df.to_dict("records"),
         edges=unique_edges.to_dict("records"),

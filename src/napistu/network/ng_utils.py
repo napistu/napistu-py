@@ -49,7 +49,7 @@ def apply_weight_transformations(
     Parameters
     ----------
     edges_df : pd.DataFrame
-        A table of edges and their attributes extracted from a cpr_graph.
+        A table of edges and their attributes extracted from a NapistuGraph.
     reaction_attrs : dict
         A dictionary of attributes identifying weighting attributes within
         an sbml_df's reaction_data, how they will be named in edges_df (the keys),

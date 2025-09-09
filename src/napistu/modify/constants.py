@@ -21,73 +21,105 @@ VALID_ANNOTATION_TYPES = [
 # if_all defines reactions species which must all be present for a filter to occur
 # except_any defines reaction species which will override "if_all"
 # as_substrates defines reaction species which must be present as a substrate for filtering to occur
+
+COFACTORS = SimpleNamespace(
+    ACETYL_COA="acetyl-CoA",
+    ADP="ADP",
+    AMP="AMP",
+    ATP="ATP",
+    CL="Cl-",
+    CO2="CO2",
+    COA="CoA",
+    FAD="FAD",
+    FADH2="FADH2",
+    GDP="GDP",
+    GLU="Glu",
+    GLN="Gln",
+    GSH="GSH",
+    GSSG="GSSG",
+    GTP="GTP",
+    H2CO3="H2CO3",
+    HCO3="HCO3",
+    H_PLUS="H+",
+    NAD_PLUS="NAD+",
+    NADH="NADH",
+    NADP_PLUS="NADP+",
+    NADPH="NADPH",
+    NA_PLUS="Na+",
+    O2="O2",
+    PO4="PO4",
+    PPI="PPi",
+    SAH="SAH",
+    SAM="SAM",
+    UDP="UDP",
+    WATER="water",
+)
+
+COFACTOR_DEFS = SimpleNamespace(
+    # schema
+    EXCEPT_ANY="except_any",
+    AS_SUBSTRATE="as_substrate",
+    IF_ALL="if_all",
+    # variables
+    COFACTOR="cofactor",
+    FILTER_REASON="filter_reason",
+)
+
 COFACTOR_SCHEMA = {
-    "ATP PO4 donation": {"if_all": ["ATP", "ADP"], "except_any": ["AMP"]},
-    "GTP PO4 donation": {"if_all": ["GTP", "GDP"]},
-    "ATP PPi donation": {"if_all": ["ATP", "AMP"], "except_any": ["ADP"]},
-    "NADH H- donation": {"if_all": ["NADH", "NAD+"], "as_substrate": ["NADH"]},
-    "NADPH H- donation": {"if_all": ["NADPH", "NADP+"], "as_substrate": ["NADPH"]},
-    "SAH methyltransferase": {"if_all": ["SAH", "SAM"]},
-    "Glutathione oxidation": {"if_all": ["GSSG", "GSH"], "except_any": ["NADPH"]},
+    "ATP PO4 donation": {COFACTOR_DEFS.IF_ALL: [COFACTORS.ATP, COFACTORS.ADP], COFACTOR_DEFS.EXCEPT_ANY: [COFACTORS.AMP]},
+    "GTP PO4 donation": {COFACTOR_DEFS.IF_ALL: [COFACTORS.GTP, COFACTORS.GDP]},
+    "ATP PPi donation": {COFACTOR_DEFS.IF_ALL: [COFACTORS.ATP, COFACTORS.AMP], COFACTOR_DEFS.EXCEPT_ANY: [COFACTORS.ADP]},
+    "NADH H- donation": {COFACTOR_DEFS.IF_ALL: [COFACTORS.NADH, COFACTORS.NAD_PLUS], COFACTOR_DEFS.AS_SUBSTRATE: [COFACTORS.NADH]},
+    "NADPH H- donation": {COFACTOR_DEFS.IF_ALL: [COFACTORS.NADPH, COFACTORS.NADP_PLUS], COFACTOR_DEFS.AS_SUBSTRATE: [COFACTORS.NADPH]},
+    "SAH methyltransferase": {COFACTOR_DEFS.IF_ALL: [COFACTORS.SAH, COFACTORS.SAM]},
+    "Glutathione oxidation": {COFACTOR_DEFS.IF_ALL: [COFACTORS.GSSG, COFACTORS.GSH], COFACTOR_DEFS.EXCEPT_ANY: [COFACTORS.NADPH]},
     # "Glutamine aminotransferase" :
-    #    {"if_all" : ["Gln", "Glu"],
-    #     "except_any" : ["ATP"]},
-    "Water": {"if_all": ["water"]},
-    "PO4": {"if_all": ["PO4"]},
-    "PPi": {"if_all": ["PPi"]},
-    "H+": {"if_all": ["H+"]},
-    "O2": {"if_all": ["O2"]},
-    "CO2": {"if_all": ["CO2"]},
-    "Na+": {"if_all": ["Na+"]},
-    "Cl-": {"if_all": ["Cl-"]},
-    "CoA": {"if_all": ["CoA"]},
-    "HCO3-": {"if_all": ["HCO3"]},
+    #    {"if_all" : [COFACTORS.GLN, COFACTORS.GLU],
+    #     "except_any" : [COFACTORS.ATP]},
+    "Water": {COFACTOR_DEFS.IF_ALL: [COFACTORS.WATER]},
+    "PO4": {COFACTOR_DEFS.IF_ALL: [COFACTORS.PO4]},
+    "PPi": {COFACTOR_DEFS.IF_ALL: [COFACTORS.PPI]},
+    "H+": {COFACTOR_DEFS.IF_ALL: [COFACTORS.H_PLUS]},
+    "O2": {COFACTOR_DEFS.IF_ALL: [COFACTORS.O2]},
+    "CO2": {COFACTOR_DEFS.IF_ALL: [COFACTORS.CO2]},
+    "Na+": {COFACTOR_DEFS.IF_ALL: [COFACTORS.NA_PLUS]},
+    "Cl-": {COFACTOR_DEFS.IF_ALL: [COFACTORS.CL]},
+    "CoA": {COFACTOR_DEFS.IF_ALL: [COFACTORS.COA]},
+    "HCO3-": {COFACTOR_DEFS.IF_ALL: [COFACTORS.HCO3]},
 }
 
-COFACTOR_CHEBI_IDS = pd.DataFrame(
-    [
-        ("ADP", 456216),  # ADP(3−)
-        ("ADP", 16761),
-        ("AMP", 16027),
-        ("ATP", 30616),  # ATP(4-)
-        ("ATP", 15422),
-        ("CO2", 16526),
-        ("HCO3", 17544),
-        ("H2CO3", 28976),
-        ("GDP", 17552),
-        ("GSH", 16856),
-        ("GSSG", 17858),
-        ("GTP", 15996),
-        ("Glu", 29985),
-        ("Gln", 58359),
-        ("H+", 15378),
-        ("H+", 24636),
-        ("O2", 15379),
-        ("NADH", 57945),  # NADH(2−)
-        ("NADH", 16908),  # NADH
-        ("NAD+", 57540),  # NAD(1-)
-        ("NAD+", 15846),  # NAD(+)
-        ("NADPH", 16474),
-        ("NADP+", 18009),
-        ("NADP+", 58349),  # NADP(3−)
-        ("PO4", 18367),
-        ("PPi", 29888),  # H2PO4
-        ("PPi", 18361),  # PPi4-
-        ("SAH", 16680),
-        ("SAM", 15414),
-        ("water", 15377),
-        ("water", 16234),  # HO-
-        ("Na+", 29101),
-        ("Cl-", 29311),
-        ("CoA", 1146900),
-        ("CoA", 57287),
-        ("acetyl-CoA", 15351),
-        ("FAD", 16238),
-        ("FADH2", 17877),
-        ("UDP", 17659),
-    ],
-    columns=["cofactor", "chebi"],
-)
+COFACTOR_CHEBI_IDS = {
+    COFACTORS.ACETYL_COA: [15351],
+    COFACTORS.ADP: [456216, 16761],  # ADP(3−)
+    COFACTORS.AMP: [16027],
+    COFACTORS.ATP: [30616, 15422],  # ATP(4-)
+    COFACTORS.CL: [29311],
+    COFACTORS.CO2: [16526],
+    COFACTORS.COA: [1146900, 57287],
+    COFACTORS.FAD: [16238],
+    COFACTORS.FADH2: [17877],
+    COFACTORS.GDP: [17552],
+    COFACTORS.GLU: [29985],
+    COFACTORS.GLN: [58359],
+    COFACTORS.GSH: [16856],
+    COFACTORS.GSSG: [17858],
+    COFACTORS.GTP: [15996],
+    COFACTORS.H2CO3: [28976],
+    COFACTORS.HCO3: [17544],
+    COFACTORS.H_PLUS: [15378, 24636],
+    COFACTORS.NAD_PLUS: [57540, 15846],  # NAD(1-), NAD(+)
+    COFACTORS.NADH: [57945, 16908],  # NADH(2−), NADH
+    COFACTORS.NADP_PLUS: [18009, 58349],  # NADP(3−)
+    COFACTORS.NADPH: [16474],
+    COFACTORS.NA_PLUS: [29101],
+    COFACTORS.O2: [15379],
+    COFACTORS.PO4: [18367],
+    COFACTORS.PPI: [29888, 18361],  # H2PO4, PPi4-
+    COFACTORS.SAH: [16680],
+    COFACTORS.SAM: [15414],
+    COFACTORS.UDP: [17659],
+    COFACTORS.WATER: [15377, 16234],  # HO-
+}
 
 NEO4J_MEMBERS_RAW = SimpleNamespace(
     SET_NAME="set_name",

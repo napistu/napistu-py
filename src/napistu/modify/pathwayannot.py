@@ -170,7 +170,7 @@ def filter_one_reactions_cofactors(
     Returns:
     ----------
     pd.Series with index of rsc_ids and values containing the reason why a
-      reaction species is a cofactor, or None if filter was not triggered.
+    reaction species is a cofactor, or None if filter was not triggered.
 
     """
 
