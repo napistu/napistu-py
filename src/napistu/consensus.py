@@ -1675,7 +1675,7 @@ def _pre_consensus_ontology_check(
     ontology_counts = pd.concat(
         {
             k: (
-                v.get_identifiers_table_for_ontology_occurrence(
+                v._get_identifiers_table_for_ontology_occurrence(
                     entity_type
                 ).value_counts([IDENTIFIERS.ONTOLOGY])
             )

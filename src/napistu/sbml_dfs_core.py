@@ -100,9 +100,11 @@ class SBML_dfs:
         Get ontology co-occurrence matrix for a specific entity type.
     get_ontology_occurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False)
         Get ontology occurrence summary for a specific entity type.
-    get_pathway_cooccurrence(entity_type, priority_pathways=DATA_SOURCES_LIST)
+    get_ontology_x_source_cooccurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False, characteristic_only=False, dogmatic=True, priority_pathways=DATA_SOURCES_LIST)
+        Get ontology × source co-occurrence matrix for a specific entity type.
+    get_source_cooccurrence(entity_type, priority_pathways=DATA_SOURCES_LIST)
         Get pathway co-occurrence matrix for a specific entity type.
-    get_pathway_occurrence(entity_type, priority_pathways=DATA_SOURCES_LIST)
+    get_source_occurrence(entity_type, priority_pathways=DATA_SOURCES_LIST)
         Get pathway occurrence summary for a specific entity type.
     get_sources(entity_type)
         Get the unnest sources table for a given entity type.
@@ -120,6 +122,8 @@ class SBML_dfs:
         Infer and assign compartments for compartmentalized species with missing compartment information.
     name_compartmentalized_species()
         Rename compartmentalized species to include compartment information if needed.
+    post_consensus_checks(entity_types=[SBML_DFS.SPECIES, SBML_DFS.COMPARTMENTS], check_types=[CONSENSUS_CHECKS.SOURCE_COOCCURRENCE, CONSENSUS_CHECKS.ONTOLOGY_X_SOURCE_COOCCURRENCE])
+        Perform checks on the SBML_dfs object after consensus building.
     reaction_formulas(r_ids=None)
         Generate human-readable reaction formulas for specified reactions.
     reaction_summaries(r_ids=None)
@@ -152,6 +156,7 @@ class SBML_dfs:
     _attempt_resolve(e)
     _edgelist_assemble_sbml_model(compartments, species, comp_species, reactions, reaction_species, species_data, reactions_data, keep_species_data, keep_reactions_data, extra_columns)
     _find_underspecified_reactions_by_scids(sc_ids)
+    _get_identifiers_table_for_ontology_occurrence(entity_type, characteristic_only=False, dogmatic=True)
     _get_unused_cspecies()
     _get_unused_species()
     _remove_compartmentalized_species(sc_ids)
@@ -704,53 +709,6 @@ class SBML_dfs:
 
         return named_identifiers
 
-    def get_identifiers_table_for_ontology_occurrence(
-        self, entity_type: str, characteristic_only: bool = False, dogmatic: bool = True
-    ) -> pd.DataFrame:
-        """
-        Get the appropriate identifiers table for ontology analysis.
-
-        This method handles the common logic for determining which identifiers
-        table to use based on the characteristic_only and dogmatic parameters.
-
-        Parameters
-        ----------
-        entity_type : str
-            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
-        characteristic_only : bool, optional
-            Whether to use only characteristic identifiers (only supported for species), by default False
-        dogmatic : bool, optional
-            Whether to use dogmatic identifier filtering, by default True
-
-        Returns
-        -------
-        pd.DataFrame
-            The appropriate identifiers table for ontology analysis
-
-        Raises
-        ------
-        ValueError
-            If the entity type is invalid
-        """
-        import logging
-
-        from napistu.constants import SBML_DFS
-
-        logger = logging.getLogger(__name__)
-
-        if characteristic_only and entity_type == SBML_DFS.SPECIES:
-            logger.debug("loading characteristic species ids")
-            identifiers_table = self.get_characteristic_species_ids(dogmatic)
-        else:
-            logger.debug("loading all identifiers")
-            if characteristic_only:
-                logger.warning(
-                    f"Characteristic only is only supported for species. Returning all ontologies for {entity_type}."
-                )
-            identifiers_table = self.get_identifiers(entity_type)
-
-        return identifiers_table
-
     def get_network_summary(self) -> Mapping[str, Any]:
         """
         Get diagnostic statistics about the network.
@@ -887,7 +845,7 @@ class SBML_dfs:
         ValueError
             If the entity type is invalid or identifiers are malformed
         """
-        identifiers_table = self.get_identifiers_table_for_ontology_occurrence(
+        identifiers_table = self._get_identifiers_table_for_ontology_occurrence(
             entity_type, characteristic_only, dogmatic
         )
 
@@ -938,7 +896,7 @@ class SBML_dfs:
             If the entity type is invalid or identifiers are malformed
         """
 
-        identifiers_table = self.get_identifiers_table_for_ontology_occurrence(
+        identifiers_table = self._get_identifiers_table_for_ontology_occurrence(
             entity_type, characteristic_only, dogmatic
         )
 
@@ -2251,6 +2209,53 @@ class SBML_dfs:
             self.reaction_species[SBML_DFS.SC_ID]
         )
         return sc_ids  # type: ignore
+
+    def _get_identifiers_table_for_ontology_occurrence(
+        self, entity_type: str, characteristic_only: bool = False, dogmatic: bool = True
+    ) -> pd.DataFrame:
+        """
+        Get the appropriate identifiers table for ontology analysis.
+
+        This method handles the common logic for determining which identifiers
+        table to use based on the characteristic_only and dogmatic parameters.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
+        characteristic_only : bool, optional
+            Whether to use only characteristic identifiers (only supported for species), by default False
+        dogmatic : bool, optional
+            Whether to use dogmatic identifier filtering, by default True
+
+        Returns
+        -------
+        pd.DataFrame
+            The appropriate identifiers table for ontology analysis
+
+        Raises
+        ------
+        ValueError
+            If the entity type is invalid
+        """
+        import logging
+
+        from napistu.constants import SBML_DFS
+
+        logger = logging.getLogger(__name__)
+
+        if characteristic_only and entity_type == SBML_DFS.SPECIES:
+            logger.debug("loading characteristic species ids")
+            identifiers_table = self.get_characteristic_species_ids(dogmatic)
+        else:
+            logger.debug("loading all identifiers")
+            if characteristic_only:
+                logger.warning(
+                    f"Characteristic only is only supported for species. Returning all ontologies for {entity_type}."
+                )
+            identifiers_table = self.get_identifiers(entity_type)
+
+        return identifiers_table
 
     def _get_unused_species(self) -> set[str]:
         """Returns a list of species that are not part of any reactions"""
