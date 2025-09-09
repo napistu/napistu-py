@@ -62,6 +62,7 @@ from napistu.network.precompute import precompute_distances
 from napistu.ontologies import dogma
 from napistu.ontologies.genodexito import Genodexito
 from napistu.sbml_dfs_core import SBML_dfs
+from napistu.sbml_dfs_utils import display_post_consensus_checks
 
 # Set up logging using shared configuration
 logger, console = setup_logging()
@@ -478,7 +479,8 @@ def check_consensus(sbml_dfs_uri: str):
     sbml_dfs = SBML_dfs.from_pickle(sbml_dfs_uri)
 
     # Run post-consensus checks
-    sbml_dfs.post_consensus_checks()
+    results = sbml_dfs.post_consensus_checks()
+    display_post_consensus_checks(results)
 
     logger.info("Consensus model check completed")
 
