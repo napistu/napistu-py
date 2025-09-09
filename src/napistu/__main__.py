@@ -18,6 +18,7 @@ with warnings.catch_warnings():
 from napistu import consensus as napistu_consensus
 from napistu import utils
 from napistu._cli import (
+    click_str_to_list,
     genodexito_options,
     nondogmatic_option,
     organismal_species_argument,
@@ -915,7 +916,7 @@ def export_precomputed_distances(
                 raise ValueError("Unknown format: %s" % format)
 
     # convert weight vars from a str to list
-    weight_vars_list = utils.click_str_to_list(weight_vars)
+    weight_vars_list = click_str_to_list(weight_vars)
 
     precomputed_distances = precompute_distances(
         napistu_graph,
