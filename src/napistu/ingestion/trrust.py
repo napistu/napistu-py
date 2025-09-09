@@ -42,11 +42,14 @@ from napistu.source import Source
 def download_trrust(target_uri: str) -> None:
     """Downloads trrust to the target uri
 
-    Args:
-        target_uri (str): target url
+    Parameters
+    ----------
+    target_uri : str
+        target url
 
-    Returns:
-        None
+    Returns
+    -------
+    None
     """
     utils.download_wget(TTRUST_URL_RAW_DATA_HUMAN, target_uri)
 
@@ -63,11 +66,21 @@ def convert_trrust_to_sbml_dfs(
 ) -> SBML_dfs:
     """Ingests trrust to sbml dfs
 
-    Args:
-        trrust_uri (str): trrust uri
+    Parameters
+    ----------
+    trrust_uri : str
+        trrust uri
+    organismal_species : str | OrganismalSpeciesValidator
+        organismal species
+    preferred_method : str
+        preferred method
+    allow_fallback : bool
+        allow fallback
 
-    Returns:
-        sbml_dfs
+    Returns
+    -------
+    SBML_dfs
+        sbml dfs
     """
 
     # Read trrust raw data
@@ -247,7 +260,9 @@ def _format_pubmed_for_interactions(pubmed_set):
     ids = list()
     for p in pubmed_set:
         # some pubmed IDs are bogus
-        url = identifiers.create_uri_url(ontology="pubmed", identifier=p, strict=False)
+        url = identifiers.create_uri_url(
+            ontology=ONTOLOGIES.PUBMED, identifier=p, strict=False
+        )
         if url is not None:
             valid_url = identifiers.format_uri(
                 uri=url, biological_qualifier_type=BQB.IS_DESCRIBED_BY
@@ -300,37 +315,16 @@ def _get_uniprot_2_symbol_mapping(
         [ONTOLOGIES.SYMBOL, ONTOLOGIES.UNIPROT, ONTOLOGIES.NCBI_ENTREZ_GENE]
     )
 
-    # Get the merged mappings
-    merged_mappings = genodexito.merged_mappings
-
-    # Create entrez to symbol mapping, filtering for unique symbols only
-    entrez_2_symbol = merged_mappings[
-        [ONTOLOGIES.NCBI_ENTREZ_GENE, ONTOLOGIES.SYMBOL]
-    ].dropna()
-
-    # Only look at symbols which uniquely map to a single gene
-    symbol_counts = entrez_2_symbol.value_counts(ONTOLOGIES.SYMBOL)
-    unique_symbols = symbol_counts[symbol_counts == 1].index.tolist()
-    entrez_2_symbol = entrez_2_symbol[
-        entrez_2_symbol[ONTOLOGIES.SYMBOL].isin(unique_symbols)
-    ]
-
-    # Create entrez to uniprot mapping (one entrez -> multiple uniprot IDs is okay)
-    entrez_2_uniprot = merged_mappings[
-        [ONTOLOGIES.NCBI_ENTREZ_GENE, ONTOLOGIES.UNIPROT]
-    ].dropna()
-
-    # Merge to create uniprot to symbol mapping
-    uniprot_2_symbol = entrez_2_symbol.merge(
-        entrez_2_uniprot, on=ONTOLOGIES.NCBI_ENTREZ_GENE
-    ).drop(ONTOLOGIES.NCBI_ENTREZ_GENE, axis=1)
-
     # Rename columns to match the original function's output format
-    uniprot_2_symbol = uniprot_2_symbol.rename(
-        columns={
-            ONTOLOGIES.SYMBOL: TRRUST_SYMBOL,
-            ONTOLOGIES.UNIPROT: TRRUST_UNIPROT_ID,
-        }
+    uniprot_2_symbol = (
+        genodexito.merged_mappings.drop(ONTOLOGIES.NCBI_ENTREZ_GENE, axis=1)
+        .dropna()
+        .rename(
+            columns={
+                ONTOLOGIES.SYMBOL: TRRUST_SYMBOL,
+                ONTOLOGIES.UNIPROT: TRRUST_UNIPROT_ID,
+            }
+        )
     )
 
     return uniprot_2_symbol
@@ -339,12 +333,17 @@ def _get_uniprot_2_symbol_mapping(
 def _read_trrust(trrust_uri: str) -> pd.DataFrame:
     """Read trrust csv
 
-    Args:
-        trrust_uri (str): uri to the trrust csv
+    Parameters
+    ----------
+    trrust_uri : str
+        uri to the trrust csv
 
-    Returns:
-        pd.DataFrame: Data Frame
+    Returns
+    -------
+    pd.DataFrame
+        Data Frame
     """
+
     base_path = os.path.dirname(trrust_uri)
     file_name = os.path.basename(trrust_uri)
     with open_fs(base_path) as base_fs:
