@@ -26,8 +26,6 @@ DATA_SOURCES = SimpleNamespace(
     TRRUST="TRRUST",
 )
 
-DATA_SOURCES_LIST = list(DATA_SOURCES.__dict__.values())
-
 DATA_SOURCE_DESCRIPTIONS = {
     DATA_SOURCES.BIGG: "UCSD genome-scale metabolic models",
     DATA_SOURCES.DOGMA: "Napistu gene, transcript, and protein annotations",
@@ -52,6 +50,11 @@ MODEL_SOURCE_DESCRIPTIONS = {
     MODEL_SOURCES.IMM1415: "The iMM1415 mouse metabolic model",
     MODEL_SOURCES.IMM904: "The iMM904 yeast metabolic model",
 }
+
+DEFAULT_PRIORITIZED_PATHWAYS = [
+    *DATA_SOURCES.__dict__.values(),
+    *MODEL_SOURCES.__dict__.values(),
+]
 
 # standardization - species
 LATIN_SPECIES_NAMES = SimpleNamespace(

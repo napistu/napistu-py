@@ -44,7 +44,10 @@ from napistu.constants import (
     SBOTERM_NAMES,
     SCHEMA_DEFS,
 )
-from napistu.ingestion.constants import DATA_SOURCES_LIST, INTERACTION_EDGELIST_DEFAULTS
+from napistu.ingestion.constants import (
+    DEFAULT_PRIORITIZED_PATHWAYS,
+    INTERACTION_EDGELIST_DEFAULTS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -100,11 +103,11 @@ class SBML_dfs:
         Get ontology co-occurrence matrix for a specific entity type.
     get_ontology_occurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False)
         Get ontology occurrence summary for a specific entity type.
-    get_ontology_x_source_cooccurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False, characteristic_only=False, dogmatic=True, priority_pathways=DATA_SOURCES_LIST)
+    get_ontology_x_source_cooccurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False, characteristic_only=False, dogmatic=True, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS)
         Get ontology × source co-occurrence matrix for a specific entity type.
-    get_source_cooccurrence(entity_type, priority_pathways=DATA_SOURCES_LIST)
+    get_source_cooccurrence(entity_type, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS)
         Get pathway co-occurrence matrix for a specific entity type.
-    get_source_occurrence(entity_type, priority_pathways=DATA_SOURCES_LIST)
+    get_source_occurrence(entity_type, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS)
         Get pathway occurrence summary for a specific entity type.
     get_sources(entity_type)
         Get the unnest sources table for a given entity type.
@@ -920,7 +923,7 @@ class SBML_dfs:
         characteristic_only: bool = False,
         dogmatic: bool = True,
         # Parameters from get_source_occurrence
-        priority_pathways: list[str] = DATA_SOURCES_LIST,
+        priority_pathways: list[str] = DEFAULT_PRIORITIZED_PATHWAYS,
     ) -> pd.DataFrame:
         """
         Get ontology × source co-occurrence matrix for a specific entity type.
@@ -948,7 +951,7 @@ class SBML_dfs:
         dogmatic : bool, optional
             Whether to use dogmatic identifier filtering in ontology analysis, by default True
         priority_pathways : list[str], optional
-            List of pathway IDs to prioritize in the source analysis, by default DATA_SOURCES_LIST
+            List of pathway IDs to prioritize in the source analysis, by default DEFAULT_PRIORITIZED_PATHWAYS
 
         Returns
         -------
@@ -998,7 +1001,9 @@ class SBML_dfs:
         return cooccurrences
 
     def get_source_cooccurrence(
-        self, entity_type: str, priority_pathways: list[str] = DATA_SOURCES_LIST
+        self,
+        entity_type: str,
+        priority_pathways: list[str] = DEFAULT_PRIORITIZED_PATHWAYS,
     ) -> pd.DataFrame:
         """
         Get pathway co-occurrence matrix for a specific entity type.
@@ -1011,7 +1016,7 @@ class SBML_dfs:
         entity_type : str
             The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
         priority_pathways : list[str], optional
-            List of pathway IDs to prioritize in the analysis. Defaults to DATA_SOURCES_LIST.
+            List of pathway IDs to prioritize in the analysis. Defaults to DEFAULT_PRIORITIZED_PATHWAYS.
 
         Returns
         -------
@@ -1039,7 +1044,7 @@ class SBML_dfs:
     def get_source_occurrence(
         self,
         entity_type: str,
-        priority_pathways: list[str] = DATA_SOURCES_LIST,
+        priority_pathways: list[str] = DEFAULT_PRIORITIZED_PATHWAYS,
         include_missing: bool = False,
     ) -> pd.DataFrame:
         """
@@ -1053,7 +1058,7 @@ class SBML_dfs:
         entity_type : str
             The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
         priority_pathways : list[str], optional
-            List of pathway IDs to prioritize in the analysis. Defaults to DATA_SOURCES_LIST.
+            List of pathway IDs to prioritize in the analysis. Defaults to DEFAULT_PRIORITIZED_PATHWAYS.
         include_missing: bool, optional
             Whether to include missing entities in the result using add_missing_ids_column, by default False
 

@@ -39,7 +39,7 @@ from napistu.constants import (
 )
 from napistu.ingestion.constants import (
     COMPARTMENTS_GO_TERMS,
-    DATA_SOURCES_LIST,
+    DEFAULT_PRIORITIZED_PATHWAYS,
     GENERIC_COMPARTMENT,
     INTERACTION_EDGELIST_DEFAULTS,
     INTERACTION_EDGELIST_DEFS,
@@ -1689,7 +1689,8 @@ def _sbml_dfs_from_edgelist_check_cspecies_merge(
 
 
 def _select_priority_pathway_sources(
-    source_table: pd.DataFrame, priority_pathways: list[str] = DATA_SOURCES_LIST
+    source_table: pd.DataFrame,
+    priority_pathways: list[str] = DEFAULT_PRIORITIZED_PATHWAYS,
 ) -> pd.DataFrame:
     """
     Filter the source table to only include pathways in the list. If 0 or 1 priority pathways are found, return the source table.
