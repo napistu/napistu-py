@@ -175,7 +175,7 @@ class SBML:
                 ]
                 error_log = error_log[headers]
 
-            utils.style_df(error_log, headers=headers)
+            utils.show(error_log, headers=headers)
 
             return None
 
@@ -206,7 +206,7 @@ class SBML:
 
         model_summaries_dat = pd.DataFrame(model_summaries, index=[0]).T
 
-        return utils.style_df(model_summaries_dat)  # type: ignore
+        return utils.show(model_summaries_dat)  # type: ignore
 
     def _define_compartments(
         self, compartment_aliases_dict: dict | None = None

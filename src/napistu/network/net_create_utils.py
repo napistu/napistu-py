@@ -135,7 +135,7 @@ def wire_reaction_species(
         invalid_counts = invalid_sbo_terms.value_counts(SBML_DFS.SBO_TERM).to_frame("N")
         if not isinstance(invalid_counts, pd.DataFrame):
             raise TypeError("invalid_counts must be a pandas DataFrame")
-        logger.warning(utils.style_df(invalid_counts, headers="keys"))  # type: ignore
+        utils.show(invalid_counts, headers="keys")  # type: ignore
         raise ValueError("Some reaction species have unusable SBO terms")
 
     # load and validate the schema of wiring_approach

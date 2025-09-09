@@ -24,6 +24,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import requests
+from pandas.io.formats.style import Styler
 from requests.adapters import HTTPAdapter, Retry
 
 with warnings.catch_warnings():
@@ -991,29 +992,79 @@ def find_weakly_connected_subgraphs(edgelist: pd.DataFrame) -> pd.DataFrame:
     return ind_clusters
 
 
+def show(obj, method="auto", headers="keys", hide_index=False):
+    """Show a table using the appropriate method for the environment.
+
+    Parameters
+    ----------
+    obj : pd.DataFrame or any other object
+        The object to show
+    method : str
+        The method to use to show the object
+        - "string" : show the object as a string
+        - "jupyter" : show the object in a Jupyter notebook
+        - "auto" : show the object in a Jupyter notebook if available, otherwise show as a string
+    headers : str, list, or None
+        The headers to use for the object
+
+    Returns
+    -------
+    None
+
+    Examples
+    --------
+    >>> show(pd.DataFrame({"a": [1, 2, 3]}), headers="keys", hide_index=True)
+    """
+
+    if method == "string":
+        _show_as_string(obj, headers=headers, hide_index=hide_index)
+
+    elif method in ("jupyter", "auto"):
+        try:
+            from IPython.display import display as jupyter_display
+
+            if method == "jupyter" or _in_jupyter_environment():
+                jupyter_display(
+                    style_df(obj, headers=headers, hide_index=hide_index)
+                    if isinstance(obj, pd.DataFrame)
+                    else obj
+                )
+            else:
+                _show_as_string(obj, headers=headers, hide_index=hide_index)
+        except ImportError:
+            if method == "jupyter":
+                raise ImportError("IPython not available but jupyter method requested")
+            _show_as_string(obj, headers=headers, hide_index=hide_index)
+
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+
 def style_df(
     df: pd.DataFrame,
     headers: Union[str, list[str], None] = "keys",
     hide_index: bool = False,
-) -> pd.io.formats.style.Styler:
+) -> Styler:
     """
     Style DataFrame
 
     Provide some simple options for styling a pd.DataFrame
 
-    Args:
-        df: pd.DataFrame
-            A table to style
-        headers:
-            - "keys" to use the current column names
-            - None to suppress column names
-            - list[str] to overwrite and show column names
-        hide_index: bool
-            Should rows be displayed?
+    Parameters
+    ----------
+    df: pd.DataFrame
+        A table to style
+    headers: Union[str, list[str], None]
+        - "keys" to use the current column names
+        - None to suppress column names
+        - list[str] to overwrite and show column names
+    hide_index: bool
+        Should rows be displayed?
 
-    Returns:
-        styled_df: pd.io.formats.style.Styler
-            `df` with styles updated
+    Returns
+    -------
+    styled_df: Styler
+        `df` with styles updated
     """
 
     if isinstance(headers, list):
@@ -1094,20 +1145,6 @@ def score_nameness(string: str):
         # penalty for each number
         + sum(c.isdigit() for c in string) * 5
     )
-
-
-def click_str_to_list(string: str) -> list[str]:
-    """Convert a string-based representation of a list inputted from the CLI into a list of strings."""
-
-    var_extract_regex = re.compile("\\'?([a-zA-Z_]+)\\'?")
-
-    re_search = re.search("^\\[(.*)\\]$", string)
-    if re_search:
-        return var_extract_regex.findall(re_search.group(0))
-    else:
-        raise ValueError(
-            f"The provided string, {string}, could not be reformatted as a list. An example string which can be formatted is: \"['weight', 'upstream_weight']\""
-        )
 
 
 def safe_fill(x: str, fill_width: int = 15) -> str:
@@ -1219,6 +1256,16 @@ def _add_nameness_score(df, name_var):
     return df
 
 
+def _in_jupyter_environment():
+    """Check if running in Jupyter notebook/lab."""
+    try:
+        from IPython import get_ipython
+
+        return get_ipython() is not None
+    except ImportError:
+        return False
+
+
 def _merge_and_log_overwrites(
     left_df: pd.DataFrame, right_df: pd.DataFrame, merge_context: str, **merge_kwargs
 ) -> pd.DataFrame:
@@ -1263,3 +1310,51 @@ def _merge_and_log_overwrites(
         merged_df = merged_df.drop(columns=cols_to_drop)
 
     return merged_df
+
+
+def _show_as_string(obj, headers="keys", hide_index=False, max_rows=20):
+    """
+    Show object using string representation with styling support.
+
+    Parameters
+    ----------
+    obj : DataFrame or Styler
+        Object to display
+    headers : str, list, or None
+        - "keys": use current column names
+        - None: suppress column names
+        - list: override column names
+    hide_index : bool
+        Whether to hide the row index
+    max_rows : int
+        Maximum number of rows to display
+    """
+
+    # Extract DataFrame based on actual type
+    if isinstance(obj, Styler):
+        df = obj.data.copy()
+    elif isinstance(obj, pd.DataFrame):
+        df = obj.copy()
+    else:
+        print(obj)
+        return
+
+    # Handle headers
+    if headers is None:
+        # Suppress column names by setting them to empty strings
+        df.columns = [""] * len(df.columns)
+    elif isinstance(headers, list):
+        # Override column names
+        if len(headers) == len(df.columns):
+            df.columns = headers
+        else:
+            logger.warning(
+                f"Warning: headers length ({len(headers)}) doesn't match columns ({len(df.columns)})"
+            )
+    # If headers == 'keys', keep original column names (default)
+
+    # Print with appropriate index setting
+    if df.shape[0] > max_rows:
+        logger.info(f"Displaying {max_rows} of {df.shape[0]} rows")
+
+    print(df.to_string(max_rows=max_rows, index=not hide_index))

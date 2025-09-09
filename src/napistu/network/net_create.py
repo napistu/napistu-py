@@ -228,7 +228,7 @@ def create_napistu_graph(
                 random.sample(duplicated_edges, min(5, len(duplicated_edges)))
             )
 
-            logger.warning(utils.style_df(example_duplicates, headers="keys"))
+            utils.show(example_duplicates, headers="keys")
 
     # convert nodes and edgelist into an igraph network
     logger.info("Formatting cpr_graph output")

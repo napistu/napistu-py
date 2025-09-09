@@ -397,8 +397,8 @@ def display_post_consensus_checks(checks_results: dict) -> None:
     """
     for entity_type, entity_results in checks_results.items():
         for check_type, cooccurrences in entity_results.items():
-            display(f"Entity type: {entity_type}, Check type: {check_type}")
-            display(utils.style_df(cooccurrences))
+            utils.show(f"Entity type: {entity_type}, Check type: {check_type}")
+            utils.show(cooccurrences)
 
 
 def find_underspecified_reactions(
