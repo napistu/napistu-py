@@ -95,7 +95,7 @@ class Identifiers:
     def print(self):
         """Print a table of identifiers"""
 
-        utils.style_df(pd.DataFrame(self.ids), hide_index=True)
+        utils.show(pd.DataFrame(self.ids), hide_index=True)
 
     def filter(self, ontologies, summarize=True):
         """Returns a bool of whether 1+ of the ontologies was represented"""

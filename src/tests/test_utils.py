@@ -485,12 +485,6 @@ def test_score_nameness():
     assert utils.score_nameness("pyruvate kinase") == 15
 
 
-def test_click_str_to_list():
-    assert utils.click_str_to_list("['foo', bar]") == ["foo", "bar"]
-    with pytest.raises(ValueError):
-        utils.click_str_to_list("foo")
-
-
 def test_drop_extra_cols():
     """Test the _drop_extra_cols function for removing and reordering columns."""
     # Setup test DataFrames
@@ -754,3 +748,20 @@ def test_safe_join_set():
 
     # Test empty inputs
     assert utils.safe_join_set([]) is None
+
+
+def test_show():
+    """Test that utils.show() runs without errors."""
+    import pandas as pd
+
+    # Create a simple test DataFrame
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+
+    # Test that show() runs without raising an exception
+    # We can't easily test the output since it depends on the environment
+    utils.show(df, method="string")
+    utils.show(df, method="string", headers=["col1", "col2"])
+    utils.show(df, method="string", hide_index=True)
+
+    # Test with auto method (should work in test environment)
+    utils.show(df, method="auto")

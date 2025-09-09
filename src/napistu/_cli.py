@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Callable
 
 import click
@@ -50,6 +51,23 @@ def setup_logging() -> tuple[logging.Logger, Console]:
     logger.addHandler(handler)
 
     return logger, console
+
+
+def click_str_to_list(string: str) -> list[str]:
+    """Convert a string-based representation of a list inputted from the CLI into a list of strings."""
+
+    var_extract_regex = re.compile("\\'?([a-zA-Z_]+)\\'?")
+
+    re_search = re.search("^\\[(.*)\\]$", string)
+    if re_search:
+        return var_extract_regex.findall(re_search.group(0))
+    else:
+        raise ValueError(
+            f"The provided string, {string}, could not be reformatted as a list. An example string which can be formatted is: \"['weight', 'upstream_weight']\""
+        )
+
+
+# click formatting options
 
 
 def verbosity_option(f: Callable) -> Callable:

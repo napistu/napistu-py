@@ -233,7 +233,7 @@ def drop_cofactors(sbml_dfs: sbml_dfs_core.SBML_dfs) -> sbml_dfs_core.SBML_dfs:
     )
 
     styled_df = all_cofactors.value_counts().to_frame()
-    logger.info(utils.style_df(styled_df))
+    utils.show(styled_df)
 
     sbml_dfs_working = copy.copy(sbml_dfs)
     sbml_dfs_working.reaction_species = sbml_dfs_working.reaction_species[
@@ -1293,7 +1293,7 @@ def _merge_reactome_crossref_ids(
             f"{failed_joins.shape[0]} network uniprot IDs were not matched to the Reactome Crossref IDs"
         )
 
-        utils.style_df(logged_join_fails, headers="keys", hide_index=True)
+        utils.show(logged_join_fails, headers="keys", hide_index=True)
 
     # entries without reactome IDs join just by uniprot
     # outer join back to uni_rct_with_crossrefs so we won't consider a uniprot-only match
@@ -1341,10 +1341,7 @@ def _merge_reactome_crossref_ids(
             f"A gene ID could not be found for {species_with_protein_and_no_gene.shape[0]} "
             "(species, bqb) pairs with a protein ID"
         )
-
-        logger.warning(
-            utils.style_df(logged_join_fails, headers="keys", hide_index=True)
-        )
+        utils.show(logged_join_fails, headers="keys", hide_index=True)
 
     return merged_crossrefs
 

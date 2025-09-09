@@ -679,7 +679,7 @@ def _log_protein_transport_gapfilling(
         DataFrame summarizing transport status for each species
     """
     print(
-        utils.style_df(
+        utils.show(
             species_transport_status_df.value_counts("type").to_frame().reset_index(),
             headers=["Transport Category", "# of Entries"],
             hide_index=True,
