@@ -132,7 +132,7 @@ def construct_reactome_consensus(
     )
 
     consensus_model = construct_consensus_model_fkt(
-        sbml_dfs_dict, pw_index, model_source
+        sbml_dfs_dict, pw_index, model_source, check_mergeability=False
     )
 
     return consensus_model

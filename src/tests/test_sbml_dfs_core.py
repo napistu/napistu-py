@@ -15,6 +15,7 @@ from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS,
     BQB_DEFINING_ATTRS_LOOSE,
+    CONSENSUS_CHECKS,
     IDENTIFIERS,
     MINI_SBO_FROM_NAME,
     ONTOLOGIES,
@@ -22,6 +23,7 @@ from napistu.constants import (
     SBML_DFS_SCHEMA,
     SBOTERM_NAMES,
     SCHEMA_DEFS,
+    SOURCE_SPEC,
 )
 from napistu.ingestion import sbml
 from napistu.ingestion.constants import (
@@ -486,85 +488,12 @@ def test_remove_entity_data_nonexistent(sbml_dfs_w_data, caplog):
     sbml_dfs_w_data.validate()
 
 
-def test_get_characteristic_species_ids(model_source_stub):
+def test_get_characteristic_species_ids(sbml_dfs_characteristic_test_data):
     """
     Test get_characteristic_species_ids function with both dogmatic and non-dogmatic cases.
     """
-    # Create mock species identifiers data
-    mock_species_ids = pd.DataFrame(
-        {
-            SBML_DFS.S_ID: ["s1", "s2", "s3", "s4", "s5"],
-            IDENTIFIERS.IDENTIFIER: [
-                "P12345",
-                "CHEBI:15377",
-                "GO:12345",
-                "P67890",
-                "P67890",
-            ],
-            IDENTIFIERS.ONTOLOGY: ["uniprot", "chebi", "go", "uniprot", "chebi"],
-            IDENTIFIERS.BQB: [
-                BQB.IS,
-                BQB.IS,
-                BQB.HAS_PART,
-                BQB.HAS_VERSION,
-                BQB.ENCODES,
-            ],
-        }
-    )
-
-    # Create minimal required tables for SBML_dfs
-    compartments = pd.DataFrame(
-        {SBML_DFS.C_NAME: ["cytosol"], SBML_DFS.C_IDENTIFIERS: [None]}, index=["C1"]
-    )
-    compartments.index.name = SBML_DFS.C_ID
-    species = pd.DataFrame(
-        {
-            SBML_DFS.S_NAME: ["A"],
-            SBML_DFS.S_IDENTIFIERS: [None],
-            SBML_DFS.S_SOURCE: [None],
-        },
-        index=["s1"],
-    )
-    species.index.name = SBML_DFS.S_ID
-    compartmentalized_species = pd.DataFrame(
-        {
-            SBML_DFS.SC_NAME: ["A [cytosol]"],
-            SBML_DFS.S_ID: ["s1"],
-            SBML_DFS.C_ID: ["C1"],
-            SBML_DFS.SC_SOURCE: [None],
-        },
-        index=["SC1"],
-    )
-    compartmentalized_species.index.name = SBML_DFS.SC_ID
-    reactions = pd.DataFrame(
-        {
-            SBML_DFS.R_NAME: ["rxn1"],
-            SBML_DFS.R_IDENTIFIERS: [None],
-            SBML_DFS.R_SOURCE: [None],
-            SBML_DFS.R_ISREVERSIBLE: [False],
-        },
-        index=["R1"],
-    )
-    reactions.index.name = SBML_DFS.R_ID
-    reaction_species = pd.DataFrame(
-        {
-            SBML_DFS.R_ID: ["R1"],
-            SBML_DFS.SC_ID: ["SC1"],
-            SBML_DFS.STOICHIOMETRY: [1],
-            SBML_DFS.SBO_TERM: ["SBO:0000459"],
-        },
-        index=["RSC1"],
-    )
-    reaction_species.index.name = SBML_DFS.RSC_ID
-
-    sbml_dict = {
-        SBML_DFS.COMPARTMENTS: compartments,
-        SBML_DFS.SPECIES: species,
-        SBML_DFS.COMPARTMENTALIZED_SPECIES: compartmentalized_species,
-        SBML_DFS.REACTIONS: reactions,
-        SBML_DFS.REACTION_SPECIES: reaction_species,
-    }
-    sbml_dfs = SBML_dfs(sbml_dict, model_source_stub, validate=False, resolve=False)
+    sbml_dfs = sbml_dfs_characteristic_test_data
+    mock_species_ids = sbml_dfs._mock_species_ids
 
     # Test dogmatic case (default)
     expected_bqbs = BQB_DEFINING_ATTRS + [BQB.HAS_PART]  # noqa: F841
@@ -921,3 +850,345 @@ def test_pickle_with_species_data(sbml_dfs):
         # Clean up
         if os.path.exists(pickle_path):
             os.unlink(pickle_path)
+
+
+def test_get_sources(sbml_dfs_metabolism):
+    """Test get_sources method returns unnest sources table."""
+    # Test with species
+    sources_df = sbml_dfs_metabolism.get_sources(SBML_DFS.SPECIES)
+    assert sources_df is not None
+    assert SOURCE_SPEC.PATHWAY_ID in sources_df.columns
+
+    # Test with reactions
+    sources_df = sbml_dfs_metabolism.get_sources(SBML_DFS.REACTIONS)
+    assert sources_df is not None
+    assert SOURCE_SPEC.PATHWAY_ID in sources_df.columns
+
+    # Test invalid entity type raises error
+    with pytest.raises(
+        ValueError, match="reaction_species does not have a source attribute"
+    ):
+        sbml_dfs_metabolism.get_sources(SBML_DFS.REACTION_SPECIES)
+
+
+def test_get_source_occurrence(sbml_dfs_metabolism):
+    """Test get_source_occurrence method returns source occurrence summary."""
+    # Test with species
+    occurrence_df = sbml_dfs_metabolism.get_source_occurrence(SBML_DFS.SPECIES)
+    assert isinstance(occurrence_df, pd.DataFrame)
+    assert occurrence_df.shape == (129, 4)  # Expected: 129 pathways, 4 columns
+
+    # Test with reactions
+    occurrence_df = sbml_dfs_metabolism.get_source_occurrence(SBML_DFS.REACTIONS)
+    assert isinstance(occurrence_df, pd.DataFrame)
+    assert occurrence_df.shape == (86, 4)  # Expected: 86 pathways, 4 columns
+
+
+def test_get_source_cooccurrence(sbml_dfs_metabolism):
+    """Test get_source_cooccurrence method returns co-occurrence matrix."""
+    # Test with species
+    cooccurrence_df = sbml_dfs_metabolism.get_source_cooccurrence(SBML_DFS.SPECIES)
+    assert isinstance(cooccurrence_df, pd.DataFrame)
+    assert cooccurrence_df.shape == (4, 4)  # Expected: 4x4 square matrix
+
+    # Test with reactions
+    cooccurrence_df = sbml_dfs_metabolism.get_source_cooccurrence(SBML_DFS.REACTIONS)
+    assert isinstance(cooccurrence_df, pd.DataFrame)
+    assert cooccurrence_df.shape == (4, 4)  # Expected: 4x4 square matrix
+
+
+def test_pathway_methods_single_source_error(sbml_dfs):
+    """Test that source methods raise error for single-source models."""
+    # Test get_source_occurrence raises error for single-source model
+    with pytest.raises(ValueError, match="The Source tables for species were empty"):
+        sbml_dfs.get_source_occurrence(SBML_DFS.SPECIES)
+
+    with pytest.raises(ValueError, match="The Source tables for reactions were empty"):
+        sbml_dfs.get_source_occurrence(SBML_DFS.REACTIONS)
+
+    # Test get_pathway_cooccurrence raises error for single-source model
+    with pytest.raises(ValueError, match="The Source tables for species were empty"):
+        sbml_dfs.get_source_cooccurrence(SBML_DFS.SPECIES)
+
+    with pytest.raises(ValueError, match="The Source tables for reactions were empty"):
+        sbml_dfs.get_source_cooccurrence(SBML_DFS.REACTIONS)
+
+
+def test_priority_pathways_filtering(sbml_dfs_metabolism):
+    """Test that priority_pathways parameter correctly filters sources."""
+    # First, get the full co-occurrence matrix to see pathway names
+    full_cooccurrence = sbml_dfs_metabolism.get_source_cooccurrence(SBML_DFS.SPECIES)
+
+    # Select first 2 pathways for testing
+    priority_pathways = list(full_cooccurrence.index)[:2]
+
+    # Test with filtered pathways
+    filtered_cooccurrence = sbml_dfs_metabolism.get_source_cooccurrence(
+        SBML_DFS.SPECIES, priority_pathways=priority_pathways
+    )
+
+    # Verify the filtered result is (2,2)
+    assert filtered_cooccurrence.shape == (2, 2)
+    assert list(filtered_cooccurrence.index) == priority_pathways
+    assert list(filtered_cooccurrence.columns) == priority_pathways
+
+
+def test_get_ontology_occurrence(sbml_dfs_metabolism):
+    """Test get_ontology_occurrence method returns ontology occurrence summary."""
+    # Test with species
+    occurrence_df = sbml_dfs_metabolism.get_ontology_occurrence(SBML_DFS.SPECIES)
+    assert isinstance(occurrence_df, pd.DataFrame)
+    assert occurrence_df.shape == (129, 7)  # Expected: 129 entities, 7 ontologies
+
+    # Test with reactions
+    occurrence_df = sbml_dfs_metabolism.get_ontology_occurrence(SBML_DFS.REACTIONS)
+    assert isinstance(occurrence_df, pd.DataFrame)
+    assert occurrence_df.shape == (86, 4)  # Expected: 86 entities, 4 ontologies
+
+
+def test_get_ontology_cooccurrence(sbml_dfs_metabolism):
+    """Test get_ontology_cooccurrence method returns co-occurrence matrix."""
+    # Test with species
+    cooccurrence_df = sbml_dfs_metabolism.get_ontology_cooccurrence(SBML_DFS.SPECIES)
+    assert isinstance(cooccurrence_df, pd.DataFrame)
+    assert cooccurrence_df.shape == (7, 7)  # Expected: 7x7 square matrix
+
+    # Test with reactions
+    cooccurrence_df = sbml_dfs_metabolism.get_ontology_cooccurrence(SBML_DFS.REACTIONS)
+    assert isinstance(cooccurrence_df, pd.DataFrame)
+    assert cooccurrence_df.shape == (4, 4)  # Expected: 4x4 square matrix
+
+
+def test_get_ontology_cooccurrence_multindex(sbml_dfs_metabolism):
+    """Test get_ontology_cooccurrence method with multi-index columns."""
+    # Test with species and allow_col_multindex=True
+    cooccurrence_df = sbml_dfs_metabolism.get_ontology_cooccurrence(
+        SBML_DFS.SPECIES, allow_col_multindex=True
+    )
+    assert isinstance(cooccurrence_df, pd.DataFrame)
+
+    # Verify it's a square matrix
+    assert cooccurrence_df.shape[0] == cooccurrence_df.shape[1]
+    assert cooccurrence_df.shape == (7, 7)  # Expected: 7x7 square matrix
+
+    # Verify multi-index is present
+    assert isinstance(cooccurrence_df.columns, pd.MultiIndex)
+    assert (
+        len(cooccurrence_df.columns.names) == 2
+    )  # Should have 2 levels (ontology, bqb)
+    assert cooccurrence_df.columns.names == [IDENTIFIERS.ONTOLOGY, IDENTIFIERS.BQB]
+
+    # Verify expected ontologies are present
+    expected_ontologies = {
+        ONTOLOGIES.CHEBI,
+        ONTOLOGIES.PUBMED,
+        ONTOLOGIES.REACTOME,
+        ONTOLOGIES.UNIPROT,
+    }
+    actual_ontologies = set(
+        cooccurrence_df.columns.get_level_values(IDENTIFIERS.ONTOLOGY)
+    )
+    assert expected_ontologies.issubset(actual_ontologies)
+
+    # Test with reactions and allow_col_multindex=True
+    cooccurrence_df = sbml_dfs_metabolism.get_ontology_cooccurrence(
+        SBML_DFS.REACTIONS, allow_col_multindex=True
+    )
+    assert isinstance(cooccurrence_df, pd.DataFrame)
+
+    # Verify it's a square matrix
+    assert cooccurrence_df.shape[0] == cooccurrence_df.shape[1]
+    assert cooccurrence_df.shape == (4, 4)  # Expected: 4x4 square matrix
+
+    # Verify multi-index is present
+    assert isinstance(cooccurrence_df.columns, pd.MultiIndex)
+    assert (
+        len(cooccurrence_df.columns.names) == 2
+    )  # Should have 2 levels (ontology, bqb)
+    assert cooccurrence_df.columns.names == [IDENTIFIERS.ONTOLOGY, IDENTIFIERS.BQB]
+
+    # Verify expected ontologies are present
+    expected_ontologies = {
+        ONTOLOGIES.EC_CODE,
+        ONTOLOGIES.GO,
+        ONTOLOGIES.PUBMED,
+        ONTOLOGIES.REACTOME,
+    }
+    actual_ontologies = set(
+        cooccurrence_df.columns.get_level_values(IDENTIFIERS.ONTOLOGY)
+    )
+    assert expected_ontologies.issubset(actual_ontologies)
+
+
+def test_get_ontology_occurrence_characteristic_only(sbml_dfs_characteristic_test_data):
+    """Test get_ontology_occurrence method with characteristic_only parameter using the new fixture."""
+    sbml_dfs = sbml_dfs_characteristic_test_data
+
+    # Test with species and characteristic_only=True
+    occurrence_df_char = sbml_dfs.get_ontology_occurrence(
+        SBML_DFS.SPECIES, characteristic_only=True
+    )
+
+    assert isinstance(occurrence_df_char, pd.DataFrame)
+    assert occurrence_df_char.shape[0] == 1
+    assert occurrence_df_char.shape[1] == 3
+
+    # Test with species and characteristic_only=False
+    occurrence_df_all = sbml_dfs.get_ontology_occurrence(
+        SBML_DFS.SPECIES, characteristic_only=False
+    )
+
+    assert isinstance(occurrence_df_all, pd.DataFrame)
+    assert occurrence_df_all.shape[0] == 1
+    assert occurrence_df_all.shape[1] == 5
+
+
+def test_get_ontology_x_source_cooccurrence(sbml_dfs_metabolism):
+    """
+    Test get_ontology_x_source_cooccurrence method with metabolism data.
+
+    This test verifies that the method correctly creates a co-occurrence matrix
+    between ontologies and sources using the metabolism fixture.
+    """
+    # Test basic functionality
+    cooccurrence_matrix = sbml_dfs_metabolism.get_ontology_x_source_cooccurrence(
+        SBML_DFS.SPECIES
+    )
+
+    # Verify the result is a DataFrame with correct data types
+    assert isinstance(cooccurrence_matrix, pd.DataFrame)
+    assert (cooccurrence_matrix >= 0).all().all(), "All values should be non-negative"
+    assert cooccurrence_matrix.dtypes.apply(
+        lambda x: pd.api.types.is_integer_dtype(x)
+    ).all(), "All values should be integers"
+
+    # Test with characteristic_only=True
+    char_cooccurrence = sbml_dfs_metabolism.get_ontology_x_source_cooccurrence(
+        SBML_DFS.SPECIES, characteristic_only=True
+    )
+    assert isinstance(char_cooccurrence, pd.DataFrame)
+
+    # Test with custom priority pathways (use actual pathway names from the data)
+    custom_pathways = cooccurrence_matrix.columns[
+        :2
+    ].tolist()  # Use first 2 pathways from the data
+    custom_cooccurrence = sbml_dfs_metabolism.get_ontology_x_source_cooccurrence(
+        SBML_DFS.SPECIES, priority_pathways=custom_pathways
+    )
+    assert isinstance(custom_cooccurrence, pd.DataFrame)
+
+    # Test with reactions
+    reaction_cooccurrence = sbml_dfs_metabolism.get_ontology_x_source_cooccurrence(
+        SBML_DFS.REACTIONS
+    )
+    assert isinstance(reaction_cooccurrence, pd.DataFrame)
+
+    # Test exact dimensions
+    assert cooccurrence_matrix.shape == (
+        7,
+        4,
+    ), f"Expected species co-occurrence shape (7, 4), got {cooccurrence_matrix.shape}"
+    assert reaction_cooccurrence.shape == (
+        4,
+        4,
+    ), f"Expected reaction co-occurrence shape (4, 4), got {reaction_cooccurrence.shape}"
+
+
+def test_post_consensus_checks(sbml_dfs_metabolism):
+    """Test the post_consensus_checks method with a consensus model."""
+
+    # Test with default parameters
+    results = sbml_dfs_metabolism.post_consensus_checks()
+
+    # Verify the structure of the results
+    assert isinstance(results, dict), "Results should be a dictionary"
+
+    # Check that we have results for the default entity types
+    expected_entity_types = [SBML_DFS.SPECIES, SBML_DFS.COMPARTMENTS]
+    for entity_type in expected_entity_types:
+        assert entity_type in results, f"Results should contain {entity_type}"
+        assert isinstance(
+            results[entity_type], dict
+        ), f"Results for {entity_type} should be a dictionary"
+
+    # Check that we have results for the default check types
+    expected_check_types = [
+        CONSENSUS_CHECKS.SOURCE_COOCCURRENCE,
+        CONSENSUS_CHECKS.ONTOLOGY_X_SOURCE_COOCCURRENCE,
+    ]
+    for entity_type in expected_entity_types:
+        for check_type in expected_check_types:
+            assert (
+                check_type in results[entity_type]
+            ), f"Results should contain {check_type} for {entity_type}"
+            assert isinstance(
+                results[entity_type][check_type], pd.DataFrame
+            ), f"Result for {entity_type}/{check_type} should be a DataFrame"
+
+    # Test with custom entity types
+    custom_results = sbml_dfs_metabolism.post_consensus_checks(
+        entity_types=[SBML_DFS.SPECIES],
+        check_types=[CONSENSUS_CHECKS.SOURCE_COOCCURRENCE],
+    )
+
+    assert SBML_DFS.SPECIES in custom_results, "Custom results should contain species"
+    assert (
+        SBML_DFS.COMPARTMENTS not in custom_results
+    ), "Custom results should not contain compartments when not requested"
+    assert (
+        CONSENSUS_CHECKS.SOURCE_COOCCURRENCE in custom_results[SBML_DFS.SPECIES]
+    ), "Custom results should contain source_cooccurrence"
+    assert (
+        CONSENSUS_CHECKS.ONTOLOGY_X_SOURCE_COOCCURRENCE
+        not in custom_results[SBML_DFS.SPECIES]
+    ), "Custom results should not contain ontology_x_source_cooccurrence when not requested"
+
+    # Test with invalid check types
+    with pytest.raises(ValueError, match="Invalid check types"):
+        sbml_dfs_metabolism.post_consensus_checks(check_types=["invalid_check_type"])
+
+    # Test exact dimensions based on the output
+    species_source_cooccurrence = results[SBML_DFS.SPECIES][
+        CONSENSUS_CHECKS.SOURCE_COOCCURRENCE
+    ]
+    species_ontology_cooccurrence = results[SBML_DFS.SPECIES][
+        CONSENSUS_CHECKS.ONTOLOGY_X_SOURCE_COOCCURRENCE
+    ]
+    compartments_source_cooccurrence = results[SBML_DFS.COMPARTMENTS][
+        CONSENSUS_CHECKS.SOURCE_COOCCURRENCE
+    ]
+    compartments_ontology_cooccurrence = results[SBML_DFS.COMPARTMENTS][
+        CONSENSUS_CHECKS.ONTOLOGY_X_SOURCE_COOCCURRENCE
+    ]
+
+    # Test exact dimensions
+    assert species_source_cooccurrence.shape == (
+        4,
+        4,
+    ), f"Expected species source co-occurrence shape (4, 4), got {species_source_cooccurrence.shape}"
+    assert species_ontology_cooccurrence.shape == (
+        7,
+        4,
+    ), f"Expected species ontology co-occurrence shape (7, 4), got {species_ontology_cooccurrence.shape}"
+    assert compartments_source_cooccurrence.shape == (
+        4,
+        4,
+    ), f"Expected compartments source co-occurrence shape (4, 4), got {compartments_source_cooccurrence.shape}"
+    assert compartments_ontology_cooccurrence.shape == (
+        1,
+        4,
+    ), f"Expected compartments ontology co-occurrence shape (1, 4), got {compartments_ontology_cooccurrence.shape}"
+
+    # Test that all results are numeric and not empty
+    for entity_type in [SBML_DFS.SPECIES, SBML_DFS.COMPARTMENTS]:
+        for check_type in [
+            CONSENSUS_CHECKS.SOURCE_COOCCURRENCE,
+            CONSENSUS_CHECKS.ONTOLOGY_X_SOURCE_COOCCURRENCE,
+        ]:
+            df = results[entity_type][check_type]
+            assert (
+                not df.empty
+            ), f"DataFrame for {entity_type}/{check_type} should not be empty"
+            assert pd.api.types.is_numeric_dtype(
+                df.values
+            ), f"Values for {entity_type}/{check_type} should be numeric"

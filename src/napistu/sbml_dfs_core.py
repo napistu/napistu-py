@@ -28,6 +28,8 @@ from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS_LOOSE,
     BQB_PRIORITIES,
+    CONSENSUS_CHECKS,
+    CONSENSUS_CHECKS_LIST,
     ENTITIES_TO_ENTITY_DATA,
     ENTITIES_W_DATA,
     IDENTIFIERS,
@@ -42,7 +44,7 @@ from napistu.constants import (
     SBOTERM_NAMES,
     SCHEMA_DEFS,
 )
-from napistu.ingestion.constants import INTERACTION_EDGELIST_DEFAULTS
+from napistu.ingestion.constants import DATA_SOURCES_LIST, INTERACTION_EDGELIST_DEFAULTS
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +96,18 @@ class SBML_dfs:
         Retrieve a table of identifiers for a specified entity type (e.g., species or reactions).
     get_network_summary()
         Return a dictionary of diagnostic statistics summarizing the network structure.
+    get_ontology_cooccurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False)
+        Get ontology co-occurrence matrix for a specific entity type.
+    get_ontology_occurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False)
+        Get ontology occurrence summary for a specific entity type.
+    get_ontology_x_source_cooccurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False, characteristic_only=False, dogmatic=True, priority_pathways=DATA_SOURCES_LIST)
+        Get ontology × source co-occurrence matrix for a specific entity type.
+    get_source_cooccurrence(entity_type, priority_pathways=DATA_SOURCES_LIST)
+        Get pathway co-occurrence matrix for a specific entity type.
+    get_source_occurrence(entity_type, priority_pathways=DATA_SOURCES_LIST)
+        Get pathway occurrence summary for a specific entity type.
+    get_sources(entity_type)
+        Get the unnest sources table for a given entity type.
     get_source_total_counts(entity_type)
         Get the total counts of each source for a given entity type.
     get_species_features()
@@ -108,6 +122,8 @@ class SBML_dfs:
         Infer and assign compartments for compartmentalized species with missing compartment information.
     name_compartmentalized_species()
         Rename compartmentalized species to include compartment information if needed.
+    post_consensus_checks(entity_types=[SBML_DFS.SPECIES, SBML_DFS.COMPARTMENTS], check_types=[CONSENSUS_CHECKS.SOURCE_COOCCURRENCE, CONSENSUS_CHECKS.ONTOLOGY_X_SOURCE_COOCCURRENCE])
+        Perform checks on the SBML_dfs object after consensus building.
     reaction_formulas(r_ids=None)
         Generate human-readable reaction formulas for specified reactions.
     reaction_summaries(r_ids=None)
@@ -140,6 +156,7 @@ class SBML_dfs:
     _attempt_resolve(e)
     _edgelist_assemble_sbml_model(compartments, species, comp_species, reactions, reaction_species, species_data, reactions_data, keep_species_data, keep_reactions_data, extra_columns)
     _find_underspecified_reactions_by_scids(sc_ids)
+    _get_identifiers_table_for_ontology_occurrence(entity_type, characteristic_only=False, dogmatic=True)
     _get_unused_cspecies()
     _get_unused_species()
     _remove_compartmentalized_species(sc_ids)
@@ -567,8 +584,6 @@ class SBML_dfs:
 
         Parameters
         ----------
-        sbml_dfs : sbml_dfs_core.SBML_dfs
-            The SBML_dfs object.
         dogmatic : bool, default=True
             Whether to use the dogmatic flag to determine which BQB attributes are valid.
 
@@ -793,6 +808,335 @@ class SBML_dfs:
 
         return stats
 
+    def get_ontology_cooccurrence(
+        self,
+        entity_type: str,
+        stratify_by_bqb: bool = True,
+        allow_col_multindex: bool = False,
+        characteristic_only: bool = False,
+        dogmatic: bool = True,
+    ) -> pd.DataFrame:
+        """
+        Get ontology co-occurrence matrix for a specific entity type.
+
+        This method creates a co-occurrence matrix showing which ontologies share entities
+        of the specified type, indicating ontology relationships and overlaps.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
+        stratify_by_bqb : bool, optional
+            Whether to stratify by BQB (Biological Qualifier) terms, by default True
+        allow_col_multindex : bool, optional
+            Whether to allow column multi-index, by default False
+        characteristic_only : bool, optional
+            Whether to use only characteristic identifiers (only supported for species), by default False
+        dogmatic : bool, optional
+            Whether to use dogmatic identifier filtering, by default True
+
+        Returns
+        -------
+        pd.DataFrame
+            Co-occurrence matrix with ontologies as both rows and columns
+
+        Raises
+        ------
+        ValueError
+            If the entity type is invalid or identifiers are malformed
+        """
+        identifiers_table = self._get_identifiers_table_for_ontology_occurrence(
+            entity_type, characteristic_only, dogmatic
+        )
+
+        return sbml_dfs_utils._summarize_ontology_cooccurrence(
+            identifiers_table, stratify_by_bqb, allow_col_multindex
+        )
+
+    def get_ontology_occurrence(
+        self,
+        entity_type: str,
+        stratify_by_bqb: bool = True,
+        allow_col_multindex: bool = False,
+        characteristic_only: bool = False,
+        dogmatic: bool = True,
+        include_missing: bool = False,
+    ) -> pd.DataFrame:
+        """
+        Get ontology occurrence summary for a specific entity type.
+
+        This method analyzes which ontologies are associated with entities of the specified type,
+        providing a summary of ontology occurrence patterns.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
+        stratify_by_bqb : bool, optional
+            Whether to stratify by BQB (Biological Qualifier) terms, by default True
+        allow_col_multindex : bool, optional
+            Whether to allow column multi-index, by default False
+        characteristic_only: bool, optional
+            Whether to only include characteristic identifiers. Only supported for species. If,
+                true - returns only the characteristic identifiers (BQB_IS, and small complex BQB_HAS_PART annotations)
+                false - returns all identifiers
+        dogmatic: bool, optional
+            Whether to use a strict or loose definition of characteristic identifiers. Only applicable if `characteristic_only` is True and `entity_type` is SBML_DFS.SPECIES.
+        include_missing: bool, optional
+            Whether to include missing entities in the result using add_missing_ids_column, by default False
+
+        Returns
+        -------
+        pd.DataFrame
+            Summary of ontology occurrence patterns with entities as rows and ontologies as columns
+
+        Raises
+        ------
+        ValueError
+            If the entity type is invalid or identifiers are malformed
+        """
+
+        identifiers_table = self._get_identifiers_table_for_ontology_occurrence(
+            entity_type, characteristic_only, dogmatic
+        )
+
+        result = sbml_dfs_utils._summarize_ontology_occurrence(
+            identifiers_table, stratify_by_bqb, allow_col_multindex
+        )
+
+        if include_missing:
+            # Get the reference table (all entities of this type)
+            reference_table = self.get_table(entity_type)
+            result = sbml_dfs_utils.add_missing_ids_column(result, reference_table)
+
+        return result
+
+    def get_ontology_x_source_cooccurrence(
+        self,
+        entity_type: str,
+        # Parameters from get_ontology_occurrence
+        stratify_by_bqb: bool = True,
+        allow_col_multindex: bool = False,
+        characteristic_only: bool = False,
+        dogmatic: bool = True,
+        # Parameters from get_source_occurrence
+        priority_pathways: list[str] = DATA_SOURCES_LIST,
+    ) -> pd.DataFrame:
+        """
+        Get ontology × source co-occurrence matrix for a specific entity type.
+
+        This method creates a co-occurrence matrix showing the relationship between
+        ontologies and sources (pathways) by calculating how many entities of the
+        specified type are shared between each ontology-source pair.
+
+        The method combines ontology occurrence data with source occurrence data to
+        create a cross-tabulation matrix where:
+        - Rows represent ontologies
+        - Columns represent sources/pathways
+        - Values represent the number of entities shared between each ontology-source pair
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
+        stratify_by_bqb : bool, optional
+            Whether to stratify by BQB (Biological Qualifier) terms in ontology analysis, by default True
+        allow_col_multindex : bool, optional
+            Whether to allow column multi-index in ontology analysis, by default False
+        characteristic_only : bool, optional
+            Whether to use only characteristic identifiers in ontology analysis (only supported for species), by default False
+        dogmatic : bool, optional
+            Whether to use dogmatic identifier filtering in ontology analysis, by default True
+        priority_pathways : list[str], optional
+            List of pathway IDs to prioritize in the source analysis, by default DATA_SOURCES_LIST
+
+        Returns
+        -------
+        pd.DataFrame
+            Co-occurrence matrix with ontologies as rows and sources as columns.
+            Values represent the number of entities shared between each ontology-source pair.
+
+        Raises
+        ------
+        ValueError
+            If the entity type is invalid, identifiers are malformed, or source tables are empty
+
+        Examples
+        --------
+        >>> # Get ontology × source co-occurrence for species
+        >>> cooccurrence_matrix = sbml_dfs.get_ontology_x_source_cooccurrence(SBML_DFS.SPECIES)
+        >>>
+        >>> # Use characteristic species only
+        >>> char_cooccurrence = sbml_dfs.get_ontology_x_source_cooccurrence(
+        ...     SBML_DFS.SPECIES, characteristic_only=True
+        ... )
+        >>>
+        >>> # Custom pathway priority
+        >>> custom_cooccurrence = sbml_dfs.get_ontology_x_source_cooccurrence(
+        ...     SBML_DFS.SPECIES, priority_pathways=['reactome', 'kegg']
+        ... )
+        """
+        sources = self.get_source_occurrence(
+            entity_type, priority_pathways=priority_pathways, include_missing=True
+        )
+        ontologies = self.get_ontology_occurrence(
+            entity_type,
+            stratify_by_bqb=stratify_by_bqb,
+            allow_col_multindex=allow_col_multindex,
+            characteristic_only=characteristic_only,
+            dogmatic=dogmatic,
+            include_missing=True,
+        )
+
+        ontologies_matrix = (ontologies > 0).astype(int)
+        sources_matrix = (sources > 0).astype(int)
+
+        # Calculate co-occurrence matrix: ontologies × sources
+        # This gives us the number of entities shared between each ontology-source pair
+        cooccurrences = ontologies_matrix.T @ sources_matrix
+
+        return cooccurrences
+
+    def get_source_cooccurrence(
+        self, entity_type: str, priority_pathways: list[str] = DATA_SOURCES_LIST
+    ) -> pd.DataFrame:
+        """
+        Get pathway co-occurrence matrix for a specific entity type.
+
+        This method creates a co-occurrence matrix showing which pathways share entities
+        of the specified type, indicating pathway relationships and overlaps.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
+        priority_pathways : list[str], optional
+            List of pathway IDs to prioritize in the analysis. Defaults to DATA_SOURCES_LIST.
+
+        Returns
+        -------
+        pd.DataFrame
+            Co-occurrence matrix with pathways as both rows and columns
+
+        Raises
+        ------
+        ValueError
+            If the source tables for the entity type are empty (indicating single-source model)
+        """
+        source_table = self.get_sources(entity_type)
+        if source_table is None:
+            raise ValueError(
+                f"The Source tables for {entity_type} were empty, this indicates that the sbml_dfs is from a single source. "
+                "Only sbml_dfs which have been merged with consensus should use this method."
+            )
+
+        filtered_sources = sbml_dfs_utils._select_priority_pathway_sources(
+            source_table, priority_pathways
+        )
+
+        return sbml_dfs_utils._summarize_source_cooccurrence(filtered_sources)
+
+    def get_source_occurrence(
+        self,
+        entity_type: str,
+        priority_pathways: list[str] = DATA_SOURCES_LIST,
+        include_missing: bool = False,
+    ) -> pd.DataFrame:
+        """
+        Get pathway occurrence summary for a specific entity type.
+
+        This method analyzes which pathways contain entities of the specified type,
+        providing a summary of pathway occurrence patterns.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
+        priority_pathways : list[str], optional
+            List of pathway IDs to prioritize in the analysis. Defaults to DATA_SOURCES_LIST.
+        include_missing: bool, optional
+            Whether to include missing entities in the result using add_missing_ids_column, by default False
+
+        Returns
+        -------
+        pd.DataFrame
+            Summary of pathway occurrence patterns
+
+        Raises
+        ------
+        ValueError
+            If the source tables for the entity type are empty (indicating single-source model)
+        """
+        source_table = self.get_sources(entity_type)
+        if source_table is None:
+            raise ValueError(
+                f"The Source tables for {entity_type} were empty, this indicates that the sbml_dfs is from a single source. "
+                "Only sbml_dfs which have been merged with consensus should use this method."
+            )
+
+        filtered_sources = sbml_dfs_utils._select_priority_pathway_sources(
+            source_table, priority_pathways
+        )
+
+        result = sbml_dfs_utils._summarize_source_occurrence(filtered_sources)
+
+        if include_missing:
+            # Get the reference table (all entities of this type)
+            reference_table = self.get_table(entity_type)
+            result = sbml_dfs_utils.add_missing_ids_column(result, reference_table)
+
+        return result
+
+    def get_sources(self, entity_type: str) -> pd.DataFrame | None:
+        """
+        Get the unnest sources table for a given entity type.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to get sources for (e.g., 'species', 'reactions')
+
+        Returns
+        -------
+        pd.DataFrame | None
+            DataFrame containing the unnest sources table, or None if no sources found
+
+        Raises
+        ------
+        ValueError
+            If entity_type is invalid or does not have a source attribute
+        """
+        # Validate that the entity_type exists in the schema
+        if entity_type not in SBML_DFS_SCHEMA.SCHEMA:
+            raise ValueError(
+                f"{entity_type} is not a valid entity type. "
+                f"Valid types are: {', '.join(SBML_DFS_SCHEMA.SCHEMA.keys())}"
+            )
+
+        # Check if the entity_type has a source attribute
+        entity_schema = SBML_DFS_SCHEMA.SCHEMA[entity_type]
+        if SCHEMA_DEFS.SOURCE not in entity_schema:
+            raise ValueError(f"{entity_type} does not have a source attribute")
+
+        entity_table = self.get_table(entity_type)
+
+        if entity_type == SBML_DFS.REACTIONS:
+            logger.info(
+                "Excluding reactions which are all interactors from reaction source counts"
+            )
+
+            interactor_sbo_term = MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
+            reaction_species = self.get_table(SBML_DFS.REACTION_SPECIES)
+            valid_reactions = reaction_species[
+                ~reaction_species[SBML_DFS.SBO_TERM].isin([interactor_sbo_term])
+            ][SBML_DFS.R_ID].unique()
+
+            entity_table = entity_table.loc[valid_reactions]
+
+        all_sources_table = source.unnest_sources(entity_table)
+
+        return all_sources_table
+
     def get_source_total_counts(self, entity_type: str) -> pd.Series:
         """
         Get the total counts of each source for a given entity type.
@@ -812,22 +1156,7 @@ class SBML_dfs:
         ValueError
             If entity_type is invalid
         """
-        entity_table = self.get_table(entity_type)
-
-        if entity_type == SBML_DFS.REACTIONS:
-            logger.info(
-                "Excluding reactions which are all interactors from reaction source counts"
-            )
-
-            interactor_sbo_term = MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
-            reaction_species = self.get_table(SBML_DFS.REACTION_SPECIES)
-            valid_reactions = reaction_species[
-                ~reaction_species[SBML_DFS.SBO_TERM].isin([interactor_sbo_term])
-            ][SBML_DFS.R_ID].unique()
-
-            entity_table = entity_table.loc[valid_reactions]
-
-        all_sources_table = source.unnest_sources(entity_table)
+        all_sources_table = self.get_sources(entity_type)
 
         if all_sources_table is None:
             logger.warning(
@@ -1239,9 +1568,51 @@ class SBML_dfs:
         ]
 
         self.compartmentalized_species = augmented_cspecies.loc[
-            :, self.schema[SBML_DFS.COMPARTMENTALIZED_SPECIES]["vars"]
+            :, self.schema[SBML_DFS.COMPARTMENTALIZED_SPECIES][SCHEMA_DEFS.VARS]
         ]
         return
+
+    def post_consensus_checks(
+        self,
+        entity_types: list[str] = [SBML_DFS.SPECIES, SBML_DFS.COMPARTMENTS],
+        check_types: list[str] = [
+            CONSENSUS_CHECKS.SOURCE_COOCCURRENCE,
+            CONSENSUS_CHECKS.ONTOLOGY_X_SOURCE_COOCCURRENCE,
+        ],
+    ) -> None:
+        """
+        Post-consensus checks
+
+        Perform checks on the SBML_dfs object after consensus building.
+
+        Parameters
+        ----------
+        entity_types: list[str], optional
+            Entity types to check
+        check_types: list[str], optional
+            Check types to perform
+
+        Returns
+        -------
+        None
+        """
+
+        invalid_checks = set(check_types).difference(CONSENSUS_CHECKS_LIST)
+        if len(invalid_checks) > 0:
+            raise ValueError(f"Invalid check types: {invalid_checks}")
+
+        checks_results = {}
+        for entity_type in entity_types:
+            checks_results[entity_type] = {}
+            for check_type in check_types:
+                if check_type == CONSENSUS_CHECKS.SOURCE_COOCCURRENCE:
+                    cooccurrences = self.get_source_cooccurrence(entity_type)
+                elif check_type == CONSENSUS_CHECKS.ONTOLOGY_X_SOURCE_COOCCURRENCE:
+                    cooccurrences = self.get_ontology_x_source_cooccurrence(entity_type)
+
+                checks_results[entity_type][check_type] = cooccurrences
+
+        return checks_results
 
     def reaction_formulas(
         self, r_ids: Optional[Union[str, list[str]]] = None
@@ -1274,67 +1645,52 @@ class SBML_dfs:
             SBML_DFS.C_ID
         ].nunique()
 
-        # identify reactions which work across compartments
-        r_id_cross_compartment = r_id_compartment_counts[r_id_compartment_counts > 1]
-        # there species must be labelled with the sc_name to specify where a species exists
-        if r_id_cross_compartment.shape[0] > 0:
-            rxn_eqtn_cross_compartment = (
-                matching_reaction_species[
-                    matching_reaction_species[SBML_DFS.R_ID].isin(
-                        r_id_cross_compartment.index
-                    )
-                ]
-                .sort_values([SBML_DFS.SC_NAME])
-                .groupby(SBML_DFS.R_ID)
-                .apply(
-                    lambda x: sbml_dfs_utils.construct_formula_string(
-                        x, self.reactions, SBML_DFS.SC_NAME
-                    )
-                )
-                .rename("r_formula_str")
-            )
-        else:
-            rxn_eqtn_cross_compartment = None
+        # Process cross-compartment reactions (use sc_name for species identification)
+        cross_compartment_rids = r_id_compartment_counts[
+            r_id_compartment_counts > 1
+        ].index
+        cross_compartment_data = matching_reaction_species[
+            matching_reaction_species[SBML_DFS.R_ID].isin(cross_compartment_rids)
+        ]
 
-        # identify reactions which occur within a single compartment; for these the reaction
-        # can be labelled with the compartment and individual species can receive a more readable s_name
-        r_id_within_compartment = r_id_compartment_counts[r_id_compartment_counts == 1]
-        if r_id_within_compartment.shape[0] > 0:
-            # add s_name
-            augmented_matching_reaction_species = (
-                matching_reaction_species[
-                    matching_reaction_species[SBML_DFS.R_ID].isin(
-                        r_id_within_compartment.index
-                    )
-                ]
-                .merge(self.compartments, left_on=SBML_DFS.C_ID, right_index=True)
-                .merge(self.species, left_on=SBML_DFS.S_ID, right_index=True)
-                .sort_values([SBML_DFS.S_NAME])
+        rxn_eqtn_cross_compartment = sbml_dfs_utils.create_reaction_formula_series(
+            cross_compartment_data,
+            self.reactions,
+            species_name_col=SBML_DFS.SC_NAME,
+            sort_cols=[SBML_DFS.SC_NAME],
+            group_cols=[SBML_DFS.R_ID],
+            r_id_col=SBML_DFS.R_ID,
+            c_name_col=SBML_DFS.C_NAME,
+        )
+
+        # Process within-compartment reactions (use s_name and add compartment prefix)
+        within_compartment_rids = r_id_compartment_counts[
+            r_id_compartment_counts == 1
+        ].index
+        within_compartment_data = matching_reaction_species[
+            matching_reaction_species[SBML_DFS.R_ID].isin(within_compartment_rids)
+        ]
+
+        if within_compartment_data.shape[0] > 0:
+            # Augment with additional data needed for s_name
+            within_compartment_data = within_compartment_data.merge(
+                self.compartments, left_on=SBML_DFS.C_ID, right_index=True
+            ).merge(self.species, left_on=SBML_DFS.S_ID, right_index=True)
+
+            rxn_eqtn_within_compartment = sbml_dfs_utils.create_reaction_formula_series(
+                within_compartment_data,
+                self.reactions,
+                species_name_col=SBML_DFS.S_NAME,
+                sort_cols=[SBML_DFS.S_NAME],
+                group_cols=[SBML_DFS.R_ID, SBML_DFS.C_NAME],
+                add_compartment_prefix=True,
+                r_id_col=SBML_DFS.R_ID,
+                c_name_col=SBML_DFS.C_NAME,
             )
-            # create formulas based on s_names of components
-            rxn_eqtn_within_compartment = augmented_matching_reaction_species.groupby(
-                [SBML_DFS.R_ID, SBML_DFS.C_NAME]
-            ).apply(
-                lambda x: sbml_dfs_utils.construct_formula_string(
-                    x, self.reactions, SBML_DFS.S_NAME
-                )
-            )
-            # add compartment for each reaction
-            rxn_eqtn_within_compartment = pd.Series(
-                [
-                    y + ": " + x
-                    for x, y in zip(
-                        rxn_eqtn_within_compartment,
-                        rxn_eqtn_within_compartment.index.get_level_values(
-                            SBML_DFS.C_NAME
-                        ),
-                    )
-                ],
-                index=rxn_eqtn_within_compartment.index.get_level_values(SBML_DFS.R_ID),
-            ).rename("r_formula_str")
         else:
             rxn_eqtn_within_compartment = None
 
+        # Combine results
         formula_strs = pd.concat(
             [rxn_eqtn_cross_compartment, rxn_eqtn_within_compartment]
         )
@@ -1853,6 +2209,53 @@ class SBML_dfs:
             self.reaction_species[SBML_DFS.SC_ID]
         )
         return sc_ids  # type: ignore
+
+    def _get_identifiers_table_for_ontology_occurrence(
+        self, entity_type: str, characteristic_only: bool = False, dogmatic: bool = True
+    ) -> pd.DataFrame:
+        """
+        Get the appropriate identifiers table for ontology analysis.
+
+        This method handles the common logic for determining which identifiers
+        table to use based on the characteristic_only and dogmatic parameters.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
+        characteristic_only : bool, optional
+            Whether to use only characteristic identifiers (only supported for species), by default False
+        dogmatic : bool, optional
+            Whether to use dogmatic identifier filtering, by default True
+
+        Returns
+        -------
+        pd.DataFrame
+            The appropriate identifiers table for ontology analysis
+
+        Raises
+        ------
+        ValueError
+            If the entity type is invalid
+        """
+        import logging
+
+        from napistu.constants import SBML_DFS
+
+        logger = logging.getLogger(__name__)
+
+        if characteristic_only and entity_type == SBML_DFS.SPECIES:
+            logger.debug("loading characteristic species ids")
+            identifiers_table = self.get_characteristic_species_ids(dogmatic)
+        else:
+            logger.debug("loading all identifiers")
+            if characteristic_only:
+                logger.warning(
+                    f"Characteristic only is only supported for species. Returning all ontologies for {entity_type}."
+                )
+            identifiers_table = self.get_identifiers(entity_type)
+
+        return identifiers_table
 
     def _get_unused_species(self) -> set[str]:
         """Returns a list of species that are not part of any reactions"""

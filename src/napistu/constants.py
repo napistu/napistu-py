@@ -20,9 +20,14 @@ PACKAGE_DEFS = SimpleNamespace(
     CACHE_DIR="napistu_data",
 )
 
+NAPISTU_CLI = SimpleNamespace(
+    SBML_DFS_URI="sbml_dfs_uri",
+    OUTPUT_MODEL_URI="output_model_uri",
+    OVERWRITE="overwrite",
+)
+
 FILE_EXT_ZIP = "zip"
 FILE_EXT_GZ = "gz"
-
 # SBML_dfs
 
 SBML_DFS = SimpleNamespace(
@@ -168,6 +173,13 @@ NAPISTU_STANDARD_OUTPUTS = SimpleNamespace(
     COMPARTMENTS="compartments.json",
     COMPARTMENTALIZED_SPECIES="compartmentalized_species.json",
 )
+
+CONSENSUS_CHECKS = SimpleNamespace(
+    SOURCE_COOCCURRENCE="source_cooccurrence",
+    ONTOLOGY_X_SOURCE_COOCCURRENCE="ontology_x_source_cooccurrence",
+)
+
+CONSENSUS_CHECKS_LIST = list(CONSENSUS_CHECKS.__dict__.values())
 
 # SBML
 # Biological qualifiers
@@ -406,6 +418,7 @@ EXPECTED_PW_INDEX_COLUMNS = {
 ONTOLOGIES = SimpleNamespace(
     CHEBI="chebi",
     CORUM="corum",
+    EC_CODE="ec-code",
     ENSEMBL_GENE="ensembl_gene",
     ENSEMBL_GENE_VERSION="ensembl_gene_version",
     ENSEMBL_TRANSCRIPT="ensembl_transcript",

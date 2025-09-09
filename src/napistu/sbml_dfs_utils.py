@@ -7,12 +7,21 @@ from typing import Any, Iterable, Optional
 import numpy as np
 import pandas as pd
 
+try:
+    from IPython.display import display
+except ImportError:
+    # Fallback for non-Jupyter environments
+    def display(obj):
+        print(obj)
+
+
 from napistu import identifiers, utils
 from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS,
     BQB_DEFINING_ATTRS_LOOSE,
     IDENTIFIERS,
+    IDENTIFIERS_REQUIRED_VARS,
     MINI_SBO_FROM_NAME,
     MINI_SBO_NAME_TO_POLARITY,
     MINI_SBO_TO_NAME,
@@ -24,11 +33,13 @@ from napistu.constants import (
     SBO_ROLES_DEFS,
     SBOTERM_NAMES,
     SCHEMA_DEFS,
+    SOURCE_SPEC,
     VALID_SBO_TERM_NAMES,
     VALID_SBO_TERMS,
 )
 from napistu.ingestion.constants import (
     COMPARTMENTS_GO_TERMS,
+    DATA_SOURCES_LIST,
     GENERIC_COMPARTMENT,
     INTERACTION_EDGELIST_DEFAULTS,
     INTERACTION_EDGELIST_DEFS,
@@ -43,6 +54,103 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # PUBLIC FUNCTIONS (ALPHABETICAL ORDER)
 # =============================================================================
+
+
+def add_missing_ids_column(
+    contingency_table: pd.DataFrame,
+    reference_table: pd.DataFrame,
+    other_column_name: str = "other",
+) -> pd.DataFrame:
+    """
+    Add an 'other' column to a contingency table for IDs that exist in a reference table
+    but are missing from the contingency table.
+
+    Parameters:
+    -----------
+    contingency_table : pd.DataFrame
+        The contingency table with binary values (subset of IDs)
+    reference_table : pd.DataFrame
+        The reference table containing all possible IDs
+    other_column_name : str, optional
+        Name for the 'other' column, by default "other"
+
+    Returns:
+    --------
+    pd.DataFrame
+        Updated contingency table with 'other' column(s) added if there are missing IDs.
+        If no IDs are missing, returns a copy of the original contingency table without
+        adding an 'other' column.
+
+    Raises:
+    -------
+    ValueError
+        If the index names don't match between the two tables
+    """
+
+    # Check that index names match
+    if contingency_table.index.name != reference_table.index.name:
+        raise ValueError(
+            f"Index names must match. Contingency table index name: '{contingency_table.index.name}', "
+            f"Reference table index name: '{reference_table.index.name}'"
+        )
+
+    # Check that all index values are unique in both tables
+    for name, table in [
+        ("Contingency", contingency_table),
+        ("Reference", reference_table),
+    ]:
+        if table.index.duplicated().any():
+            duplicates = table.index[table.index.duplicated()].unique()
+            raise ValueError(
+                f"{name} table has duplicate index values: {sorted(duplicates)}"
+            )
+
+    # Get the indices
+    contingency_ids = set(contingency_table.index)
+    reference_ids = set(reference_table.index)
+
+    # Check that contingency_ids is a subset of reference_ids
+    if not contingency_ids.issubset(reference_ids):
+        extra_ids = contingency_ids - reference_ids
+        raise ValueError(
+            f"Contingency table contains IDs not found in reference table: {sorted(extra_ids)}"
+        )
+
+    # Find missing IDs
+    missing_ids = reference_ids - contingency_ids
+
+    # Create a copy of the contingency table to avoid modifying the original
+    result_table = contingency_table.copy()
+
+    # If no missing IDs, return the original table without adding 'other' column
+    if len(missing_ids) == 0:
+        return result_table
+
+    # Create 'other' column name based on column structure
+    if isinstance(result_table.columns, pd.MultiIndex):
+        other_column = tuple([other_column_name] * result_table.columns.nlevels)
+    else:
+        other_column = other_column_name
+
+    # Add the 'other' column
+    result_table[other_column] = 0
+
+    # Add missing IDs as new rows
+    for missing_id in missing_ids:
+        new_row = pd.Series(0, index=result_table.columns, name=missing_id)
+        new_row[other_column] = 1
+        result_table = pd.concat([result_table, new_row.to_frame().T])
+
+    # Sort the index to maintain order
+    result_table = result_table.sort_index()
+
+    # Verify that the result index equals the reference table index
+    if not result_table.index.equals(reference_table.index.sort_values()):
+        raise ValueError(
+            "Result table index does not match reference table index. This is an internal error."
+        )
+
+    return result_table
 
 
 def add_sbo_role(reaction_species: pd.DataFrame) -> pd.DataFrame:
@@ -142,7 +250,7 @@ def construct_formula_string(
 
     """
 
-    reaction_species_df["label"] = [
+    reaction_species_df[SCHEMA_DEFS.LABEL] = [
         _add_stoi_to_species_name(x, y)
         for x, y in zip(
             reaction_species_df[SBML_DFS.STOICHIOMETRY], reaction_species_df[name_var]
@@ -153,7 +261,7 @@ def construct_formula_string(
         reaction_species_df[SBML_DFS.SBO_TERM]
         == MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
     ):
-        labels = reaction_species_df["label"].tolist()
+        labels = reaction_species_df[SCHEMA_DEFS.LABEL].tolist()
         if len(labels) != 2:
             logger.warning(
                 f"Reaction {reaction_species_df[SBML_DFS.R_ID].iloc[0]} has {len(labels)} species, expected 2"
@@ -200,6 +308,97 @@ def construct_formula_string(
         modifiers = f" ---- modifiers: {modifiers}]"
 
     return f"{substrates}{arrow_type}{products}{modifiers}"
+
+
+def create_reaction_formula_series(
+    reaction_data,
+    reactions_df,
+    species_name_col,
+    sort_cols,
+    group_cols=None,
+    add_compartment_prefix=False,
+    r_id_col=SBML_DFS.R_ID,
+    c_name_col=SBML_DFS.C_NAME,
+):
+    """
+    Helper function to create reaction formula series.
+
+    Parameters:
+    -----------
+    reaction_data : pd.DataFrame
+        The reaction species data to process
+    reactions_df : pd.DataFrame
+        The reactions dataframe needed by construct_formula_string
+    species_name_col : str
+        Column name to use for species names in formulas
+    sort_cols : list
+        Columns to sort by before grouping
+    group_cols : list, optional
+        Columns to group by. If None, uses [r_id_col]
+    add_compartment_prefix : bool
+        Whether to add compartment name as prefix to formula
+    r_id_col : str
+        Column name for reaction ID
+    c_name_col : str
+        Column name for compartment name (used when add_compartment_prefix=True)
+
+    Returns:
+    --------
+    pd.Series or None : Formula strings indexed by reaction ID, or None if no data
+    """
+    if reaction_data.shape[0] == 0:
+        return None
+
+    if group_cols is None:
+        group_cols = [r_id_col]
+
+    # Include all columns that might be needed by construct_formula_string
+    # We include all original columns to avoid accidentally filtering out needed data
+    all_cols = list(reaction_data.columns)
+
+    formulas = (
+        reaction_data.sort_values(sort_cols)
+        .groupby(group_cols)[all_cols]  # Use all columns to be safe
+        .apply(lambda x: construct_formula_string(x, reactions_df, species_name_col))
+    )
+
+    if add_compartment_prefix:
+        # Add compartment prefix and reindex by reaction ID only
+        formulas = pd.Series(
+            [
+                f"{compartment}: {formula}"
+                for formula, compartment in zip(
+                    formulas, formulas.index.get_level_values(c_name_col)
+                )
+            ],
+            index=formulas.index.get_level_values(r_id_col),
+        )
+
+    return formulas.rename("r_formula_str")
+
+
+def display_post_consensus_checks(checks_results: dict) -> None:
+    """
+    Display the results of post_consensus_checks in a formatted way.
+
+    This function takes the results from the post_consensus_checks method and displays
+    them using the same formatting as shown in the sandbox notebook.
+
+    Parameters
+    ----------
+    checks_results : dict
+        Dictionary returned by the post_consensus_checks method, containing nested
+        dictionaries with entity types and check types as keys, and DataFrames as values.
+
+    Returns
+    -------
+    None
+        This function displays results but doesn't return anything.
+    """
+    for entity_type, entity_results in checks_results.items():
+        for check_type, cooccurrences in entity_results.items():
+            display(f"Entity type: {entity_type}, Check type: {check_type}")
+            display(utils.style_df(cooccurrences))
 
 
 def find_underspecified_reactions(
@@ -1254,6 +1453,15 @@ def _filter_promiscuous_components(
     return filtered_bqb_has_parts
 
 
+def _filter_to_pathways(df: pd.DataFrame, pathways: list[str]) -> pd.DataFrame:
+    """
+    Filter a table to only include pathways in the list.
+    """
+
+    pathway_mask = df[SOURCE_SPEC.PATHWAY_ID].isin(pathways)
+    return df.loc[pathway_mask]
+
+
 def _find_underspecified_reactions(
     reaction_species_w_roles: pd.DataFrame,
 ) -> pd.DataFrame:
@@ -1480,6 +1688,191 @@ def _sbml_dfs_from_edgelist_check_cspecies_merge(
     return None
 
 
+def _select_priority_pathway_sources(
+    source_table: pd.DataFrame, priority_pathways: list[str] = DATA_SOURCES_LIST
+) -> pd.DataFrame:
+    """
+    Filter the source table to only include pathways in the list. If 0 or 1 priority pathways are found, return the source table.
+
+    Parameters
+    ----------
+    source_table (pd.DataFrame)
+        The source table to filter
+    priority_pathways (list[str])
+        The list of pathways to filter to
+
+    Returns
+    -------
+    pd.DataFrame
+        The filtered source table
+    """
+
+    # filter to pathways of interest
+    priority_source_table = _filter_to_pathways(source_table, priority_pathways)
+    n_priority_pathways = priority_source_table[SOURCE_SPEC.PATHWAY_ID].nunique()
+
+    if n_priority_pathways > 1:
+        filtered_sources = priority_source_table
+    else:
+        logger.debug("1 or fewer priority pathways found, using all pathways")
+        filtered_sources = source_table
+
+    return filtered_sources
+
+
+def _summarize_ontology_cooccurrence(
+    df: pd.DataFrame, stratify_by_bqb: bool = True, allow_col_multindex: bool = False
+) -> pd.DataFrame:
+    """
+    Create a cooccurrence matrix of ontologies based entities sharing the same ontology.
+
+    This can be used to identify ontologies which are associated with the same types of entities.
+
+    Parameters
+    ----------
+    df (pd.DataFrame)
+        a table generated using `sbml_dfs.get_sources`
+    stratify_by_bqb (bool)
+        whether to stratify by bqb
+    allow_col_multindex (bool)
+        whether to allow the column multindex
+
+    Returns
+    -------
+    pd.DataFrame
+        Square matrix with pathways as both rows and columns
+    """
+
+    entity_ontology_occurrences = _summarize_ontology_occurrence(
+        df, stratify_by_bqb, allow_col_multindex
+    )
+
+    # Convert to binary (1 if compound is in pathway, 0 otherwise)
+    entity_ontology_matrix = (entity_ontology_occurrences > 0).astype(int)
+
+    # Calculate co-occurrence matrix: pathways × pathways
+    # This gives us the number of compounds shared between each pair of pathways
+    cooccurrences = entity_ontology_matrix.T @ entity_ontology_matrix
+
+    return cooccurrences
+
+
+def _summarize_ontology_occurrence(
+    df: pd.DataFrame, stratify_by_bqb: bool = True, allow_col_multindex: bool = False
+) -> pd.DataFrame:
+    """
+    Summarize the types of identifiers associated with each entity.
+
+    Parameters
+    ----------
+    df (pd.DataFrame)
+        a table generated using `sbml_dfs.get_identifiers` or `sbml_dfs.get_characteristic_species_ids`
+    stratify_by_bqb (bool)
+        whether to stratify by bqb
+    allow_col_multindex (bool)
+        whether to allow the column multindex
+
+    Returns
+    -------
+    pd.DataFrame
+        a table with entities as rows and ontologies as columns
+    """
+
+    entity_type = infer_entity_type(df)
+    pk = SBML_DFS_SCHEMA.SCHEMA[entity_type][SCHEMA_DEFS.PK]
+
+    required_vars = {pk, SOURCE_SPEC.ENTRY} | IDENTIFIERS_REQUIRED_VARS
+    utils.match_pd_vars(
+        df, req_vars=set(required_vars), allow_series=False
+    ).assert_present()
+
+    if stratify_by_bqb:
+        if allow_col_multindex:
+            pivot_cols = [IDENTIFIERS.ONTOLOGY, IDENTIFIERS.BQB]
+        else:
+            # combine bqb and ontology into a single column
+            df["bqb_ontology"] = (
+                df[IDENTIFIERS.BQB].astype(str)
+                + "::"
+                + df[IDENTIFIERS.ONTOLOGY].astype(str)
+            )
+            pivot_cols = ["bqb_ontology"]
+    else:
+        pivot_cols = [IDENTIFIERS.ONTOLOGY]
+
+    return df.pivot_table(
+        index=pk,
+        columns=pivot_cols,
+        values=SOURCE_SPEC.ENTRY,  # Using 'entry' column as indicator
+        fill_value=0,
+        aggfunc="count",  # Count occurrences
+    )
+
+
+def _summarize_source_cooccurrence(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Create a cooccurrence matrix of pathways based on the presence of entities in pathways.
+
+    Parameters
+    ----------
+    df (pd.DataFrame)
+        a table generated using `sbml_dfs.get_sources`
+
+    Returns
+    -------
+    pd.DataFrame
+        Square matrix with pathways as both rows and columns
+    """
+
+    entity_pathway_occurrences = _summarize_source_occurrence(df)
+
+    # Convert to binary (1 if compound is in pathway, 0 otherwise)
+    entity_source_matrix = (entity_pathway_occurrences > 0).astype(int)
+
+    # Calculate co-occurrence matrix: pathways × pathways
+    # This gives us the number of compounds shared between each pair of pathways
+    cooccurrences = entity_source_matrix.T @ entity_source_matrix
+
+    return cooccurrences
+
+
+def _summarize_source_occurrence(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Summarize the occurrence of entities in pathways.
+
+    Parameters
+    ----------
+    df (pd.DataFrame)
+        a table generated using `sbml_dfs.get_sources`
+
+    Returns
+    -------
+    pd.DataFrame
+        a table with entities as rows and pathways as columns
+
+    """
+
+    entity_type = infer_entity_type(df)
+    pk = SBML_DFS_SCHEMA.SCHEMA[entity_type][SCHEMA_DEFS.PK]
+
+    expected_multindex = [pk, SOURCE_SPEC.ENTRY]
+    if expected_multindex != df.index.names:
+        raise ValueError(
+            f"Expected multindex {expected_multindex} but got {df.index.names}. `df` should be generated using `sbml_dfs.get_sources`"
+        )
+
+    # Create a binary matrix: compounds × pathways
+    entity_source_occurrences = df.reset_index().pivot_table(
+        index=pk,
+        columns=SOURCE_SPEC.PATHWAY_ID,
+        values=SOURCE_SPEC.ENTRY,  # Using 'entry' column as indicator
+        fill_value=0,
+        aggfunc="count",  # Count occurrences
+    )
+
+    return entity_source_occurrences
+
+
 def _validate_non_null_values(
     df: pd.DataFrame, expected_columns: set, table_name: str
 ) -> None:
@@ -1589,5 +1982,3 @@ def _validate_sbo_values(sbo_series: pd.Series, validate: str = "names") -> None
             raise TypeError("invalid_counts must be a pandas DataFrame")
         print(invalid_counts)
         raise ValueError("Some reaction species have unusable SBO terms")
-
-    return None

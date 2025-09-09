@@ -318,8 +318,8 @@ def process_napistu_graph(
     napistu_graph.add_edge_data(sbml_dfs)
     napistu_graph.transform_edges(custom_transformations=custom_transformations)
 
-    if "reactions" in reaction_graph_attrs.keys():
-        reaction_attrs = reaction_graph_attrs["reactions"]
+    if SBML_DFS.REACTIONS in reaction_graph_attrs.keys():
+        reaction_attrs = reaction_graph_attrs[SBML_DFS.REACTIONS]
     else:
         reaction_attrs = dict()
 
