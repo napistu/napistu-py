@@ -310,6 +310,73 @@ def construct_formula_string(
     return f"{substrates}{arrow_type}{products}{modifiers}"
 
 
+def create_reaction_formula_series(
+    reaction_data,
+    reactions_df,
+    species_name_col,
+    sort_cols,
+    group_cols=None,
+    add_compartment_prefix=False,
+    r_id_col=SBML_DFS.R_ID,
+    c_name_col=SBML_DFS.C_NAME,
+):
+    """
+    Helper function to create reaction formula series.
+
+    Parameters:
+    -----------
+    reaction_data : pd.DataFrame
+        The reaction species data to process
+    reactions_df : pd.DataFrame
+        The reactions dataframe needed by construct_formula_string
+    species_name_col : str
+        Column name to use for species names in formulas
+    sort_cols : list
+        Columns to sort by before grouping
+    group_cols : list, optional
+        Columns to group by. If None, uses [r_id_col]
+    add_compartment_prefix : bool
+        Whether to add compartment name as prefix to formula
+    r_id_col : str
+        Column name for reaction ID
+    c_name_col : str
+        Column name for compartment name (used when add_compartment_prefix=True)
+
+    Returns:
+    --------
+    pd.Series or None : Formula strings indexed by reaction ID, or None if no data
+    """
+    if reaction_data.shape[0] == 0:
+        return None
+
+    if group_cols is None:
+        group_cols = [r_id_col]
+
+    # Include all columns that might be needed by construct_formula_string
+    # We include all original columns to avoid accidentally filtering out needed data
+    all_cols = list(reaction_data.columns)
+
+    formulas = (
+        reaction_data.sort_values(sort_cols)
+        .groupby(group_cols)[all_cols]  # Use all columns to be safe
+        .apply(lambda x: construct_formula_string(x, reactions_df, species_name_col))
+    )
+
+    if add_compartment_prefix:
+        # Add compartment prefix and reindex by reaction ID only
+        formulas = pd.Series(
+            [
+                f"{compartment}: {formula}"
+                for formula, compartment in zip(
+                    formulas, formulas.index.get_level_values(c_name_col)
+                )
+            ],
+            index=formulas.index.get_level_values(r_id_col),
+        )
+
+    return formulas.rename("r_formula_str")
+
+
 def display_post_consensus_checks(checks_results: dict) -> None:
     """
     Display the results of post_consensus_checks in a formatted way.

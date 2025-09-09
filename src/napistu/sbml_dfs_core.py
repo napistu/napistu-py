@@ -1687,67 +1687,52 @@ class SBML_dfs:
             SBML_DFS.C_ID
         ].nunique()
 
-        # identify reactions which work across compartments
-        r_id_cross_compartment = r_id_compartment_counts[r_id_compartment_counts > 1]
-        # there species must be labelled with the sc_name to specify where a species exists
-        if r_id_cross_compartment.shape[0] > 0:
-            rxn_eqtn_cross_compartment = (
-                matching_reaction_species[
-                    matching_reaction_species[SBML_DFS.R_ID].isin(
-                        r_id_cross_compartment.index
-                    )
-                ]
-                .sort_values([SBML_DFS.SC_NAME])
-                .groupby(SBML_DFS.R_ID)
-                .apply(
-                    lambda x: sbml_dfs_utils.construct_formula_string(
-                        x, self.reactions, SBML_DFS.SC_NAME
-                    )
-                )
-                .rename("r_formula_str")
-            )
-        else:
-            rxn_eqtn_cross_compartment = None
+        # Process cross-compartment reactions (use sc_name for species identification)
+        cross_compartment_rids = r_id_compartment_counts[
+            r_id_compartment_counts > 1
+        ].index
+        cross_compartment_data = matching_reaction_species[
+            matching_reaction_species[SBML_DFS.R_ID].isin(cross_compartment_rids)
+        ]
 
-        # identify reactions which occur within a single compartment; for these the reaction
-        # can be labelled with the compartment and individual species can receive a more readable s_name
-        r_id_within_compartment = r_id_compartment_counts[r_id_compartment_counts == 1]
-        if r_id_within_compartment.shape[0] > 0:
-            # add s_name
-            augmented_matching_reaction_species = (
-                matching_reaction_species[
-                    matching_reaction_species[SBML_DFS.R_ID].isin(
-                        r_id_within_compartment.index
-                    )
-                ]
-                .merge(self.compartments, left_on=SBML_DFS.C_ID, right_index=True)
-                .merge(self.species, left_on=SBML_DFS.S_ID, right_index=True)
-                .sort_values([SBML_DFS.S_NAME])
+        rxn_eqtn_cross_compartment = sbml_dfs_utils.create_reaction_formula_series(
+            cross_compartment_data,
+            self.reactions,
+            species_name_col=SBML_DFS.SC_NAME,
+            sort_cols=[SBML_DFS.SC_NAME],
+            group_cols=[SBML_DFS.R_ID],
+            r_id_col=SBML_DFS.R_ID,
+            c_name_col=SBML_DFS.C_NAME,
+        )
+
+        # Process within-compartment reactions (use s_name and add compartment prefix)
+        within_compartment_rids = r_id_compartment_counts[
+            r_id_compartment_counts == 1
+        ].index
+        within_compartment_data = matching_reaction_species[
+            matching_reaction_species[SBML_DFS.R_ID].isin(within_compartment_rids)
+        ]
+
+        if within_compartment_data.shape[0] > 0:
+            # Augment with additional data needed for s_name
+            within_compartment_data = within_compartment_data.merge(
+                self.compartments, left_on=SBML_DFS.C_ID, right_index=True
+            ).merge(self.species, left_on=SBML_DFS.S_ID, right_index=True)
+
+            rxn_eqtn_within_compartment = sbml_dfs_utils.create_reaction_formula_series(
+                within_compartment_data,
+                self.reactions,
+                species_name_col=SBML_DFS.S_NAME,
+                sort_cols=[SBML_DFS.S_NAME],
+                group_cols=[SBML_DFS.R_ID, SBML_DFS.C_NAME],
+                add_compartment_prefix=True,
+                r_id_col=SBML_DFS.R_ID,
+                c_name_col=SBML_DFS.C_NAME,
             )
-            # create formulas based on s_names of components
-            rxn_eqtn_within_compartment = augmented_matching_reaction_species.groupby(
-                [SBML_DFS.R_ID, SBML_DFS.C_NAME]
-            ).apply(
-                lambda x: sbml_dfs_utils.construct_formula_string(
-                    x, self.reactions, SBML_DFS.S_NAME
-                )
-            )
-            # add compartment for each reaction
-            rxn_eqtn_within_compartment = pd.Series(
-                [
-                    y + ": " + x
-                    for x, y in zip(
-                        rxn_eqtn_within_compartment,
-                        rxn_eqtn_within_compartment.index.get_level_values(
-                            SBML_DFS.C_NAME
-                        ),
-                    )
-                ],
-                index=rxn_eqtn_within_compartment.index.get_level_values(SBML_DFS.R_ID),
-            ).rename("r_formula_str")
         else:
             rxn_eqtn_within_compartment = None
 
+        # Combine results
         formula_strs = pd.concat(
             [rxn_eqtn_cross_compartment, rxn_eqtn_within_compartment]
         )
