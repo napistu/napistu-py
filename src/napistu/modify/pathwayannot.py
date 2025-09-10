@@ -23,8 +23,6 @@ from napistu.constants import (
     SBOTERM_NAMES,
 )
 from napistu.modify.constants import (
-    COFACTOR_CHEBI_IDS,
-    COFACTOR_SCHEMA,
     NEO4_MEMBERS_SET,
     REACTOME_CROSSREF_SET,
 )

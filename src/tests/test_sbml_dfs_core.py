@@ -30,7 +30,6 @@ from napistu.ingestion.constants import (
     INTERACTION_EDGELIST_DEFAULTS,
     INTERACTION_EDGELIST_DEFS,
 )
-from napistu.modify import pathwayannot
 from napistu.sbml_dfs_core import SBML_dfs
 from napistu.source import Source
 
@@ -97,13 +96,6 @@ def test_data():
     )
 
     return [interaction_edgelist, species_df, compartments_df]
-
-
-def test_drop_cofactors(sbml_dfs):
-    starting_rscs = sbml_dfs.reaction_species.shape[0]
-    reduced_dfs = pathwayannot.drop_cofactors(sbml_dfs)
-
-    assert starting_rscs - reduced_dfs.reaction_species.shape[0] == 20
 
 
 def test_sbml_dfs_from_dict_required(sbml_dfs, model_source_stub):

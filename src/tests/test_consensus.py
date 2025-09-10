@@ -18,7 +18,7 @@ from napistu.constants import (
 )
 from napistu.identifiers import Identifiers
 from napistu.ingestion import sbml
-from napistu.modify import pathwayannot
+from napistu.modify.cofactors import drop_cofactors
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")
@@ -56,7 +56,7 @@ def test_consensus():
     assert consensus_model.reactions.shape == (30, 4)
     assert consensus_model.reaction_species.shape == (137, 4)
 
-    consensus_model = pathwayannot.drop_cofactors(consensus_model)
+    consensus_model = drop_cofactors(consensus_model)
     assert consensus_model.species.shape == (38, 3)
     assert consensus_model.reaction_species.shape == (52, 4)
     # update reaction_species.shape after more cofactors identified

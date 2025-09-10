@@ -4,30 +4,11 @@ import os
 
 from napistu.constants import SBML_DFS
 from napistu.modify import pathwayannot
-from napistu.modify.constants import COFACTOR_CHEBI_IDS, COFACTOR_SCHEMA
 
 test_path = os.path.abspath(os.path.join(__file__, os.pardir))
 test_data = os.path.join(test_path, "test_data")
 reduced_neo4j_members_path = os.path.join(test_data, "reduced_neo4j_members.csv")
 reduced_neo4j_cross_refs_path = os.path.join(test_data, "reduced_neo4j_members.csv")
-
-
-def test_cofactor_specifications():
-    # cofactors are manually annotated with their ChEBI ID so that they can be matched
-    # to the corresponding ChEBI ID of molecular species
-
-    cofactor_labels_set = set(COFACTOR_CHEBI_IDS["cofactor"].tolist())
-
-    deep_cofactor_list = [list(v.values()) for v in COFACTOR_SCHEMA.values()]
-    shallow_cofactor_list = [item for sublist in deep_cofactor_list for item in sublist]
-    unique_cofactors = {item for sublist in shallow_cofactor_list for item in sublist}
-
-    # check whether all species in cofactor schema are tied with an ID
-    undefined_labels = unique_cofactors.difference(cofactor_labels_set)
-    if len(undefined_labels) != 0:
-        raise ValueError(
-            f"{', '.join(undefined_labels)} are not defined in \"COFACTOR_CHEBI_IDS\""
-        )
 
 
 def test_add_reactome_entity_sets(sbml_dfs_glucose_metabolism):

@@ -50,6 +50,7 @@ from napistu.ingestion.constants import (
 from napistu.ingestion.sbml import SBML
 from napistu.matching.mount import bind_wide_results
 from napistu.modify import pathwayannot
+from napistu.modify.cofactors import drop_cofactors as drop_cofactors_func
 from napistu.modify.curation import curate_sbml_dfs
 from napistu.modify.gaps import add_transportation_reactions
 from napistu.modify.uncompartmentalize import uncompartmentalize_sbml_dfs
@@ -567,7 +568,7 @@ def merge_model_compartments(sbml_dfs_uri: str, output_model_uri: str):
 def drop_cofactors(sbml_dfs_uri: str, output_model_uri: str):
     """Remove reaction species acting as cofactors"""
     sbml_dfs = SBML_dfs.from_pickle(sbml_dfs_uri)
-    cofactor_filtered_sbml_dfs = pathwayannot.drop_cofactors(sbml_dfs)
+    cofactor_filtered_sbml_dfs = drop_cofactors_func(sbml_dfs)
     cofactor_filtered_sbml_dfs.to_pickle(output_model_uri)
 
 
