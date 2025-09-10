@@ -1003,7 +1003,7 @@ class SBML_dfs:
     def get_source_cooccurrence(
         self,
         entity_type: str,
-        priority_pathways: list[str] = DEFAULT_PRIORITIZED_PATHWAYS,
+        priority_pathways: Optional[list[str]] = DEFAULT_PRIORITIZED_PATHWAYS,
     ) -> pd.DataFrame:
         """
         Get pathway co-occurrence matrix for a specific entity type.
@@ -1015,8 +1015,9 @@ class SBML_dfs:
         ----------
         entity_type : str
             The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
-        priority_pathways : list[str], optional
-            List of pathway IDs to prioritize in the analysis. Defaults to DEFAULT_PRIORITIZED_PATHWAYS.
+        priority_pathways : Optional[list[str]], default DEFAULT_PRIORITIZED_PATHWAYS
+            List of pathway IDs to prioritize in the analysis. If None, uses all pathways
+            without filtering or warnings.
 
         Returns
         -------
@@ -1044,7 +1045,7 @@ class SBML_dfs:
     def get_source_occurrence(
         self,
         entity_type: str,
-        priority_pathways: list[str] = DEFAULT_PRIORITIZED_PATHWAYS,
+        priority_pathways: Optional[list[str]] = DEFAULT_PRIORITIZED_PATHWAYS,
         include_missing: bool = False,
     ) -> pd.DataFrame:
         """
@@ -1057,8 +1058,9 @@ class SBML_dfs:
         ----------
         entity_type : str
             The type of entity to analyze (e.g., 'species', 'reactions', 'compartments')
-        priority_pathways : list[str], optional
-            List of pathway IDs to prioritize in the analysis. Defaults to DEFAULT_PRIORITIZED_PATHWAYS.
+        priority_pathways : Optional[list[str]], default DEFAULT_PRIORITIZED_PATHWAYS
+            List of pathway IDs to prioritize in the analysis. If None, uses all pathways
+            without filtering or warnings.
         include_missing: bool, optional
             Whether to include missing entities in the result using add_missing_ids_column, by default False
 

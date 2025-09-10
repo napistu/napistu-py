@@ -343,18 +343,22 @@ def test_infer_entity_type_errors():
         sbml_dfs_utils.infer_entity_type(df)
 
 
-def test_infer_entity_type_multindex_reactions():
+def test_infer_entity_type_multindex():
     # DataFrame with MultiIndex (r_id, foo), should infer as reactions
-    import pandas as pd
-
-    from napistu.constants import SBML_DFS
-
     df = pd.DataFrame({"some_col": [1, 2]})
     df.index = pd.MultiIndex.from_tuples(
         [("rxn1", "a"), ("rxn2", "b")], names=[SBML_DFS.R_ID, "foo"]
     )
     result = sbml_dfs_utils.infer_entity_type(df)
     assert result == SBML_DFS.REACTIONS
+
+    # DataFrame with MultiIndex (sc_id, bar), should infer as compartmentalized_species
+    df = pd.DataFrame({"some_col": [1, 2]})
+    df.index = pd.MultiIndex.from_tuples(
+        [("glucose_c", "a"), ("atp_c", "b")], names=[SBML_DFS.SC_ID, "bar"]
+    )
+    result = sbml_dfs_utils.infer_entity_type(df)
+    assert result == SBML_DFS.COMPARTMENTALIZED_SPECIES
 
 
 def test_get_interaction_symbol():
