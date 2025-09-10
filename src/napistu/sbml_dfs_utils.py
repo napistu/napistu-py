@@ -133,12 +133,12 @@ def add_missing_ids_column(
         other_column = other_column_name
 
     # Add the 'other' column
-    result_table[other_column] = 0
+    result_table[other_column] = int(0)
 
     # Add missing IDs as new rows
     for missing_id in missing_ids:
         new_row = pd.Series(0, index=result_table.columns, name=missing_id)
-        new_row[other_column] = 1
+        new_row[other_column] = int(1)
         result_table = pd.concat([result_table, new_row.to_frame().T])
 
     # Sort the index to maintain order

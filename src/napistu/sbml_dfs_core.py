@@ -1128,15 +1128,17 @@ class SBML_dfs:
         entity_table = self.get_table(entity_type)
 
         if entity_type == SBML_DFS.REACTIONS:
-            logger.info(
-                "Excluding reactions which are all interactors from reaction source counts"
-            )
 
             interactor_sbo_term = MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
             reaction_species = self.get_table(SBML_DFS.REACTION_SPECIES)
             valid_reactions = reaction_species[
                 ~reaction_species[SBML_DFS.SBO_TERM].isin([interactor_sbo_term])
             ][SBML_DFS.R_ID].unique()
+
+            if valid_reactions.shape[0] != entity_table.shape[0]:
+                logger.info(
+                    "Excluding reactions which are all interactors from reaction source counts"
+                )
 
             entity_table = entity_table.loc[valid_reactions]
 

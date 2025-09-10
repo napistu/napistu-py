@@ -6,7 +6,10 @@ import pytest
 
 from napistu.constants import SBML_DFS
 from napistu.network import ng_utils
-from napistu.network.constants import DEFAULT_WT_TRANS, WEIGHTING_SPEC
+from napistu.network.constants import (
+    DEFAULT_WT_TRANS,
+    WEIGHTING_SPEC,
+)
 
 
 def test_entity_validation():
@@ -201,3 +204,20 @@ def test_apply_weight_transformations_nan_handling():
             assert abs(result["string_wt"].iloc[i] - expected) < 1e-10
         else:
             assert pd.isna(result["string_wt"].iloc[i])
+
+
+def test_get_sbml_dfs_vertex_summaries_dimensions(sbml_dfs_metabolism):
+    """Test that get_sbml_dfs_vertex_summaries returns correct output dimensions."""
+    result = ng_utils.get_sbml_dfs_vertex_summaries(sbml_dfs_metabolism)
+
+    # Verify output is a DataFrame
+    assert isinstance(result, pd.DataFrame)
+
+    # Verify specific dimensions
+    assert result.shape == (245, 13)
+
+    # Verify all values are numeric (should be filled with 0 for missing values)
+    assert result.dtypes.apply(lambda x: pd.api.types.is_numeric_dtype(x)).all()
+
+    # Verify no NaN values (should be filled with 0)
+    assert not result.isnull().any().any()
