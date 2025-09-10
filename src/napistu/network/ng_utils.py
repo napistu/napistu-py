@@ -34,6 +34,10 @@ from napistu.network.constants import (
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
     NAPISTU_GRAPH_VERTICES,
+    NODE_TYPES_TO_ENTITY_TABLES,
+    VALID_NAPISTU_GRAPH_NODE_TYPES,
+    VALID_VERTEX_SBML_DFS_SUMMARIES,
+    VERTEX_SBML_DFS_SUMMARIES,
     WEIGHT_TRANSFORMATIONS,
 )
 
@@ -270,6 +274,78 @@ def get_minimal_sources_edges(
         return reaction_sources.reset_index()[
             [SBML_DFS.R_ID, SOURCE_SPEC.PATHWAY_ID, SOURCE_SPEC.NAME]
         ]
+
+
+def get_sbml_dfs_vertex_summaries(
+    sbml_dfs,
+    summary_types=VALID_VERTEX_SBML_DFS_SUMMARIES,
+    priority_pathways=None,
+    stratify_by_bqb=True,
+    characteristic_only=False,
+    dogmatic=False,
+) -> pd.DataFrame:
+
+    if len(summary_types) == 0:
+        raise ValueError(
+            "No summary types provided, valid summary types are: {VALID_VERTEX_SBML_DFS_SUMMARIES}"
+        )
+
+    invalid_summary_types = set(summary_types) - set(VALID_VERTEX_SBML_DFS_SUMMARIES)
+    if len(invalid_summary_types) > 0:
+        raise ValueError(
+            f"Invalid summary types: {invalid_summary_types}. valid summary types are: {VALID_VERTEX_SBML_DFS_SUMMARIES}"
+        )
+
+    summaries = list()
+
+    if VERTEX_SBML_DFS_SUMMARIES.SOURCES in summary_types:
+
+        entity_tables = {
+            NODE_TYPES_TO_ENTITY_TABLES[x] for x in VALID_NAPISTU_GRAPH_NODE_TYPES
+        }
+
+        source_dfs = list()
+        for entity_table in entity_tables:
+            df = sbml_dfs.get_source_occurrence(entity_table, priority_pathways)
+            df.columns.name = None
+            source_dfs.append(df.rename_axis(NAPISTU_GRAPH_VERTICES.NAME))
+
+        summaries.append(pd.concat(source_dfs).fillna(int(0)))
+
+    if VERTEX_SBML_DFS_SUMMARIES.ONTOLOGIES in summary_types:
+
+        # get reaction ontologies directly (since these are vertex names)
+        df = sbml_dfs.get_ontology_occurrence(
+            SBML_DFS.REACTIONS,
+            stratify_by_bqb=stratify_by_bqb,
+            characteristic_only=characteristic_only,
+            dogmatic=dogmatic,
+            include_missing=True,
+        )
+        df.columns.name = None
+        reaction_ontologies = df.rename_axis(NAPISTU_GRAPH_VERTICES.NAME)
+
+        # get species ontologies then map them to compartmentalized species (since the cspecies are the vertex names)
+        df = sbml_dfs.get_ontology_occurrence(
+            SBML_DFS.SPECIES,
+            stratify_by_bqb=stratify_by_bqb,
+            characteristic_only=characteristic_only,
+            dogmatic=dogmatic,
+            include_missing=True,
+        )
+        df.columns.name = None
+
+        species_ontologies = (
+            sbml_dfs.compartmentalized_species[[SBML_DFS.S_ID]]
+            .merge(df, left_on=SBML_DFS.S_ID, right_index=True)
+            .drop(columns=[SBML_DFS.S_ID])
+        )
+
+        summaries.append(
+            pd.concat([reaction_ontologies, species_ontologies]).fillna(int(0))
+        )
+
+    return pd.concat(summaries, axis=1).astype(int)
 
 
 def pluck_entity_data(

@@ -20,6 +20,7 @@ from napistu.network.constants import (
     NAPISTU_METADATA_KEYS,
     NAPISTU_WEIGHTING_STRATEGIES,
     SOURCE_VARS_DICT,
+    VALID_VERTEX_SBML_DFS_SUMMARIES,
     VALID_WEIGHTING_STRATEGIES,
     WEIGHTING_SPEC,
 )
@@ -51,12 +52,14 @@ class NapistuGraph(ig.Graph):
 
     Public Methods (alphabetical)
     ----------------------------
-    add_degree_attributes()
+    add_degree_attributes(inplace=True)
         Add degree-based attributes to vertices and edges.
-    add_edge_data(sbml_dfs, mode='fresh', overwrite=False)
+    add_edge_data(sbml_dfs, mode='fresh', overwrite=False, inplace=True)
         Add edge data from SBML_dfs to the graph.
-    add_topology_weights(base_score=2, protein_multiplier=1, metabolite_multiplier=3, unknown_multiplier=10, scale_multiplier_by_meandegree=True)
+    add_topology_weights(base_score=2, protein_multiplier=1, metabolite_multiplier=3, unknown_multiplier=10, scale_multiplier_by_meandegree=True, inplace=True)
         Add topology-based weights to graph edges.
+    add_sbml_dfs_summaries(sbml_dfs, summary_types=None, priority_pathways=None, stratify_by_bqb=True, characteristic_only=False, dogmatic=False, inplace=True)
+        Add vertex summaries from SBML_dfs to the graph vertices.
     copy()
         Create a deep copy of the NapistuGraph.
     from_igraph(graph, **metadata)
@@ -158,47 +161,6 @@ class NapistuGraph(ig.Graph):
             NAPISTU_METADATA_KEYS.REACTION_ATTRS: {},
         }
 
-    @classmethod
-    def from_igraph(cls, graph: ig.Graph, **metadata) -> "NapistuGraph":
-        """
-        Create a NapistuGraph from an existing igraph.Graph.
-
-        Parameters
-        ----------
-        graph : ig.Graph
-            The igraph to convert
-        **metadata : dict
-            Additional metadata to store with the graph
-
-        Returns
-        -------
-        NapistuGraph
-            A new NapistuGraph instance
-        """
-        # Create new instance with same structure
-        new_graph = cls(
-            n=graph.vcount(),
-            edges=[(e.source, e.target) for e in graph.es],
-            directed=graph.is_directed(),
-        )
-
-        # Copy all vertex attributes
-        for attr in graph.vs.attributes():
-            new_graph.vs[attr] = graph.vs[attr]
-
-        # Copy all edge attributes
-        for attr in graph.es.attributes():
-            new_graph.es[attr] = graph.es[attr]
-
-        # Copy graph attributes
-        for attr in graph.attributes():
-            new_graph[attr] = graph[attr]
-
-        # Set metadata
-        new_graph._metadata.update(metadata)
-
-        return new_graph
-
     @property
     def is_reversed(self) -> bool:
         """Check if the graph has been reversed."""
@@ -219,337 +181,7 @@ class NapistuGraph(ig.Graph):
         """Get the weight_by attributes used."""
         return self._metadata["weight_by"]
 
-    def add_edge_data(
-        self, sbml_dfs: SBML_dfs, mode: str = "fresh", overwrite: bool = False
-    ) -> None:
-        """
-        Extract and add reaction attributes to the graph edges.
-
-        Parameters
-        ----------
-        sbml_dfs : SBML_dfs
-            The SBML_dfs object containing reaction data
-        mode : str
-            Either "fresh" (replace existing) or "extend" (add new attributes only)
-        overwrite : bool
-            Whether to allow overwriting existing edge attributes when conflicts arise
-        """
-
-        # Get reaction_attrs from stored metadata
-        reaction_attrs = self._get_entity_attrs("reactions")
-        if reaction_attrs is None or not reaction_attrs:
-            logger.warning(
-                "No reaction_attrs found. Use set_graph_attrs() to configure reaction attributes before extracting edge data."
-            )
-            return
-
-        # Check for conflicts with existing edge attributes
-        existing_edge_attrs = set(self.es.attributes())
-        new_attrs = set(reaction_attrs.keys())
-
-        if mode == "fresh":
-            overlapping_attrs = existing_edge_attrs & new_attrs
-            if overlapping_attrs and not overwrite:
-                raise ValueError(
-                    f"Edge attributes already exist: {overlapping_attrs}. "
-                    f"Use overwrite=True to replace or mode='extend' to add only new attributes"
-                )
-            attrs_to_add = new_attrs
-
-        elif mode == "extend":
-            overlapping_attrs = existing_edge_attrs & new_attrs
-            if overlapping_attrs and not overwrite:
-                raise ValueError(
-                    f"Overlapping edge attributes found: {overlapping_attrs}. "
-                    f"Use overwrite=True to allow replacement"
-                )
-            # In extend mode, only add attributes that don't exist (unless overwrite=True)
-            if overwrite:
-                attrs_to_add = new_attrs
-            else:
-                attrs_to_add = new_attrs - existing_edge_attrs
-
-        else:
-            raise ValueError(f"Unknown mode: {mode}. Must be 'fresh' or 'extend'")
-
-        if not attrs_to_add:
-            logger.info("No new attributes to add")
-            return
-
-        # Only extract the attributes we're actually going to add
-        attrs_to_extract = {attr: reaction_attrs[attr] for attr in attrs_to_add}
-
-        # Get reaction data using existing function - only for attributes we need
-        reaction_data = ng_utils.pluck_entity_data(
-            sbml_dfs, attrs_to_extract, SBML_DFS.REACTIONS, transform=False
-        )
-
-        if reaction_data is None:
-            logger.warning(
-                "No reaction data could be extracted with the stored reaction_attrs"
-            )
-            return
-
-        # Get current edges and merge with reaction data
-        edges_df = self.get_edge_dataframe()
-
-        # Remove overlapping attributes from edges_df if overwrite=True to avoid _x/_y suffixes
-        if overwrite:
-            overlapping_in_edges = [
-                attr for attr in attrs_to_add if attr in edges_df.columns
-            ]
-            if overlapping_in_edges:
-                edges_df = edges_df.drop(columns=overlapping_in_edges)
-
-        edges_with_attrs = edges_df.merge(
-            reaction_data, left_on=SBML_DFS.R_ID, right_index=True, how="left"
-        )
-
-        # Add new attributes directly to the graph
-        added_count = 0
-        for attr_name in attrs_to_add:
-            if attr_name in reaction_data.columns:
-                self.es[attr_name] = edges_with_attrs[attr_name].values
-                added_count += 1
-
-        logger.info(
-            f"Added {added_count} edge attributes to graph: {list(attrs_to_add)}"
-        )
-
-        return None
-
-    def set_weights(
-        self,
-        weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
-        weight_by: list[str] | None = None,
-        reaction_edge_multiplier: float = 0.5,
-    ) -> None:
-        """
-        Set Graph Weights for this NapistuGraph using a specified weighting strategy.
-
-        Modifies the graph in-place. Now includes functionality to downweight edges
-        connected to reaction vertices to account for increased path lengths through
-        reaction intermediates (e.g., S → R → P vs direct S → P).
-
-        Parameters:
-            weight_by (list[str], optional): A list of edge attributes to weight by.
-                How these are used depends on the weighting strategy.
-            weighting_strategy (str, optional): A network weighting strategy. Options:
-                'unweighted': all weights (and upstream_weight for directed graphs) are set to 1.
-                'topology': weight edges by the degree of the source nodes favoring nodes
-                    emerging from nodes with few connections.
-                'mixed': transform edges with a quantitative score based on reaction_attrs;
-                    and set edges without quantitative score as a source-specific weight.
-            reaction_edge_multiplier (float, optional): Factor to multiply weights of edges
-                connected to reaction vertices. Default 0.5 reduces reaction edge weights
-                by 50% to normalize path lengths. Set to 1.0 to disable this feature.
-
-        Raises:
-            ValueError: If weighting_strategy is not valid.
-
-        Notes:
-            The reaction_edge_multiplier addresses the issue where SBML-derived networks
-            have paths like S → R → P (length 2) compared to direct protein interactions
-            S → P (length 1). A multiplier of 0.5 makes these path costs equivalent.
-        """
-
-        is_weights_provided = not ((weight_by is None) or (weight_by == []))
-
-        # Apply base weighting strategy first
-        if weighting_strategy not in VALID_WEIGHTING_STRATEGIES:
-            raise ValueError(
-                f"weighting_strategy was {weighting_strategy} and must be one of: "
-                f"{', '.join(VALID_WEIGHTING_STRATEGIES)}"
-            )
-
-        if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY:
-            if is_weights_provided:
-                logger.warning(
-                    "weight_by is not used for topology weighting. "
-                    "It will be ignored."
-                )
-
-            self.add_topology_weights()
-
-            # count parents and children and create weights based on them
-            self.es[NAPISTU_GRAPH_EDGES.WEIGHT] = self.es["topo_weights"]
-            if self.is_directed():
-                self.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = self.es[
-                    "upstream_topo_weights"
-                ]
-
-        elif weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED:
-
-            if is_weights_provided:
-                logger.warning(
-                    "weight_by is not used for unweighted weighting. "
-                    "It will be ignored."
-                )
-
-            # set weights as a constant
-            self.es[NAPISTU_GRAPH_EDGES.WEIGHT] = 1
-            if self.is_directed():
-                self.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = 1
-
-        elif weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.MIXED:
-            self._add_graph_weights_mixed(weight_by)
-
-        else:
-            raise NotImplementedError(
-                f"No logic implemented for {weighting_strategy}. This error should not happen."
-            )
-
-        # Apply reaction edge multiplier if not 1.0
-        if reaction_edge_multiplier != 1.0:
-            self._apply_reaction_edge_multiplier(reaction_edge_multiplier)
-
-        # Update metadata to track weighting configuration
-        self.set_metadata(weighting_strategy=weighting_strategy, weight_by=weight_by)
-
-        return None
-
-    def add_topology_weights(
-        self,
-        base_score: float = 2,
-        protein_multiplier: int = 1,
-        metabolite_multiplier: int = 3,
-        unknown_multiplier: int = 10,
-        scale_multiplier_by_meandegree: bool = True,
-    ) -> "NapistuGraph":
-        """
-        Create Topology Weights for a network based on its topology.
-
-        Edges downstream of nodes with many connections receive a higher weight suggesting that any one
-        of them is less likely to be regulatory. This is a simple and clearly flawed heuristic which can be
-        combined with more principled weighting schemes.
-
-        Parameters
-        ----------
-        base_score : float, optional
-            Offset which will be added to all weights. Default is 2.
-        protein_multiplier : int, optional
-            Multiplier for non-metabolite species. Default is 1.
-        metabolite_multiplier : int, optional
-            Multiplier for metabolites. Default is 3.
-        unknown_multiplier : int, optional
-            Multiplier for species without any identifier. Default is 10.
-        scale_multiplier_by_meandegree : bool, optional
-            If True, multipliers will be rescaled by the average number of connections a node has. Default is True.
-
-        Returns
-        -------
-        NapistuGraph
-            Graph with added topology weights.
-
-        Raises
-        ------
-        ValueError
-            If required attributes are missing or if parameters are invalid.
-        """
-
-        # Check for required attributes and add degree attributes if missing
-        degree_attrs = {
-            NAPISTU_GRAPH_EDGES.SC_DEGREE,
-            NAPISTU_GRAPH_EDGES.SC_CHILDREN,
-            NAPISTU_GRAPH_EDGES.SC_PARENTS,
-        }
-
-        missing_degree_attrs = degree_attrs.difference(set(self.es.attributes()))
-        if missing_degree_attrs:
-            logger.info(f"Adding missing degree attributes: {missing_degree_attrs}")
-            self.add_degree_attributes()
-
-        # Check for species_type attribute
-        if NAPISTU_GRAPH_EDGES.SPECIES_TYPE not in self.es.attributes():
-            raise ValueError(
-                f"Missing required attribute: {NAPISTU_GRAPH_EDGES.SPECIES_TYPE}. "
-                "Species type information is required for topology weighting."
-            )
-
-        if base_score < 0:
-            raise ValueError(f"base_score was {base_score} and must be non-negative")
-        if protein_multiplier > unknown_multiplier:
-            raise ValueError(
-                f"protein_multiplier was {protein_multiplier} and unknown_multiplier "
-                f"was {unknown_multiplier}. unknown_multiplier must be greater than "
-                "protein_multiplier"
-            )
-        if metabolite_multiplier > unknown_multiplier:
-            raise ValueError(
-                f"protein_multiplier was {metabolite_multiplier} and unknown_multiplier "
-                f"was {unknown_multiplier}. unknown_multiplier must be greater than "
-                "protein_multiplier"
-            )
-
-        # create a new weight variable
-        weight_table = pd.DataFrame(
-            {
-                NAPISTU_GRAPH_EDGES.SC_DEGREE: self.es[NAPISTU_GRAPH_EDGES.SC_DEGREE],
-                NAPISTU_GRAPH_EDGES.SC_CHILDREN: self.es[
-                    NAPISTU_GRAPH_EDGES.SC_CHILDREN
-                ],
-                NAPISTU_GRAPH_EDGES.SC_PARENTS: self.es[NAPISTU_GRAPH_EDGES.SC_PARENTS],
-                NAPISTU_GRAPH_EDGES.SPECIES_TYPE: self.es[
-                    NAPISTU_GRAPH_EDGES.SPECIES_TYPE
-                ],
-            }
-        )
-
-        lookup_multiplier_dict = {
-            "protein": protein_multiplier,
-            "metabolite": metabolite_multiplier,
-            "unknown": unknown_multiplier,
-        }
-        weight_table["multiplier"] = weight_table["species_type"].map(
-            lookup_multiplier_dict
-        )
-
-        # calculate mean degree
-        # since topology weights will differ based on the structure of the network
-        # and it would be nice to have a consistent notion of edge weights and path weights
-        # for interpretability and filtering, we can rescale topology weights by the
-        # average degree of nodes
-        if scale_multiplier_by_meandegree:
-            mean_degree = len(self.es) / len(self.vs)
-            if not self.is_directed():
-                # for a directed network in- and out-degree are separately treated while
-                # an undirected network's degree will be the sum of these two measures.
-                mean_degree = mean_degree * 2
-
-            weight_table["multiplier"] = weight_table["multiplier"] / mean_degree
-
-        if self.is_directed():
-            weight_table["connection_weight"] = weight_table[
-                NAPISTU_GRAPH_EDGES.SC_CHILDREN
-            ]
-        else:
-            weight_table["connection_weight"] = weight_table[
-                NAPISTU_GRAPH_EDGES.SC_DEGREE
-            ]
-
-        # weight traveling through a species based on
-        # - a constant
-        # - how plausibly that species type mediates a change
-        # - the number of connections that the node can bridge to
-        weight_table["topo_weights"] = [
-            base_score + (x * y)
-            for x, y in zip(
-                weight_table["multiplier"], weight_table["connection_weight"]
-            )
-        ]
-        self.es["topo_weights"] = weight_table["topo_weights"]
-
-        # if directed and we want to use travel upstream define a corresponding weighting scheme
-        if self.is_directed():
-            weight_table["upstream_topo_weights"] = [
-                base_score + (x * y)
-                for x, y in zip(weight_table["multiplier"], weight_table["sc_parents"])
-            ]
-            self.es["upstream_topo_weights"] = weight_table["upstream_topo_weights"]
-
-        return self
-
-    def add_degree_attributes(self) -> "NapistuGraph":
+    def add_degree_attributes(self, inplace: bool = True) -> Optional["NapistuGraph"]:
         """
         Calculate and add degree-based attributes (parents, children, degree) to the graph.
 
@@ -557,13 +189,25 @@ class NapistuGraph(ig.Graph):
         and stores these as edge attributes to support topology weighting. The attributes are
         calculated from the current graph's edge data.
 
+        Parameters
+        ----------
+        inplace : bool, default=True
+            Whether to modify the graph in place. If False, returns a copy with degree attributes.
+
         Returns
         -------
-        NapistuGraph
-            Self with degree attributes added to edges.
+        Optional[NapistuGraph]
+            If inplace=True, returns None.
+            If inplace=False, returns a new NapistuGraph with degree attributes added to edges.
         """
+        # If not inplace, make a copy
+        if not inplace:
+            graph = self.copy()
+        else:
+            graph = self
+
         # Check if degree attributes already exist
-        existing_attrs = set(self.es.attributes())
+        existing_attrs = set(graph.es.attributes())
         degree_attrs = {
             NAPISTU_GRAPH_EDGES.SC_DEGREE,
             NAPISTU_GRAPH_EDGES.SC_CHILDREN,
@@ -581,10 +225,10 @@ class NapistuGraph(ig.Graph):
             )
         elif degree_attrs.issubset(existing_attrs):
             logger.warning("Degree attributes already exist. Skipping calculation.")
-            return self
+            return None if inplace else graph
 
         # Get current edge data
-        edges_df = self.get_edge_dataframe()
+        edges_df = graph.get_edge_dataframe()
 
         # Calculate undirected and directed degrees (i.e., # of parents and children)
         # based on the network's edgelist
@@ -658,17 +302,386 @@ class NapistuGraph(ig.Graph):
         ).fillna(int(0))
 
         # Add degree attributes to edges
-        self.es[NAPISTU_GRAPH_EDGES.SC_DEGREE] = edge_degree_data[
+        graph.es[NAPISTU_GRAPH_EDGES.SC_DEGREE] = edge_degree_data[
             NAPISTU_GRAPH_EDGES.SC_DEGREE
         ].values
-        self.es[NAPISTU_GRAPH_EDGES.SC_CHILDREN] = edge_degree_data[
+        graph.es[NAPISTU_GRAPH_EDGES.SC_CHILDREN] = edge_degree_data[
             NAPISTU_GRAPH_EDGES.SC_CHILDREN
         ].values
-        self.es[NAPISTU_GRAPH_EDGES.SC_PARENTS] = edge_degree_data[
+        graph.es[NAPISTU_GRAPH_EDGES.SC_PARENTS] = edge_degree_data[
             NAPISTU_GRAPH_EDGES.SC_PARENTS
         ].values
 
-        return self
+        return None if inplace else graph
+
+    def add_edge_data(
+        self,
+        sbml_dfs: SBML_dfs,
+        mode: str = "fresh",
+        overwrite: bool = False,
+        inplace: bool = True,
+    ) -> Optional["NapistuGraph"]:
+        """
+        Extract and add reaction attributes to the graph edges.
+
+        Parameters
+        ----------
+        sbml_dfs : SBML_dfs
+            The SBML_dfs object containing reaction data
+        mode : str
+            Either "fresh" (replace existing) or "extend" (add new attributes only)
+        overwrite : bool
+            Whether to allow overwriting existing edge attributes when conflicts arise
+        inplace : bool, default=True
+            Whether to modify the graph in place. If False, returns a copy with edge data.
+
+        Returns
+        -------
+        Optional[NapistuGraph]
+            If inplace=True, returns None.
+            If inplace=False, returns a new NapistuGraph with edge data added.
+        """
+        # If not inplace, make a copy
+        if not inplace:
+            graph = self.copy()
+        else:
+            graph = self
+
+        # Get reaction_attrs from stored metadata
+        reaction_attrs = graph._get_entity_attrs("reactions")
+        if reaction_attrs is None or not reaction_attrs:
+            logger.warning(
+                "No reaction_attrs found. Use set_graph_attrs() to configure reaction attributes before extracting edge data."
+            )
+            return None if inplace else graph
+
+        # Check for conflicts with existing edge attributes
+        existing_edge_attrs = set(graph.es.attributes())
+        new_attrs = set(reaction_attrs.keys())
+
+        if mode == "fresh":
+            overlapping_attrs = existing_edge_attrs & new_attrs
+            if overlapping_attrs and not overwrite:
+                raise ValueError(
+                    f"Edge attributes already exist: {overlapping_attrs}. "
+                    f"Use overwrite=True to replace or mode='extend' to add only new attributes"
+                )
+            attrs_to_add = new_attrs
+
+        elif mode == "extend":
+            overlapping_attrs = existing_edge_attrs & new_attrs
+            if overlapping_attrs and not overwrite:
+                raise ValueError(
+                    f"Overlapping edge attributes found: {overlapping_attrs}. "
+                    f"Use overwrite=True to allow replacement"
+                )
+            # In extend mode, only add attributes that don't exist (unless overwrite=True)
+            if overwrite:
+                attrs_to_add = new_attrs
+            else:
+                attrs_to_add = new_attrs - existing_edge_attrs
+
+        else:
+            raise ValueError(f"Unknown mode: {mode}. Must be 'fresh' or 'extend'")
+
+        if not attrs_to_add:
+            logger.info("No new attributes to add")
+            return None if inplace else graph
+
+        # Only extract the attributes we're actually going to add
+        attrs_to_extract = {attr: reaction_attrs[attr] for attr in attrs_to_add}
+
+        # Get reaction data using existing function - only for attributes we need
+        reaction_data = ng_utils.pluck_entity_data(
+            sbml_dfs, attrs_to_extract, SBML_DFS.REACTIONS, transform=False
+        )
+
+        if reaction_data is None:
+            logger.warning(
+                "No reaction data could be extracted with the stored reaction_attrs"
+            )
+            return None if inplace else graph
+
+        # Get current edges and merge with reaction data
+        edges_df = graph.get_edge_dataframe()
+
+        # Remove overlapping attributes from edges_df if overwrite=True to avoid _x/_y suffixes
+        if overwrite:
+            overlapping_in_edges = [
+                attr for attr in attrs_to_add if attr in edges_df.columns
+            ]
+            if overlapping_in_edges:
+                edges_df = edges_df.drop(columns=overlapping_in_edges)
+
+        edges_with_attrs = edges_df.merge(
+            reaction_data, left_on=SBML_DFS.R_ID, right_index=True, how="left"
+        )
+
+        # Add new attributes directly to the graph
+        added_count = 0
+        for attr_name in attrs_to_add:
+            if attr_name in reaction_data.columns:
+                graph.es[attr_name] = edges_with_attrs[attr_name].values
+                added_count += 1
+
+        logger.info(
+            f"Added {added_count} edge attributes to graph: {list(attrs_to_add)}"
+        )
+
+        return None if inplace else graph
+
+    def add_sbml_dfs_summaries(
+        self,
+        sbml_dfs: SBML_dfs,
+        summary_types=VALID_VERTEX_SBML_DFS_SUMMARIES,
+        priority_pathways=None,
+        stratify_by_bqb=True,
+        characteristic_only=False,
+        dogmatic=False,
+        inplace: bool = True,
+    ) -> Optional["NapistuGraph"]:
+        """
+        Add vertex summaries from SBML_dfs to the graph vertices.
+
+        This method calls get_sbml_dfs_vertex_summaries and merges the results
+        with the graph's vertices by name.
+
+        Parameters
+        ----------
+        sbml_dfs : SBML_dfs
+            The SBML_dfs object to extract vertex summaries from
+        summary_types : list, optional
+            Types of summaries to include. Defaults to all valid summary types.
+        priority_pathways : list, optional
+            Priority pathways for source occurrence calculations
+        stratify_by_bqb : bool, optional
+            Whether to stratify by BioQualifiers. Default is True.
+        characteristic_only : bool, optional
+            Whether to include only characteristic identifiers. Default is False.
+        dogmatic : bool, optional
+            Whether to use dogmatic mode. Default is False.
+        inplace : bool, default=True
+            Whether to modify the graph in place. If False, returns a copy with summary attributes.
+
+        Returns
+        -------
+        Optional[NapistuGraph]
+            If inplace=True, returns None.
+            If inplace=False, returns a new NapistuGraph with summary attributes added to vertices.
+        """
+        # If not inplace, make a copy
+        if not inplace:
+            graph = self.copy()
+        else:
+            graph = self
+
+        # Get vertex summaries from SBML_dfs
+        summaries_df = ng_utils.get_sbml_dfs_vertex_summaries(
+            sbml_dfs,
+            summary_types=summary_types,
+            priority_pathways=priority_pathways,
+            stratify_by_bqb=stratify_by_bqb,
+            characteristic_only=characteristic_only,
+            dogmatic=dogmatic,
+        )
+
+        # Check if any of the summary columns already exist as vertex attributes
+        existing_attrs = set(graph.vs.attributes())
+        summary_columns = set(summaries_df.columns)
+        overlapping_attrs = summary_columns.intersection(existing_attrs)
+
+        if overlapping_attrs:
+            logger.warning(
+                f"The following summary attributes already exist on the graph and will be skipped: {overlapping_attrs}. "
+                f"Use a different graph or remove existing attributes before adding summaries."
+            )
+            # Remove overlapping columns from summaries_df
+            summaries_df = summaries_df.drop(columns=list(overlapping_attrs))
+
+            # If no columns remain, return early
+            if summaries_df.empty:
+                logger.info(
+                    "All summary attributes already exist on the graph. No new attributes added."
+                )
+                return None if inplace else graph
+
+        # Get current vertex dataframe
+        vertex_df = graph.get_vertex_dataframe()
+
+        # Merge summaries with vertices by name
+        merged_df = vertex_df.merge(
+            summaries_df,
+            left_on=NAPISTU_GRAPH_VERTICES.NAME,
+            right_index=True,
+            how="left",
+        )
+
+        # Fill NaN values with 0 for the summary columns
+        summary_columns = summaries_df.columns
+        merged_df[summary_columns] = merged_df[summary_columns].fillna(int(0))
+
+        # Update vertex attributes with the merged data
+        for col in summary_columns:
+            graph.vs[col] = merged_df[col].tolist()
+
+        logger.info(
+            f"Added {len(summary_columns)} summary attributes to graph: {list(summary_columns)}"
+        )
+
+        return None if inplace else graph
+
+    def add_topology_weights(
+        self,
+        base_score: float = 2,
+        protein_multiplier: int = 1,
+        metabolite_multiplier: int = 3,
+        unknown_multiplier: int = 10,
+        scale_multiplier_by_meandegree: bool = True,
+        inplace: bool = True,
+    ) -> Optional["NapistuGraph"]:
+        """
+        Create Topology Weights for a network based on its topology.
+
+        Edges downstream of nodes with many connections receive a higher weight suggesting that any one
+        of them is less likely to be regulatory. This is a simple and clearly flawed heuristic which can be
+        combined with more principled weighting schemes.
+
+        Parameters
+        ----------
+        base_score : float, optional
+            Offset which will be added to all weights. Default is 2.
+        protein_multiplier : int, optional
+            Multiplier for non-metabolite species. Default is 1.
+        metabolite_multiplier : int, optional
+            Multiplier for metabolites. Default is 3.
+        unknown_multiplier : int, optional
+            Multiplier for species without any identifier. Default is 10.
+        scale_multiplier_by_meandegree : bool, optional
+            If True, multipliers will be rescaled by the average number of connections a node has. Default is True.
+        inplace : bool, default=True
+            Whether to modify the graph in place. If False, returns a copy with topology weights.
+
+        Returns
+        -------
+        Optional[NapistuGraph]
+            If inplace=True, returns None.
+            If inplace=False, returns a new NapistuGraph with topology weights added.
+
+        Raises
+        ------
+        ValueError
+            If required attributes are missing or if parameters are invalid.
+        """
+
+        # If not inplace, make a copy
+        if not inplace:
+            graph = self.copy()
+        else:
+            graph = self
+
+        # Check for required attributes and add degree attributes if missing
+        degree_attrs = {
+            NAPISTU_GRAPH_EDGES.SC_DEGREE,
+            NAPISTU_GRAPH_EDGES.SC_CHILDREN,
+            NAPISTU_GRAPH_EDGES.SC_PARENTS,
+        }
+
+        missing_degree_attrs = degree_attrs.difference(set(graph.es.attributes()))
+        if missing_degree_attrs:
+            logger.info(f"Adding missing degree attributes: {missing_degree_attrs}")
+            graph.add_degree_attributes()
+
+        # Check for species_type attribute
+        if NAPISTU_GRAPH_EDGES.SPECIES_TYPE not in graph.es.attributes():
+            raise ValueError(
+                f"Missing required attribute: {NAPISTU_GRAPH_EDGES.SPECIES_TYPE}. "
+                "Species type information is required for topology weighting."
+            )
+
+        if base_score < 0:
+            raise ValueError(f"base_score was {base_score} and must be non-negative")
+        if protein_multiplier > unknown_multiplier:
+            raise ValueError(
+                f"protein_multiplier was {protein_multiplier} and unknown_multiplier "
+                f"was {unknown_multiplier}. unknown_multiplier must be greater than "
+                "protein_multiplier"
+            )
+        if metabolite_multiplier > unknown_multiplier:
+            raise ValueError(
+                f"protein_multiplier was {metabolite_multiplier} and unknown_multiplier "
+                f"was {unknown_multiplier}. unknown_multiplier must be greater than "
+                "protein_multiplier"
+            )
+
+        # create a new weight variable
+        weight_table = pd.DataFrame(
+            {
+                NAPISTU_GRAPH_EDGES.SC_DEGREE: graph.es[NAPISTU_GRAPH_EDGES.SC_DEGREE],
+                NAPISTU_GRAPH_EDGES.SC_CHILDREN: graph.es[
+                    NAPISTU_GRAPH_EDGES.SC_CHILDREN
+                ],
+                NAPISTU_GRAPH_EDGES.SC_PARENTS: graph.es[
+                    NAPISTU_GRAPH_EDGES.SC_PARENTS
+                ],
+                NAPISTU_GRAPH_EDGES.SPECIES_TYPE: graph.es[
+                    NAPISTU_GRAPH_EDGES.SPECIES_TYPE
+                ],
+            }
+        )
+
+        lookup_multiplier_dict = {
+            "protein": protein_multiplier,
+            "metabolite": metabolite_multiplier,
+            "unknown": unknown_multiplier,
+        }
+        weight_table["multiplier"] = weight_table["species_type"].map(
+            lookup_multiplier_dict
+        )
+
+        # calculate mean degree
+        # since topology weights will differ based on the structure of the network
+        # and it would be nice to have a consistent notion of edge weights and path weights
+        # for interpretability and filtering, we can rescale topology weights by the
+        # average degree of nodes
+        if scale_multiplier_by_meandegree:
+            mean_degree = len(self.es) / len(self.vs)
+            if not self.is_directed():
+                # for a directed network in- and out-degree are separately treated while
+                # an undirected network's degree will be the sum of these two measures.
+                mean_degree = mean_degree * 2
+
+            weight_table["multiplier"] = weight_table["multiplier"] / mean_degree
+
+        if self.is_directed():
+            weight_table["connection_weight"] = weight_table[
+                NAPISTU_GRAPH_EDGES.SC_CHILDREN
+            ]
+        else:
+            weight_table["connection_weight"] = weight_table[
+                NAPISTU_GRAPH_EDGES.SC_DEGREE
+            ]
+
+        # weight traveling through a species based on
+        # - a constant
+        # - how plausibly that species type mediates a change
+        # - the number of connections that the node can bridge to
+        weight_table["topo_weights"] = [
+            base_score + (x * y)
+            for x, y in zip(
+                weight_table["multiplier"], weight_table["connection_weight"]
+            )
+        ]
+        graph.es["topo_weights"] = weight_table["topo_weights"]
+
+        # if directed and we want to use travel upstream define a corresponding weighting scheme
+        if graph.is_directed():
+            weight_table["upstream_topo_weights"] = [
+                base_score + (x * y)
+                for x, y in zip(weight_table["multiplier"], weight_table["sc_parents"])
+            ]
+            graph.es["upstream_topo_weights"] = weight_table["upstream_topo_weights"]
+
+        return None if inplace else graph
 
     def copy(self) -> "NapistuGraph":
         """
@@ -687,6 +700,47 @@ class NapistuGraph(ig.Graph):
         napistu_copy._metadata = copy.deepcopy(self._metadata)
 
         return napistu_copy
+
+    @classmethod
+    def from_igraph(cls, graph: ig.Graph, **metadata) -> "NapistuGraph":
+        """
+        Create a NapistuGraph from an existing igraph.Graph.
+
+        Parameters
+        ----------
+        graph : ig.Graph
+            The igraph to convert
+        **metadata : dict
+            Additional metadata to store with the graph
+
+        Returns
+        -------
+        NapistuGraph
+            A new NapistuGraph instance
+        """
+        # Create new instance with same structure
+        new_graph = cls(
+            n=graph.vcount(),
+            edges=[(e.source, e.target) for e in graph.es],
+            directed=graph.is_directed(),
+        )
+
+        # Copy all vertex attributes
+        for attr in graph.vs.attributes():
+            new_graph.vs[attr] = graph.vs[attr]
+
+        # Copy all edge attributes
+        for attr in graph.es.attributes():
+            new_graph.es[attr] = graph.es[attr]
+
+        # Copy graph attributes
+        for attr in graph.attributes():
+            new_graph[attr] = graph[attr]
+
+        # Set metadata
+        new_graph._metadata.update(metadata)
+
+        return new_graph
 
     @classmethod
     def from_pickle(cls, path: str) -> "NapistuGraph":
@@ -926,6 +980,96 @@ class NapistuGraph(ig.Graph):
             Metadata key-value pairs to set
         """
         self._metadata.update(kwargs)
+
+        return None
+
+    def set_weights(
+        self,
+        weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
+        weight_by: list[str] | None = None,
+        reaction_edge_multiplier: float = 0.5,
+    ) -> None:
+        """
+        Set Graph Weights for this NapistuGraph using a specified weighting strategy.
+
+        Modifies the graph in-place. Now includes functionality to downweight edges
+        connected to reaction vertices to account for increased path lengths through
+        reaction intermediates (e.g., S → R → P vs direct S → P).
+
+        Parameters:
+            weight_by (list[str], optional): A list of edge attributes to weight by.
+                How these are used depends on the weighting strategy.
+            weighting_strategy (str, optional): A network weighting strategy. Options:
+                'unweighted': all weights (and upstream_weight for directed graphs) are set to 1.
+                'topology': weight edges by the degree of the source nodes favoring nodes
+                    emerging from nodes with few connections.
+                'mixed': transform edges with a quantitative score based on reaction_attrs;
+                    and set edges without quantitative score as a source-specific weight.
+            reaction_edge_multiplier (float, optional): Factor to multiply weights of edges
+                connected to reaction vertices. Default 0.5 reduces reaction edge weights
+                by 50% to normalize path lengths. Set to 1.0 to disable this feature.
+
+        Raises:
+            ValueError: If weighting_strategy is not valid.
+
+        Notes:
+            The reaction_edge_multiplier addresses the issue where SBML-derived networks
+            have paths like S → R → P (length 2) compared to direct protein interactions
+            S → P (length 1). A multiplier of 0.5 makes these path costs equivalent.
+        """
+
+        is_weights_provided = not ((weight_by is None) or (weight_by == []))
+
+        # Apply base weighting strategy first
+        if weighting_strategy not in VALID_WEIGHTING_STRATEGIES:
+            raise ValueError(
+                f"weighting_strategy was {weighting_strategy} and must be one of: "
+                f"{', '.join(VALID_WEIGHTING_STRATEGIES)}"
+            )
+
+        if weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.TOPOLOGY:
+            if is_weights_provided:
+                logger.warning(
+                    "weight_by is not used for topology weighting. "
+                    "It will be ignored."
+                )
+
+            self.add_topology_weights()
+
+            # count parents and children and create weights based on them
+            self.es[NAPISTU_GRAPH_EDGES.WEIGHT] = self.es["topo_weights"]
+            if self.is_directed():
+                self.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = self.es[
+                    "upstream_topo_weights"
+                ]
+
+        elif weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED:
+
+            if is_weights_provided:
+                logger.warning(
+                    "weight_by is not used for unweighted weighting. "
+                    "It will be ignored."
+                )
+
+            # set weights as a constant
+            self.es[NAPISTU_GRAPH_EDGES.WEIGHT] = 1
+            if self.is_directed():
+                self.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = 1
+
+        elif weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.MIXED:
+            self._add_graph_weights_mixed(weight_by)
+
+        else:
+            raise NotImplementedError(
+                f"No logic implemented for {weighting_strategy}. This error should not happen."
+            )
+
+        # Apply reaction edge multiplier if not 1.0
+        if reaction_edge_multiplier != 1.0:
+            self._apply_reaction_edge_multiplier(reaction_edge_multiplier)
+
+        # Update metadata to track weighting configuration
+        self.set_metadata(weighting_strategy=weighting_strategy, weight_by=weight_by)
 
         return None
 

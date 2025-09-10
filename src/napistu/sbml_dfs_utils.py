@@ -133,12 +133,12 @@ def add_missing_ids_column(
         other_column = other_column_name
 
     # Add the 'other' column
-    result_table[other_column] = 0
+    result_table[other_column] = int(0)
 
     # Add missing IDs as new rows
     for missing_id in missing_ids:
         new_row = pd.Series(0, index=result_table.columns, name=missing_id)
-        new_row[other_column] = 1
+        new_row[other_column] = int(1)
         result_table = pd.concat([result_table, new_row.to_frame().T])
 
     # Sort the index to maintain order
@@ -661,12 +661,17 @@ def infer_entity_type(df: pd.DataFrame) -> str:
         expected_keys.update(fks)
 
         # Check for exact match
+        if len(df_columns) == 1 and set(df_columns) == {pk}:
+            # only a single key is present and its this entities pk
+            return entity_type
+
         if df_columns == expected_keys:
+            # all primary and foreign keys are present
             return entity_type
 
     # No match found
     raise ValueError(
-        f"No entity type matches DataFrame with columns: {sorted(df_columns)}"
+        f"No entity type matches DataFrame with index: {df.index.names} and columns: {sorted(df_columns)}"
     )
 
 
@@ -1690,35 +1695,41 @@ def _sbml_dfs_from_edgelist_check_cspecies_merge(
 
 def _select_priority_pathway_sources(
     source_table: pd.DataFrame,
-    priority_pathways: list[str] = DEFAULT_PRIORITIZED_PATHWAYS,
+    priority_pathways: Optional[list[str]] = DEFAULT_PRIORITIZED_PATHWAYS,
 ) -> pd.DataFrame:
     """
     Filter the source table to only include pathways in the list. If 0 or 1 priority pathways are found, return the source table.
 
     Parameters
     ----------
-    source_table (pd.DataFrame)
+    source_table : pd.DataFrame
         The source table to filter
-    priority_pathways (list[str])
-        The list of pathways to filter to
+    priority_pathways : Optional[list[str]], default DEFAULT_PRIORITIZED_PATHWAYS
+        The list of pathways to filter to. If None, returns source_table with no filtering or warning.
+        If fewer than 2 pathways are found in the source table, returns the full source table with a warning.
 
     Returns
     -------
     pd.DataFrame
-        The filtered source table
+        The filtered source table. If priority_pathways is None, returns the original source_table.
+        If fewer than 2 priority pathways are found, returns the full source_table with a warning.
     """
+
+    # If priority_pathways is explicitly None, return source_table without warning
+    if priority_pathways is None:
+        return source_table
 
     # filter to pathways of interest
     priority_source_table = _filter_to_pathways(source_table, priority_pathways)
     n_priority_pathways = priority_source_table[SOURCE_SPEC.PATHWAY_ID].nunique()
 
     if n_priority_pathways > 1:
-        filtered_sources = priority_source_table
+        return priority_source_table
     else:
-        logger.debug("1 or fewer priority pathways found, using all pathways")
-        filtered_sources = source_table
-
-    return filtered_sources
+        logger.warning(
+            "<2 priority pathways found, using all pathways. Set priority_pathways as None explicitly to remove this warning."
+        )
+        return source_table
 
 
 def _summarize_ontology_cooccurrence(
