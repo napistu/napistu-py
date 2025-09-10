@@ -159,6 +159,7 @@ class SBML_dfs:
     _attempt_resolve(e)
     _edgelist_assemble_sbml_model(compartments, species, comp_species, reactions, reaction_species, species_data, reactions_data, keep_species_data, keep_reactions_data, extra_columns)
     _find_underspecified_reactions_by_scids(sc_ids)
+    _get_entity_data(entity_type, label)
     _get_identifiers_table_for_ontology_occurrence(entity_type, characteristic_only=False, dogmatic=True)
     _get_unused_cspecies()
     _get_unused_species()
@@ -167,6 +168,7 @@ class SBML_dfs:
     _remove_species(s_ids)
     _remove_unused_cspecies()
     _remove_unused_species()
+    _validate_entity_data_access(entity_type, label)
     _validate_identifiers()
     _validate_pk_fk_correspondence()
     _validate_r_ids(r_ids)
@@ -2211,13 +2213,30 @@ class SBML_dfs:
         )
         return underspecified_reactions
 
-    def _get_unused_cspecies(self) -> set[str]:
-        """Returns a set of compartmentalized species
-        that are not part of any reactions"""
-        sc_ids = set(self.compartmentalized_species.index) - set(
-            self.reaction_species[SBML_DFS.SC_ID]
-        )
-        return sc_ids  # type: ignore
+    def _get_entity_data(self, entity_type: str, label: str) -> Optional[pd.DataFrame]:
+        """
+        Get data from species_data or reactions_data by table name and label.
+
+        Parameters
+        ----------
+        entity_type : str
+            Name of the table to get data from ('species' or 'reactions')
+        label : str
+            Label of the data to retrieve
+
+        Returns
+        -------
+        Optional[pd.DataFrame]
+            The requested data as a DataFrame, or None if the label doesn't exist
+
+        Notes
+        -----
+        If the label does not exist, a warning will be logged that includes the existing labels.
+        """
+        data_dict = self._validate_entity_data_access(entity_type, label)
+        if data_dict is not None:
+            return data_dict[label]
+        return None
 
     def _get_identifiers_table_for_ontology_occurrence(
         self, entity_type: str, characteristic_only: bool = False, dogmatic: bool = True
@@ -2266,6 +2285,14 @@ class SBML_dfs:
 
         return identifiers_table
 
+    def _get_unused_cspecies(self) -> set[str]:
+        """Returns a set of compartmentalized species
+        that are not part of any reactions"""
+        sc_ids = set(self.compartmentalized_species.index) - set(
+            self.reaction_species[SBML_DFS.SC_ID]
+        )
+        return sc_ids  # type: ignore
+
     def _get_unused_species(self) -> set[str]:
         """Returns a list of species that are not part of any reactions"""
         s_ids = set(self.species.index) - set(
@@ -2305,19 +2332,9 @@ class SBML_dfs:
         -----
         If the label does not exist, a warning will be logged that includes the existing labels.
         """
-        if entity_type not in ENTITIES_W_DATA:
-            raise ValueError("table_name must be either 'species' or 'reactions'")
-
-        data_dict = getattr(self, ENTITIES_TO_ENTITY_DATA[entity_type])
-        if label not in data_dict:
-            existing_labels = list(data_dict.keys())
-            logger.warning(
-                f"Label '{label}' not found in {ENTITIES_TO_ENTITY_DATA[entity_type]}. "
-                f"Existing labels: {existing_labels}"
-            )
-            return
-
-        del data_dict[label]
+        data_dict = self._validate_entity_data_access(entity_type, label)
+        if data_dict is not None:
+            del data_dict[label]
 
     def _remove_species(self, s_ids: Iterable[str]):
         """Removes species from the model
@@ -2351,6 +2368,47 @@ class SBML_dfs:
         compartmentalized species"""
         s_ids = self._get_unused_species()
         self._remove_species(s_ids)
+
+    def _validate_entity_data_access(
+        self, entity_type: str, label: str
+    ) -> Optional[MutableMapping[str, pd.DataFrame]]:
+        """
+        Validate entity type and label, and return the data dictionary if valid.
+
+        Parameters
+        ----------
+        entity_type : str
+            Name of the table to access ('species' or 'reactions')
+        label : str
+            Label of the data to access
+
+        Returns
+        -------
+        Optional[MutableMapping[str, pd.DataFrame]]
+            The data dictionary if entity_type and label are valid, None if label doesn't exist
+
+        Raises
+        ------
+        ValueError
+            If entity_type is not 'species' or 'reactions'
+
+        Notes
+        -----
+        If the label does not exist, a warning will be logged that includes the existing labels.
+        """
+        if entity_type not in ENTITIES_W_DATA:
+            raise ValueError("entity_type must be either 'species' or 'reactions'")
+
+        data_dict = getattr(self, ENTITIES_TO_ENTITY_DATA[entity_type])
+        if label not in data_dict:
+            existing_labels = list(data_dict.keys())
+            logger.warning(
+                f"Label '{label}' not found in {ENTITIES_TO_ENTITY_DATA[entity_type]}. "
+                f"Existing labels: {existing_labels}"
+            )
+            return None
+
+        return data_dict
 
     def _validate_identifiers(self):
         """
