@@ -269,21 +269,6 @@ def test_graph_attrs_extend_and_overwrite_protection(test_graph):
     reaction_attrs = test_graph.get_metadata("reaction_attrs")
     assert "attr1" in reaction_attrs and "attr2" in reaction_attrs
 
-    # Extend with overlap should fail
-    with pytest.raises(ValueError, match="Overlapping keys found"):
-        test_graph.set_graph_attrs(
-            {
-                "reactions": {
-                    "attr1": {
-                        "table": "conflict",
-                        "variable": "val",
-                        "trans": "identity",
-                    }
-                }
-            },
-            mode="extend",
-        )
-
 
 def test_add_edge_data_basic_functionality(test_graph, minimal_valid_sbml_dfs):
     """Test basic add_edge_data functionality with mock reaction data."""
@@ -396,6 +381,76 @@ def test_add_edge_data_mode_and_overwrite(test_graph, minimal_valid_sbml_dfs):
     )
     test_graph.add_edge_data(minimal_valid_sbml_dfs, mode="extend")
     assert "attr2" in test_graph.es.attributes()
+
+
+def test_add_edge_data_extend_mode_overlapping_attrs_bug(
+    test_graph, minimal_valid_sbml_dfs
+):
+    """Test that extend mode should NOT error when there are overlapping attributes.
+
+    This test demonstrates the bug where extend mode incorrectly raises a ValueError
+    when there are overlapping attributes, when it should simply add only new attributes.
+    """
+    # Update the test graph to have the correct r_ids that match the SBML data
+    test_graph.es["r_id"] = [
+        "R00001",
+        "R00001",
+    ]  # Both edges should map to the same reaction
+
+    # Create mock data with overlapping attributes
+    minimal_valid_sbml_dfs.reactions_data["table1"] = pd.DataFrame(
+        {"attr1": [10], "attr2": [20]}, index=["R00001"]
+    )
+    minimal_valid_sbml_dfs.reactions_data["table2"] = pd.DataFrame(
+        {"attr1": [30], "attr3": [50]}, index=["R00001"]  # attr1 overlaps, attr3 is new
+    )
+
+    # First, add attr1 and attr2 to the graph
+    test_graph.set_graph_attrs(
+        {
+            "reactions": {
+                "attr1": {"table": "table1", "variable": "attr1", "trans": "identity"},
+                "attr2": {"table": "table1", "variable": "attr2", "trans": "identity"},
+            }
+        }
+    )
+    test_graph.add_edge_data(minimal_valid_sbml_dfs)
+
+    # Verify initial attributes exist
+    assert "attr1" in test_graph.es.attributes()
+    assert "attr2" in test_graph.es.attributes()
+    initial_attr1_values = test_graph.es["attr1"]
+    initial_attr2_values = test_graph.es["attr2"]
+
+    # Now try to extend with overlapping attributes (attr1) and new attribute (attr3)
+    # This should NOT raise an error in extend mode - it should only add attr3
+    test_graph.set_graph_attrs(
+        {
+            "reactions": {
+                "attr1": {"table": "table2", "variable": "attr1", "trans": "identity"},
+                "attr3": {"table": "table2", "variable": "attr3", "trans": "identity"},
+            }
+        },
+        mode="extend",
+    )
+
+    # This should now work correctly in extend mode - only add new attributes
+    test_graph.add_edge_data(minimal_valid_sbml_dfs, mode="extend")
+
+    # Verify that only attr3 was added, and existing attributes remain unchanged
+    assert "attr3" in test_graph.es.attributes()
+    assert test_graph.es["attr1"] == initial_attr1_values  # Should be unchanged
+    assert test_graph.es["attr2"] == initial_attr2_values  # Should be unchanged
+
+    # Test extend mode with overwrite=True - currently ignored in extend mode
+    # The current implementation ignores overwrite in extend mode and only adds new attributes
+    test_graph.add_edge_data(minimal_valid_sbml_dfs, mode="extend", overwrite=True)
+    # attr1 should remain unchanged since it already exists (overwrite is ignored in extend mode)
+    assert test_graph.es["attr1"] == initial_attr1_values
+    # attr2 should remain unchanged since it's not in the new data
+    assert test_graph.es["attr2"] == initial_attr2_values
+    # attr3 should still be there
+    assert "attr3" in test_graph.es.attributes()
 
 
 def test_transform_edges_basic_functionality(test_graph, minimal_valid_sbml_dfs):

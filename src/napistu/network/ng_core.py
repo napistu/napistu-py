@@ -331,7 +331,7 @@ class NapistuGraph(ig.Graph):
         mode : str
             Either "fresh" (replace existing) or "extend" (add new attributes only)
         overwrite : bool
-            Whether to allow overwriting existing edge attributes when conflicts arise
+            Whether to allow overwriting existing edge attributes when conflicts arise. Ignored if mode is "extend".
         inplace : bool, default=True
             Whether to modify the graph in place. If False, returns a copy with edge data.
 
@@ -369,17 +369,8 @@ class NapistuGraph(ig.Graph):
             attrs_to_add = new_attrs
 
         elif mode == "extend":
-            overlapping_attrs = existing_edge_attrs & new_attrs
-            if overlapping_attrs and not overwrite:
-                raise ValueError(
-                    f"Overlapping edge attributes found: {overlapping_attrs}. "
-                    f"Use overwrite=True to allow replacement"
-                )
             # In extend mode, only add attributes that don't exist (unless overwrite=True)
-            if overwrite:
-                attrs_to_add = new_attrs
-            else:
-                attrs_to_add = new_attrs - existing_edge_attrs
+            attrs_to_add = new_attrs - existing_edge_attrs
 
         else:
             raise ValueError(f"Unknown mode: {mode}. Must be 'fresh' or 'extend'")
@@ -1397,7 +1388,7 @@ class NapistuGraph(ig.Graph):
         mode : str
             Either "fresh" (replace) or "extend" (add new keys)
         overwrite : bool
-            Whether to allow overwriting existing data
+            Whether to allow overwriting existing data (ignored if mode is "extend")
 
         Returns
         -------
@@ -1415,13 +1406,6 @@ class NapistuGraph(ig.Graph):
             return new_attrs.copy()
 
         elif mode == "extend":
-            overlapping_keys = set(existing_attrs.keys()) & set(new_attrs.keys())
-            if overlapping_keys and not overwrite:
-                raise ValueError(
-                    f"Overlapping keys found in {attr_type}: {overlapping_keys}. "
-                    f"Use overwrite=True to allow key replacement"
-                )
-
             # Merge dictionaries
             merged_attrs = existing_attrs.copy()
             merged_attrs.update(new_attrs)
