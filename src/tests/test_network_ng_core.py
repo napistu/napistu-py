@@ -598,11 +598,10 @@ def test_add_degree_attributes(test_graph):
     assert edge_d_to_r[NAPISTU_GRAPH_EDGES.SC_PARENTS] == 1
 
     # Test method chaining
-    result = napistu_graph.add_degree_attributes()
-    assert result is napistu_graph
+    result = napistu_graph.add_degree_attributes(inplace=False)
 
     # Test that calling again doesn't change values (idempotent)
-    edges_df_after = napistu_graph.get_edge_dataframe()
+    edges_df_after = result.get_edge_dataframe()
     pd.testing.assert_frame_equal(edges_df, edges_df_after)
 
 
@@ -1039,3 +1038,39 @@ def test_reaction_edge_weighting():
     # All edges should have weight 1.0
     assert all(edges_df[NAPISTU_GRAPH_EDGES.WEIGHT] == 1.0)
     assert all(edges_df[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] == 1.0)
+
+
+def test_add_sbml_dfs_summaries(napistu_graph_metabolism, sbml_dfs_metabolism):
+    """Test that add_sbml_dfs_summaries adds vertex summary attributes correctly."""
+    from napistu.network import ng_utils
+
+    # Get the expected summary columns
+    expected_summaries = ng_utils.get_sbml_dfs_vertex_summaries(sbml_dfs_metabolism)
+
+    # Debug: check if we got a valid DataFrame
+    assert expected_summaries is not None, "get_sbml_dfs_vertex_summaries returned None"
+    assert isinstance(
+        expected_summaries, pd.DataFrame
+    ), f"Expected DataFrame, got {type(expected_summaries)}"
+    assert len(expected_summaries.columns) > 0, "Summary DataFrame has no columns"
+
+    expected_columns = set(expected_summaries.columns)
+
+    # Test inplace=True (default)
+    result = napistu_graph_metabolism.add_sbml_dfs_summaries(sbml_dfs_metabolism)
+    assert result is None
+
+    # Check that all expected columns were added as vertex attributes
+    vertex_attrs = set(napistu_graph_metabolism.vs.attributes())
+    assert expected_columns.issubset(vertex_attrs)
+
+    # Test inplace=False
+    new_graph = napistu_graph_metabolism.add_sbml_dfs_summaries(
+        sbml_dfs_metabolism, inplace=False
+    )
+    assert new_graph is not None
+    assert new_graph is not napistu_graph_metabolism
+
+    # Check that the new graph has the summary attributes
+    new_vertex_attrs = set(new_graph.vs.attributes())
+    assert expected_columns.issubset(new_vertex_attrs)
