@@ -461,19 +461,24 @@ def test_remove_entity_data_success(sbml_dfs_w_data):
     sbml_dfs_w_data.validate()
 
 
-def test_remove_entity_data_nonexistent(sbml_dfs_w_data, caplog):
-    """Test warning when trying to remove nonexistent entity data."""
+def test_remove_entity_data_nonexistent(sbml_dfs_w_data):
+    """Test ValueError when trying to remove nonexistent entity data."""
     # Try to remove nonexistent species data
-    sbml_dfs_w_data._remove_entity_data(SBML_DFS.SPECIES, "nonexistent_label")
-    assert "Label 'nonexistent_label' not found in species_data" in caplog.text
+    with pytest.raises(
+        ValueError, match="Label 'nonexistent_label' not found in species_data"
+    ):
+        sbml_dfs_w_data._remove_entity_data(SBML_DFS.SPECIES, "nonexistent_label")
+
+    # Verify the data is unchanged
     assert set(sbml_dfs_w_data.species_data.keys()) == {"test_species"}
 
-    # Clear the log
-    caplog.clear()
-
     # Try to remove nonexistent reactions data
-    sbml_dfs_w_data._remove_entity_data(SBML_DFS.REACTIONS, "nonexistent_label")
-    assert "Label 'nonexistent_label' not found in reactions_data" in caplog.text
+    with pytest.raises(
+        ValueError, match="Label 'nonexistent_label' not found in reactions_data"
+    ):
+        sbml_dfs_w_data._remove_entity_data(SBML_DFS.REACTIONS, "nonexistent_label")
+
+    # Verify the data is unchanged
     assert set(sbml_dfs_w_data.reactions_data.keys()) == {"test_reactions"}
 
     # Validate the model is still valid

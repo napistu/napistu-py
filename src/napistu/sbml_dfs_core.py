@@ -2213,7 +2213,7 @@ class SBML_dfs:
         )
         return underspecified_reactions
 
-    def _get_entity_data(self, entity_type: str, label: str) -> Optional[pd.DataFrame]:
+    def _get_entity_data(self, entity_type: str, label: str) -> pd.DataFrame:
         """
         Get data from species_data or reactions_data by table name and label.
 
@@ -2226,17 +2226,16 @@ class SBML_dfs:
 
         Returns
         -------
-        Optional[pd.DataFrame]
-            The requested data as a DataFrame, or None if the label doesn't exist
+        pd.DataFrame
+            The requested data as a DataFrame
 
-        Notes
-        -----
-        If the label does not exist, a warning will be logged that includes the existing labels.
+        Raises
+        ------
+        ValueError
+            If entity_type is not 'species' or 'reactions', or if label doesn't exist
         """
         data_dict = self._validate_entity_data_access(entity_type, label)
-        if data_dict is not None:
-            return data_dict[label]
-        return None
+        return data_dict[label]
 
     def _get_identifiers_table_for_ontology_occurrence(
         self, entity_type: str, characteristic_only: bool = False, dogmatic: bool = True
@@ -2307,8 +2306,10 @@ class SBML_dfs:
         invalid reactions when removing species without a logic to decide
         if the reaction needs to be removed as well.
 
-        Args:
-            sc_ids (Iterable[str]): the compartmentalized species to remove
+        Parameters
+        ----------
+        sc_ids : Iterable[str]
+            The compartmentalized species to remove
         """
         # Remove compartmentalized species
         self.compartmentalized_species = self.compartmentalized_species.drop(
@@ -2328,13 +2329,13 @@ class SBML_dfs:
         label : str
             Label of the data to remove
 
-        Notes
-        -----
-        If the label does not exist, a warning will be logged that includes the existing labels.
+        Raises
+        ------
+        ValueError
+            If entity_type is not 'species' or 'reactions', or if label doesn't exist
         """
         data_dict = self._validate_entity_data_access(entity_type, label)
-        if data_dict is not None:
-            del data_dict[label]
+        del data_dict[label]
 
     def _remove_species(self, s_ids: Iterable[str]):
         """Removes species from the model
@@ -2346,8 +2347,10 @@ class SBML_dfs:
         This removes the species and corresponding compartmentalized species and
         reactions_species.
 
-        Args:
-            s_ids (Iterable[str]): the species to remove
+        Parameters
+        ----------
+        s_ids : Iterable[str]
+            The species to remove
         """
         sc_ids = self.compartmentalized_species.query("s_id in @s_ids").index.tolist()
         self._remove_compartmentalized_species(sc_ids)
@@ -2384,17 +2387,13 @@ class SBML_dfs:
 
         Returns
         -------
-        Optional[MutableMapping[str, pd.DataFrame]]
-            The data dictionary if entity_type and label are valid, None if label doesn't exist
+        MutableMapping[str, pd.DataFrame]
+            The data dictionary if entity_type and label are valid
 
         Raises
         ------
         ValueError
-            If entity_type is not 'species' or 'reactions'
-
-        Notes
-        -----
-        If the label does not exist, a warning will be logged that includes the existing labels.
+            If entity_type is not 'species' or 'reactions', or if label doesn't exist
         """
         if entity_type not in ENTITIES_W_DATA:
             raise ValueError("entity_type must be either 'species' or 'reactions'")
@@ -2402,11 +2401,10 @@ class SBML_dfs:
         data_dict = getattr(self, ENTITIES_TO_ENTITY_DATA[entity_type])
         if label not in data_dict:
             existing_labels = list(data_dict.keys())
-            logger.warning(
+            raise ValueError(
                 f"Label '{label}' not found in {ENTITIES_TO_ENTITY_DATA[entity_type]}. "
                 f"Existing labels: {existing_labels}"
             )
-            return None
 
         return data_dict
 
@@ -2416,8 +2414,10 @@ class SBML_dfs:
 
         Iterates through all tables and checks if the identifier columns are valid.
 
-        Raises:
-            ValueError: missing identifiers in the table
+        Raises
+        ------
+        ValueError
+            missing identifiers in the table
         """
 
         SCHEMA = SBML_DFS_SCHEMA.SCHEMA
@@ -2536,13 +2536,17 @@ class SBML_dfs:
     def _validate_reactions_data(self, reactions_data_table: pd.DataFrame):
         """Validates reactions data attribute
 
-        Args:
-            reactions_data_table (pd.DataFrame): a reactions data table
+        Parameters
+        ----------
+        reactions_data_table : pd.DataFrame
+            a reactions data table
 
-        Raises:
-            ValueError: r_id not index name
-            ValueError: r_id index contains duplicates
-            ValueError: r_id not in reactions table
+        Raises
+        ------
+        ValueError
+            r_id not index name
+            r_id index contains duplicates
+            r_id not in reactions table
         """
         sbml_dfs_utils._validate_matching_data(reactions_data_table, self.reactions)
 
@@ -2570,13 +2574,17 @@ class SBML_dfs:
     def _validate_species_data(self, species_data_table: pd.DataFrame):
         """Validates species data attribute
 
-        Args:
-            species_data_table (pd.DataFrame): a species data table
+        Parameters
+        ----------
+        species_data_table : pd.DataFrame
+            a species data table
 
-        Raises:
-            ValueError: s_id not index name
-            ValueError: s_id index contains duplicates
-            ValueError: s_id not in species table
+        Raises
+        ------
+        ValueError
+            s_id not index name
+            s_id index contains duplicates
+            s_id not in species table
         """
         sbml_dfs_utils._validate_matching_data(species_data_table, self.species)
 
