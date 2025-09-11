@@ -257,7 +257,13 @@ def test_graph_attrs_extend_and_overwrite_protection(test_graph):
 
     # Fresh mode should fail with existing data
     with pytest.raises(ValueError, match="Existing reaction_attrs found"):
-        test_graph.set_graph_attrs({"reactions": {"attr2": {}}})
+        test_graph.set_graph_attrs(
+            {
+                "reactions": {
+                    "attr2": {"table": "test", "variable": "val2", "trans": "identity"}
+                }
+            }
+        )
 
     # Extend mode should work
     test_graph.set_graph_attrs(
@@ -878,8 +884,8 @@ def test_get_weight_variables():
     # Test with weight_by parameter
     weight_vars = napistu_graph._get_weight_variables(weight_by=["custom_weight"])
     assert "custom_weight" in weight_vars
-    assert weight_vars["custom_weight"]["table"] == "edge"
-    assert weight_vars["custom_weight"]["variable"] == "custom_weight"
+    assert weight_vars["custom_weight"][WEIGHTING_SPEC.TABLE] == "__edges__"
+    assert weight_vars["custom_weight"][WEIGHTING_SPEC.VARIABLE] == "custom_weight"
 
     # Test with non-existent attribute
     with pytest.raises(ValueError, match="Edge attributes not found in graph"):
@@ -892,11 +898,11 @@ def test_get_weight_variables():
     # Test with reaction_attrs set
     napistu_graph.set_graph_attrs(
         {
-            "reactions": {
+            SBML_DFS.REACTIONS: {
                 "string_wt": {
-                    "table": "string",
-                    "variable": "score",
-                    "trans": "identity",
+                    WEIGHTING_SPEC.TABLE: "string",
+                    WEIGHTING_SPEC.VARIABLE: "score",
+                    WEIGHTING_SPEC.TRANSFORMATION: "identity",
                 }
             }
         }
@@ -904,7 +910,7 @@ def test_get_weight_variables():
 
     weight_vars = napistu_graph._get_weight_variables()
     assert "string_wt" in weight_vars
-    assert weight_vars["string_wt"]["table"] == "string"
+    assert weight_vars["string_wt"][WEIGHTING_SPEC.TABLE] == "string"
 
 
 def test_process_napistu_graph_with_reactions_data(sbml_dfs):
@@ -935,11 +941,11 @@ def test_process_napistu_graph_with_reactions_data(sbml_dfs):
 
     # Define reaction_graph_attrs matching graph_attrs_spec.yaml
     reaction_graph_attrs = {
-        "reactions": {
+        SBML_DFS.REACTIONS: {
             "string_wt": {
-                "table": "string",
-                "variable": "combined_score",
-                "trans": "string_inv",
+                WEIGHTING_SPEC.TABLE: "string",
+                WEIGHTING_SPEC.VARIABLE: "combined_score",
+                WEIGHTING_SPEC.TRANSFORMATION: "string_inv",
             }
         }
     }
@@ -1184,3 +1190,70 @@ def test_add_vertex_data_error_handling(test_graph, minimal_valid_sbml_dfs):
     # Test that it raises error for existing attributes (like add_edge_data does)
     with pytest.raises(ValueError, match="Vertex attributes already exist"):
         test_graph.add_vertex_data(minimal_valid_sbml_dfs, mode="fresh")
+
+
+def test_transform_vertices_basic_functionality(test_graph, minimal_valid_sbml_dfs):
+    """Test basic transform_vertices functionality - mirrors transform_edges but for vertices."""
+    # Set up species data and add it to vertices
+    test_graph.vs[SBML_DFS.S_ID] = ["S00001", "S00001", "S00002"]
+
+    mock_df = pd.DataFrame({"score_col": [100, 200]}, index=["S00001", "S00002"])
+    minimal_valid_sbml_dfs.species_data["mock_table"] = mock_df
+
+    species_attrs = {
+        "score_col": {
+            WEIGHTING_SPEC.TABLE: "mock_table",
+            WEIGHTING_SPEC.VARIABLE: "score_col",
+            WEIGHTING_SPEC.TRANSFORMATION: "square",  # Use a transformation
+        }
+    }
+    # Set up custom transformations for validation
+    custom_transformations = {"square": lambda x: x**2}
+    test_graph.set_graph_attrs(
+        {SBML_DFS.SPECIES: species_attrs}, custom_transformations=custom_transformations
+    )
+
+    # Add vertex data first
+    test_graph.add_vertex_data(minimal_valid_sbml_dfs)
+
+    # Verify original values
+    assert test_graph.vs["score_col"][0] == 100
+    assert test_graph.vs["score_col"][2] == 200
+
+    # Transform vertices with custom transformation
+    test_graph.transform_vertices(custom_transformations=custom_transformations)
+
+    # Verify transformation was applied (square transformation)
+    assert test_graph.vs["score_col"][0] == 10000  # 100^2
+    assert test_graph.vs["score_col"][2] == 40000  # 200^2
+
+
+def test_transform_vertices_validation_behavior(test_graph, minimal_valid_sbml_dfs):
+    """Test that set_graph_attrs validates transformations when custom transformations are not provided."""
+    # Set up species data
+    test_graph.vs[SBML_DFS.S_ID] = ["S00001", "S00001", "S00002"]
+
+    mock_df = pd.DataFrame({"score_col": [100, 200]}, index=["S00001", "S00002"])
+    minimal_valid_sbml_dfs.species_data["mock_table"] = mock_df
+
+    species_attrs = {
+        "score_col": {
+            WEIGHTING_SPEC.TABLE: "mock_table",
+            WEIGHTING_SPEC.VARIABLE: "score_col",
+            WEIGHTING_SPEC.TRANSFORMATION: "square",  # Custom transformation
+        }
+    }
+
+    # This should raise an error because "square" is not a built-in transformation
+    # and no custom transformations are provided
+    with pytest.raises(ValueError, match="transformation 'square' was not defined"):
+        test_graph.set_graph_attrs({SBML_DFS.SPECIES: species_attrs})
+
+
+def test_transform_vertices_error_handling(test_graph, minimal_valid_sbml_dfs):
+    """Test that transform_vertices handles missing species_attrs like transform_edges."""
+    # Test without setting species_attrs - should warn and return early
+    test_graph.transform_vertices()
+
+    # No error should be raised, just a warning logged
+    # This mirrors the behavior of transform_edges

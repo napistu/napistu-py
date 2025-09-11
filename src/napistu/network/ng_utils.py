@@ -412,8 +412,13 @@ def pluck_entity_data(
         )
         entity_attrs = entity_attrs[data_type]
 
-    # validating dict
-    _validate_entity_attrs(entity_attrs, custom_transformations=custom_transformations)
+    # validating dict structure (skip transformation validation during data extraction)
+    if transform:
+        _validate_entity_attrs(
+            entity_attrs, custom_transformations=custom_transformations
+        )
+    else:
+        _validate_entity_attrs(entity_attrs, validate_transformations=False)
 
     if transform:
         logger.warning(

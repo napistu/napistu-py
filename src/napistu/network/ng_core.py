@@ -95,6 +95,8 @@ class NapistuGraph(ig.Graph):
         Save the NapistuGraph to a pickle file.
     transform_edges(keep_raw_attributes=False, custom_transformations=None)
         Transform edge attributes using predefined or custom transformations.
+    transform_vertices(keep_raw_attributes=False, custom_transformations=None)
+        Transform vertex attributes using predefined or custom transformations.
     validate()
         Validate the graph structure and metadata.
 
@@ -102,7 +104,7 @@ class NapistuGraph(ig.Graph):
     -----------------------------------------------------------------
     _add_graph_weights_mixed(weight_by=None)
         Add mixed weighting strategy to graph edges.
-    _add_entity_data(sbml_dfs, entity_type, mode, overwrite, inplace, target_entity)
+    _add_entity_data(sbml_dfs, entity_type, target_entity, mode, overwrite, inplace)
         Add entity data from SBML_dfs to the graph.
     _apply_reaction_edge_multiplier(multiplier=0.5)
         Apply multiplier to reaction edges.
@@ -353,10 +355,10 @@ class NapistuGraph(ig.Graph):
         return self._add_entity_data(
             sbml_dfs=sbml_dfs,
             entity_type=SBML_DFS.REACTIONS,
+            target_entity=NAPISTU_GRAPH.EDGES,
             mode=mode,
             overwrite=overwrite,
             inplace=inplace,
-            target_entity=NAPISTU_GRAPH.EDGES,
         )
 
     def add_vertex_data(
@@ -389,10 +391,10 @@ class NapistuGraph(ig.Graph):
         return self._add_entity_data(
             sbml_dfs=sbml_dfs,
             entity_type=SBML_DFS.SPECIES,
+            target_entity=NAPISTU_GRAPH.VERTICES,
             mode=mode,
             overwrite=overwrite,
             inplace=inplace,
-            target_entity=NAPISTU_GRAPH.VERTICES,
         )
 
     def add_sbml_dfs_summaries(
@@ -776,6 +778,8 @@ class NapistuGraph(ig.Graph):
         graph_attrs: Union[str, dict],
         mode: str = ADDING_ENTITY_DATA_DEFS.FRESH,
         overwrite: bool = False,
+        validate_transformations: bool = True,
+        custom_transformations: Optional[dict] = None,
     ) -> None:
         """
         Set graph attributes from YAML file or dictionary.
@@ -788,6 +792,10 @@ class NapistuGraph(ig.Graph):
             Either "fresh" (replace existing) or "extend" (add new keys)
         overwrite : bool
             Whether to allow overwriting existing data when conflicts arise
+        validate_transformations : bool, default=True
+            Whether to validate transformation names when setting up attributes
+        custom_transformations : dict, optional
+            Dictionary of custom transformation functions for validation. The values should be functions.
         """
 
         # Load from YAML if string path provided
@@ -795,7 +803,15 @@ class NapistuGraph(ig.Graph):
             graph_attrs = ng_utils.read_graph_attrs_spec(graph_attrs)
 
         # Process species attributes if present
-        if "species" in graph_attrs:
+        if SBML_DFS.SPECIES in graph_attrs:
+            # Validate species attributes if requested
+            if validate_transformations:
+                ng_utils._validate_entity_attrs(
+                    graph_attrs[SBML_DFS.SPECIES],
+                    validate_transformations=True,
+                    custom_transformations=custom_transformations,
+                )
+
             merged_species = self._compare_and_merge_attrs(
                 graph_attrs["species"],
                 NAPISTU_METADATA_KEYS.SPECIES_ATTRS,
@@ -805,9 +821,17 @@ class NapistuGraph(ig.Graph):
             self.set_metadata(species_attrs=merged_species)
 
         # Process reaction attributes if present
-        if "reactions" in graph_attrs:
+        if SBML_DFS.REACTIONS in graph_attrs:
+            # Validate reaction attributes if requested
+            if validate_transformations:
+                ng_utils._validate_entity_attrs(
+                    graph_attrs[SBML_DFS.REACTIONS],
+                    validate_transformations=True,
+                    custom_transformations=custom_transformations,
+                )
+
             merged_reactions = self._compare_and_merge_attrs(
-                graph_attrs["reactions"],
+                graph_attrs[SBML_DFS.REACTIONS],
                 NAPISTU_METADATA_KEYS.REACTION_ATTRS,
                 mode,
                 overwrite,
@@ -1077,138 +1101,33 @@ class NapistuGraph(ig.Graph):
         custom_transformations : dict, optional
             Dictionary mapping transformation names to functions
         """
-
-        # Get reaction attributes from stored metadata
-        reaction_attrs = self._get_entity_attrs("reactions")
-        if reaction_attrs is None or not reaction_attrs:
-            logger.warning(
-                "No reaction_attrs found. Use set_graph_attrs() to configure reaction attributes."
-            )
-            return
-
-        # Initialize metadata structures
-        if NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED not in self._metadata:
-            self._metadata[NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED] = {
-                SBML_DFS.REACTIONS: {}
-            }
-        if NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES not in self._metadata:
-            self._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES] = {
-                SBML_DFS.REACTIONS: {}
-            }
-
-        # Determine what attributes need updating using set operations
-        current_transformations = self._metadata[
-            NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED
-        ][SBML_DFS.REACTIONS]
-        requested_attrs = set(reaction_attrs.keys())
-
-        # Attributes that have never been transformed
-        never_transformed = requested_attrs - set(current_transformations.keys())
-
-        # Attributes that need different transformations
-        needs_retransform = set()
-        for attr_name in requested_attrs & set(current_transformations.keys()):
-            new_trans = reaction_attrs[attr_name].get(
-                WEIGHTING_SPEC.TRANSFORMATION, "identity"
-            )
-            current_trans = current_transformations[attr_name]
-            if current_trans != new_trans:
-                needs_retransform.add(attr_name)
-
-        # Check if we can re-transform (need raw data)
-        stored_raw_attrs = set(
-            self._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][
-                SBML_DFS.REACTIONS
-            ].keys()
-        )
-        invalid_retransform = needs_retransform - stored_raw_attrs
-
-        if invalid_retransform and not keep_raw_attributes:
-            # Get transformation details for error message
-            error_details = []
-            for attr_name in invalid_retransform:
-                current_trans = current_transformations[attr_name]
-                new_trans = reaction_attrs[attr_name].get(
-                    WEIGHTING_SPEC.TRANSFORMATION, "identity"
-                )
-                error_details.append(f"'{attr_name}': {current_trans} -> {new_trans}")
-
-            raise ValueError(
-                f"Cannot re-transform attributes without raw data: {error_details}. "
-                f"Raw attributes were not kept for these attributes."
-            )
-
-        attrs_to_transform = never_transformed | needs_retransform
-
-        if not attrs_to_transform:
-            logger.info("No edge attributes need transformation")
-            return
-
-        # Get current edge data
-        edges_df = self.get_edge_dataframe()
-
-        # Check that all attributes to transform exist
-        missing_attrs = attrs_to_transform - set(edges_df.columns)
-        if missing_attrs:
-            logger.warning(
-                f"Edge attributes not found in graph: {missing_attrs}. Skipping."
-            )
-            attrs_to_transform = attrs_to_transform - missing_attrs
-
-        if not attrs_to_transform:
-            return
-
-        # Store raw attributes if requested (for never-transformed attributes)
-        if keep_raw_attributes:
-            for attr_name in never_transformed & attrs_to_transform:
-                if (
-                    attr_name
-                    not in self._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][
-                        SBML_DFS.REACTIONS
-                    ]
-                ):
-                    self._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][
-                        SBML_DFS.REACTIONS
-                    ][attr_name] = edges_df[attr_name].copy()
-
-        # Prepare data for transformation - always use raw data
-        transform_data = edges_df.copy()
-        for attr_name in attrs_to_transform:
-            if (
-                attr_name
-                in self._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][
-                    SBML_DFS.REACTIONS
-                ]
-            ):
-                # Use stored raw values
-                transform_data[attr_name] = self._metadata[
-                    NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES
-                ][SBML_DFS.REACTIONS][attr_name]
-            # If no raw data available, we must be in the never_transformed case with current data as raw
-
-        # Apply transformations using existing function
-        attrs_to_transform_config = {
-            attr: reaction_attrs[attr] for attr in attrs_to_transform
-        }
-
-        transformed_data = ng_utils.apply_weight_transformations(
-            transform_data, attrs_to_transform_config, custom_transformations
+        self._transform_entity_attributes(
+            entity_type="reactions",
+            target_entity="edges",
+            keep_raw_attributes=keep_raw_attributes,
+            custom_transformations=custom_transformations,
         )
 
-        # Update edge attributes
-        for attr_name in attrs_to_transform:
-            self.es[attr_name] = transformed_data[attr_name].values
+    def transform_vertices(
+        self,
+        keep_raw_attributes: bool = False,
+        custom_transformations: Optional[dict] = None,
+    ) -> None:
+        """
+        Apply transformations to vertex attributes based on stored species_attrs.
 
-        # Update transformations_applied metadata
-        for attr_name in attrs_to_transform:
-            self._metadata[NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED][
-                SBML_DFS.REACTIONS
-            ][attr_name] = reaction_attrs[attr_name].get(
-                WEIGHTING_SPEC.TRANSFORMATION, "identity"
-            )
-
-        logger.info(
-            f"Transformed {len(attrs_to_transform)} edge attributes: {list(attrs_to_transform)}"
+        Parameters
+        ----------
+        keep_raw_attributes : bool
+            If True, store untransformed attributes for future re-transformation
+        custom_transformations : dict, optional
+            Dictionary mapping transformation names to functions
+        """
+        self._transform_entity_attributes(
+            entity_type="species",
+            target_entity="vertices",
+            keep_raw_attributes=keep_raw_attributes,
+            custom_transformations=custom_transformations,
         )
 
     def validate(self) -> None:
@@ -1471,8 +1390,9 @@ class NapistuGraph(ig.Graph):
             logger.warning(f"{entity_type}_attrs is empty")
             return None
 
-        # Validate and let any exceptions propagate
-        ng_utils._validate_entity_attrs(entity_attrs)
+        # Validate structure but skip transformation validation during setup
+        # Transformations will be validated when actually used in transform methods
+        ng_utils._validate_entity_attrs(entity_attrs, validate_transformations=False)
         return entity_attrs
 
     def _get_weight_variables(self, weight_by: Optional[list[str]] = None) -> dict:
@@ -1522,7 +1442,7 @@ class NapistuGraph(ig.Graph):
             # This maintains compatibility with the existing weighting logic
             return {
                 attr: {
-                    WEIGHTING_SPEC.TABLE: "edge",
+                    WEIGHTING_SPEC.TABLE: "__edges__",
                     WEIGHTING_SPEC.VARIABLE: attr,
                     WEIGHTING_SPEC.TRANSFORMATION: WEIGHT_TRANSFORMATIONS.IDENTITY,
                 }
@@ -1533,10 +1453,10 @@ class NapistuGraph(ig.Graph):
         self,
         sbml_dfs: SBML_dfs,
         entity_type: str,
+        target_entity: str,  # either "edges" or "vertices"
         mode: str = ADDING_ENTITY_DATA_DEFS.FRESH,
         overwrite: bool = False,
         inplace: bool = True,
-        target_entity: str = NAPISTU_GRAPH.EDGES,
     ) -> Optional["NapistuGraph"]:
         """
         Extract and add entity attributes to the graph edges or vertices.
@@ -1549,14 +1469,14 @@ class NapistuGraph(ig.Graph):
             The SBML_dfs object containing entity data
         entity_type : str
             Either "reactions" or "species"
+        target_entity : str
+            Either "edges" or "vertices" - determines where to add the attributes
         mode : str
             Either "fresh" (replace existing) or "extend" (add new attributes only)
         overwrite : bool
             Whether to allow overwriting existing attributes when conflicts arise. Ignored if mode is "extend".
         inplace : bool, default=True
             Whether to modify the graph in place. If False, returns a copy with entity data.
-        target_entity : str
-            Either "edges" or "vertices" - determines where to add the attributes
 
         Returns
         -------
@@ -1665,6 +1585,167 @@ class NapistuGraph(ig.Graph):
         )
 
         return None if inplace else graph
+
+    def _transform_entity_attributes(
+        self,
+        entity_type: str,
+        target_entity: str,
+        keep_raw_attributes: bool = False,
+        custom_transformations: Optional[dict] = None,
+    ) -> None:
+        """
+        Apply transformations to entity attributes (edges or vertices).
+
+        This is a shared utility method used by transform_edges and transform_vertices.
+
+        Parameters
+        ----------
+        entity_type : str
+            Either "reactions" or "species"
+        target_entity : str
+            Either "edges" or "vertices" - determines where to apply transformations
+        keep_raw_attributes : bool
+            If True, store untransformed attributes for future re-transformation
+        custom_transformations : dict, optional
+            Dictionary mapping transformation names to functions
+        """
+        # Get entity attributes from stored metadata
+        entity_attrs = self._get_entity_attrs(entity_type)
+        if entity_attrs is None or not entity_attrs:
+            logger.warning(
+                f"No {entity_type}_attrs found. Use set_graph_attrs() to configure {entity_type} attributes."
+            )
+            return
+
+        # Validate transformations now that we have custom_transformations available
+        ng_utils._validate_entity_attrs(
+            entity_attrs,
+            validate_transformations=True,
+            custom_transformations=custom_transformations,
+        )
+
+        # Initialize metadata structures
+        if NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED not in self._metadata:
+            self._metadata[NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED] = {
+                entity_type: {}
+            }
+        if NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES not in self._metadata:
+            self._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES] = {entity_type: {}}
+
+        # Determine what attributes need updating using set operations
+        current_transformations = self._metadata[
+            NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED
+        ][entity_type]
+        requested_attrs = set(entity_attrs.keys())
+
+        # Attributes that have never been transformed
+        never_transformed = requested_attrs - set(current_transformations.keys())
+
+        # Attributes that need different transformations
+        needs_retransform = set()
+        for attr_name in requested_attrs & set(current_transformations.keys()):
+            new_trans = entity_attrs[attr_name].get(
+                WEIGHTING_SPEC.TRANSFORMATION, "identity"
+            )
+            current_trans = current_transformations[attr_name]
+            if current_trans != new_trans:
+                needs_retransform.add(attr_name)
+
+        # Check if we can re-transform (need raw data)
+        stored_raw_attrs = set(
+            self._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][entity_type].keys()
+        )
+        invalid_retransform = needs_retransform - stored_raw_attrs
+
+        if invalid_retransform and not keep_raw_attributes:
+            # Get transformation details for error message
+            error_details = []
+            for attr_name in invalid_retransform:
+                current_trans = current_transformations[attr_name]
+                new_trans = entity_attrs[attr_name].get(
+                    WEIGHTING_SPEC.TRANSFORMATION, "identity"
+                )
+                error_details.append(f"'{attr_name}': {current_trans} -> {new_trans}")
+
+            raise ValueError(
+                f"Cannot re-transform attributes without raw data: {error_details}. "
+                f"Raw attributes were not kept for these attributes."
+            )
+
+        attrs_to_transform = never_transformed | needs_retransform
+
+        if not attrs_to_transform:
+            logger.info(f"No {target_entity} attributes need transformation")
+            return
+
+        # Get current graph data
+        if target_entity == "edges":
+            graph_df = self.get_edge_dataframe()
+        else:  # vertices
+            graph_df = self.get_vertex_dataframe()
+
+        # Check that all attributes to transform exist
+        missing_attrs = attrs_to_transform - set(graph_df.columns)
+        if missing_attrs:
+            logger.warning(
+                f"{target_entity.capitalize()} attributes not found in graph: {missing_attrs}. Skipping."
+            )
+            attrs_to_transform = attrs_to_transform - missing_attrs
+
+        if not attrs_to_transform:
+            return
+
+        # Store raw attributes if requested (for never-transformed attributes)
+        if keep_raw_attributes:
+            for attr_name in never_transformed & attrs_to_transform:
+                if (
+                    attr_name
+                    not in self._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][
+                        entity_type
+                    ]
+                ):
+                    self._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][entity_type][
+                        attr_name
+                    ] = graph_df[attr_name].copy()
+
+        # Prepare data for transformation - always use raw data
+        transform_data = graph_df.copy()
+        for attr_name in attrs_to_transform:
+            if (
+                attr_name
+                in self._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][entity_type]
+            ):
+                # Use stored raw values
+                transform_data[attr_name] = self._metadata[
+                    NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES
+                ][entity_type][attr_name]
+            # If no raw data available, we must be in the never_transformed case with current data as raw
+
+        # Apply transformations using existing function
+        attrs_to_transform_config = {
+            attr: entity_attrs[attr] for attr in attrs_to_transform
+        }
+
+        transformed_data = ng_utils.apply_weight_transformations(
+            transform_data, attrs_to_transform_config, custom_transformations
+        )
+
+        # Update graph attributes
+        for attr_name in attrs_to_transform:
+            if target_entity == "edges":
+                self.es[attr_name] = transformed_data[attr_name].values
+            else:  # vertices
+                self.vs[attr_name] = transformed_data[attr_name].values
+
+        # Update transformations_applied metadata
+        for attr_name in attrs_to_transform:
+            self._metadata[NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED][entity_type][
+                attr_name
+            ] = entity_attrs[attr_name].get(WEIGHTING_SPEC.TRANSFORMATION, "identity")
+
+        logger.info(
+            f"Transformed {len(attrs_to_transform)} {target_entity} attributes: {list(attrs_to_transform)}"
+        )
 
 
 def _apply_edge_reversal_mapping(edges_df: pd.DataFrame) -> pd.DataFrame:
