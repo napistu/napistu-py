@@ -116,47 +116,43 @@ def create_napistu_graph(
         "Organizing all network nodes (compartmentalized species and reactions)"
     )
 
-    network_nodes_df = pd.concat(
-        [
-            (
-                working_sbml_dfs.compartmentalized_species.reset_index()[
-                    [SBML_DFS.SC_ID, SBML_DFS.SC_NAME]
-                ]
-                .rename(
-                    columns={
-                        SBML_DFS.SC_ID: NAPISTU_GRAPH_VERTICES.NAME,
-                        SBML_DFS.SC_NAME: NAPISTU_GRAPH_VERTICES.NODE_NAME,
-                    }
-                )
-                .assign(
-                    **{
-                        NAPISTU_GRAPH_VERTICES.NODE_TYPE: NAPISTU_GRAPH_NODE_TYPES.SPECIES
-                    }
-                )
-            ),
-            (
-                working_sbml_dfs.reactions.reset_index()[
-                    [SBML_DFS.R_ID, SBML_DFS.R_NAME]
-                ]
-                .rename(
-                    columns={
-                        SBML_DFS.R_ID: NAPISTU_GRAPH_VERTICES.NAME,
-                        SBML_DFS.R_NAME: NAPISTU_GRAPH_VERTICES.NODE_NAME,
-                    }
-                )
-                .assign(
-                    **{
-                        NAPISTU_GRAPH_VERTICES.NODE_TYPE: NAPISTU_GRAPH_NODE_TYPES.REACTION
-                    }
-                )
-            ),
+    species_vertices = (
+        working_sbml_dfs.compartmentalized_species.reset_index()[
+            [SBML_DFS.SC_ID, SBML_DFS.SC_NAME]
         ]
-    ).merge(
-        cspecies_features,
-        left_on=NAPISTU_GRAPH_VERTICES.NAME,
-        right_index=True,
-        how="left",
+        .rename(
+            columns={
+                SBML_DFS.SC_ID: NAPISTU_GRAPH_VERTICES.NAME,
+                SBML_DFS.SC_NAME: NAPISTU_GRAPH_VERTICES.NODE_NAME,
+            }
+        )
+        .assign(**{NAPISTU_GRAPH_VERTICES.NODE_TYPE: NAPISTU_GRAPH_NODE_TYPES.SPECIES})
+        .merge(
+            cspecies_features,
+            left_on=NAPISTU_GRAPH_VERTICES.NAME,
+            right_index=True,
+            how="left",
+        )
+        .merge(
+            working_sbml_dfs.compartmentalized_species[[SBML_DFS.S_ID, SBML_DFS.C_ID]],
+            left_on=NAPISTU_GRAPH_VERTICES.NAME,
+            right_index=True,
+            how="left",
+        )
     )
+
+    reaction_vertices = (
+        working_sbml_dfs.reactions.reset_index()[[SBML_DFS.R_ID, SBML_DFS.R_NAME]]
+        .rename(
+            columns={
+                SBML_DFS.R_ID: NAPISTU_GRAPH_VERTICES.NAME,
+                SBML_DFS.R_NAME: NAPISTU_GRAPH_VERTICES.NODE_NAME,
+            }
+        )
+        .assign(**{NAPISTU_GRAPH_VERTICES.NODE_TYPE: NAPISTU_GRAPH_NODE_TYPES.REACTION})
+    )
+
+    network_nodes_df = pd.concat([species_vertices, reaction_vertices])
 
     logger.info(f"Formatting edges as a {wiring_approach} graph")
 

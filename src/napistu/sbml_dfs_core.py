@@ -659,7 +659,14 @@ class SBML_dfs:
             .join(cspecies_n_parents)
             .fillna(int(0))  # Explicitly fill with int(0) to avoid downcasting warning
             .merge(species_features, left_on=SBML_DFS.S_ID, right_index=True)
-            .drop(columns=[SBML_DFS.SC_NAME, SBML_DFS.S_ID, SBML_DFS.C_ID])
+            .drop(
+                columns=[
+                    SBML_DFS.SC_NAME,
+                    SBML_DFS.SC_SOURCE,
+                    SBML_DFS.S_ID,
+                    SBML_DFS.C_ID,
+                ]
+            )
         )
 
     def get_identifiers(self, id_type) -> pd.DataFrame:

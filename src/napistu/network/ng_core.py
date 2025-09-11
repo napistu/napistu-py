@@ -503,6 +503,8 @@ class NapistuGraph(ig.Graph):
         base_score: float = 2,
         protein_multiplier: int = 1,
         metabolite_multiplier: int = 3,
+        drug_multiplier: int = 1,
+        complex_multiplier: int = 3,
         unknown_multiplier: int = 10,
         scale_multiplier_by_meandegree: bool = True,
         inplace: bool = True,
@@ -598,13 +600,18 @@ class NapistuGraph(ig.Graph):
         )
 
         lookup_multiplier_dict = {
-            "protein": protein_multiplier,
+            "complex": complex_multiplier,
+            "drug": drug_multiplier,
             "metabolite": metabolite_multiplier,
+            "protein": protein_multiplier,
             "unknown": unknown_multiplier,
         }
         weight_table["multiplier"] = weight_table["species_type"].map(
             lookup_multiplier_dict
         )
+
+        if any(weight_table["multiplier"].isna()):
+            raise ValueError("Missing multiplier values")
 
         # calculate mean degree
         # since topology weights will differ based on the structure of the network

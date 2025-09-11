@@ -22,7 +22,7 @@ def add_results_table_to_graph(
     graph_attr_modified: str = NAPISTU_GRAPH.VERTICES,
     transformation: Optional[Callable] = None,
     custom_transformations: Optional[Dict[str, Callable]] = None,
-    mode='fresh',
+    mode="fresh",
     overwrite=False,
     inplace: bool = True,
 ):
@@ -107,10 +107,10 @@ def add_results_table_to_graph(
 
     # add the attribute to the graph
     napistu_graph.set_graph_attrs(
-        species_attrs, 
-        mode=mode, 
-        overwrite=overwrite, 
-        custom_transformations=custom_transformations
+        species_attrs,
+        mode=mode,
+        overwrite=overwrite,
+        custom_transformations=custom_transformations,
     )
 
     # add the new attributes

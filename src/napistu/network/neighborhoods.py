@@ -531,6 +531,7 @@ def add_vertices_uri_urls(
         left_on=NAPISTU_GRAPH_VERTICES.NAME,
         right_index=True,
         how="left",
+        suffixes=("", "_duplicate"),
     )
 
     # add a standard reference identifier

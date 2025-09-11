@@ -737,9 +737,14 @@ def species_type_types(x):
     """Assign a high-level molecule type to a molecular species"""
 
     if isinstance(x, identifiers.Identifiers):
-        if x.filter(["chebi"]):
+        bqbs = x.get_all_bqbs()
+        if BQB.HAS_PART in bqbs:
+            return "complex"
+
+        ontologies = x.get_all_ontologies()
+        if ONTOLOGIES.CHEBI in ontologies:
             return "metabolite"
-        elif x.filter(["molodex"]):
+        elif ONTOLOGIES.DRUGBANK in ontologies:  # no current sources for drugs
             return "drug"
         else:
             return "protein"
