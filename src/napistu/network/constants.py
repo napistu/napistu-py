@@ -52,6 +52,11 @@ NAPISTU_GRAPH_EDGES = SimpleNamespace(
     SOURCE_WT="source_wt",
 )
 
+SINGULAR_GRAPH_ENTITIES = {
+    NAPISTU_GRAPH.EDGES: "edge",
+    NAPISTU_GRAPH.VERTICES: "vertex",
+}
+
 # added during graph wiring
 NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS = {
     NAPISTU_GRAPH_EDGES.FROM,
@@ -237,6 +242,13 @@ VALID_NEIGHBORHOOD_NETWORK_TYPES = [
 
 # weighting networks and transforming attributes
 
+ADDING_ENTITY_DATA_DEFS = SimpleNamespace(
+    FRESH="fresh",
+    EXTEND="extend",
+)
+
+VALID_ADDING_ENTITY_DATA_DEFS = list(ADDING_ENTITY_DATA_DEFS.__dict__.values())
+
 WEIGHTING_SPEC = SimpleNamespace(
     TABLE="table",
     VARIABLE="variable",
@@ -252,6 +264,7 @@ WEIGHT_TRANSFORMATIONS = SimpleNamespace(
 DEFAULT_WT_TRANS = WEIGHT_TRANSFORMATIONS.IDENTITY
 
 SOURCE_VARS_DICT = {"string_wt": 10}
+
 
 # network propagation
 NET_PROPAGATION_DEFS = SimpleNamespace(PERSONALIZED_PAGERANK="personalized_pagerank")

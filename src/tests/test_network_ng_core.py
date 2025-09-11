@@ -9,12 +9,14 @@ from fs.errors import ResourceNotFound
 
 from napistu.constants import SBML_DFS
 from napistu.network.constants import (
+    DEFAULT_WT_TRANS,
     GRAPH_WIRING_APPROACHES,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
     NAPISTU_GRAPH_VERTICES,
     NAPISTU_METADATA_KEYS,
     NAPISTU_WEIGHTING_STRATEGIES,
+    WEIGHTING_SPEC,
 )
 from napistu.network.ng_core import NapistuGraph
 
@@ -1129,3 +1131,56 @@ def test_add_sbml_dfs_summaries(napistu_graph_metabolism, sbml_dfs_metabolism):
     # Check that the new graph has the summary attributes
     new_vertex_attrs = set(new_graph.vs.attributes())
     assert expected_columns.issubset(new_vertex_attrs)
+
+
+def test_add_vertex_data_basic_functionality(test_graph, minimal_valid_sbml_dfs):
+    """Test basic add_vertex_data functionality - mirrors add_edge_data but for vertices."""
+    # Set up species data similar to edge data test
+    test_graph.vs[SBML_DFS.S_ID] = ["S00001", "S00001", "S00002"]
+
+    mock_df = pd.DataFrame({"score_col": [100, 200]}, index=["S00001", "S00002"])
+    minimal_valid_sbml_dfs.species_data["mock_table"] = mock_df
+
+    species_attrs = {
+        "score_col": {
+            WEIGHTING_SPEC.TABLE: "mock_table",
+            WEIGHTING_SPEC.VARIABLE: "score_col",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        }
+    }
+    test_graph.set_graph_attrs({SBML_DFS.SPECIES: species_attrs})
+
+    # Add vertex data
+    test_graph.add_vertex_data(minimal_valid_sbml_dfs)
+
+    # Verify attributes were added to vertices (not edges)
+    assert "score_col" in test_graph.vs.attributes()
+    assert "score_col" not in test_graph.es.attributes()
+
+    # Check values were assigned correctly
+    assert test_graph.vs["score_col"][0] == 100  # S00001
+    assert test_graph.vs["score_col"][2] == 200  # S00002
+
+
+def test_add_vertex_data_error_handling(test_graph, minimal_valid_sbml_dfs):
+    """Test that add_vertex_data raises appropriate errors like add_edge_data."""
+    test_graph.vs[SBML_DFS.S_ID] = ["S00001", "S00001", "S00002"]
+
+    mock_df = pd.DataFrame({"score_col": [100, 200]}, index=["S00001", "S00002"])
+    minimal_valid_sbml_dfs.species_data["mock_table"] = mock_df
+
+    species_attrs = {
+        "score_col": {
+            WEIGHTING_SPEC.TABLE: "mock_table",
+            WEIGHTING_SPEC.VARIABLE: "score_col",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        }
+    }
+    test_graph.set_graph_attrs({SBML_DFS.SPECIES: species_attrs})
+
+    # Add data once
+    test_graph.add_vertex_data(minimal_valid_sbml_dfs)
+
+    # Test that it raises error for existing attributes (like add_edge_data does)
+    with pytest.raises(ValueError, match="Vertex attributes already exist"):
+        test_graph.add_vertex_data(minimal_valid_sbml_dfs, mode="fresh")
