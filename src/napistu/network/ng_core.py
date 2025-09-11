@@ -12,6 +12,7 @@ from napistu.constants import SBML_DFS
 from napistu.network import ig_utils, ng_utils
 from napistu.network.constants import (
     ADDING_ENTITY_DATA_DEFS,
+    DEFAULT_WT_TRANS,
     EDGE_DIRECTION_MAPPING,
     EDGE_REVERSAL_ATTRIBUTE_MAPPING,
     ENTITIES_TO_ATTRS,
@@ -1617,6 +1618,11 @@ class NapistuGraph(ig.Graph):
             )
             return
 
+        if target_entity not in [NAPISTU_GRAPH.EDGES, NAPISTU_GRAPH.VERTICES]:
+            raise ValueError(
+                f"Unknown target_entity: {target_entity}. Must be '{NAPISTU_GRAPH.EDGES}' or '{NAPISTU_GRAPH.VERTICES}'"
+            )
+
         # Validate transformations now that we have custom_transformations available
         ng_utils._validate_entity_attrs(
             entity_attrs,
@@ -1645,7 +1651,7 @@ class NapistuGraph(ig.Graph):
         needs_retransform = set()
         for attr_name in requested_attrs & set(current_transformations.keys()):
             new_trans = entity_attrs[attr_name].get(
-                WEIGHTING_SPEC.TRANSFORMATION, "identity"
+                WEIGHTING_SPEC.TRANSFORMATION, DEFAULT_WT_TRANS
             )
             current_trans = current_transformations[attr_name]
             if current_trans != new_trans:
@@ -1663,7 +1669,7 @@ class NapistuGraph(ig.Graph):
             for attr_name in invalid_retransform:
                 current_trans = current_transformations[attr_name]
                 new_trans = entity_attrs[attr_name].get(
-                    WEIGHTING_SPEC.TRANSFORMATION, "identity"
+                    WEIGHTING_SPEC.TRANSFORMATION, DEFAULT_WT_TRANS
                 )
                 error_details.append(f"'{attr_name}': {current_trans} -> {new_trans}")
 
@@ -1679,10 +1685,13 @@ class NapistuGraph(ig.Graph):
             return
 
         # Get current graph data
-        if target_entity == "edges":
+        if target_entity == NAPISTU_GRAPH.EDGES:
             graph_df = self.get_edge_dataframe()
-        else:  # vertices
+        elif target_entity == NAPISTU_GRAPH.VERTICES:
             graph_df = self.get_vertex_dataframe()
+        else:
+            # not reachable; added for clarity
+            raise ValueError("Unknown category for target_entity")
 
         # Check that all attributes to transform exist
         missing_attrs = attrs_to_transform - set(graph_df.columns)
@@ -1732,16 +1741,21 @@ class NapistuGraph(ig.Graph):
 
         # Update graph attributes
         for attr_name in attrs_to_transform:
-            if target_entity == "edges":
+            if target_entity == NAPISTU_GRAPH.EDGES:
                 self.es[attr_name] = transformed_data[attr_name].values
-            else:  # vertices
+            elif target_entity == NAPISTU_GRAPH.VERTICES:
                 self.vs[attr_name] = transformed_data[attr_name].values
+            else:
+                # not reachable; added for clarity
+                raise ValueError("Unknown category for target_entity")
 
         # Update transformations_applied metadata
         for attr_name in attrs_to_transform:
             self._metadata[NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED][entity_type][
                 attr_name
-            ] = entity_attrs[attr_name].get(WEIGHTING_SPEC.TRANSFORMATION, "identity")
+            ] = entity_attrs[attr_name].get(
+                WEIGHTING_SPEC.TRANSFORMATION, DEFAULT_WT_TRANS
+            )
 
         logger.info(
             f"Transformed {len(attrs_to_transform)} {target_entity} attributes: {list(attrs_to_transform)}"

@@ -468,7 +468,7 @@ def _add_edge_attr_to_vertex_graph(
     # rename shared_node_key to vertex key 'name'
     # as in net_create.create_napistu_graph(), vertex_name_attr is set to 'name'
     graph_edge_df_sub_no_duplicate = graph_edge_df_sub_no_duplicate.rename(
-        columns={shared_node_key: "name"},
+        columns={shared_node_key: NAPISTU_GRAPH_VERTICES.NAME},
     )
 
     # merge edge attributes in graph_edge_df_sub_no_duplicate to vertex_df,
@@ -476,7 +476,7 @@ def _add_edge_attr_to_vertex_graph(
     graph_vertex_df_w_edge_attr = pd.merge(
         graph_vertex_df,
         graph_edge_df_sub_no_duplicate,
-        on="name",
+        on=NAPISTU_GRAPH_VERTICES.NAME,
         how="outer",
     )
 

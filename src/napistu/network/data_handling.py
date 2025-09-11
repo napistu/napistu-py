@@ -22,6 +22,8 @@ def add_results_table_to_graph(
     graph_attr_modified: str = NAPISTU_GRAPH.VERTICES,
     transformation: Optional[Callable] = None,
     custom_transformations: Optional[Dict[str, Callable]] = None,
+    mode='fresh',
+    overwrite=False,
     inplace: bool = True,
 ):
     """
@@ -54,6 +56,10 @@ def add_results_table_to_graph(
         If not provided, the attribute will not be transformed.
     custom_transformations: dict, optional
         A dictionary of custom transformations which could be applied to the attributes. The keys are the transformation names and the values are the transformation functions.
+    mode: str, optional
+        The mode to use for adding the attributes. Must be one of "fresh" or "extend".
+    overwrite: bool, optional
+        If True, the attributes will be overwritten if they already exist.
     inplace: bool, optional
         If True, the attribute will be added to the graph in place. If False, a new graph will be returned.
 
@@ -92,7 +98,7 @@ def add_results_table_to_graph(
         transformation = DEFAULT_WT_TRANS
 
     # create the configuration dict which is used by lower-level functions
-    reaction_attrs = _create_graph_attrs_config(
+    species_attrs = _create_graph_attrs_config(
         column_mapping=attribute_mapping,
         data_type=table_type,
         table_name=table_name,
@@ -100,12 +106,16 @@ def add_results_table_to_graph(
     )
 
     # add the attribute to the graph
-    napistu_graph = _add_graph_species_attribute(
-        napistu_graph,
-        sbml_dfs,
-        species_graph_attrs=reaction_attrs,
-        custom_transformations=custom_transformations,
+    napistu_graph.set_graph_attrs(
+        species_attrs, 
+        mode=mode, 
+        overwrite=overwrite, 
+        custom_transformations=custom_transformations
     )
+
+    # add the new attributes
+    napistu_graph.add_vertex_data(sbml_dfs, mode=mode, overwrite=overwrite)
+    napistu_graph.transform_vertices(custom_transformations=custom_transformations)
 
     return napistu_graph if not inplace else None
 
