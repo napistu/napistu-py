@@ -1492,6 +1492,7 @@ class NapistuGraph(ig.Graph):
             If inplace=True, returns None.
             If inplace=False, returns a new NapistuGraph with entity data added.
         """
+
         # If not inplace, make a copy
         if not inplace:
             graph = self.copy()
@@ -1499,22 +1500,26 @@ class NapistuGraph(ig.Graph):
             graph = self
 
         # Use utility function to prepare entity data extraction
-        results = ng_utils.prepare_entity_data_extraction(
+        entity_attrs_to_extract = ng_utils.prepare_entity_data_extraction(
             graph, entity_type, target_entity, mode, overwrite
         )
-
-        if results is None:
-            return None if inplace else graph
-        else:
-            attrs_to_extract, attrs_to_add = results
-
-        # Get a singular name for logging
+        # just for logging
         entity_name = SINGULAR_GRAPH_ENTITIES[target_entity]
 
-        # Get entity data using existing function - only for attributes we need
-        entity_data = ng_utils.pluck_entity_data(
-            sbml_dfs, attrs_to_extract, entity_type, transform=False
+        if entity_attrs_to_extract is None:
+            return None if inplace else graph
+        else:
+            attrs_to_add = entity_attrs_to_extract.keys()
+
+        sbml_dfs_attrs, side_loaded_attrs = ng_utils.separate_entity_attrs_by_source(
+            entity_attrs_to_extract, entity_type, sbml_dfs, side_loaded_attributes=None
         )
+
+        if len(sbml_dfs_attrs) > 0:
+            # Get entity data using existing function - only for attributes we need
+            entity_data = ng_utils.pluck_entity_data(
+                sbml_dfs, entity_attrs_to_extract, entity_type, transform=False
+            )
 
         if entity_data is None:
             logger.warning(

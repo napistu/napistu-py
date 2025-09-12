@@ -58,6 +58,47 @@ def sbml_dfs(sbml_model, model_source_stub):
 
 
 @fixture
+def sbml_dfs_w_data(sbml_dfs):
+    """Create an sbml_dfs fixture with test data for reactions and species."""
+
+    # Add test reactions data using real indices from the sbml_dfs
+    reaction_indices = (
+        sbml_dfs.reactions.index[:3]
+        if len(sbml_dfs.reactions) >= 3
+        else sbml_dfs.reactions.index
+    )
+    reactions_data = pd.DataFrame(
+        {
+            "rxn_attr_int": [0, 1, 2],
+            "rxn_attr_float": [0.1, 0.2, 0.3],
+            "rxn_attr_bool": [True, False, True],
+            "rxn_attr_string": ["a", "b", "c"],
+        },
+        index=reaction_indices,
+    )
+    sbml_dfs.add_reactions_data("rxn_data", reactions_data)
+
+    # Add test species data using real indices from the sbml_dfs
+    species_indices = (
+        sbml_dfs.species.index[:3]
+        if len(sbml_dfs.species) >= 3
+        else sbml_dfs.species.index
+    )
+    species_data = pd.DataFrame(
+        {
+            "spec_attr_int": [3, 4, 5],
+            "spec_attr_float": [0.4, 0.5, 0.6],
+            "spec_attr_bool": [False, False, True],
+            "spec_attr_string": ["A", "B", "C"],
+        },
+        index=species_indices,
+    )
+    sbml_dfs.add_species_data("spec_data", species_data)
+
+    return sbml_dfs
+
+
+@fixture
 def pw_index_metabolism():
     """Create a pathway index for metabolism test data."""
     test_path = os.path.abspath(os.path.join(__file__, os.pardir))

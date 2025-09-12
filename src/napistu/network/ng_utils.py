@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import copy
 import logging
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import igraph as ig
 import numpy as np
@@ -43,6 +43,7 @@ from napistu.network.constants import (
     VALID_VERTEX_SBML_DFS_SUMMARIES,
     VERTEX_SBML_DFS_SUMMARIES,
     WEIGHT_TRANSFORMATIONS,
+    WEIGHTING_SPEC,
 )
 
 logger = logging.getLogger(__name__)
@@ -512,8 +513,8 @@ def prepare_entity_data_extraction(
 
     Returns
     -------
-    tuple[dict, set] | None
-        If successful: (attrs_to_extract, attrs_to_add)
+    entity_attrs_to_extract | None
+        If successful: entity_attrs_to_extract - a dictionary of entity attributes to extract drawn from the vertex/edge attributes metadata
         If failed: None
 
     Raises
@@ -566,9 +567,138 @@ def prepare_entity_data_extraction(
         return None
 
     # Only extract the attributes we're actually going to add
-    attrs_to_extract = {attr: entity_attrs[attr] for attr in attrs_to_add}
+    entity_attrs_to_extract = {attr: entity_attrs[attr] for attr in attrs_to_add}
 
-    return attrs_to_extract, attrs_to_add
+    return entity_attrs_to_extract
+
+
+def separate_entity_attrs_by_source(
+    entity_attrs: dict[str, dict],
+    entity_type: str,
+    sbml_dfs: Optional[Any] = None,
+    side_loaded_attributes: Optional[dict[str, pd.DataFrame]] = None,
+) -> tuple[dict[str, dict], dict[str, dict]]:
+    """
+    Separate entity attributes by data source (SBML vs side-loaded).
+
+    This function categorizes entity attributes based on their table content:
+    - SBML attributes: table names that exist in the sbml_dfs object for the specified entity_type
+    - Side-loaded attributes: table names that exist in the side_loaded_attributes dict
+
+    Both types use the same structure: table, variable, transformation
+
+    Parameters
+    ----------
+    entity_attrs : dict[str, dict]
+        Dictionary of entity attributes to separate
+    entity_type : str
+        Either "reactions" or "species" - determines which SBML tables to check
+    sbml_dfs : SBML_dfs, optional
+        SBML_dfs object to check for valid table names
+    side_loaded_attributes : dict[str, pd.DataFrame], optional
+        Dictionary mapping table names to DataFrames for side-loaded data
+
+    Returns
+    -------
+    tuple[dict[str, dict], dict[str, dict]]
+        (sbml_attrs, side_loaded_attrs) - two dictionaries containing separated attributes
+
+    Raises
+    ------
+    ValueError
+        If an attribute has an invalid structure, if entity_type is invalid, if both
+        sbml_dfs and side_loaded_attributes have overlapping table names, if neither data
+        source is provided, or if required table names are missing from both sources
+    """
+    from napistu.network.constants import SBML_DFS, WEIGHTING_SPEC
+
+    # Validate entity_type
+    if entity_type not in [SBML_DFS.REACTIONS, SBML_DFS.SPECIES]:
+        raise ValueError(
+            f"Invalid entity_type: '{entity_type}'. Must be either '{SBML_DFS.REACTIONS}' or '{SBML_DFS.SPECIES}'"
+        )
+
+    # Validate that at least one data source is provided
+    if sbml_dfs is None and side_loaded_attributes is None:
+        raise ValueError(
+            "At least one of 'sbml_dfs' or 'side_loaded_attributes' must be provided"
+        )
+
+    # Get valid table names from both sources
+    valid_sbml_tables = set()
+    valid_extra_tables = set()
+
+    if sbml_dfs is not None:
+        # Get the correct attribute name for the entity type
+        entity_data_attr = ENTITIES_TO_ENTITY_DATA[entity_type]
+
+        # Check only the relevant entity type tables
+        if hasattr(sbml_dfs, entity_data_attr):
+            entity_data = getattr(sbml_dfs, entity_data_attr)
+            if entity_data:
+                valid_sbml_tables.update(entity_data.keys())
+
+    logger.debug(f"Valid SBML tables: {valid_sbml_tables}")
+
+    if side_loaded_attributes is not None:
+        valid_extra_tables.update(side_loaded_attributes.keys())
+
+    logger.debug(f"Valid extra tables: {valid_extra_tables}")
+
+    # Check for overlapping table names
+    overlapping_tables = valid_sbml_tables & valid_extra_tables
+    if overlapping_tables:
+        raise ValueError(
+            f"Overlapping table names found between sbml_dfs and extra_attributes: "
+            f"{overlapping_tables}. Each table name must be unique across data sources."
+        )
+
+    # Get all required table names from entity_attrs
+    required_tables = set()
+    for attr_config in entity_attrs.values():
+        if WEIGHTING_SPEC.TABLE in attr_config:
+            required_tables.add(attr_config[WEIGHTING_SPEC.TABLE])
+
+    # Check that all required tables are available
+    available_tables = valid_sbml_tables | valid_extra_tables
+    missing_tables = required_tables - available_tables
+
+    if missing_tables:
+        raise ValueError(
+            f"Required table names not found in either data source: {missing_tables}. "
+            f"Available SBML {entity_type} tables: {valid_sbml_tables}. "
+            f"Available extra tables: {valid_extra_tables}."
+        )
+
+    sbml_attrs = {}
+    side_loaded_attrs = {}
+
+    for attr_name, attr_config in entity_attrs.items():
+        # Validate structure - must have table and variable
+        if (
+            WEIGHTING_SPEC.TABLE not in attr_config
+            or WEIGHTING_SPEC.VARIABLE not in attr_config
+        ):
+            raise ValueError(
+                f"Invalid attribute structure for '{attr_name}': "
+                f"must have both 'table' and 'variable' keys. "
+                f"Found keys: {list(attr_config.keys())}"
+            )
+
+        table_name = attr_config[WEIGHTING_SPEC.TABLE]
+
+        # Determine if it's SBML or side-loaded based on table name
+        if table_name in valid_sbml_tables:
+            sbml_attrs[attr_name] = attr_config
+        elif table_name in valid_extra_tables:
+            side_loaded_attrs[attr_name] = attr_config
+        else:
+            # This should not happen due to validation above, but just in case
+            raise ValueError(
+                f"Table '{table_name}' not found in any data source for attribute '{attr_name}'"
+            )
+
+    return sbml_attrs, side_loaded_attrs
 
 
 def validate_assets(
@@ -855,12 +985,14 @@ def _validate_entity_attrs(
     """
     assert isinstance(entity_attrs, dict), "entity_attrs must be a dictionary"
 
-    for k, v in entity_attrs.items():
+    for _, v in entity_attrs.items():
         # check structure against pydantic config
         validated_attrs = _EntityAttrValidator(**v).model_dump()
 
         if validate_transformations:
-            trans_name = validated_attrs.get("trans", DEFAULT_WT_TRANS)
+            trans_name = validated_attrs.get(
+                WEIGHTING_SPEC.TRANSFORMATION, DEFAULT_WT_TRANS
+            )
             if custom_transformations:
                 valid_transformations = {
                     **DEFINED_WEIGHT_TRANSFORMATION,

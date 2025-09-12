@@ -221,3 +221,166 @@ def test_get_sbml_dfs_vertex_summaries_dimensions(sbml_dfs_metabolism):
 
     # Verify no NaN values (should be filled with 0)
     assert not result.isnull().any().any()
+
+
+def test_separate_entity_attrs_by_source(sbml_dfs_w_data):
+    """Test separation of entity attributes by data source (SBML vs side-loaded)."""
+    from napistu.network.constants import SBML_DFS, WEIGHTING_SPEC
+
+    # Create side-loaded attributes
+    side_loaded_attributes = {
+        "external_db": pd.DataFrame({"confidence_score": [0.8, 0.9, 0.7]})
+    }
+
+    # Create entity attributes mixing SBML and side-loaded data
+    entity_attrs = {
+        # SBML attributes - using actual table names from fixture
+        "rxn_int_attr": {
+            WEIGHTING_SPEC.TABLE: "rxn_data",
+            WEIGHTING_SPEC.VARIABLE: "rxn_attr_int",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        },
+        "rxn_float_attr": {
+            WEIGHTING_SPEC.TABLE: "rxn_data",
+            WEIGHTING_SPEC.VARIABLE: "rxn_attr_float",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        },
+        # Side-loaded attributes
+        "external_score": {
+            WEIGHTING_SPEC.TABLE: "external_db",
+            WEIGHTING_SPEC.VARIABLE: "confidence_score",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        },
+    }
+
+    # Test the separation
+    sbml_attrs, side_loaded_attrs = ng_utils.separate_entity_attrs_by_source(
+        entity_attrs,
+        entity_type=SBML_DFS.REACTIONS,
+        sbml_dfs=sbml_dfs_w_data,
+        side_loaded_attributes=side_loaded_attributes,
+    )
+
+    # Verify SBML attributes
+    assert "rxn_int_attr" in sbml_attrs
+    assert "rxn_float_attr" in sbml_attrs
+    assert len(sbml_attrs) == 2
+
+    # Verify side-loaded attributes
+    assert "external_score" in side_loaded_attrs
+    assert len(side_loaded_attrs) == 1
+
+    # Verify structure consistency
+    assert WEIGHTING_SPEC.TABLE in sbml_attrs["rxn_int_attr"]
+    assert WEIGHTING_SPEC.VARIABLE in sbml_attrs["rxn_int_attr"]
+    assert WEIGHTING_SPEC.TABLE in side_loaded_attrs["external_score"]
+    assert WEIGHTING_SPEC.VARIABLE in side_loaded_attrs["external_score"]
+
+    # Test single source cases
+
+    # Case 1: Only sbml_dfs provided (no side_loaded_attributes)
+    sbml_only_attrs = {
+        "rxn_int_attr": {
+            WEIGHTING_SPEC.TABLE: "rxn_data",
+            WEIGHTING_SPEC.VARIABLE: "rxn_attr_int",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        }
+    }
+
+    sbml_attrs_only, side_loaded_attrs_only = ng_utils.separate_entity_attrs_by_source(
+        sbml_only_attrs, entity_type=SBML_DFS.REACTIONS, sbml_dfs=sbml_dfs_w_data
+    )
+    assert "rxn_int_attr" in sbml_attrs_only
+    assert len(sbml_attrs_only) == 1
+    assert side_loaded_attrs_only == {}
+
+    # Case 2: Only side_loaded_attributes provided (no sbml_dfs)
+    side_loaded_only_attrs = {
+        "external_score": {
+            WEIGHTING_SPEC.TABLE: "external_db",
+            WEIGHTING_SPEC.VARIABLE: "confidence_score",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        }
+    }
+
+    sbml_attrs_only, side_loaded_attrs_only = ng_utils.separate_entity_attrs_by_source(
+        side_loaded_only_attrs,
+        entity_type=SBML_DFS.REACTIONS,
+        side_loaded_attributes=side_loaded_attributes,
+    )
+    assert sbml_attrs_only == {}
+    assert "external_score" in side_loaded_attrs_only
+    assert len(side_loaded_attrs_only) == 1
+
+
+def test_separate_entity_attrs_by_source_negative_cases(sbml_dfs_w_data):
+    """Test negative cases for separate_entity_attrs_by_source function."""
+    from napistu.network.constants import SBML_DFS, WEIGHTING_SPEC
+
+    # Create test data
+    side_loaded_attributes = {
+        "external_db": pd.DataFrame({"confidence_score": [0.8, 0.9, 0.7]})
+    }
+
+    entity_attrs = {
+        "rxn_int_attr": {
+            WEIGHTING_SPEC.TABLE: "rxn_data",
+            WEIGHTING_SPEC.VARIABLE: "rxn_attr_int",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        },
+        "external_score": {
+            WEIGHTING_SPEC.TABLE: "external_db",
+            WEIGHTING_SPEC.VARIABLE: "confidence_score",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        },
+    }
+
+    # Case 1: Neither sbml_dfs nor side_loaded_attributes provided
+    with pytest.raises(
+        ValueError,
+        match="At least one of 'sbml_dfs' or 'side_loaded_attributes' must be provided",
+    ):
+        ng_utils.separate_entity_attrs_by_source(
+            entity_attrs, entity_type=SBML_DFS.REACTIONS
+        )
+
+    # Case 2: Overlapping table names between sbml_dfs and side_loaded_attributes
+    overlapping_side_loaded_attributes = {
+        "rxn_data": pd.DataFrame(
+            {"overlap_score": [0.1, 0.2, 0.3]}
+        )  # overlaps with sbml_dfs table
+    }
+
+    with pytest.raises(ValueError, match="Overlapping table names found"):
+        ng_utils.separate_entity_attrs_by_source(
+            entity_attrs,
+            entity_type=SBML_DFS.REACTIONS,
+            sbml_dfs=sbml_dfs_w_data,
+            side_loaded_attributes=overlapping_side_loaded_attributes,
+        )
+
+    # Case 3: Invalid entity_type
+    with pytest.raises(ValueError, match="Invalid entity_type"):
+        ng_utils.separate_entity_attrs_by_source(
+            entity_attrs,
+            entity_type="invalid",
+            sbml_dfs=sbml_dfs_w_data,
+            side_loaded_attributes=side_loaded_attributes,
+        )
+
+    # Case 4: Required table not found in either source
+    missing_table_attrs = {
+        "missing_attr": {
+            WEIGHTING_SPEC.TABLE: "nonexistent_table",
+            WEIGHTING_SPEC.VARIABLE: "some_var",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        }
+    }
+
+    with pytest.raises(ValueError, match="Required table names not found"):
+        ng_utils.separate_entity_attrs_by_source(
+            missing_table_attrs,
+            entity_type=SBML_DFS.REACTIONS,
+            sbml_dfs=sbml_dfs_w_data,
+            side_loaded_attributes=side_loaded_attributes,
+        )
