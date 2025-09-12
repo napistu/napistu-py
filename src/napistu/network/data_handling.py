@@ -6,7 +6,6 @@ import pandas as pd
 
 from napistu import sbml_dfs_core
 from napistu.constants import ENTITIES_W_DATA, SBML_DFS
-from napistu.network import net_create, ng_utils
 from napistu.network.constants import DEFAULT_WT_TRANS, NAPISTU_GRAPH, WEIGHTING_SPEC
 from napistu.network.ng_core import NapistuGraph
 
@@ -118,84 +117,6 @@ def add_results_table_to_graph(
     napistu_graph.transform_vertices(custom_transformations=custom_transformations)
 
     return napistu_graph if not inplace else None
-
-
-def _add_graph_species_attribute(
-    napistu_graph: NapistuGraph,
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
-    species_graph_attrs: dict,
-    custom_transformations: Optional[dict] = None,
-) -> NapistuGraph:
-    """
-    Add meta-data from species_data to existing igraph's vertices.
-
-    This function augments the vertices of an igraph network with additional attributes
-    derived from the species-level data in the provided SBML_dfs object. The attributes
-    to add are specified in the species_graph_attrs dictionary, and can be transformed
-    using either built-in or user-supplied transformation functions.
-
-    Parameters
-    ----------
-    napistu_graph : NapistuGraph
-        The igraph network to augment.
-    sbml_dfs : sbml_dfs_core.SBML_dfs
-        The SBML_dfs object containing species data.
-    species_graph_attrs : dict
-        Dictionary specifying which attributes to pull from species_data and how to transform them.
-        The structure should be {attribute_name: {"table": ..., "variable": ..., "trans": ...}}.
-    custom_transformations : dict, optional
-        Dictionary mapping transformation names to functions. If provided, these will be checked
-        before built-in transformations. Example: {"square": lambda x: x**2}
-
-    Returns
-    -------
-    NapistuGraph
-        The input igraph network with additional vertex attributes added from species_data.
-    """
-    if not isinstance(species_graph_attrs, dict):
-        raise TypeError(
-            f"species_graph_attrs must be a dict, but was {type(species_graph_attrs)}"
-        )
-
-    # fail fast if species_graph_attrs is not properly formatted
-    # also flatten attribute list to be added to vertex nodes
-    sp_graph_key_list = []
-    sp_node_attr_list = []
-    for k in species_graph_attrs.keys():
-        ng_utils._validate_entity_attrs(
-            species_graph_attrs[k], custom_transformations=custom_transformations
-        )
-
-        sp_graph_key_list.append(k)
-        sp_node_attr_list.append(list(species_graph_attrs[k].keys()))
-
-    # flatten sp_node_attr_list
-    flat_sp_node_attr_list = [item for items in sp_node_attr_list for item in items]
-
-    # Check for attribute collisions before proceeding
-    existing_attrs = set(napistu_graph.vs.attributes())
-    for attr in flat_sp_node_attr_list:
-        if attr in existing_attrs:
-            raise ValueError(f"Attribute '{attr}' already exists in graph vertices")
-
-    logger.info("Adding meta-data from species_data")
-
-    curr_network_nodes_df = napistu_graph.get_vertex_dataframe()
-
-    # add species-level attributes to nodes dataframe
-    augmented_network_nodes_df = net_create._augment_network_nodes(
-        curr_network_nodes_df,
-        sbml_dfs,
-        species_graph_attrs,
-        custom_transformations=custom_transformations,
-    )
-
-    # Add each attribute to the graph vertices
-    for vs_attr in flat_sp_node_attr_list:
-        logger.info(f"Adding new attribute {vs_attr} to vertices")
-        napistu_graph.vs[vs_attr] = augmented_network_nodes_df[vs_attr].values
-
-    return napistu_graph
 
 
 def _select_sbml_dfs_data_table(

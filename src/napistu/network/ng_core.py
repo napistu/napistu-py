@@ -1498,52 +1498,18 @@ class NapistuGraph(ig.Graph):
         else:
             graph = self
 
-        # Get entity_attrs from stored metadata
-        entity_attrs = graph._get_entity_attrs(entity_type)
-        if entity_attrs is None or not entity_attrs:
-            logger.warning(
-                f"No {entity_type}_attrs found. Use set_graph_attrs() to configure {entity_type} attributes before extracting {target_entity} data."
-            )
-            return None if inplace else graph
+        # Use utility function to prepare entity data extraction
+        results = ng_utils.prepare_entity_data_extraction(
+            graph, entity_type, target_entity, mode, overwrite
+        )
 
-        # Check for conflicts with existing attributes
-        if target_entity == NAPISTU_GRAPH.EDGES:
-            existing_attrs = set(graph.es.attributes())
-        elif target_entity == NAPISTU_GRAPH.VERTICES:  # vertices
-            existing_attrs = set(graph.vs.attributes())
+        if results is None:
+            return None if inplace else graph
         else:
-            raise ValueError(
-                f"Unknown target_entity: {target_entity}. Must be '{NAPISTU_GRAPH.EDGES}' or '{NAPISTU_GRAPH.VERTICES}'"
-            )
-        # get a singular name for logging
+            attrs_to_extract, attrs_to_add = results
+
+        # Get a singular name for logging
         entity_name = SINGULAR_GRAPH_ENTITIES[target_entity]
-
-        new_attrs = set(entity_attrs.keys())
-
-        if mode == ADDING_ENTITY_DATA_DEFS.FRESH:
-            overlapping_attrs = existing_attrs & new_attrs
-            if overlapping_attrs and not overwrite:
-                raise ValueError(
-                    f"{entity_name.capitalize()} attributes already exist: {overlapping_attrs}. "
-                    f"Use overwrite=True to replace or mode='{ADDING_ENTITY_DATA_DEFS.EXTEND}' to add only new attributes"
-                )
-            attrs_to_add = new_attrs
-
-        elif mode == ADDING_ENTITY_DATA_DEFS.EXTEND:
-            # In extend mode, only add attributes that don't exist (unless overwrite=True)
-            attrs_to_add = new_attrs - existing_attrs
-
-        else:
-            raise ValueError(
-                f"Unknown mode: {mode}. Must be one of: {VALID_ADDING_ENTITY_DATA_DEFS}"
-            )
-
-        if not attrs_to_add:
-            logger.info("No new attributes to add")
-            return None if inplace else graph
-
-        # Only extract the attributes we're actually going to add
-        attrs_to_extract = {attr: entity_attrs[attr] for attr in attrs_to_add}
 
         # Get entity data using existing function - only for attributes we need
         entity_data = ng_utils.pluck_entity_data(

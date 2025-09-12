@@ -29,12 +29,16 @@ from napistu.constants import (
     SOURCE_SPEC,
 )
 from napistu.network.constants import (
+    ADDING_ENTITY_DATA_DEFS,
     DEFAULT_WT_TRANS,
     DISTANCES,
+    NAPISTU_GRAPH,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
     NAPISTU_GRAPH_VERTICES,
     NODE_TYPES_TO_ENTITY_TABLES,
+    SINGULAR_GRAPH_ENTITIES,
+    VALID_ADDING_ENTITY_DATA_DEFS,
     VALID_NAPISTU_GRAPH_NODE_TYPES,
     VALID_VERTEX_SBML_DFS_SUMMARIES,
     VERTEX_SBML_DFS_SUMMARIES,
@@ -478,6 +482,93 @@ def pluck_entity_data(
         return None
 
     return pd.concat(data_list, axis=1)
+
+
+def prepare_entity_data_extraction(
+    graph,
+    entity_type: str,
+    target_entity: str,
+    mode: str = ADDING_ENTITY_DATA_DEFS.FRESH,
+    overwrite: bool = False,
+) -> tuple[dict, set] | None:
+    """
+    Prepare entity data extraction by validating inputs and determining which attributes to extract.
+
+    This utility captures the logic from _add_entity_data up to the pluck_entity_data call,
+    handling validation, conflict checking, and attribute filtering.
+
+    Parameters
+    ----------
+    graph : NapistuGraph
+        The graph object containing entity attributes metadata
+    entity_type : str
+        Either "reactions" or "species"
+    target_entity : str
+        Either "edges" or "vertices" - determines where attributes will be added
+    mode : str, default="fresh"
+        Either "fresh" (replace existing) or "extend" (add new attributes only)
+    overwrite : bool, default=False
+        Whether to allow overwriting existing attributes when conflicts arise
+
+    Returns
+    -------
+    tuple[dict, set] | None
+        If successful: (attrs_to_extract, attrs_to_add)
+        If failed: None
+
+    Raises
+    ------
+    ValueError
+        If target_entity is invalid, mode is invalid, or conflicts exist without overwrite
+    """
+
+    # Get entity_attrs from stored metadata
+    entity_attrs = graph._get_entity_attrs(entity_type)
+    if entity_attrs is None or not entity_attrs:
+        logger.warning(
+            f"No {entity_type}_attrs found. Use set_graph_attrs() to configure {entity_type} attributes before extracting {target_entity} data."
+        )
+        return None
+
+    # Check for conflicts with existing attributes
+    if target_entity == NAPISTU_GRAPH.EDGES:
+        existing_attrs = set(graph.es.attributes())
+    elif target_entity == NAPISTU_GRAPH.VERTICES:  # vertices
+        existing_attrs = set(graph.vs.attributes())
+    else:
+        raise ValueError(
+            f"Unknown target_entity: {target_entity}. Must be '{NAPISTU_GRAPH.EDGES}' or '{NAPISTU_GRAPH.VERTICES}'"
+        )
+    # Get a singular name for logging
+    entity_name = SINGULAR_GRAPH_ENTITIES[target_entity]
+
+    new_attrs = set(entity_attrs.keys())
+    if mode == ADDING_ENTITY_DATA_DEFS.FRESH:
+        overlapping_attrs = existing_attrs & new_attrs
+        if overlapping_attrs and not overwrite:
+            raise ValueError(
+                f"{entity_name.capitalize()} attributes already exist: {overlapping_attrs}. "
+                f"Use overwrite=True to replace or mode='{ADDING_ENTITY_DATA_DEFS.EXTEND}' to add only new attributes"
+            )
+        attrs_to_add = new_attrs
+
+    elif mode == ADDING_ENTITY_DATA_DEFS.EXTEND:
+        # In extend mode, only add attributes that don't exist (unless overwrite=True)
+        attrs_to_add = new_attrs - existing_attrs
+
+    else:
+        raise ValueError(
+            f"Unknown mode: {mode}. Must be one of: {VALID_ADDING_ENTITY_DATA_DEFS}"
+        )
+
+    if not attrs_to_add:
+        logger.info("No new attributes to add")
+        return None
+
+    # Only extract the attributes we're actually going to add
+    attrs_to_extract = {attr: entity_attrs[attr] for attr in attrs_to_add}
+
+    return attrs_to_extract, attrs_to_add
 
 
 def validate_assets(
