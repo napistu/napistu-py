@@ -11,6 +11,7 @@ from napistu.constants import SBML_DFS
 from napistu.network.constants import (
     DEFAULT_WT_TRANS,
     GRAPH_WIRING_APPROACHES,
+    IGRAPH_DEFS,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
     NAPISTU_GRAPH_VERTICES,
@@ -1257,3 +1258,132 @@ def test_transform_vertices_error_handling(test_graph, minimal_valid_sbml_dfs):
 
     # No error should be raised, just a warning logged
     # This mirrors the behavior of transform_edges
+
+
+def test_add_attributes_to_graph_inplace_edges(test_graph):
+    """Test _add_attributes_to_graph_inplace with edges using multi-index."""
+    # Get a few edges from the test graph
+    edge_df = test_graph.get_edge_dataframe()
+
+    num_edges = min(3, len(edge_df))
+    selected_edges = edge_df.head(num_edges)
+
+    # Create edge data indexed by (source, target) tuples
+    edge_data = pd.DataFrame(
+        {
+            "edge_weight": [0.5, 0.8, 0.3][:num_edges],
+            "edge_confidence": [0.9, 0.7, 0.8][:num_edges],
+            "edge_type": ["activation", "inhibition", "binding"][:num_edges],
+        },
+        index=pd.MultiIndex.from_tuples(
+            [
+                (row[IGRAPH_DEFS.SOURCE], row[IGRAPH_DEFS.TARGET])
+                for _, row in selected_edges.iterrows()
+            ],
+            names=[IGRAPH_DEFS.SOURCE, IGRAPH_DEFS.TARGET],
+        ),
+    )
+
+    # Test adding attributes to edges
+    test_graph._add_attributes_df(
+        entity_data=edge_data, target_entity=IGRAPH_DEFS.EDGES, overwrite=False
+    )
+
+    # Verify attributes were added to edges
+    assert "edge_weight" in test_graph.es.attributes()
+    assert "edge_confidence" in test_graph.es.attributes()
+    assert "edge_type" in test_graph.es.attributes()
+
+    # Verify values were assigned correctly
+    edge_weights = test_graph.es["edge_weight"]
+    edge_confidences = test_graph.es["edge_confidence"]
+    edge_types = test_graph.es["edge_type"]
+
+    # Check that the values match our test data
+    for i in range(num_edges):
+        assert edge_weights[i] == edge_data["edge_weight"].iloc[i]
+        assert edge_confidences[i] == edge_data["edge_confidence"].iloc[i]
+        assert edge_types[i] == edge_data["edge_type"].iloc[i]
+
+
+def test_add_attributes_to_graph_inplace_vertices(test_graph):
+    """Test _add_attributes_to_graph_inplace with vertices using single index."""
+    # Get a few vertices from the test graph
+    vertex_df = test_graph.get_vertex_dataframe()
+    num_vertices = min(3, len(vertex_df))
+    selected_vertices = vertex_df.head(num_vertices)
+
+    # Create vertex data indexed by vertex names
+    vertex_data = pd.DataFrame(
+        {
+            "vertex_expression": [1.2, 3.4, 5.6][:num_vertices],
+            "vertex_confidence": [0.8, 0.9, 0.7][:num_vertices],
+            "vertex_location": ["nucleus", "cytoplasm", "membrane"][:num_vertices],
+        },
+        index=pd.Index(selected_vertices[IGRAPH_DEFS.NAME], name=IGRAPH_DEFS.NAME),
+    )
+
+    # Test adding attributes to vertices
+    test_graph._add_attributes_df(
+        entity_data=vertex_data, target_entity=IGRAPH_DEFS.VERTICES, overwrite=False
+    )
+
+    # Verify attributes were added to vertices
+    assert "vertex_expression" in test_graph.vs.attributes()
+    assert "vertex_confidence" in test_graph.vs.attributes()
+    assert "vertex_location" in test_graph.vs.attributes()
+
+    # Verify values were assigned correctly
+    vertex_expressions = test_graph.vs["vertex_expression"]
+    vertex_confidences = test_graph.vs["vertex_confidence"]
+    vertex_locations = test_graph.vs["vertex_location"]
+
+    # Check that the values match our test data
+    for i in range(num_vertices):
+        assert vertex_expressions[i] == vertex_data["vertex_expression"].iloc[i]
+        assert vertex_confidences[i] == vertex_data["vertex_confidence"].iloc[i]
+        assert vertex_locations[i] == vertex_data["vertex_location"].iloc[i]
+
+
+def test_add_attributes_to_graph_inplace_overwrite(test_graph):
+    """Test _add_attributes_to_graph_inplace with overwrite=True."""
+    # Get a few vertices from the test graph
+    vertex_df = test_graph.get_vertex_dataframe()
+    num_vertices = min(2, len(vertex_df))
+    selected_vertices = vertex_df.head(num_vertices)
+
+    # Create initial vertex data
+    initial_data = pd.DataFrame(
+        {
+            "test_attr": [100, 200][:num_vertices],
+        },
+        index=pd.Index(selected_vertices[IGRAPH_DEFS.NAME], name=IGRAPH_DEFS.NAME),
+    )
+
+    # Add initial attributes
+    test_graph._add_attributes_df(
+        entity_data=initial_data, target_entity=IGRAPH_DEFS.VERTICES, overwrite=False
+    )
+
+    # Verify initial values
+    assert test_graph.vs["test_attr"][0] == 100
+    if num_vertices > 1:
+        assert test_graph.vs["test_attr"][1] == 200
+
+    # Create new data with different values
+    new_data = pd.DataFrame(
+        {
+            "test_attr": [300, 400][:num_vertices],
+        },
+        index=pd.Index(selected_vertices[IGRAPH_DEFS.NAME], name=IGRAPH_DEFS.NAME),
+    )
+
+    # Add new attributes with overwrite=True
+    test_graph._add_attributes_df(
+        entity_data=new_data, target_entity=IGRAPH_DEFS.VERTICES, overwrite=True
+    )
+
+    # Verify values were overwritten
+    assert test_graph.vs["test_attr"][0] == 300
+    if num_vertices > 1:
+        assert test_graph.vs["test_attr"][1] == 400

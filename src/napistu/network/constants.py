@@ -6,6 +6,14 @@ from types import SimpleNamespace
 
 from napistu.constants import SBML_DFS, SBML_DFS_METHOD_DEFS, SBOTERM_NAMES
 
+IGRAPH_DEFS = SimpleNamespace(
+    VERTICES="vertices",
+    EDGES="edges",
+    NAME="name",
+    SOURCE="source",
+    TARGET="target",
+)
+
 NAPISTU_GRAPH = SimpleNamespace(VERTICES="vertices", EDGES="edges", METADATA="metadata")
 
 GRAPH_DIRECTEDNESS = SimpleNamespace(DIRECTED="directed", UNDIRECTED="undirected")

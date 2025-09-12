@@ -353,6 +353,84 @@ def get_sbml_dfs_vertex_summaries(
     return pd.concat(summaries, axis=1).astype(int)
 
 
+def pluck_data(
+    data_tables: dict[str, pd.DataFrame],
+    entity_attrs: dict[str, dict],
+) -> pd.DataFrame | None:
+    """
+    Pluck data from a dictionary of DataFrames based on specified attributes.
+
+    Parameters
+    ----------
+    data_tables : dict[str, pd.DataFrame]
+        A dictionary mapping table names to pandas DataFrames.
+    entity_attrs : dict[str, dict]
+        A dictionary containing the attributes to pull out. Of the form:
+        {
+            "to_be_created_column_name": {
+                "table": "table name in data_tables",
+                "variable": "column name in the specified table"
+            }
+        }
+
+    Returns
+    -------
+    pd.DataFrame or None
+        A table where all extracted attributes are merged based on a common index or None
+        if no attributes were extracted. If the attribute dict is empty, returns None.
+
+    Raises
+    ------
+    ValueError
+        If requested tables/variables are missing.
+    """
+
+    # Use existing validation logic (without transformation validation)
+    _validate_entity_attrs(entity_attrs, validate_transformations=False)
+
+    if not isinstance(data_tables, dict):
+        raise ValueError("data_tables must be a dictionary")
+
+    if len(data_tables) == 0:
+        raise ValueError("data_tables must be a non-empty dictionary")
+    for table_name in data_tables.keys():
+        if not isinstance(data_tables[table_name], pd.DataFrame):
+            raise ValueError(f"data_tables[{table_name}] must be a pandas DataFrame")
+
+    if len(entity_attrs) == 0:
+        logger.warning("No attributes were provided in entity_attrs; returning None")
+        return None
+
+    data_list = []
+
+    for column_name, attr_dict in entity_attrs.items():
+        table_name = attr_dict[WEIGHTING_SPEC.TABLE]
+        variable_name = attr_dict[WEIGHTING_SPEC.VARIABLE]
+
+        # Check if table exists
+        if table_name not in data_tables.keys():
+            raise ValueError(
+                f"'{table_name}' was defined as a table in entity_attrs but "
+                f"it is not present in the provided data_tables"
+            )
+
+        # Check if variable exists in the table
+        if variable_name not in data_tables[table_name].columns.tolist():
+            raise ValueError(
+                f"'{variable_name}' was defined as a variable in entity_attrs but "
+                f"it is not present in the '{table_name}' table"
+            )
+
+        # Extract the series and rename it
+        entity_series = data_tables[table_name][variable_name].rename(column_name)
+        data_list.append(entity_series)
+
+    if len(data_list) == 0:
+        return None
+
+    return pd.concat(data_list, axis=1)
+
+
 def pluck_entity_data(
     sbml_dfs: sbml_dfs_core.SBML_dfs,
     entity_attrs: dict[str, list[dict]] | list[dict],
@@ -966,7 +1044,17 @@ def _validate_entity_attrs(
     Parameters
     ----------
     entity_attrs : dict
-        Dictionary of entity attributes to validate.
+        Dictionary of entity attributes to validate. The structure should be:
+        {
+            "attr_name": {
+                "table": "table_name",
+                "variable": "variable_name",
+                "trans": "transformation_name"
+            }
+        }
+        where "table" is the name of the table in the sbml_dfs to look for the variable,
+        "variable" is the name of the variable in the table,
+        "trans" (optional) is the name of the transformation to apply to the variable.
     validate_transformations : bool, optional
         Whether to validate transformation names, by default True.
     custom_transformations : dict, optional

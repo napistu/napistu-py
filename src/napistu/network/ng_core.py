@@ -328,7 +328,8 @@ class NapistuGraph(ig.Graph):
 
     def add_edge_data(
         self,
-        sbml_dfs: SBML_dfs,
+        sbml_dfs: Optional[SBML_dfs] = None,
+        side_loaded_attributes: Optional[dict[str, pd.DataFrame]] = None,
         mode: str = ADDING_ENTITY_DATA_DEFS.FRESH,
         overwrite: bool = False,
         inplace: bool = True,
@@ -339,7 +340,9 @@ class NapistuGraph(ig.Graph):
         Parameters
         ----------
         sbml_dfs : SBML_dfs
-            The SBML_dfs object containing reaction data
+            The SBML_dfs object containing reaction data. If None, only side-loaded attributes will be used.
+        side_loaded_attributes : dict[str, pd.DataFrame], optional
+            Dictionary mapping table names to DataFrames for side-loaded data
         mode : str
             Either "fresh" (replace existing) or "extend" (add new attributes only)
         overwrite : bool
@@ -354,9 +357,10 @@ class NapistuGraph(ig.Graph):
             If inplace=False, returns a new NapistuGraph with edge data added.
         """
         return self._add_entity_data(
-            sbml_dfs=sbml_dfs,
             entity_type=SBML_DFS.REACTIONS,
             target_entity=NAPISTU_GRAPH.EDGES,
+            sbml_dfs=sbml_dfs,
+            side_loaded_attributes=side_loaded_attributes,
             mode=mode,
             overwrite=overwrite,
             inplace=inplace,
@@ -364,7 +368,8 @@ class NapistuGraph(ig.Graph):
 
     def add_vertex_data(
         self,
-        sbml_dfs: SBML_dfs,
+        sbml_dfs: Optional[SBML_dfs] = None,
+        side_loaded_attributes: Optional[dict[str, pd.DataFrame]] = None,
         mode: str = ADDING_ENTITY_DATA_DEFS.FRESH,
         overwrite: bool = False,
         inplace: bool = True,
@@ -375,7 +380,9 @@ class NapistuGraph(ig.Graph):
         Parameters
         ----------
         sbml_dfs : SBML_dfs
-            The SBML_dfs object containing species data
+            The SBML_dfs object containing species data. If None, only side-loaded attributes will be used.
+        side_loaded_attributes : dict[str, pd.DataFrame], optional
+            Dictionary mapping table names to DataFrames for side-loaded data
         mode : str
             Either "fresh" (replace existing) or "extend" (add new attributes only)
         overwrite : bool
@@ -390,9 +397,10 @@ class NapistuGraph(ig.Graph):
             If inplace=False, returns a new NapistuGraph with vertex data added.
         """
         return self._add_entity_data(
-            sbml_dfs=sbml_dfs,
             entity_type=SBML_DFS.SPECIES,
             target_entity=NAPISTU_GRAPH.VERTICES,
+            sbml_dfs=sbml_dfs,
+            side_loaded_attributes=side_loaded_attributes,
             mode=mode,
             overwrite=overwrite,
             inplace=inplace,
@@ -1459,9 +1467,10 @@ class NapistuGraph(ig.Graph):
 
     def _add_entity_data(
         self,
-        sbml_dfs: SBML_dfs,
         entity_type: str,
-        target_entity: str,  # either "edges" or "vertices"
+        target_entity: str,
+        sbml_dfs: Optional[SBML_dfs] = None,
+        side_loaded_attributes: Optional[dict[str, pd.DataFrame]] = None,
         mode: str = ADDING_ENTITY_DATA_DEFS.FRESH,
         overwrite: bool = False,
         inplace: bool = True,
@@ -1473,12 +1482,14 @@ class NapistuGraph(ig.Graph):
 
         Parameters
         ----------
-        sbml_dfs : SBML_dfs
-            The SBML_dfs object containing entity data
         entity_type : str
             Either "reactions" or "species"
         target_entity : str
             Either "edges" or "vertices" - determines where to add the attributes
+        sbml_dfs : SBML_dfs
+            The SBML_dfs object containing entity data. If None, only side-loaded attributes will be used.
+        side_loaded_attributes : dict[str, pd.DataFrame]
+            A dictionary of side-loaded attributes. If None, only sbml_dfs will be used.
         mode : str
             Either "fresh" (replace existing) or "extend" (add new attributes only)
         overwrite : bool
@@ -1508,18 +1519,46 @@ class NapistuGraph(ig.Graph):
 
         if entity_attrs_to_extract is None:
             return None if inplace else graph
-        else:
-            attrs_to_add = entity_attrs_to_extract.keys()
 
+        # Get current graph data and drop to-be-overwritten attributes if overwrite=True
+        if target_entity == NAPISTU_GRAPH.EDGES:
+            graph_df = graph.get_edge_dataframe()
+        else:  # vertices
+            graph_df = graph.get_vertex_dataframe()
+
+        # Remove overlapping attributes from graph_df if overwrite=True to avoid _x/_y suffixes
+        attrs_to_add = entity_attrs_to_extract.keys()
+        if overwrite:
+            overlapping_in_graph = [
+                attr for attr in attrs_to_add if attr in graph_df.columns
+            ]
+            if overlapping_in_graph:
+                graph_df = graph_df.drop(columns=overlapping_in_graph)
+
+        # separate the attributes into those which will be extracted from the sbml_dfs
+        # and those which will be extracted from the side_loaded_attributes
         sbml_dfs_attrs, side_loaded_attrs = ng_utils.separate_entity_attrs_by_source(
-            entity_attrs_to_extract, entity_type, sbml_dfs, side_loaded_attributes=None
+            entity_attrs_to_extract, entity_type, sbml_dfs, side_loaded_attributes
         )
 
         if len(sbml_dfs_attrs) > 0:
-            # Get entity data using existing function - only for attributes we need
-            entity_data = ng_utils.pluck_entity_data(
-                sbml_dfs, entity_attrs_to_extract, entity_type, transform=False
+            # Get entity data from sbml_dfs
+            sbml_dfs_entity_data = ng_utils.pluck_entity_data(
+                sbml_dfs, sbml_dfs_attrs, entity_type, transform=False
             )
+        else:
+            sbml_dfs_entity_data = None
+
+        if len(side_loaded_attrs) > 0:
+            # Get entity data from side_loaded_attributes
+            side_loaded_entity_data = ng_utils.pluck_data(
+                side_loaded_attributes, side_loaded_attrs
+            )
+        else:
+            side_loaded_entity_data = None
+
+        # merge the two entity dataframes
+        entity_data = pd.concat([sbml_dfs_entity_data, side_loaded_entity_data])
 
         if entity_data is None:
             logger.warning(
@@ -1529,21 +1568,11 @@ class NapistuGraph(ig.Graph):
 
         # Get current graph data and merge with entity data
         if target_entity == NAPISTU_GRAPH.EDGES:
-            graph_df = graph.get_edge_dataframe()
             # For edges, merge on reaction ID
             merge_key = SBML_DFS.R_ID
         else:  # vertices
-            graph_df = graph.get_vertex_dataframe()
             # For vertices, merge on species ID
             merge_key = SBML_DFS.S_ID
-
-        # Remove overlapping attributes from graph_df if overwrite=True to avoid _x/_y suffixes
-        if overwrite:
-            overlapping_in_graph = [
-                attr for attr in attrs_to_add if attr in graph_df.columns
-            ]
-            if overlapping_in_graph:
-                graph_df = graph_df.drop(columns=overlapping_in_graph)
 
         graph_with_attrs = graph_df.merge(
             entity_data, left_on=merge_key, right_index=True, how="left"
@@ -1564,6 +1593,89 @@ class NapistuGraph(ig.Graph):
         )
 
         return None if inplace else graph
+
+    def _add_attributes_df(
+        self,
+        entity_data: pd.DataFrame,
+        target_entity: str,
+        overwrite: bool = False,
+    ) -> None:
+        """
+        Add attributes to a graph in-place by merging entity data with graph data.
+
+        This private method performs the core operation of merging entity data
+        with graph data and assigning the resulting attributes directly to the graph.
+        It's extracted from the _add_entity_data method for reusability.
+
+        Parameters
+        ----------
+        entity_data : pd.DataFrame
+            DataFrame containing the entity data to add, indexed by entity IDs.
+            The merge will occur on any combination of columns present in the
+            vertices/edges that match the index names of entity_data.
+            For single index: uses the index name (e.g., "s_id" for species).
+            For multi-index: uses the index names (e.g., ["from", "to"] for edges).
+        target_entity : str
+            Either "edges" or "vertices" - determines where to add the attributes
+        overwrite : bool, default=False
+            Whether to allow overwriting existing attributes when conflicts arise
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If target_entity is not "edges" or "vertices"
+        """
+        if target_entity not in [NAPISTU_GRAPH.EDGES, NAPISTU_GRAPH.VERTICES]:
+            raise ValueError(
+                f"target_entity must be '{NAPISTU_GRAPH.EDGES}' or '{NAPISTU_GRAPH.VERTICES}'"
+            )
+
+        # Get attributes to add from the entity_data columns
+        attrs_to_add = list(entity_data.columns)
+
+        # Get merge key(s) from entity_data index names
+        if isinstance(entity_data.index, pd.MultiIndex):
+            merge_keys = list(entity_data.index.names)
+        else:
+            merge_keys = [entity_data.index.name]
+
+        # Get current graph data
+        if target_entity == NAPISTU_GRAPH.EDGES:
+            graph_df = self.get_edge_dataframe()
+        else:  # vertices
+            graph_df = self.get_vertex_dataframe()
+
+        # Remove overlapping attributes from graph_df if overwrite=True to avoid _x/_y suffixes
+        if overwrite:
+            overlapping_in_graph = [
+                attr for attr in attrs_to_add if attr in graph_df.columns
+            ]
+            if overlapping_in_graph:
+                graph_df = graph_df.drop(columns=overlapping_in_graph)
+
+        # Merge entity data with graph data
+        graph_with_attrs = graph_df.merge(
+            entity_data, left_on=merge_keys, right_index=True, how="left"
+        )
+
+        # Add new attributes directly to the graph
+        added_count = 0
+        for attr_name in attrs_to_add:
+            if target_entity == NAPISTU_GRAPH.EDGES:
+                self.es[attr_name] = graph_with_attrs[attr_name].values
+            else:  # vertices
+                self.vs[attr_name] = graph_with_attrs[attr_name].values
+            added_count += 1
+
+        # Log the results
+        entity_name = SINGULAR_GRAPH_ENTITIES[target_entity]
+        logger.info(
+            f"Added {added_count} {entity_name} attributes to graph: {attrs_to_add}"
+        )
 
     def _transform_entity_attributes(
         self,

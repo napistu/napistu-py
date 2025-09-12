@@ -384,3 +384,34 @@ def test_separate_entity_attrs_by_source_negative_cases(sbml_dfs_w_data):
             sbml_dfs=sbml_dfs_w_data,
             side_loaded_attributes=side_loaded_attributes,
         )
+
+
+def test_pluck_side_loaded_data():
+    # Create test data tables
+    table_a = pd.DataFrame({"col1": [1, 2, 3], "col2": ["a", "b", "c"]})
+    table_b = pd.DataFrame({"value": [10, 20, 30], "name": ["x", "y", "z"]})
+    data_tables = {"table_a": table_a, "table_b": table_b}
+
+    # Define entity attributes to extract
+    entity_attrs = {
+        "numbers": {"table": "table_a", "variable": "col1"},
+        "values": {"table": "table_b", "variable": "value"},
+    }
+
+    # Test the function
+    result = ng_utils.pluck_data(data_tables, entity_attrs)
+
+    # Assertions
+    assert result is not None
+    assert list(result.columns) == ["numbers", "values"]
+    assert result["numbers"].tolist() == [1, 2, 3]
+    assert result["values"].tolist() == [10, 20, 30]
+
+    # Test empty entity_attrs returns None
+    assert ng_utils.pluck_data(data_tables, {}) is None
+
+    # Test missing table raises ValueError
+    with pytest.raises(ValueError, match="not present in the provided data_tables"):
+        ng_utils.pluck_data(
+            data_tables, {"test": {"table": "missing", "variable": "col1"}}
+        )
