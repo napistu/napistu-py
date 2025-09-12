@@ -352,7 +352,10 @@ def get_sbml_dfs_vertex_summaries(
             pd.concat([reaction_ontologies, species_ontologies]).fillna(int(0))
         )
 
-    return pd.concat(summaries, axis=1).astype(int)
+    out = pd.concat(summaries, axis=1).astype(int)
+    out.index.name = NAPISTU_GRAPH_VERTICES.NAME
+
+    return out
 
 
 def pluck_data(

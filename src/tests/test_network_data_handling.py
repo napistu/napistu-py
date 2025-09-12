@@ -220,6 +220,30 @@ def test_create_graph_attrs_config():
     assert result == expected
 
 
+def test_create_graph_attrs_config_with_none_data_type():
+    """Test creating graph attributes configuration with data_type=None returns inner dict."""
+    result = data_handling._create_graph_attrs_config(
+        column_mapping={"col1": "col1", "col2": "renamed_col2"},
+        data_type=None,
+        table_name="test_table",
+        transformation="identity",
+    )
+
+    expected = {
+        "col1": {
+            "table": "test_table",
+            "variable": "col1",
+            "trans": "identity",
+        },
+        "renamed_col2": {
+            "table": "test_table",
+            "variable": "col2",
+            "trans": "identity",
+        },
+    }
+    assert result == expected
+
+
 def test_add_results_table_to_graph(sbml_dfs_glucose_metabolism):
     """Test adding results table to graph."""
     # Create a test graph using create_napistu_graph

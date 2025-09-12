@@ -8,6 +8,7 @@ import pytest
 from fs.errors import ResourceNotFound
 
 from napistu.constants import SBML_DFS
+from napistu.network import ng_utils
 from napistu.network.constants import (
     DEFAULT_WT_TRANS,
     GRAPH_WIRING_APPROACHES,
@@ -1127,7 +1128,6 @@ def test_reaction_edge_weighting():
 
 def test_add_sbml_dfs_summaries(napistu_graph_metabolism, sbml_dfs_metabolism):
     """Test that add_sbml_dfs_summaries adds vertex summary attributes correctly."""
-    from napistu.network import ng_utils
 
     # Get the expected summary columns
     expected_summaries = ng_utils.get_sbml_dfs_vertex_summaries(sbml_dfs_metabolism)
@@ -1142,11 +1142,15 @@ def test_add_sbml_dfs_summaries(napistu_graph_metabolism, sbml_dfs_metabolism):
     expected_columns = set(expected_summaries.columns)
 
     # Test inplace=True (default)
-    result = napistu_graph_metabolism.add_sbml_dfs_summaries(sbml_dfs_metabolism)
+    working_napistu_graph_metabolism = napistu_graph_metabolism.copy()
+    assert working_napistu_graph_metabolism is not napistu_graph_metabolism
+    result = working_napistu_graph_metabolism.add_sbml_dfs_summaries(
+        sbml_dfs_metabolism, inplace=True
+    )
     assert result is None
 
     # Check that all expected columns were added as vertex attributes
-    vertex_attrs = set(napistu_graph_metabolism.vs.attributes())
+    vertex_attrs = set(working_napistu_graph_metabolism.vs.attributes())
     assert expected_columns.issubset(vertex_attrs)
 
     # Test inplace=False

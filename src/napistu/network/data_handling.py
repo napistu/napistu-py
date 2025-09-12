@@ -1,13 +1,17 @@
+from __future__ import annotations
+
 import logging
 import re
-from typing import Callable, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Union
 
 import pandas as pd
 
 from napistu import sbml_dfs_core
 from napistu.constants import ENTITIES_W_DATA, SBML_DFS
 from napistu.network.constants import DEFAULT_WT_TRANS, NAPISTU_GRAPH, WEIGHTING_SPEC
-from napistu.network.ng_core import NapistuGraph
+
+if TYPE_CHECKING:
+    from napistu.network.ng_core import NapistuGraph
 
 logger = logging.getLogger(__name__)
 
@@ -273,10 +277,10 @@ def _create_data_table_column_mapping(
 
 def _create_graph_attrs_config(
     column_mapping: Dict[str, str],
-    data_type: str,
+    data_type: Optional[str],
     table_name: str,
     transformation: str = DEFAULT_WT_TRANS,
-) -> Dict[str, Dict[str, Dict[str, str]]]:
+) -> Union[Dict[str, Dict[str, Dict[str, str]]], Dict[str, Dict[str, str]]]:
     """
     Create a configuration dictionary for graph attributes.
 
@@ -284,8 +288,8 @@ def _create_graph_attrs_config(
     ----------
     column_mapping : Dict[str, str]
         A dictionary mapping original column names to their new names in the graph
-    data_type : str
-        The type of data (e.g. "species", "reactions")
+    data_type : str or None
+        The type of data (e.g. "species", "reactions"). If None, returns the inner dict directly.
     table_name : str
         The name of the table containing the data
     transformation : str, optional
@@ -293,9 +297,17 @@ def _create_graph_attrs_config(
 
     Returns
     -------
-    Dict[str, Dict[str, Dict[str, str]]]
+    Dict[str, Dict[str, Dict[str, str]]] or Dict[str, Dict[str, str]]
         A nested dictionary containing the graph attributes configuration
-        Format:
+        If data_type is None, returns the inner dict directly:
+        {
+            new_col_name: {
+                "table": table_name,
+                "variable": original_col_name,
+                "trans": transformation
+            }
+        }
+        Otherwise, returns the full nested structure:
         {
             data_type: {
                 new_col_name: {
@@ -306,13 +318,16 @@ def _create_graph_attrs_config(
             }
         }
     """
-    graph_attrs = {data_type: {}}
+    inner_dict = {}
 
     for original_col, new_col in column_mapping.items():
-        graph_attrs[data_type][new_col] = {
+        inner_dict[new_col] = {
             WEIGHTING_SPEC.TABLE: table_name,
             WEIGHTING_SPEC.VARIABLE: original_col,
             WEIGHTING_SPEC.TRANSFORMATION: transformation,
         }
 
-    return graph_attrs
+    if data_type is None:
+        return inner_dict
+    else:
+        return {data_type: inner_dict}

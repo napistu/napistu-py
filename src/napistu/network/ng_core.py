@@ -11,7 +11,8 @@ from napistu import utils
 from napistu.constants import (
     SBML_DFS,
 )
-from napistu.network import ig_utils, ng_utils
+from napistu.ingestion.constants import DEFAULT_PRIORITIZED_PATHWAYS
+from napistu.network import data_handling, ig_utils, ng_utils
 from napistu.network.constants import (
     ADDING_ENTITY_DATA_DEFS,
     DEFAULT_WT_TRANS,
@@ -412,10 +413,12 @@ class NapistuGraph(ig.Graph):
         self,
         sbml_dfs: SBML_dfs,
         summary_types=VALID_VERTEX_SBML_DFS_SUMMARIES,
-        priority_pathways=None,
+        priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS,
         stratify_by_bqb=True,
         characteristic_only=False,
         dogmatic=False,
+        mode: str = ADDING_ENTITY_DATA_DEFS.FRESH,
+        overwrite: bool = False,
         inplace: bool = True,
     ) -> Optional["NapistuGraph"]:
         """
@@ -431,13 +434,17 @@ class NapistuGraph(ig.Graph):
         summary_types : list, optional
             Types of summaries to include. Defaults to all valid summary types.
         priority_pathways : list, optional
-            Priority pathways for source occurrence calculations
+            Priority pathways for source occurrence calculations. Defaults to DEFAULT_PRIORITIZED_PATHWAYS.
         stratify_by_bqb : bool, optional
             Whether to stratify by BioQualifiers. Default is True.
         characteristic_only : bool, optional
             Whether to include only characteristic identifiers. Default is False.
         dogmatic : bool, optional
             Whether to use dogmatic mode. Default is False.
+        mode : str
+            Either "fresh" (replace existing) or "extend" (add new attributes only)
+        overwrite : bool
+            Whether to allow overwriting existing vertex attributes when conflicts arise. Ignored if mode is "extend".
         inplace : bool, default=True
             Whether to modify the graph in place. If False, returns a copy with summary attributes.
 
@@ -463,47 +470,19 @@ class NapistuGraph(ig.Graph):
             dogmatic=dogmatic,
         )
 
-        # Check if any of the summary columns already exist as vertex attributes
-        existing_attrs = set(graph.vs.attributes())
-        summary_columns = set(summaries_df.columns)
-        overlapping_attrs = summary_columns.intersection(existing_attrs)
-
-        if overlapping_attrs:
-            logger.warning(
-                f"The following summary attributes already exist on the graph and will be skipped: {overlapping_attrs}. "
-                f"Use a different graph or remove existing attributes before adding summaries."
-            )
-            # Remove overlapping columns from summaries_df
-            summaries_df = summaries_df.drop(columns=list(overlapping_attrs))
-
-            # If no columns remain, return early
-            if summaries_df.empty:
-                logger.info(
-                    "All summary attributes already exist on the graph. No new attributes added."
-                )
-                return None if inplace else graph
-
-        # Get current vertex dataframe
-        vertex_df = graph.get_vertex_dataframe()
-
-        # Merge summaries with vertices by name
-        merged_df = vertex_df.merge(
-            summaries_df,
-            left_on=NAPISTU_GRAPH_VERTICES.NAME,
-            right_index=True,
-            how="left",
+        graph_attrs = data_handling._create_graph_attrs_config(
+            column_mapping={v: v for v in summaries_df.columns},
+            data_type=SBML_DFS.SPECIES,
+            table_name="sbml_dfs_summaries",
+            transformation="identity",
         )
 
-        # Fill NaN values with 0 for the summary columns
-        summary_columns = summaries_df.columns
-        merged_df[summary_columns] = merged_df[summary_columns].fillna(int(0))
+        graph.set_graph_attrs(graph_attrs, mode=mode, overwrite=overwrite)
 
-        # Update vertex attributes with the merged data
-        for col in summary_columns:
-            graph.vs[col] = merged_df[col].tolist()
-
-        logger.info(
-            f"Added {len(summary_columns)} summary attributes to graph: {list(summary_columns)}"
+        graph.add_vertex_data(
+            side_loaded_attributes={"sbml_dfs_summaries": summaries_df},
+            mode=mode,
+            overwrite=overwrite,
         )
 
         return None if inplace else graph
@@ -534,6 +513,10 @@ class NapistuGraph(ig.Graph):
             Multiplier for non-metabolite species. Default is 1.
         metabolite_multiplier : int, optional
             Multiplier for metabolites. Default is 3.
+        drug_multiplier : int, optional
+            Multiplier for drugs. Default is 1.
+        complex_multiplier : int, optional
+            Multiplier for complexes. Default is 3.
         unknown_multiplier : int, optional
             Multiplier for species without any identifier. Default is 10.
         scale_multiplier_by_meandegree : bool, optional
