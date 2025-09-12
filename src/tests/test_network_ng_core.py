@@ -8,13 +8,17 @@ import pytest
 from fs.errors import ResourceNotFound
 
 from napistu.constants import SBML_DFS
+from napistu.network import ng_utils
 from napistu.network.constants import (
+    DEFAULT_WT_TRANS,
     GRAPH_WIRING_APPROACHES,
+    IGRAPH_DEFS,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
     NAPISTU_GRAPH_VERTICES,
     NAPISTU_METADATA_KEYS,
     NAPISTU_WEIGHTING_STRATEGIES,
+    WEIGHTING_SPEC,
 )
 from napistu.network.ng_core import NapistuGraph
 
@@ -186,21 +190,21 @@ def test_set_and_get_graph_attrs(test_graph):
     stored_species = test_graph.get_metadata("species_attrs")
 
     assert (
-        stored_reactions == attrs["reactions"]
-    ), f"Expected {attrs['reactions']}, got {stored_reactions}"
+        stored_reactions == attrs[SBML_DFS.REACTIONS]
+    ), f"Expected {attrs[SBML_DFS.REACTIONS]}, got {stored_reactions}"
     assert (
-        stored_species == attrs["species"]
-    ), f"Expected {attrs['species']}, got {stored_species}"
+        stored_species == attrs[SBML_DFS.SPECIES]
+    ), f"Expected {attrs[SBML_DFS.SPECIES]}, got {stored_species}"
 
     # Get attributes through helper method
-    reactions_result = test_graph._get_entity_attrs("reactions")
-    species_result = test_graph._get_entity_attrs("species")
+    reactions_result = test_graph._get_entity_attrs(SBML_DFS.REACTIONS)
+    species_result = test_graph._get_entity_attrs(SBML_DFS.SPECIES)
 
     assert (
-        reactions_result == attrs["reactions"]
-    ), f"Expected {attrs['reactions']}, got {reactions_result}"
+        reactions_result == attrs[SBML_DFS.REACTIONS]
+    ), f"Expected {attrs[SBML_DFS.REACTIONS]}, got {reactions_result}"
     assert (
-        species_result == attrs["species"]
+        species_result == attrs[SBML_DFS.SPECIES]
     ), f"Expected {attrs['species']}, got {species_result}"
 
     # Test that method raises ValueError for unknown entity types
@@ -209,13 +213,17 @@ def test_set_and_get_graph_attrs(test_graph):
 
     # Test that method returns None for empty attributes
     test_graph.set_metadata(reaction_attrs={})
-    assert test_graph._get_entity_attrs("reactions") is None
+    assert test_graph._get_entity_attrs(SBML_DFS.REACTIONS) is None
 
 
 def test_compare_and_merge_attrs(test_graph):
     """Test the _compare_and_merge_attrs method directly."""
     new_attrs = {
-        "string_wt": {"table": "string", "variable": "score", "trans": "identity"}
+        "string_wt": {
+            WEIGHTING_SPEC.TABLE: "string",
+            WEIGHTING_SPEC.VARIABLE: "score",
+            WEIGHTING_SPEC.TRANSFORMATION: "identity",
+        }
     }
 
     # Test fresh mode
@@ -232,7 +240,11 @@ def test_compare_and_merge_attrs(test_graph):
 
     # Test extend mode with existing attrs
     existing_attrs = {
-        "existing": {"table": "test", "variable": "val", "trans": "identity"}
+        "existing": {
+            WEIGHTING_SPEC.TABLE: "test",
+            WEIGHTING_SPEC.VARIABLE: "val",
+            WEIGHTING_SPEC.TRANSFORMATION: "identity",
+        }
     }
     test_graph.set_metadata(reaction_attrs=existing_attrs)
 
@@ -248,41 +260,44 @@ def test_graph_attrs_extend_and_overwrite_protection(test_graph):
     # Set initial attributes
     initial = {
         "reactions": {
-            "attr1": {"table": "test", "variable": "val", "trans": "identity"}
+            "attr1": {
+                WEIGHTING_SPEC.TABLE: "test",
+                WEIGHTING_SPEC.VARIABLE: "val",
+                WEIGHTING_SPEC.TRANSFORMATION: "identity",
+            }
         }
     }
     test_graph.set_graph_attrs(initial)
 
     # Fresh mode should fail with existing data
     with pytest.raises(ValueError, match="Existing reaction_attrs found"):
-        test_graph.set_graph_attrs({"reactions": {"attr2": {}}})
+        test_graph.set_graph_attrs(
+            {
+                "reactions": {
+                    "attr2": {
+                        WEIGHTING_SPEC.TABLE: "test",
+                        WEIGHTING_SPEC.VARIABLE: "val2",
+                        WEIGHTING_SPEC.TRANSFORMATION: "identity",
+                    }
+                }
+            }
+        )
 
     # Extend mode should work
     test_graph.set_graph_attrs(
         {
             "reactions": {
-                "attr2": {"table": "new", "variable": "val2", "trans": "identity"}
+                "attr2": {
+                    WEIGHTING_SPEC.TABLE: "new",
+                    WEIGHTING_SPEC.VARIABLE: "val2",
+                    WEIGHTING_SPEC.TRANSFORMATION: "identity",
+                }
             }
         },
         mode="extend",
     )
     reaction_attrs = test_graph.get_metadata("reaction_attrs")
     assert "attr1" in reaction_attrs and "attr2" in reaction_attrs
-
-    # Extend with overlap should fail
-    with pytest.raises(ValueError, match="Overlapping keys found"):
-        test_graph.set_graph_attrs(
-            {
-                "reactions": {
-                    "attr1": {
-                        "table": "conflict",
-                        "variable": "val",
-                        "trans": "identity",
-                    }
-                }
-            },
-            mode="extend",
-        )
 
 
 def test_add_edge_data_basic_functionality(test_graph, minimal_valid_sbml_dfs):
@@ -398,6 +413,76 @@ def test_add_edge_data_mode_and_overwrite(test_graph, minimal_valid_sbml_dfs):
     assert "attr2" in test_graph.es.attributes()
 
 
+def test_add_edge_data_extend_mode_overlapping_attrs_bug(
+    test_graph, minimal_valid_sbml_dfs
+):
+    """Test that extend mode should NOT error when there are overlapping attributes.
+
+    This test demonstrates the bug where extend mode incorrectly raises a ValueError
+    when there are overlapping attributes, when it should simply add only new attributes.
+    """
+    # Update the test graph to have the correct r_ids that match the SBML data
+    test_graph.es["r_id"] = [
+        "R00001",
+        "R00001",
+    ]  # Both edges should map to the same reaction
+
+    # Create mock data with overlapping attributes
+    minimal_valid_sbml_dfs.reactions_data["table1"] = pd.DataFrame(
+        {"attr1": [10], "attr2": [20]}, index=["R00001"]
+    )
+    minimal_valid_sbml_dfs.reactions_data["table2"] = pd.DataFrame(
+        {"attr1": [30], "attr3": [50]}, index=["R00001"]  # attr1 overlaps, attr3 is new
+    )
+
+    # First, add attr1 and attr2 to the graph
+    test_graph.set_graph_attrs(
+        {
+            "reactions": {
+                "attr1": {"table": "table1", "variable": "attr1", "trans": "identity"},
+                "attr2": {"table": "table1", "variable": "attr2", "trans": "identity"},
+            }
+        }
+    )
+    test_graph.add_edge_data(minimal_valid_sbml_dfs)
+
+    # Verify initial attributes exist
+    assert "attr1" in test_graph.es.attributes()
+    assert "attr2" in test_graph.es.attributes()
+    initial_attr1_values = test_graph.es["attr1"]
+    initial_attr2_values = test_graph.es["attr2"]
+
+    # Now try to extend with overlapping attributes (attr1) and new attribute (attr3)
+    # This should NOT raise an error in extend mode - it should only add attr3
+    test_graph.set_graph_attrs(
+        {
+            "reactions": {
+                "attr1": {"table": "table2", "variable": "attr1", "trans": "identity"},
+                "attr3": {"table": "table2", "variable": "attr3", "trans": "identity"},
+            }
+        },
+        mode="extend",
+    )
+
+    # This should now work correctly in extend mode - only add new attributes
+    test_graph.add_edge_data(minimal_valid_sbml_dfs, mode="extend")
+
+    # Verify that only attr3 was added, and existing attributes remain unchanged
+    assert "attr3" in test_graph.es.attributes()
+    assert test_graph.es["attr1"] == initial_attr1_values  # Should be unchanged
+    assert test_graph.es["attr2"] == initial_attr2_values  # Should be unchanged
+
+    # Test extend mode with overwrite=True - currently ignored in extend mode
+    # The current implementation ignores overwrite in extend mode and only adds new attributes
+    test_graph.add_edge_data(minimal_valid_sbml_dfs, mode="extend", overwrite=True)
+    # attr1 should remain unchanged since it already exists (overwrite is ignored in extend mode)
+    assert test_graph.es["attr1"] == initial_attr1_values
+    # attr2 should remain unchanged since it's not in the new data
+    assert test_graph.es["attr2"] == initial_attr2_values
+    # attr3 should still be there
+    assert "attr3" in test_graph.es.attributes()
+
+
 def test_transform_edges_basic_functionality(test_graph, minimal_valid_sbml_dfs):
     """Test basic edge transformation functionality."""
     # Add mock reaction data with values that will be transformed
@@ -444,6 +529,7 @@ def test_transform_edges_retransformation_behavior(test_graph, minimal_valid_sbm
     """Test re-transformation behavior and error handling."""
     # Add mock data
     mock_df = pd.DataFrame({"scores": [500]}, index=["R00001"])
+    mock_df.index.name = SBML_DFS.R_ID
     minimal_valid_sbml_dfs.reactions_data["test_table"] = mock_df
 
     # Initial transformation
@@ -821,8 +907,8 @@ def test_get_weight_variables():
     # Test with weight_by parameter
     weight_vars = napistu_graph._get_weight_variables(weight_by=["custom_weight"])
     assert "custom_weight" in weight_vars
-    assert weight_vars["custom_weight"]["table"] == "edge"
-    assert weight_vars["custom_weight"]["variable"] == "custom_weight"
+    assert weight_vars["custom_weight"][WEIGHTING_SPEC.TABLE] == "__edges__"
+    assert weight_vars["custom_weight"][WEIGHTING_SPEC.VARIABLE] == "custom_weight"
 
     # Test with non-existent attribute
     with pytest.raises(ValueError, match="Edge attributes not found in graph"):
@@ -835,11 +921,11 @@ def test_get_weight_variables():
     # Test with reaction_attrs set
     napistu_graph.set_graph_attrs(
         {
-            "reactions": {
+            SBML_DFS.REACTIONS: {
                 "string_wt": {
-                    "table": "string",
-                    "variable": "score",
-                    "trans": "identity",
+                    WEIGHTING_SPEC.TABLE: "string",
+                    WEIGHTING_SPEC.VARIABLE: "score",
+                    WEIGHTING_SPEC.TRANSFORMATION: "identity",
                 }
             }
         }
@@ -847,7 +933,7 @@ def test_get_weight_variables():
 
     weight_vars = napistu_graph._get_weight_variables()
     assert "string_wt" in weight_vars
-    assert weight_vars["string_wt"]["table"] == "string"
+    assert weight_vars["string_wt"][WEIGHTING_SPEC.TABLE] == "string"
 
 
 def test_process_napistu_graph_with_reactions_data(sbml_dfs):
@@ -878,11 +964,11 @@ def test_process_napistu_graph_with_reactions_data(sbml_dfs):
 
     # Define reaction_graph_attrs matching graph_attrs_spec.yaml
     reaction_graph_attrs = {
-        "reactions": {
+        SBML_DFS.REACTIONS: {
             "string_wt": {
-                "table": "string",
-                "variable": "combined_score",
-                "trans": "string_inv",
+                WEIGHTING_SPEC.TABLE: "string",
+                WEIGHTING_SPEC.VARIABLE: "combined_score",
+                WEIGHTING_SPEC.TRANSFORMATION: "string_inv",
             }
         }
     }
@@ -1042,7 +1128,6 @@ def test_reaction_edge_weighting():
 
 def test_add_sbml_dfs_summaries(napistu_graph_metabolism, sbml_dfs_metabolism):
     """Test that add_sbml_dfs_summaries adds vertex summary attributes correctly."""
-    from napistu.network import ng_utils
 
     # Get the expected summary columns
     expected_summaries = ng_utils.get_sbml_dfs_vertex_summaries(sbml_dfs_metabolism)
@@ -1057,11 +1142,15 @@ def test_add_sbml_dfs_summaries(napistu_graph_metabolism, sbml_dfs_metabolism):
     expected_columns = set(expected_summaries.columns)
 
     # Test inplace=True (default)
-    result = napistu_graph_metabolism.add_sbml_dfs_summaries(sbml_dfs_metabolism)
+    working_napistu_graph_metabolism = napistu_graph_metabolism.copy()
+    assert working_napistu_graph_metabolism is not napistu_graph_metabolism
+    result = working_napistu_graph_metabolism.add_sbml_dfs_summaries(
+        sbml_dfs_metabolism, inplace=True
+    )
     assert result is None
 
     # Check that all expected columns were added as vertex attributes
-    vertex_attrs = set(napistu_graph_metabolism.vs.attributes())
+    vertex_attrs = set(working_napistu_graph_metabolism.vs.attributes())
     assert expected_columns.issubset(vertex_attrs)
 
     # Test inplace=False
@@ -1074,3 +1163,380 @@ def test_add_sbml_dfs_summaries(napistu_graph_metabolism, sbml_dfs_metabolism):
     # Check that the new graph has the summary attributes
     new_vertex_attrs = set(new_graph.vs.attributes())
     assert expected_columns.issubset(new_vertex_attrs)
+
+
+def test_add_vertex_data_basic_functionality(test_graph, minimal_valid_sbml_dfs):
+    """Test basic add_vertex_data functionality - mirrors add_edge_data but for vertices."""
+    # Set up species data similar to edge data test
+    test_graph.vs[SBML_DFS.S_ID] = ["S00001", "S00001", "S00002"]
+
+    mock_df = pd.DataFrame({"score_col": [100, 200]}, index=["S00001", "S00002"])
+    mock_df.index.name = SBML_DFS.S_ID
+    minimal_valid_sbml_dfs.species_data["mock_table"] = mock_df
+
+    species_attrs = {
+        "score_col": {
+            WEIGHTING_SPEC.TABLE: "mock_table",
+            WEIGHTING_SPEC.VARIABLE: "score_col",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        }
+    }
+    test_graph.set_graph_attrs({SBML_DFS.SPECIES: species_attrs})
+
+    # Add vertex data
+    test_graph.add_vertex_data(minimal_valid_sbml_dfs)
+
+    # Verify attributes were added to vertices (not edges)
+    assert "score_col" in test_graph.vs.attributes()
+    assert "score_col" not in test_graph.es.attributes()
+
+    # Check values were assigned correctly
+    assert test_graph.vs["score_col"][0] == 100  # S00001
+    assert test_graph.vs["score_col"][2] == 200  # S00002
+
+
+def test_add_vertex_data_error_handling(test_graph, minimal_valid_sbml_dfs):
+    """Test that add_vertex_data raises appropriate errors like add_edge_data."""
+    test_graph.vs[SBML_DFS.S_ID] = ["S00001", "S00001", "S00002"]
+
+    mock_df = pd.DataFrame({"score_col": [100, 200]}, index=["S00001", "S00002"])
+    mock_df.index.name = SBML_DFS.S_ID
+    minimal_valid_sbml_dfs.species_data["mock_table"] = mock_df
+
+    species_attrs = {
+        "score_col": {
+            WEIGHTING_SPEC.TABLE: "mock_table",
+            WEIGHTING_SPEC.VARIABLE: "score_col",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        }
+    }
+    test_graph.set_graph_attrs({SBML_DFS.SPECIES: species_attrs})
+
+    # Add data once
+    test_graph.add_vertex_data(minimal_valid_sbml_dfs)
+
+    # Test that it raises error for existing attributes (like add_edge_data does)
+    with pytest.raises(ValueError, match="Vertex attributes already exist"):
+        test_graph.add_vertex_data(minimal_valid_sbml_dfs, mode="fresh")
+
+
+def test_transform_vertices_basic_functionality(test_graph, minimal_valid_sbml_dfs):
+    """Test basic transform_vertices functionality - mirrors transform_edges but for vertices."""
+    # Set up species data and add it to vertices
+    test_graph.vs[SBML_DFS.S_ID] = ["S00001", "S00001", "S00002"]
+
+    mock_df = pd.DataFrame({"score_col": [100, 200]}, index=["S00001", "S00002"])
+    mock_df.index.name = SBML_DFS.S_ID
+    minimal_valid_sbml_dfs.species_data["mock_table"] = mock_df
+
+    species_attrs = {
+        "score_col": {
+            WEIGHTING_SPEC.TABLE: "mock_table",
+            WEIGHTING_SPEC.VARIABLE: "score_col",
+            WEIGHTING_SPEC.TRANSFORMATION: "square",  # Use a transformation
+        }
+    }
+    # Set up custom transformations for validation
+    custom_transformations = {"square": lambda x: x**2}
+    test_graph.set_graph_attrs(
+        {SBML_DFS.SPECIES: species_attrs}, custom_transformations=custom_transformations
+    )
+
+    # Add vertex data first
+    test_graph.add_vertex_data(minimal_valid_sbml_dfs)
+
+    # Verify original values
+    assert test_graph.vs["score_col"][0] == 100
+    assert test_graph.vs["score_col"][2] == 200
+
+    # Transform vertices with custom transformation
+    test_graph.transform_vertices(custom_transformations=custom_transformations)
+
+    # Verify transformation was applied (square transformation)
+    assert test_graph.vs["score_col"][0] == 10000  # 100^2
+    assert test_graph.vs["score_col"][2] == 40000  # 200^2
+
+
+def test_transform_vertices_validation_behavior(test_graph, minimal_valid_sbml_dfs):
+    """Test that set_graph_attrs validates transformations when custom transformations are not provided."""
+    # Set up species data
+    test_graph.vs[SBML_DFS.S_ID] = ["S00001", "S00001", "S00002"]
+
+    mock_df = pd.DataFrame({"score_col": [100, 200]}, index=["S00001", "S00002"])
+    mock_df.index.name = SBML_DFS.S_ID
+    minimal_valid_sbml_dfs.species_data["mock_table"] = mock_df
+
+    species_attrs = {
+        "score_col": {
+            WEIGHTING_SPEC.TABLE: "mock_table",
+            WEIGHTING_SPEC.VARIABLE: "score_col",
+            WEIGHTING_SPEC.TRANSFORMATION: "square",  # Custom transformation
+        }
+    }
+
+    # This should raise an error because "square" is not a built-in transformation
+    # and no custom transformations are provided
+    with pytest.raises(ValueError, match="transformation 'square' was not defined"):
+        test_graph.set_graph_attrs({SBML_DFS.SPECIES: species_attrs})
+
+
+def test_transform_vertices_error_handling(test_graph, minimal_valid_sbml_dfs):
+    """Test that transform_vertices handles missing species_attrs like transform_edges."""
+    # Test without setting species_attrs - should warn and return early
+    test_graph.transform_vertices()
+
+    # No error should be raised, just a warning logged
+    # This mirrors the behavior of transform_edges
+
+
+def test_add_attributes_to_graph_inplace_edges(test_graph):
+    """Test _add_attributes_to_graph_inplace with edges using multi-index."""
+    # Get a few edges from the test graph
+    edge_df = test_graph.get_edge_dataframe()
+
+    num_edges = min(3, len(edge_df))
+    selected_edges = edge_df.head(num_edges)
+
+    # Create edge data indexed by (source, target) tuples
+    edge_data = pd.DataFrame(
+        {
+            "edge_weight": [0.5, 0.8, 0.3][:num_edges],
+            "edge_confidence": [0.9, 0.7, 0.8][:num_edges],
+            "edge_type": ["activation", "inhibition", "binding"][:num_edges],
+        },
+        index=pd.MultiIndex.from_tuples(
+            [
+                (row[IGRAPH_DEFS.SOURCE], row[IGRAPH_DEFS.TARGET])
+                for _, row in selected_edges.iterrows()
+            ],
+            names=[IGRAPH_DEFS.SOURCE, IGRAPH_DEFS.TARGET],
+        ),
+    )
+
+    # Test adding attributes to edges
+    test_graph._add_attributes_df(
+        entity_data=edge_data, target_entity=IGRAPH_DEFS.EDGES, overwrite=False
+    )
+
+    # Verify attributes were added to edges
+    assert "edge_weight" in test_graph.es.attributes()
+    assert "edge_confidence" in test_graph.es.attributes()
+    assert "edge_type" in test_graph.es.attributes()
+
+    # Verify values were assigned correctly
+    edge_weights = test_graph.es["edge_weight"]
+    edge_confidences = test_graph.es["edge_confidence"]
+    edge_types = test_graph.es["edge_type"]
+
+    # Check that the values match our test data
+    for i in range(num_edges):
+        assert edge_weights[i] == edge_data["edge_weight"].iloc[i]
+        assert edge_confidences[i] == edge_data["edge_confidence"].iloc[i]
+        assert edge_types[i] == edge_data["edge_type"].iloc[i]
+
+
+def test_add_attributes_to_graph_inplace_vertices(test_graph):
+    """Test _add_attributes_to_graph_inplace with vertices using single index."""
+    # Get a few vertices from the test graph
+    vertex_df = test_graph.get_vertex_dataframe()
+    num_vertices = min(3, len(vertex_df))
+    selected_vertices = vertex_df.head(num_vertices)
+
+    # Create vertex data indexed by vertex names
+    vertex_data = pd.DataFrame(
+        {
+            "vertex_expression": [1.2, 3.4, 5.6][:num_vertices],
+            "vertex_confidence": [0.8, 0.9, 0.7][:num_vertices],
+            "vertex_location": ["nucleus", "cytoplasm", "membrane"][:num_vertices],
+        },
+        index=pd.Index(selected_vertices[IGRAPH_DEFS.NAME], name=IGRAPH_DEFS.NAME),
+    )
+
+    # Test adding attributes to vertices
+    test_graph._add_attributes_df(
+        entity_data=vertex_data, target_entity=IGRAPH_DEFS.VERTICES, overwrite=False
+    )
+
+    # Verify attributes were added to vertices
+    assert "vertex_expression" in test_graph.vs.attributes()
+    assert "vertex_confidence" in test_graph.vs.attributes()
+    assert "vertex_location" in test_graph.vs.attributes()
+
+    # Verify values were assigned correctly
+    vertex_expressions = test_graph.vs["vertex_expression"]
+    vertex_confidences = test_graph.vs["vertex_confidence"]
+    vertex_locations = test_graph.vs["vertex_location"]
+
+    # Check that the values match our test data
+    for i in range(num_vertices):
+        assert vertex_expressions[i] == vertex_data["vertex_expression"].iloc[i]
+        assert vertex_confidences[i] == vertex_data["vertex_confidence"].iloc[i]
+        assert vertex_locations[i] == vertex_data["vertex_location"].iloc[i]
+
+
+def test_add_attributes_to_graph_inplace_overwrite(test_graph):
+    """Test _add_attributes_to_graph_inplace with overwrite=True."""
+    # Get a few vertices from the test graph
+    vertex_df = test_graph.get_vertex_dataframe()
+    num_vertices = min(2, len(vertex_df))
+    selected_vertices = vertex_df.head(num_vertices)
+
+    # Create initial vertex data
+    initial_data = pd.DataFrame(
+        {
+            "test_attr": [100, 200][:num_vertices],
+        },
+        index=pd.Index(selected_vertices[IGRAPH_DEFS.NAME], name=IGRAPH_DEFS.NAME),
+    )
+
+    # Add initial attributes
+    test_graph._add_attributes_df(
+        entity_data=initial_data, target_entity=IGRAPH_DEFS.VERTICES, overwrite=False
+    )
+
+    # Verify initial values
+    assert test_graph.vs["test_attr"][0] == 100
+    if num_vertices > 1:
+        assert test_graph.vs["test_attr"][1] == 200
+
+    # Create new data with different values
+    new_data = pd.DataFrame(
+        {
+            "test_attr": [300, 400][:num_vertices],
+        },
+        index=pd.Index(selected_vertices[IGRAPH_DEFS.NAME], name=IGRAPH_DEFS.NAME),
+    )
+
+    # Add new attributes with overwrite=True
+    test_graph._add_attributes_df(
+        entity_data=new_data, target_entity=IGRAPH_DEFS.VERTICES, overwrite=True
+    )
+
+    # Verify values were overwritten
+    assert test_graph.vs["test_attr"][0] == 300
+    if num_vertices > 1:
+        assert test_graph.vs["test_attr"][1] == 400
+
+
+def test_add_edge_data_with_both_sources(napistu_graph, sbml_dfs_w_data):
+    """Test add_edge_data using both sbml_dfs and side_loaded_attributes as data sources."""
+    # Get a couple of real edges for side-loaded data
+    edge_df = napistu_graph.get_edge_dataframe()
+    selected_edges = edge_df.head(2)
+    edge_pairs = list(
+        zip(
+            selected_edges[NAPISTU_GRAPH_EDGES.FROM],
+            selected_edges[NAPISTU_GRAPH_EDGES.TO],
+        )
+    )
+
+    # Create side-loaded data for these edges
+    side_loaded_df = pd.DataFrame(
+        {
+            "external_confidence": [0.95, 0.87],
+            "external_source": ["database_A", "database_B"],
+        },
+        index=pd.MultiIndex.from_tuples(
+            edge_pairs, names=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+        ),
+    )
+
+    side_loaded_attributes = {"external_db": side_loaded_df}
+
+    # Set up attributes for both data sources
+    reaction_attrs = {
+        "rxn_score": {
+            WEIGHTING_SPEC.TABLE: "rxn_data",
+            WEIGHTING_SPEC.VARIABLE: "rxn_attr_float",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        },
+        "confidence": {
+            WEIGHTING_SPEC.TABLE: "external_db",
+            WEIGHTING_SPEC.VARIABLE: "external_confidence",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        },
+    }
+
+    napistu_graph.set_graph_attrs({SBML_DFS.REACTIONS: reaction_attrs})
+
+    # Add data from both sources
+    napistu_graph.add_edge_data(
+        sbml_dfs_w_data, side_loaded_attributes=side_loaded_attributes
+    )
+
+    # Verify attributes exist and have some non-None values
+    edge_attrs = napistu_graph.es.attributes()
+    assert "rxn_score" in edge_attrs
+    assert "confidence" in edge_attrs
+
+    # Check that we have some non-None values from each source
+    rxn_scores = napistu_graph.es["rxn_score"]
+    confidences = napistu_graph.es["confidence"]
+
+    assert any(
+        score is not None and not pd.isna(score) for score in rxn_scores
+    ), "No valid rxn_score values found"
+    assert any(
+        conf is not None and not pd.isna(conf) for conf in confidences
+    ), "No valid confidence values found"
+
+
+def test_add_edge_data_side_loaded_only(napistu_graph):
+    """Test add_edge_data using only side_loaded_attributes (no sbml_dfs)."""
+    # Get a couple of real edges for side-loaded data
+    edge_df = napistu_graph.get_edge_dataframe()
+    selected_edges = edge_df.head(2)
+    edge_pairs = list(
+        zip(
+            selected_edges[NAPISTU_GRAPH_EDGES.FROM],
+            selected_edges[NAPISTU_GRAPH_EDGES.TO],
+        )
+    )
+
+    # Create side-loaded data for these edges
+    side_loaded_df = pd.DataFrame(
+        {
+            "external_confidence": [0.95, 0.87],
+            "external_source": ["database_A", "database_B"],
+        },
+        index=pd.MultiIndex.from_tuples(
+            edge_pairs, names=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+        ),
+    )
+
+    side_loaded_attributes = {"external_db": side_loaded_df}
+
+    # Set up attributes for side-loaded data only
+    reaction_attrs = {
+        "confidence": {
+            WEIGHTING_SPEC.TABLE: "external_db",
+            WEIGHTING_SPEC.VARIABLE: "external_confidence",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        },
+        "source_db": {
+            WEIGHTING_SPEC.TABLE: "external_db",
+            WEIGHTING_SPEC.VARIABLE: "external_source",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        },
+    }
+
+    napistu_graph.set_graph_attrs({SBML_DFS.REACTIONS: reaction_attrs})
+
+    # Add data from side-loaded source only
+    napistu_graph.add_edge_data(side_loaded_attributes=side_loaded_attributes)
+
+    # Verify attributes exist and have some non-None values
+    edge_attrs = napistu_graph.es.attributes()
+    assert "confidence" in edge_attrs
+    assert "source_db" in edge_attrs
+
+    # Check that we have some non-None values
+    confidences = napistu_graph.es["confidence"]
+    source_dbs = napistu_graph.es["source_db"]
+
+    assert any(
+        conf is not None and not pd.isna(conf) for conf in confidences
+    ), "No valid confidence values found"
+    assert any(
+        source is not None and not pd.isna(source) for source in source_dbs
+    ), "No valid source_db values found"

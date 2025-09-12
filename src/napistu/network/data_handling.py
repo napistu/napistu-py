@@ -1,14 +1,17 @@
+from __future__ import annotations
+
 import logging
 import re
-from typing import Callable, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Union
 
 import pandas as pd
 
 from napistu import sbml_dfs_core
 from napistu.constants import ENTITIES_W_DATA, SBML_DFS
-from napistu.network import net_create, ng_utils
 from napistu.network.constants import DEFAULT_WT_TRANS, NAPISTU_GRAPH, WEIGHTING_SPEC
-from napistu.network.ng_core import NapistuGraph
+
+if TYPE_CHECKING:
+    from napistu.network.ng_core import NapistuGraph
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +25,8 @@ def add_results_table_to_graph(
     graph_attr_modified: str = NAPISTU_GRAPH.VERTICES,
     transformation: Optional[Callable] = None,
     custom_transformations: Optional[Dict[str, Callable]] = None,
+    mode="fresh",
+    overwrite=False,
     inplace: bool = True,
 ):
     """
@@ -54,6 +59,10 @@ def add_results_table_to_graph(
         If not provided, the attribute will not be transformed.
     custom_transformations: dict, optional
         A dictionary of custom transformations which could be applied to the attributes. The keys are the transformation names and the values are the transformation functions.
+    mode: str, optional
+        The mode to use for adding the attributes. Must be one of "fresh" or "extend".
+    overwrite: bool, optional
+        If True, the attributes will be overwritten if they already exist.
     inplace: bool, optional
         If True, the attribute will be added to the graph in place. If False, a new graph will be returned.
 
@@ -92,7 +101,7 @@ def add_results_table_to_graph(
         transformation = DEFAULT_WT_TRANS
 
     # create the configuration dict which is used by lower-level functions
-    reaction_attrs = _create_graph_attrs_config(
+    species_attrs = _create_graph_attrs_config(
         column_mapping=attribute_mapping,
         data_type=table_type,
         table_name=table_name,
@@ -100,92 +109,18 @@ def add_results_table_to_graph(
     )
 
     # add the attribute to the graph
-    napistu_graph = _add_graph_species_attribute(
-        napistu_graph,
-        sbml_dfs,
-        species_graph_attrs=reaction_attrs,
+    napistu_graph.set_graph_attrs(
+        species_attrs,
+        mode=mode,
+        overwrite=overwrite,
         custom_transformations=custom_transformations,
     )
+
+    # add the new attributes
+    napistu_graph.add_vertex_data(sbml_dfs, mode=mode, overwrite=overwrite)
+    napistu_graph.transform_vertices(custom_transformations=custom_transformations)
 
     return napistu_graph if not inplace else None
-
-
-def _add_graph_species_attribute(
-    napistu_graph: NapistuGraph,
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
-    species_graph_attrs: dict,
-    custom_transformations: Optional[dict] = None,
-) -> NapistuGraph:
-    """
-    Add meta-data from species_data to existing igraph's vertices.
-
-    This function augments the vertices of an igraph network with additional attributes
-    derived from the species-level data in the provided SBML_dfs object. The attributes
-    to add are specified in the species_graph_attrs dictionary, and can be transformed
-    using either built-in or user-supplied transformation functions.
-
-    Parameters
-    ----------
-    napistu_graph : NapistuGraph
-        The igraph network to augment.
-    sbml_dfs : sbml_dfs_core.SBML_dfs
-        The SBML_dfs object containing species data.
-    species_graph_attrs : dict
-        Dictionary specifying which attributes to pull from species_data and how to transform them.
-        The structure should be {attribute_name: {"table": ..., "variable": ..., "trans": ...}}.
-    custom_transformations : dict, optional
-        Dictionary mapping transformation names to functions. If provided, these will be checked
-        before built-in transformations. Example: {"square": lambda x: x**2}
-
-    Returns
-    -------
-    NapistuGraph
-        The input igraph network with additional vertex attributes added from species_data.
-    """
-    if not isinstance(species_graph_attrs, dict):
-        raise TypeError(
-            f"species_graph_attrs must be a dict, but was {type(species_graph_attrs)}"
-        )
-
-    # fail fast if species_graph_attrs is not properly formatted
-    # also flatten attribute list to be added to vertex nodes
-    sp_graph_key_list = []
-    sp_node_attr_list = []
-    for k in species_graph_attrs.keys():
-        ng_utils._validate_entity_attrs(
-            species_graph_attrs[k], custom_transformations=custom_transformations
-        )
-
-        sp_graph_key_list.append(k)
-        sp_node_attr_list.append(list(species_graph_attrs[k].keys()))
-
-    # flatten sp_node_attr_list
-    flat_sp_node_attr_list = [item for items in sp_node_attr_list for item in items]
-
-    # Check for attribute collisions before proceeding
-    existing_attrs = set(napistu_graph.vs.attributes())
-    for attr in flat_sp_node_attr_list:
-        if attr in existing_attrs:
-            raise ValueError(f"Attribute '{attr}' already exists in graph vertices")
-
-    logger.info("Adding meta-data from species_data")
-
-    curr_network_nodes_df = napistu_graph.get_vertex_dataframe()
-
-    # add species-level attributes to nodes dataframe
-    augmented_network_nodes_df = net_create._augment_network_nodes(
-        curr_network_nodes_df,
-        sbml_dfs,
-        species_graph_attrs,
-        custom_transformations=custom_transformations,
-    )
-
-    # Add each attribute to the graph vertices
-    for vs_attr in flat_sp_node_attr_list:
-        logger.info(f"Adding new attribute {vs_attr} to vertices")
-        napistu_graph.vs[vs_attr] = augmented_network_nodes_df[vs_attr].values
-
-    return napistu_graph
 
 
 def _select_sbml_dfs_data_table(
@@ -342,10 +277,10 @@ def _create_data_table_column_mapping(
 
 def _create_graph_attrs_config(
     column_mapping: Dict[str, str],
-    data_type: str,
+    data_type: Optional[str],
     table_name: str,
     transformation: str = DEFAULT_WT_TRANS,
-) -> Dict[str, Dict[str, Dict[str, str]]]:
+) -> Union[Dict[str, Dict[str, Dict[str, str]]], Dict[str, Dict[str, str]]]:
     """
     Create a configuration dictionary for graph attributes.
 
@@ -353,8 +288,8 @@ def _create_graph_attrs_config(
     ----------
     column_mapping : Dict[str, str]
         A dictionary mapping original column names to their new names in the graph
-    data_type : str
-        The type of data (e.g. "species", "reactions")
+    data_type : str or None
+        The type of data (e.g. "species", "reactions"). If None, returns the inner dict directly.
     table_name : str
         The name of the table containing the data
     transformation : str, optional
@@ -362,9 +297,17 @@ def _create_graph_attrs_config(
 
     Returns
     -------
-    Dict[str, Dict[str, Dict[str, str]]]
+    Dict[str, Dict[str, Dict[str, str]]] or Dict[str, Dict[str, str]]
         A nested dictionary containing the graph attributes configuration
-        Format:
+        If data_type is None, returns the inner dict directly:
+        {
+            new_col_name: {
+                "table": table_name,
+                "variable": original_col_name,
+                "trans": transformation
+            }
+        }
+        Otherwise, returns the full nested structure:
         {
             data_type: {
                 new_col_name: {
@@ -375,13 +318,16 @@ def _create_graph_attrs_config(
             }
         }
     """
-    graph_attrs = {data_type: {}}
+    inner_dict = {}
 
     for original_col, new_col in column_mapping.items():
-        graph_attrs[data_type][new_col] = {
+        inner_dict[new_col] = {
             WEIGHTING_SPEC.TABLE: table_name,
             WEIGHTING_SPEC.VARIABLE: original_col,
             WEIGHTING_SPEC.TRANSFORMATION: transformation,
         }
 
-    return graph_attrs
+    if data_type is None:
+        return inner_dict
+    else:
+        return {data_type: inner_dict}

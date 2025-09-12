@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import igraph as ig
 import pandas as pd
 import pytest
 
 from napistu.network import data_handling, net_create
-from napistu.network.constants import GRAPH_WIRING_APPROACHES
 
 
 # Fixtures
@@ -222,6 +220,30 @@ def test_create_graph_attrs_config():
     assert result == expected
 
 
+def test_create_graph_attrs_config_with_none_data_type():
+    """Test creating graph attributes configuration with data_type=None returns inner dict."""
+    result = data_handling._create_graph_attrs_config(
+        column_mapping={"col1": "col1", "col2": "renamed_col2"},
+        data_type=None,
+        table_name="test_table",
+        transformation="identity",
+    )
+
+    expected = {
+        "col1": {
+            "table": "test_table",
+            "variable": "col1",
+            "trans": "identity",
+        },
+        "renamed_col2": {
+            "table": "test_table",
+            "variable": "col2",
+            "trans": "identity",
+        },
+    }
+    assert result == expected
+
+
 def test_add_results_table_to_graph(sbml_dfs_glucose_metabolism):
     """Test adding results table to graph."""
     # Create a test graph using create_napistu_graph
@@ -293,107 +315,4 @@ def test_add_results_table_to_graph(sbml_dfs_glucose_metabolism):
             napistu_graph=graph,
             sbml_dfs=sbml_dfs_glucose_metabolism,
             table_type="reactions",
-        )
-
-
-def test_add_graph_species_attribute(sbml_dfs_glucose_metabolism):
-    """Test adding species attributes to graph."""
-    # Create a test graph using create_napistu_graph
-    graph = net_create.create_napistu_graph(
-        sbml_dfs_glucose_metabolism,
-        directed=True,
-        wiring_approach=GRAPH_WIRING_APPROACHES.REGULATORY,
-    )
-
-    # Add test data to sbml_dfs
-    test_data = pd.DataFrame(
-        {"test_attr": [1.0, 2.0, 3.0]},
-        index=pd.Index(
-            list(sbml_dfs_glucose_metabolism.species.index[:3]), name="s_id"
-        ),
-    )
-    sbml_dfs_glucose_metabolism.add_species_data("test_table", test_data)
-
-    # Define custom transformations
-    custom_transformations = {"square": lambda x: x**2}
-
-    # Test attempting to overwrite an existing vertex attribute
-    collision_attrs = {
-        "species": {
-            "name": {  # Using 'name' which is a required vertex attribute
-                "table": "test_table",
-                "variable": "test_attr",
-                "trans": "identity",
-            }
-        }
-    }
-
-    with pytest.raises(
-        ValueError, match="Attribute 'name' already exists in graph vertices"
-    ):
-        data_handling._add_graph_species_attribute(
-            graph, sbml_dfs_glucose_metabolism, collision_attrs
-        )
-
-    # Test basic attribute addition
-    species_graph_attrs = {
-        "species": {
-            "new_attr": {
-                "table": "test_table",
-                "variable": "test_attr",
-                "trans": "identity",
-            }
-        }
-    }
-
-    result = data_handling._add_graph_species_attribute(
-        graph, sbml_dfs_glucose_metabolism, species_graph_attrs
-    )
-
-    assert "new_attr" in result.vs.attributes()
-
-    # Test with custom transformation
-    species_graph_attrs = {
-        "species": {
-            "squared_attr": {
-                "table": "test_table",
-                "variable": "test_attr",
-                "trans": "square",
-            }
-        }
-    }
-
-    result = data_handling._add_graph_species_attribute(
-        graph,
-        sbml_dfs_glucose_metabolism,
-        species_graph_attrs,
-        custom_transformations=custom_transformations,
-    )
-
-    assert "squared_attr" in result.vs.attributes()
-
-    # Test error cases
-    with pytest.raises(TypeError, match="species_graph_attrs must be a dict"):
-        data_handling._add_graph_species_attribute(
-            graph, sbml_dfs_glucose_metabolism, species_graph_attrs=[]
-        )
-
-    # Test missing required attributes in graph
-    bad_graph = ig.Graph()
-    bad_graph.add_vertices(3)
-
-    # Use basic transformation to avoid transformation error
-    basic_attrs = {
-        "species": {
-            "new_attr": {
-                "table": "test_table",
-                "variable": "test_attr",
-                "trans": "identity",
-            }
-        }
-    }
-
-    with pytest.raises(ValueError, match="required attributes were missing"):
-        data_handling._add_graph_species_attribute(
-            bad_graph, sbml_dfs_glucose_metabolism, basic_attrs
         )

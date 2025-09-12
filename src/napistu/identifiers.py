@@ -41,12 +41,16 @@ class Identifiers:
 
     Methods
     -------
-    print
-        Print a table of identifiers
     filter(ontologies, summarize)
         Returns a bool of whether 1+ of the ontologies was represented
+    get_all_bqbs()
+        Returns a set of all BQB entries
+    get_all_ontologies()
+        Returns a set of all ontology entries
     hoist(ontology)
         Returns value(s) from an ontology
+    print
+        Print a table of identifiers
 
     """
 
@@ -92,11 +96,6 @@ class Identifiers:
 
         self.ids = validated_id_list
 
-    def print(self):
-        """Print a table of identifiers"""
-
-        utils.show(pd.DataFrame(self.ids), hide_index=True)
-
     def filter(self, ontologies, summarize=True):
         """Returns a bool of whether 1+ of the ontologies was represented"""
 
@@ -116,6 +115,26 @@ class Identifiers:
             return any(identifier_matches)
         else:
             return identifier_matches
+
+    def get_all_bqbs(self) -> set[str]:
+        """Returns a set of all BQB entries
+
+        Returns:
+            set[str]: A set containing all unique BQB values from the identifiers
+        """
+        return {
+            id_entry[IDENTIFIERS.BQB]
+            for id_entry in self.ids
+            if id_entry.get(IDENTIFIERS.BQB) is not None
+        }
+
+    def get_all_ontologies(self) -> set[str]:
+        """Returns a set of all ontology entries
+
+        Returns:
+            set[str]: A set containing all unique ontology names from the identifiers
+        """
+        return {id_entry[IDENTIFIERS.ONTOLOGY] for id_entry in self.ids}
 
     def hoist(self, ontology: str, squeeze: bool = True) -> str | list[str] | None:
         """Returns value(s) from an ontology
@@ -144,6 +163,11 @@ class Identifiers:
             elif len(ontology_ids) == 1:
                 return ontology_ids[0]
         return ontology_ids
+
+    def print(self):
+        """Print a table of identifiers"""
+
+        utils.show(pd.DataFrame(self.ids), hide_index=True)
 
 
 def merge_identifiers(identifier_series: pd.Series) -> Identifiers:

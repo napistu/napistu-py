@@ -159,6 +159,7 @@ class SBML_dfs:
     _attempt_resolve(e)
     _edgelist_assemble_sbml_model(compartments, species, comp_species, reactions, reaction_species, species_data, reactions_data, keep_species_data, keep_reactions_data, extra_columns)
     _find_underspecified_reactions_by_scids(sc_ids)
+    _get_entity_data(entity_type, label)
     _get_identifiers_table_for_ontology_occurrence(entity_type, characteristic_only=False, dogmatic=True)
     _get_unused_cspecies()
     _get_unused_species()
@@ -167,6 +168,7 @@ class SBML_dfs:
     _remove_species(s_ids)
     _remove_unused_cspecies()
     _remove_unused_species()
+    _validate_entity_data_access(entity_type, label)
     _validate_identifiers()
     _validate_pk_fk_correspondence()
     _validate_r_ids(r_ids)
@@ -657,7 +659,14 @@ class SBML_dfs:
             .join(cspecies_n_parents)
             .fillna(int(0))  # Explicitly fill with int(0) to avoid downcasting warning
             .merge(species_features, left_on=SBML_DFS.S_ID, right_index=True)
-            .drop(columns=[SBML_DFS.SC_NAME, SBML_DFS.S_ID, SBML_DFS.C_ID])
+            .drop(
+                columns=[
+                    SBML_DFS.SC_NAME,
+                    SBML_DFS.SC_SOURCE,
+                    SBML_DFS.S_ID,
+                    SBML_DFS.C_ID,
+                ]
+            )
         )
 
     def get_identifiers(self, id_type) -> pd.DataFrame:
@@ -2211,13 +2220,29 @@ class SBML_dfs:
         )
         return underspecified_reactions
 
-    def _get_unused_cspecies(self) -> set[str]:
-        """Returns a set of compartmentalized species
-        that are not part of any reactions"""
-        sc_ids = set(self.compartmentalized_species.index) - set(
-            self.reaction_species[SBML_DFS.SC_ID]
-        )
-        return sc_ids  # type: ignore
+    def _get_entity_data(self, entity_type: str, label: str) -> pd.DataFrame:
+        """
+        Get data from species_data or reactions_data by table name and label.
+
+        Parameters
+        ----------
+        entity_type : str
+            Name of the table to get data from ('species' or 'reactions')
+        label : str
+            Label of the data to retrieve
+
+        Returns
+        -------
+        pd.DataFrame
+            The requested data as a DataFrame
+
+        Raises
+        ------
+        ValueError
+            If entity_type is not 'species' or 'reactions', or if label doesn't exist
+        """
+        data_dict = self._validate_entity_data_access(entity_type, label)
+        return data_dict[label]
 
     def _get_identifiers_table_for_ontology_occurrence(
         self, entity_type: str, characteristic_only: bool = False, dogmatic: bool = True
@@ -2266,6 +2291,14 @@ class SBML_dfs:
 
         return identifiers_table
 
+    def _get_unused_cspecies(self) -> set[str]:
+        """Returns a set of compartmentalized species
+        that are not part of any reactions"""
+        sc_ids = set(self.compartmentalized_species.index) - set(
+            self.reaction_species[SBML_DFS.SC_ID]
+        )
+        return sc_ids  # type: ignore
+
     def _get_unused_species(self) -> set[str]:
         """Returns a list of species that are not part of any reactions"""
         s_ids = set(self.species.index) - set(
@@ -2280,8 +2313,10 @@ class SBML_dfs:
         invalid reactions when removing species without a logic to decide
         if the reaction needs to be removed as well.
 
-        Args:
-            sc_ids (Iterable[str]): the compartmentalized species to remove
+        Parameters
+        ----------
+        sc_ids : Iterable[str]
+            The compartmentalized species to remove
         """
         # Remove compartmentalized species
         self.compartmentalized_species = self.compartmentalized_species.drop(
@@ -2301,22 +2336,12 @@ class SBML_dfs:
         label : str
             Label of the data to remove
 
-        Notes
-        -----
-        If the label does not exist, a warning will be logged that includes the existing labels.
+        Raises
+        ------
+        ValueError
+            If entity_type is not 'species' or 'reactions', or if label doesn't exist
         """
-        if entity_type not in ENTITIES_W_DATA:
-            raise ValueError("table_name must be either 'species' or 'reactions'")
-
-        data_dict = getattr(self, ENTITIES_TO_ENTITY_DATA[entity_type])
-        if label not in data_dict:
-            existing_labels = list(data_dict.keys())
-            logger.warning(
-                f"Label '{label}' not found in {ENTITIES_TO_ENTITY_DATA[entity_type]}. "
-                f"Existing labels: {existing_labels}"
-            )
-            return
-
+        data_dict = self._validate_entity_data_access(entity_type, label)
         del data_dict[label]
 
     def _remove_species(self, s_ids: Iterable[str]):
@@ -2329,8 +2354,10 @@ class SBML_dfs:
         This removes the species and corresponding compartmentalized species and
         reactions_species.
 
-        Args:
-            s_ids (Iterable[str]): the species to remove
+        Parameters
+        ----------
+        s_ids : Iterable[str]
+            The species to remove
         """
         sc_ids = self.compartmentalized_species.query("s_id in @s_ids").index.tolist()
         self._remove_compartmentalized_species(sc_ids)
@@ -2352,14 +2379,52 @@ class SBML_dfs:
         s_ids = self._get_unused_species()
         self._remove_species(s_ids)
 
+    def _validate_entity_data_access(
+        self, entity_type: str, label: str
+    ) -> Optional[MutableMapping[str, pd.DataFrame]]:
+        """
+        Validate entity type and label, and return the data dictionary if valid.
+
+        Parameters
+        ----------
+        entity_type : str
+            Name of the table to access ('species' or 'reactions')
+        label : str
+            Label of the data to access
+
+        Returns
+        -------
+        MutableMapping[str, pd.DataFrame]
+            The data dictionary if entity_type and label are valid
+
+        Raises
+        ------
+        ValueError
+            If entity_type is not 'species' or 'reactions', or if label doesn't exist
+        """
+        if entity_type not in ENTITIES_W_DATA:
+            raise ValueError("entity_type must be either 'species' or 'reactions'")
+
+        data_dict = getattr(self, ENTITIES_TO_ENTITY_DATA[entity_type])
+        if label not in data_dict:
+            existing_labels = list(data_dict.keys())
+            raise ValueError(
+                f"Label '{label}' not found in {ENTITIES_TO_ENTITY_DATA[entity_type]}. "
+                f"Existing labels: {existing_labels}"
+            )
+
+        return data_dict
+
     def _validate_identifiers(self):
         """
         Validate identifiers in the model
 
         Iterates through all tables and checks if the identifier columns are valid.
 
-        Raises:
-            ValueError: missing identifiers in the table
+        Raises
+        ------
+        ValueError
+            missing identifiers in the table
         """
 
         SCHEMA = SBML_DFS_SCHEMA.SCHEMA
@@ -2478,13 +2543,17 @@ class SBML_dfs:
     def _validate_reactions_data(self, reactions_data_table: pd.DataFrame):
         """Validates reactions data attribute
 
-        Args:
-            reactions_data_table (pd.DataFrame): a reactions data table
+        Parameters
+        ----------
+        reactions_data_table : pd.DataFrame
+            a reactions data table
 
-        Raises:
-            ValueError: r_id not index name
-            ValueError: r_id index contains duplicates
-            ValueError: r_id not in reactions table
+        Raises
+        ------
+        ValueError
+            r_id not index name
+            r_id index contains duplicates
+            r_id not in reactions table
         """
         sbml_dfs_utils._validate_matching_data(reactions_data_table, self.reactions)
 
@@ -2512,13 +2581,17 @@ class SBML_dfs:
     def _validate_species_data(self, species_data_table: pd.DataFrame):
         """Validates species data attribute
 
-        Args:
-            species_data_table (pd.DataFrame): a species data table
+        Parameters
+        ----------
+        species_data_table : pd.DataFrame
+            a species data table
 
-        Raises:
-            ValueError: s_id not index name
-            ValueError: s_id index contains duplicates
-            ValueError: s_id not in species table
+        Raises
+        ------
+        ValueError
+            s_id not index name
+            s_id index contains duplicates
+            s_id not in species table
         """
         sbml_dfs_utils._validate_matching_data(species_data_table, self.species)
 

@@ -1,5 +1,7 @@
+import pytest
+
 from napistu.ontologies.constants import PUBCHEM_DEFS
-from napistu.ontologies.pubchem import map_pubchem_ids
+from napistu.ontologies.pubchem import PubChemConnectivityError, map_pubchem_ids
 
 
 def test_map_pubchem_ids_valid():
@@ -15,7 +17,11 @@ def test_map_pubchem_ids_valid():
         "446220",
         "5280656",
     ]  # 8 valid CIDs
-    result = map_pubchem_ids(valid_cids, verbose=False)
+
+    try:
+        result = map_pubchem_ids(valid_cids, verbose=False)
+    except PubChemConnectivityError as e:
+        pytest.skip(f"PubChem connectivity issue: {e}")
 
     assert len(result) == 8, f"Expected 8 results, got {len(result)}"
 
