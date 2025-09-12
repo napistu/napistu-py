@@ -26,6 +26,8 @@ from napistu.constants import (
     ENTITIES_TO_ENTITY_DATA,
     ENTITIES_W_DATA,
     SBML_DFS,
+    SBML_DFS_SCHEMA,
+    SCHEMA_DEFS,
     SOURCE_SPEC,
 )
 from napistu.network.constants import (
@@ -522,22 +524,27 @@ def pluck_entity_data(
     data_list = list()
     for k, v in entity_attrs.items():
         # v["table"] is always present if entity_attrs is non-empty and validated
-        if v["table"] not in entity_data_tbls.keys():
+        if v[WEIGHTING_SPEC.TABLE] not in entity_data_tbls.keys():
             raise ValueError(
-                f"{v['table']} was defined as a table in \"graph_attrs\" but "
+                f'{v[WEIGHTING_SPEC.TABLE]} was defined as a table in "graph_attrs" but '
                 f'it is not present in the "{data_type_attr}" of the sbml_dfs'
             )
 
-        if v["variable"] not in entity_data_tbls[v["table"]].columns.tolist():
+        if (
+            v[WEIGHTING_SPEC.VARIABLE]
+            not in entity_data_tbls[v[WEIGHTING_SPEC.TABLE]].columns.tolist()
+        ):
             raise ValueError(
-                f"{v['variable']} was defined as a variable in \"graph_attrs\" but "
-                f"it is not present in the {v['table']} of the \"{data_type_attr}\" of "
+                f'{v[WEIGHTING_SPEC.VARIABLE]} was defined as a variable in "graph_attrs" but '
+                f'it is not present in the {v[WEIGHTING_SPEC.TABLE]} of the "{data_type_attr}" of '
                 "the sbml_dfs"
             )
 
-        entity_series = entity_data_tbls[v["table"]][v["variable"]].rename(k)
+        entity_series = entity_data_tbls[v[WEIGHTING_SPEC.TABLE]][
+            v[WEIGHTING_SPEC.VARIABLE]
+        ].rename(k)
         if transform:
-            trans_name = v.get("trans", DEFAULT_WT_TRANS)
+            trans_name = v.get(WEIGHTING_SPEC.TRANSFORMATION, DEFAULT_WT_TRANS)
             # Look up transformation
             if custom_transformations:
                 valid_transformations = {
@@ -560,7 +567,13 @@ def pluck_entity_data(
     if len(data_list) == 0:
         return None
 
-    return pd.concat(data_list, axis=1)
+    result_df = pd.concat(data_list, axis=1)
+
+    # Preserve the index name from the original data
+    # The index name should match the entity type (s_id for species, r_id for reactions)
+    result_df.index.name = SBML_DFS_SCHEMA.SCHEMA[data_type][SCHEMA_DEFS.PK]
+
+    return result_df
 
 
 def prepare_entity_data_extraction(
@@ -719,6 +732,7 @@ def separate_entity_attrs_by_source(
     logger.debug(f"Valid SBML tables: {valid_sbml_tables}")
 
     if side_loaded_attributes is not None:
+        _validate_side_loaded_attributes(side_loaded_attributes)
         valid_extra_tables.update(side_loaded_attributes.keys())
 
     logger.debug(f"Valid extra tables: {valid_extra_tables}")
@@ -1097,6 +1111,67 @@ def _validate_entity_attrs(
                 )
 
     return None
+
+
+def _validate_side_loaded_attributes(
+    side_loaded_attributes: dict[str, pd.DataFrame],
+) -> None:
+    """
+    Validate that side_loaded_attributes is a dict of DataFrames with consistent index names.
+
+    This function ensures that all DataFrames in the dictionary can be concatenated
+    by checking that they have the same index structure (single or multi-index).
+
+    Parameters
+    ----------
+    side_loaded_attributes : dict[str, pd.DataFrame]
+        Dictionary mapping table names to DataFrames
+
+    Raises
+    ------
+    TypeError
+        If side_loaded_attributes is not a dict or contains non-DataFrame values
+    ValueError
+        If DataFrames have inconsistent index names or structures
+    """
+    if not isinstance(side_loaded_attributes, dict):
+        raise TypeError("side_loaded_attributes must be a dictionary")
+
+    if not side_loaded_attributes:
+        return  # Empty dict is valid
+
+    # Check that all values are DataFrames
+    for table_name, df in side_loaded_attributes.items():
+        if not isinstance(df, pd.DataFrame):
+            raise TypeError(
+                f"side_loaded_attributes[{table_name}] must be a pandas DataFrame, got {type(df)}"
+            )
+
+    # Get the first DataFrame's index structure as reference
+    first_df = next(iter(side_loaded_attributes.values()))
+    reference_index_names = first_df.index.names
+    reference_is_multiindex = isinstance(first_df.index, pd.MultiIndex)
+
+    # Check that all other DataFrames have the same index structure
+    for table_name, df in side_loaded_attributes.items():
+        current_index_names = df.index.names
+        current_is_multiindex = isinstance(df.index, pd.MultiIndex)
+
+        # Check if index types match (both single or both multi)
+        if current_is_multiindex != reference_is_multiindex:
+            raise ValueError(
+                f"side_loaded_attributes[{table_name}] has {'MultiIndex' if current_is_multiindex else 'single index'}, "
+                f"but other tables have {'MultiIndex' if reference_is_multiindex else 'single index'}. "
+                f"All DataFrames must have the same index structure for concatenation."
+            )
+
+        # Check if index names match
+        if current_index_names != reference_index_names:
+            raise ValueError(
+                f"side_loaded_attributes[{table_name}] has index names {current_index_names}, "
+                f"but other tables have index names {reference_index_names}. "
+                f"All DataFrames must have the same index names for concatenation."
+            )
 
 
 class _EntityAttrValidator(BaseModel):

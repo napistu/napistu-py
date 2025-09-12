@@ -8,7 +8,9 @@ import igraph as ig
 import pandas as pd
 
 from napistu import utils
-from napistu.constants import SBML_DFS
+from napistu.constants import (
+    SBML_DFS,
+)
 from napistu.network import ig_utils, ng_utils
 from napistu.network.constants import (
     ADDING_ENTITY_DATA_DEFS,
@@ -1514,26 +1516,8 @@ class NapistuGraph(ig.Graph):
         entity_attrs_to_extract = ng_utils.prepare_entity_data_extraction(
             graph, entity_type, target_entity, mode, overwrite
         )
-        # just for logging
-        entity_name = SINGULAR_GRAPH_ENTITIES[target_entity]
-
         if entity_attrs_to_extract is None:
             return None if inplace else graph
-
-        # Get current graph data and drop to-be-overwritten attributes if overwrite=True
-        if target_entity == NAPISTU_GRAPH.EDGES:
-            graph_df = graph.get_edge_dataframe()
-        else:  # vertices
-            graph_df = graph.get_vertex_dataframe()
-
-        # Remove overlapping attributes from graph_df if overwrite=True to avoid _x/_y suffixes
-        attrs_to_add = entity_attrs_to_extract.keys()
-        if overwrite:
-            overlapping_in_graph = [
-                attr for attr in attrs_to_add if attr in graph_df.columns
-            ]
-            if overlapping_in_graph:
-                graph_df = graph_df.drop(columns=overlapping_in_graph)
 
         # separate the attributes into those which will be extracted from the sbml_dfs
         # and those which will be extracted from the side_loaded_attributes
@@ -1541,56 +1525,44 @@ class NapistuGraph(ig.Graph):
             entity_attrs_to_extract, entity_type, sbml_dfs, side_loaded_attributes
         )
 
+        logger.debug(f"{len(sbml_dfs_attrs)} sbml_dfs attributes to add")
+        logger.debug(
+            f"{len(side_loaded_attrs)} side_loaded_attributes attributes to add"
+        )
+
         if len(sbml_dfs_attrs) > 0:
+
+            logger.debug(f"sbml_dfs_attrs: {sbml_dfs_attrs}")
             # Get entity data from sbml_dfs
             sbml_dfs_entity_data = ng_utils.pluck_entity_data(
                 sbml_dfs, sbml_dfs_attrs, entity_type, transform=False
             )
-        else:
-            sbml_dfs_entity_data = None
+
+            if sbml_dfs_entity_data is not None:
+                # add an index to help with merging
+                # pk = SBML_DFS_SCHEMA.SCHEMA[entity_type][SCHEMA_DEFS.PK]
+                # sbml_dfs_entity_data = sbml_dfs_entity_data.set_index(pk)
+
+                self._add_attributes_df(sbml_dfs_entity_data, target_entity, overwrite)
+            else:
+                logger.warning(
+                    f"No {entity_type} data could be extracted from sbml_dfs using the stored {entity_type}_attrs"
+                )
 
         if len(side_loaded_attrs) > 0:
             # Get entity data from side_loaded_attributes
             side_loaded_entity_data = ng_utils.pluck_data(
                 side_loaded_attributes, side_loaded_attrs
             )
-        else:
-            side_loaded_entity_data = None
 
-        # merge the two entity dataframes
-        entity_data = pd.concat([sbml_dfs_entity_data, side_loaded_entity_data])
-
-        if entity_data is None:
-            logger.warning(
-                f"No {entity_type} data could be extracted with the stored {entity_type}_attrs"
-            )
-            return None if inplace else graph
-
-        # Get current graph data and merge with entity data
-        if target_entity == NAPISTU_GRAPH.EDGES:
-            # For edges, merge on reaction ID
-            merge_key = SBML_DFS.R_ID
-        else:  # vertices
-            # For vertices, merge on species ID
-            merge_key = SBML_DFS.S_ID
-
-        graph_with_attrs = graph_df.merge(
-            entity_data, left_on=merge_key, right_index=True, how="left"
-        )
-
-        # Add new attributes directly to the graph
-        added_count = 0
-        for attr_name in attrs_to_add:
-            if attr_name in entity_data.columns:
-                if target_entity == NAPISTU_GRAPH.EDGES:
-                    graph.es[attr_name] = graph_with_attrs[attr_name].values
-                else:  # vertices
-                    graph.vs[attr_name] = graph_with_attrs[attr_name].values
-                added_count += 1
-
-        logger.info(
-            f"Added {added_count} {entity_name} attributes to graph: {list(attrs_to_add)}"
-        )
+            if side_loaded_entity_data is not None:
+                self._add_attributes_df(
+                    side_loaded_entity_data, target_entity, overwrite
+                )
+            else:
+                logger.warning(
+                    f"No {entity_type} data could be extracted from the side_loaded_attributes using the stored {entity_type}_attrs"
+                )
 
         return None if inplace else graph
 
@@ -1634,6 +1606,13 @@ class NapistuGraph(ig.Graph):
                 f"target_entity must be '{NAPISTU_GRAPH.EDGES}' or '{NAPISTU_GRAPH.VERTICES}'"
             )
 
+        # Check that entity_data is a DataFrame
+        if not isinstance(entity_data, pd.DataFrame):
+            raise TypeError(
+                f"Expected entity_data to be a pandas DataFrame, but got {type(entity_data)}. "
+                f"entity_data value: {entity_data}"
+            )
+
         # Get attributes to add from the entity_data columns
         attrs_to_add = list(entity_data.columns)
 
@@ -1643,11 +1622,35 @@ class NapistuGraph(ig.Graph):
         else:
             merge_keys = [entity_data.index.name]
 
+        # Check for missing index names (None values)
+        missing_index_names = [i for i, key in enumerate(merge_keys) if key is None]
+        if missing_index_names:
+            if isinstance(entity_data.index, pd.MultiIndex):
+                level_info = f" at level(s) {missing_index_names}"
+            else:
+                level_info = ""
+            raise ValueError(
+                f"Entity data DataFrame has unnamed index{level_info}. "
+                f"Expected index name(s) for {target_entity}: {merge_keys}. "
+                f"Please set the index name(s) on your DataFrame before adding entity data. "
+                f"For example: df.index.name = 's_id' for species data or 'r_id' for reaction data."
+            )
+
         # Get current graph data
         if target_entity == NAPISTU_GRAPH.EDGES:
             graph_df = self.get_edge_dataframe()
         else:  # vertices
             graph_df = self.get_vertex_dataframe()
+
+        # Check that merge keys exist in graph_df
+        missing_keys = [key for key in merge_keys if key not in graph_df.columns]
+        if missing_keys:
+            available_attrs = list(graph_df.columns)
+            raise ValueError(
+                f"Merge keys {missing_keys} from entity_data index are missing from graph {target_entity} DataFrame. "
+                f"The merge is defined by entity_data's index names: {merge_keys}. "
+                f"Available attributes in graph {target_entity} DataFrame: {available_attrs}"
+            )
 
         # Remove overlapping attributes from graph_df if overwrite=True to avoid _x/_y suffixes
         if overwrite:

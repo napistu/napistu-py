@@ -189,21 +189,21 @@ def test_set_and_get_graph_attrs(test_graph):
     stored_species = test_graph.get_metadata("species_attrs")
 
     assert (
-        stored_reactions == attrs["reactions"]
-    ), f"Expected {attrs['reactions']}, got {stored_reactions}"
+        stored_reactions == attrs[SBML_DFS.REACTIONS]
+    ), f"Expected {attrs[SBML_DFS.REACTIONS]}, got {stored_reactions}"
     assert (
-        stored_species == attrs["species"]
-    ), f"Expected {attrs['species']}, got {stored_species}"
+        stored_species == attrs[SBML_DFS.SPECIES]
+    ), f"Expected {attrs[SBML_DFS.SPECIES]}, got {stored_species}"
 
     # Get attributes through helper method
-    reactions_result = test_graph._get_entity_attrs("reactions")
-    species_result = test_graph._get_entity_attrs("species")
+    reactions_result = test_graph._get_entity_attrs(SBML_DFS.REACTIONS)
+    species_result = test_graph._get_entity_attrs(SBML_DFS.SPECIES)
 
     assert (
-        reactions_result == attrs["reactions"]
-    ), f"Expected {attrs['reactions']}, got {reactions_result}"
+        reactions_result == attrs[SBML_DFS.REACTIONS]
+    ), f"Expected {attrs[SBML_DFS.REACTIONS]}, got {reactions_result}"
     assert (
-        species_result == attrs["species"]
+        species_result == attrs[SBML_DFS.SPECIES]
     ), f"Expected {attrs['species']}, got {species_result}"
 
     # Test that method raises ValueError for unknown entity types
@@ -212,13 +212,17 @@ def test_set_and_get_graph_attrs(test_graph):
 
     # Test that method returns None for empty attributes
     test_graph.set_metadata(reaction_attrs={})
-    assert test_graph._get_entity_attrs("reactions") is None
+    assert test_graph._get_entity_attrs(SBML_DFS.REACTIONS) is None
 
 
 def test_compare_and_merge_attrs(test_graph):
     """Test the _compare_and_merge_attrs method directly."""
     new_attrs = {
-        "string_wt": {"table": "string", "variable": "score", "trans": "identity"}
+        "string_wt": {
+            WEIGHTING_SPEC.TABLE: "string",
+            WEIGHTING_SPEC.VARIABLE: "score",
+            WEIGHTING_SPEC.TRANSFORMATION: "identity",
+        }
     }
 
     # Test fresh mode
@@ -235,7 +239,11 @@ def test_compare_and_merge_attrs(test_graph):
 
     # Test extend mode with existing attrs
     existing_attrs = {
-        "existing": {"table": "test", "variable": "val", "trans": "identity"}
+        "existing": {
+            WEIGHTING_SPEC.TABLE: "test",
+            WEIGHTING_SPEC.VARIABLE: "val",
+            WEIGHTING_SPEC.TRANSFORMATION: "identity",
+        }
     }
     test_graph.set_metadata(reaction_attrs=existing_attrs)
 
@@ -251,7 +259,11 @@ def test_graph_attrs_extend_and_overwrite_protection(test_graph):
     # Set initial attributes
     initial = {
         "reactions": {
-            "attr1": {"table": "test", "variable": "val", "trans": "identity"}
+            "attr1": {
+                WEIGHTING_SPEC.TABLE: "test",
+                WEIGHTING_SPEC.VARIABLE: "val",
+                WEIGHTING_SPEC.TRANSFORMATION: "identity",
+            }
         }
     }
     test_graph.set_graph_attrs(initial)
@@ -261,7 +273,11 @@ def test_graph_attrs_extend_and_overwrite_protection(test_graph):
         test_graph.set_graph_attrs(
             {
                 "reactions": {
-                    "attr2": {"table": "test", "variable": "val2", "trans": "identity"}
+                    "attr2": {
+                        WEIGHTING_SPEC.TABLE: "test",
+                        WEIGHTING_SPEC.VARIABLE: "val2",
+                        WEIGHTING_SPEC.TRANSFORMATION: "identity",
+                    }
                 }
             }
         )
@@ -270,7 +286,11 @@ def test_graph_attrs_extend_and_overwrite_protection(test_graph):
     test_graph.set_graph_attrs(
         {
             "reactions": {
-                "attr2": {"table": "new", "variable": "val2", "trans": "identity"}
+                "attr2": {
+                    WEIGHTING_SPEC.TABLE: "new",
+                    WEIGHTING_SPEC.VARIABLE: "val2",
+                    WEIGHTING_SPEC.TRANSFORMATION: "identity",
+                }
             }
         },
         mode="extend",
@@ -508,6 +528,7 @@ def test_transform_edges_retransformation_behavior(test_graph, minimal_valid_sbm
     """Test re-transformation behavior and error handling."""
     # Add mock data
     mock_df = pd.DataFrame({"scores": [500]}, index=["R00001"])
+    mock_df.index.name = SBML_DFS.R_ID
     minimal_valid_sbml_dfs.reactions_data["test_table"] = mock_df
 
     # Initial transformation
@@ -1146,6 +1167,7 @@ def test_add_vertex_data_basic_functionality(test_graph, minimal_valid_sbml_dfs)
     test_graph.vs[SBML_DFS.S_ID] = ["S00001", "S00001", "S00002"]
 
     mock_df = pd.DataFrame({"score_col": [100, 200]}, index=["S00001", "S00002"])
+    mock_df.index.name = SBML_DFS.S_ID
     minimal_valid_sbml_dfs.species_data["mock_table"] = mock_df
 
     species_attrs = {
@@ -1174,6 +1196,7 @@ def test_add_vertex_data_error_handling(test_graph, minimal_valid_sbml_dfs):
     test_graph.vs[SBML_DFS.S_ID] = ["S00001", "S00001", "S00002"]
 
     mock_df = pd.DataFrame({"score_col": [100, 200]}, index=["S00001", "S00002"])
+    mock_df.index.name = SBML_DFS.S_ID
     minimal_valid_sbml_dfs.species_data["mock_table"] = mock_df
 
     species_attrs = {
@@ -1199,6 +1222,7 @@ def test_transform_vertices_basic_functionality(test_graph, minimal_valid_sbml_d
     test_graph.vs[SBML_DFS.S_ID] = ["S00001", "S00001", "S00002"]
 
     mock_df = pd.DataFrame({"score_col": [100, 200]}, index=["S00001", "S00002"])
+    mock_df.index.name = SBML_DFS.S_ID
     minimal_valid_sbml_dfs.species_data["mock_table"] = mock_df
 
     species_attrs = {
@@ -1235,6 +1259,7 @@ def test_transform_vertices_validation_behavior(test_graph, minimal_valid_sbml_d
     test_graph.vs[SBML_DFS.S_ID] = ["S00001", "S00001", "S00002"]
 
     mock_df = pd.DataFrame({"score_col": [100, 200]}, index=["S00001", "S00002"])
+    mock_df.index.name = SBML_DFS.S_ID
     minimal_valid_sbml_dfs.species_data["mock_table"] = mock_df
 
     species_attrs = {
