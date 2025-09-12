@@ -62,13 +62,13 @@ class NapistuGraph(ig.Graph):
     ----------------------------
     add_degree_attributes(inplace=True)
         Add degree-based attributes to vertices and edges.
-    add_edge_data(sbml_dfs, mode='fresh', overwrite=False, inplace=True)
+    add_edge_data(sbml_dfs, side_loaded_attributes, mode='fresh', overwrite=False, inplace=True)
         Add edge data from SBML_dfs to the graph.
     add_topology_weights(base_score=2, protein_multiplier=1, metabolite_multiplier=3, unknown_multiplier=10, scale_multiplier_by_meandegree=True, inplace=True)
         Add topology-based weights to graph edges.
     add_sbml_dfs_summaries(sbml_dfs, summary_types=None, priority_pathways=None, stratify_by_bqb=True, characteristic_only=False, dogmatic=False, inplace=True)
         Add vertex summaries from SBML_dfs to the graph vertices.
-    add_vertex_data(sbml_dfs, mode='fresh', overwrite=False, inplace=True)
+    add_vertex_data(sbml_dfs, side_loaded_attributes, mode='fresh', overwrite=False, inplace=True)
         Add vertex data from SBML_dfs to the graph.
     copy()
         Create a deep copy of the NapistuGraph.

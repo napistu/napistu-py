@@ -1412,3 +1412,127 @@ def test_add_attributes_to_graph_inplace_overwrite(test_graph):
     assert test_graph.vs["test_attr"][0] == 300
     if num_vertices > 1:
         assert test_graph.vs["test_attr"][1] == 400
+
+
+def test_add_edge_data_with_both_sources(napistu_graph, sbml_dfs_w_data):
+    """Test add_edge_data using both sbml_dfs and side_loaded_attributes as data sources."""
+    # Get a couple of real edges for side-loaded data
+    edge_df = napistu_graph.get_edge_dataframe()
+    selected_edges = edge_df.head(2)
+    edge_pairs = list(
+        zip(
+            selected_edges[NAPISTU_GRAPH_EDGES.FROM],
+            selected_edges[NAPISTU_GRAPH_EDGES.TO],
+        )
+    )
+
+    # Create side-loaded data for these edges
+    side_loaded_df = pd.DataFrame(
+        {
+            "external_confidence": [0.95, 0.87],
+            "external_source": ["database_A", "database_B"],
+        },
+        index=pd.MultiIndex.from_tuples(
+            edge_pairs, names=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+        ),
+    )
+
+    side_loaded_attributes = {"external_db": side_loaded_df}
+
+    # Set up attributes for both data sources
+    reaction_attrs = {
+        "rxn_score": {
+            WEIGHTING_SPEC.TABLE: "rxn_data",
+            WEIGHTING_SPEC.VARIABLE: "rxn_attr_float",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        },
+        "confidence": {
+            WEIGHTING_SPEC.TABLE: "external_db",
+            WEIGHTING_SPEC.VARIABLE: "external_confidence",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        },
+    }
+
+    napistu_graph.set_graph_attrs({SBML_DFS.REACTIONS: reaction_attrs})
+
+    # Add data from both sources
+    napistu_graph.add_edge_data(
+        sbml_dfs_w_data, side_loaded_attributes=side_loaded_attributes
+    )
+
+    # Verify attributes exist and have some non-None values
+    edge_attrs = napistu_graph.es.attributes()
+    assert "rxn_score" in edge_attrs
+    assert "confidence" in edge_attrs
+
+    # Check that we have some non-None values from each source
+    rxn_scores = napistu_graph.es["rxn_score"]
+    confidences = napistu_graph.es["confidence"]
+
+    assert any(
+        score is not None and not pd.isna(score) for score in rxn_scores
+    ), "No valid rxn_score values found"
+    assert any(
+        conf is not None and not pd.isna(conf) for conf in confidences
+    ), "No valid confidence values found"
+
+
+def test_add_edge_data_side_loaded_only(napistu_graph):
+    """Test add_edge_data using only side_loaded_attributes (no sbml_dfs)."""
+    # Get a couple of real edges for side-loaded data
+    edge_df = napistu_graph.get_edge_dataframe()
+    selected_edges = edge_df.head(2)
+    edge_pairs = list(
+        zip(
+            selected_edges[NAPISTU_GRAPH_EDGES.FROM],
+            selected_edges[NAPISTU_GRAPH_EDGES.TO],
+        )
+    )
+
+    # Create side-loaded data for these edges
+    side_loaded_df = pd.DataFrame(
+        {
+            "external_confidence": [0.95, 0.87],
+            "external_source": ["database_A", "database_B"],
+        },
+        index=pd.MultiIndex.from_tuples(
+            edge_pairs, names=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+        ),
+    )
+
+    side_loaded_attributes = {"external_db": side_loaded_df}
+
+    # Set up attributes for side-loaded data only
+    reaction_attrs = {
+        "confidence": {
+            WEIGHTING_SPEC.TABLE: "external_db",
+            WEIGHTING_SPEC.VARIABLE: "external_confidence",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        },
+        "source_db": {
+            WEIGHTING_SPEC.TABLE: "external_db",
+            WEIGHTING_SPEC.VARIABLE: "external_source",
+            WEIGHTING_SPEC.TRANSFORMATION: DEFAULT_WT_TRANS,
+        },
+    }
+
+    napistu_graph.set_graph_attrs({SBML_DFS.REACTIONS: reaction_attrs})
+
+    # Add data from side-loaded source only
+    napistu_graph.add_edge_data(side_loaded_attributes=side_loaded_attributes)
+
+    # Verify attributes exist and have some non-None values
+    edge_attrs = napistu_graph.es.attributes()
+    assert "confidence" in edge_attrs
+    assert "source_db" in edge_attrs
+
+    # Check that we have some non-None values
+    confidences = napistu_graph.es["confidence"]
+    source_dbs = napistu_graph.es["source_db"]
+
+    assert any(
+        conf is not None and not pd.isna(conf) for conf in confidences
+    ), "No valid confidence values found"
+    assert any(
+        source is not None and not pd.isna(source) for source in source_dbs
+    ), "No valid source_db values found"
