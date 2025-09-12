@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import requests
 
@@ -12,6 +12,12 @@ from napistu.ontologies.constants import (
 
 # Setup logger
 logger = logging.getLogger(__name__)
+
+
+class PubChemConnectivityError(Exception):
+    """Raised when PubChem API is unreachable due to network/connectivity issues."""
+
+    pass
 
 
 def map_pubchem_ids(
@@ -164,8 +170,38 @@ def _validate_params(
     return batch_size, max_retries, delay
 
 
-def _process_batch_response(data: dict, batch: List[str]) -> Dict[str, Dict[str, str]]:
-    """Process API response for a batch of CIDs."""
+def _process_batch_response(
+    data: Dict[str, Any], batch: List[str]
+) -> Dict[str, Dict[str, str]]:
+    """
+    Process PubChem API response for a batch of compound identifiers.
+
+    Extracts compound names and SMILES strings from the PubChem REST API response,
+    handling both found and missing compounds in the batch.
+
+    Parameters
+    ----------
+    data : Dict[str, any]
+        JSON response from PubChem REST API containing property table with
+        compound information.
+    batch : List[str]
+        List of PubChem CIDs that were requested in this batch.
+
+    Returns
+    -------
+    Dict[str, Dict[str, str]]
+        Dictionary mapping each CID to a nested dictionary containing:
+        - 'name': Compound name (prefers Title over IUPACName, falls back to CID)
+        - 'smiles': Isomeric SMILES string (empty string if not available)
+
+        Missing CIDs are included with name=CID and empty SMILES.
+
+    Notes
+    -----
+    - Handles API inconsistencies between IsomericSMILES and SMILES fields
+    - Compounds not found in API response are included with default values
+    - Prefers compound Title over IUPACName for better readability
+    """
     batch_results = {}
     properties_list = data.get(PUBCHEM_PROPERTIES.PROPERTY_TABLE, {}).get(
         PUBCHEM_PROPERTIES.PROPERTIES, []
@@ -194,7 +230,7 @@ def _process_batch_response(data: dict, batch: List[str]) -> Dict[str, Dict[str,
         if cid not in found_cids:
             batch_results[cid] = {PUBCHEM_DEFS.NAME: cid, PUBCHEM_DEFS.SMILES: ""}
 
-    return batch_results, len(found_cids)
+    return batch_results
 
 
 def _fetch_batch(
@@ -211,7 +247,7 @@ def _fetch_batch(
 
             if response.status_code == 200:
                 data = response.json()
-                batch_results, found_count = _process_batch_response(data, batch)
+                batch_results = _process_batch_response(data, batch)
                 return batch_results, True
 
             elif response.status_code == 400:
@@ -239,8 +275,16 @@ def _fetch_batch(
                     time.sleep(delay * 2)
 
         except Exception as e:
+            # Immediate dealbreakers - re-raise right away
+            if _is_immediate_failure(e):
+                raise PubChemConnectivityError(f"Network error: {e}") from e
+
+            # Potentially transient issues - retry logic
             if attempt == max_retries:
-                logger.error(f"Error: {e}")
+                # Failed after all retries - now raise
+                raise PubChemConnectivityError(
+                    f"API error after {max_retries + 1} attempts: {e}"
+                ) from e
             else:
                 logger.warning(f"Retry {attempt + 1}/{max_retries + 1} - {e}")
                 time.sleep(delay * 2)
@@ -263,3 +307,13 @@ def _fetch_individual_cids(
         time.sleep(delay * 0.5)  # Shorter delay for individual requests
 
     return results, True
+
+
+def _is_immediate_failure(e):
+    """Return True if this error should not be retried."""
+    immediate_failures = (
+        requests.exceptions.SSLError,
+        requests.exceptions.ConnectionError,  # DNS, network unreachable
+        # Could add others like specific SSL cert errors
+    )
+    return isinstance(e, immediate_failures)
