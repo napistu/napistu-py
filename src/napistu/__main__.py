@@ -883,7 +883,7 @@ def export_igraph(
     "--partition_size",
     "-p",
     type=int,
-    default=5000,
+    default=1000,
     help="The number of species to process together when computing distances",
 )
 @click.option(

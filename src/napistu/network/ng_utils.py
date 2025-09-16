@@ -1040,7 +1040,7 @@ def _validate_assets_graph_dist(
     )
     inconsistent_weights = edges_with_distances.query(
         # shortest weighted paths cannot be greater than the path weight for a direct connection
-        f"{DISTANCES.PATH_WEIGHT} <= {NAPISTU_GRAPH_EDGES.WEIGHT}"
+        f"{DISTANCES.PATH_WEIGHT} > {NAPISTU_GRAPH_EDGES.WEIGHT}"
     )
     if inconsistent_weights.shape[0] > 0:
         logger.warning(
