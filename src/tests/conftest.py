@@ -229,6 +229,16 @@ def precomputed_distances_metabolism(napistu_graph_metabolism):
     )
 
 
+@fixture
+def species_identifiers_metabolism(sbml_dfs_metabolism):
+    """
+    Pytest fixture to create a species identifiers DataFrame from sbml_dfs_metabolism.
+    This creates a DataFrame with the structure expected by validate_assets.
+    """
+
+    return sbml_dfs_metabolism.get_characteristic_species_ids()
+
+
 @pytest.fixture
 def reaction_species_examples():
     """

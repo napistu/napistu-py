@@ -415,3 +415,67 @@ def test_pluck_side_loaded_data():
         ng_utils.pluck_data(
             data_tables, {"test": {"table": "missing", "variable": "col1"}}
         )
+
+
+def test_validate_assets_only_sbml_dfs(sbml_dfs_metabolism, caplog):
+    """Test validate_assets with only sbml_dfs provided - should log warning."""
+    import logging
+
+    # Clear any previous log records
+    caplog.clear()
+
+    # Call validate_assets with only sbml_dfs
+    result = ng_utils.validate_assets(sbml_dfs_metabolism)
+
+    # Should return None
+    assert result is None
+
+    # Should log a warning
+    assert caplog.records
+    assert any(
+        "Only sbml_dfs was provided; nothing to validate" in record.message
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+    )
+
+
+def test_validate_assets_with_napistu_graph(
+    sbml_dfs_metabolism, napistu_graph_metabolism
+):
+    """Test validate_assets with sbml_dfs and napistu_graph."""
+    # Should not raise any errors or warnings
+    result = ng_utils.validate_assets(
+        sbml_dfs_metabolism, napistu_graph=napistu_graph_metabolism
+    )
+    assert result is None
+
+
+def test_validate_assets_precomputed_distances_without_graph(
+    sbml_dfs_metabolism, precomputed_distances_metabolism
+):
+    """Test validate_assets with precomputed_distances but no napistu_graph - should raise ValueError."""
+    # Should raise ValueError when precomputed_distances is provided without napistu_graph
+    with pytest.raises(
+        ValueError,
+        match="napistu_graph must be provided if precomputed_distances is provided",
+    ):
+        ng_utils.validate_assets(
+            sbml_dfs_metabolism, precomputed_distances=precomputed_distances_metabolism
+        )
+
+
+def test_validate_assets_all_valid_assets(
+    sbml_dfs_metabolism,
+    napistu_graph_metabolism,
+    precomputed_distances_metabolism,
+    species_identifiers_metabolism,
+):
+    """Test validate_assets with all valid assets provided."""
+    # Should not raise any errors when all assets are provided and valid
+    result = ng_utils.validate_assets(
+        sbml_dfs_metabolism,
+        napistu_graph=napistu_graph_metabolism,
+        precomputed_distances=precomputed_distances_metabolism,
+        identifiers_df=species_identifiers_metabolism,
+    )
+    assert result is None

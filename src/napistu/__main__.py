@@ -1029,16 +1029,16 @@ def validate_sbml_dfs(sbml_dfs_uri):
 @helpers.command(name="validate_assets")
 @sbml_dfs_input
 @click.option(
-    "--napistu-graph-uri", "-g", type=str, help="URI to NapistuGraph pickle file"
+    "--napistu_graph_uri", "-g", type=str, help="URI to NapistuGraph pickle file"
 )
 @click.option(
-    "--precomputed-distances-uri",
+    "--precomputed_distances_uri",
     "-d",
     type=str,
     help="URI to precomputed distances parquet file",
 )
 @click.option(
-    "--identifiers-df-uri", "-i", type=str, help="URI to identifiers DataFrame TSV file"
+    "--identifiers_df_uri", "-i", type=str, help="URI to identifiers DataFrame TSV file"
 )
 @verbosity_option
 def validate_assets(

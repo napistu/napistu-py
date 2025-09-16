@@ -1025,7 +1025,7 @@ def _validate_assets_graph_dist(
     edges = pd.DataFrame(
         [{**{"index": e.index}, **e.attributes()} for e in napistu_graph.es]
     )
-    direct_interactions = precomputed_distances.query("path_length == 1")
+    direct_interactions = precomputed_distances.query(f"{DISTANCES.PATH_LENGTH} == 1")
     edges_with_distances = direct_interactions.merge(
         edges[
             [
@@ -1039,13 +1039,14 @@ def _validate_assets_graph_dist(
         right_on=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO],
     )
     inconsistent_weights = edges_with_distances.query(
-        f"{DISTANCES.PATH_WEIGHT} != {NAPISTU_GRAPH_EDGES.WEIGHT}"
+        # shortest weighted paths cannot be greater than the path weight for a direct connection
+        f"{DISTANCES.PATH_WEIGHT} <= {NAPISTU_GRAPH_EDGES.WEIGHT}"
     )
     if inconsistent_weights.shape[0] > 0:
         logger.warning(
-            f"{inconsistent_weights.shape[0]} edges' weights are inconsistent between",
-            "edges in the napistu_graph and length 1 paths in precomputed_distances."
-            f"This is {inconsistent_weights.shape[0] / edges_with_distances.shape[0]:.2%} of all edges.",
+            f"{inconsistent_weights.shape[0]} edges' weights are inconsistent between "
+            f"edges in the napistu_graph and length 1 paths in precomputed_distances. "
+            f"This is {inconsistent_weights.shape[0] / edges_with_distances.shape[0]:.2%} of all edges."
         )
     return None
 
