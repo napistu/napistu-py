@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import tempfile
 
+import igraph as ig
 import numpy as np
 import pandas as pd
 import pytest
@@ -323,3 +324,146 @@ def test_filter_precomputed_distances_top_n_subset(precomputed_distances_metabol
     ).issubset(filtered.columns)
     # Optionally, check that the number of rows is less than or equal to the input
     assert filtered.shape[0] <= precomputed_distances.shape[0]
+
+
+def test_find_unique_weight_vars():
+    """Test the _find_unique_weight_vars function with different scenarios."""
+
+    # Create a simple test graph
+    g = ig.Graph(directed=True)
+    g.add_vertices(4)
+    g.add_edges([(0, 1), (1, 2), (2, 3), (0, 3)])
+
+    # Test Case 1: All weight variables are different
+    g.es[NAPISTU_GRAPH_EDGES.WEIGHT] = [1.0, 2.0, 3.0, 4.0]
+    g.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = [1.1, 2.1, 3.1, 4.1]
+    g.es["custom_weight"] = [1.5, 2.5, 3.5, 4.5]
+
+    weight_vars = [
+        NAPISTU_GRAPH_EDGES.WEIGHT,
+        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+        "custom_weight",
+    ]
+    unique_map, representatives = precompute._find_unique_weight_vars(g, weight_vars)
+
+    assert len(representatives) == 3
+    assert unique_map == {
+        NAPISTU_GRAPH_EDGES.WEIGHT: NAPISTU_GRAPH_EDGES.WEIGHT,
+        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT: NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+        "custom_weight": "custom_weight",
+    }
+
+    # Test Case 2: weight and upstream_weight are identical
+    g.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = [1.0, 2.0, 3.0, 4.0]  # Same as weight
+
+    unique_map, representatives = precompute._find_unique_weight_vars(
+        g, [NAPISTU_GRAPH_EDGES.WEIGHT, NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT]
+    )
+
+    assert len(representatives) == 1
+    assert (
+        unique_map[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] == NAPISTU_GRAPH_EDGES.WEIGHT
+    )  # upstream_weight should map to weight
+    assert NAPISTU_GRAPH_EDGES.WEIGHT in representatives
+    assert set(representatives[NAPISTU_GRAPH_EDGES.WEIGHT]) == {
+        NAPISTU_GRAPH_EDGES.WEIGHT,
+        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+    }
+
+    # Test Case 3: All three weights are identical
+    g.es["custom_weight"] = [1.0, 2.0, 3.0, 4.0]  # Same as weight
+
+    unique_map, representatives = precompute._find_unique_weight_vars(
+        g,
+        [
+            NAPISTU_GRAPH_EDGES.WEIGHT,
+            NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+            "custom_weight",
+        ],
+    )
+
+    assert len(representatives) == 1
+    assert NAPISTU_GRAPH_EDGES.WEIGHT in representatives
+    assert set(representatives[NAPISTU_GRAPH_EDGES.WEIGHT]) == {
+        NAPISTU_GRAPH_EDGES.WEIGHT,
+        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+        "custom_weight",
+    }
+
+    # Test Case 4: Single weight variable
+    unique_map, representatives = precompute._find_unique_weight_vars(
+        g, [NAPISTU_GRAPH_EDGES.WEIGHT]
+    )
+
+    assert unique_map == {NAPISTU_GRAPH_EDGES.WEIGHT: NAPISTU_GRAPH_EDGES.WEIGHT}
+    assert representatives == {NAPISTU_GRAPH_EDGES.WEIGHT: [NAPISTU_GRAPH_EDGES.WEIGHT]}
+
+    # Test Case 5: Empty list should raise an exception
+    with pytest.raises(ValueError, match="weight_vars cannot be empty"):
+        precompute._find_unique_weight_vars(g, [])
+
+
+def test_precompute_distances_max_score_q_filtering(napistu_graph_metabolism):
+    """Test that max_score_q properly filters distances by quantile."""
+
+    distances_full = precompute.precompute_distances(
+        napistu_graph_metabolism, max_steps=100, max_score_q=1.0
+    )
+    distances_half = precompute.precompute_distances(
+        napistu_graph_metabolism, max_steps=100, max_score_q=0.5
+    )
+
+    # More aggressive filtering should result in fewer rows
+    assert distances_half.shape[0] <= distances_full.shape[0]
+
+    # Max weights should be lower with more aggressive filtering
+    if distances_half.shape[0] > 0:
+        max_weight_full = distances_full[DISTANCES.PATH_WEIGHT].max()
+        max_weight_half = distances_half[DISTANCES.PATH_WEIGHT].max()
+        assert max_weight_half <= max_weight_full
+
+
+def test_precompute_distances_max_score_q_edge_cases(napistu_graph_metabolism):
+    """Test that max_score_q validates input range."""
+
+    with pytest.raises(ValueError, match="max_score_q must be between 0 and 1"):
+        precompute.precompute_distances(
+            napistu_graph_metabolism, max_steps=100, max_score_q=0.0
+        )
+
+    with pytest.raises(ValueError, match="max_score_q must be between 0 and 1"):
+        precompute.precompute_distances(
+            napistu_graph_metabolism, max_steps=100, max_score_q=1.1
+        )
+
+
+def test_filter_precomputed_distances_masking_logic():
+    """Test that _filter_precomputed_distances uses proper masking instead of NaN values."""
+
+    sample_data = pd.DataFrame(
+        {
+            DISTANCES.SC_ID_ORIGIN: ["A", "B", "C", "D", "E"],
+            DISTANCES.SC_ID_DEST: ["X", "Y", "Z", "W", "V"],
+            DISTANCES.PATH_LENGTH: [1, 2, 3, 4, 5],
+            DISTANCES.PATH_WEIGHT: [1.0, 2.0, 3.0, 4.0, 5.0],
+            DISTANCES.PATH_UPSTREAM_WEIGHT: [1.1, 2.1, 3.1, 4.1, 5.1],
+        }
+    )
+
+    # Test filtering removes rows instead of setting values to NaN
+    filtered = precompute._filter_precomputed_distances(
+        sample_data,
+        max_score_q=0.6,
+        path_weight_vars=[DISTANCES.PATH_WEIGHT, DISTANCES.PATH_UPSTREAM_WEIGHT],
+    )
+
+    assert filtered.shape[0] <= sample_data.shape[0]
+    assert not filtered.isna().any().any()  # No NaN values in output
+
+    # Test max_score_q=1.0 keeps all rows
+    filtered_all = precompute._filter_precomputed_distances(
+        sample_data,
+        max_score_q=1.0,
+        path_weight_vars=[DISTANCES.PATH_WEIGHT, DISTANCES.PATH_UPSTREAM_WEIGHT],
+    )
+    assert filtered_all.shape[0] == sample_data.shape[0]
