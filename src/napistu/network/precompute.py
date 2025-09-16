@@ -118,7 +118,9 @@ def precompute_distances(
     ).reset_index(drop=True)
 
     # validate the precomputed distances
+    logger.info("Validating precomputed distances")
     _validate_precomputed_distances(filtered_precomputed_distances)
+
     return filtered_precomputed_distances
 
 
@@ -369,7 +371,7 @@ def _filter_precomputed_distances(
 
     # Combine masks: keep rows where at least one weight variable is below cutoff
     # (i.e., keep rows that are True in at least one mask)
-    combined_mask = pd.concat(masks, axis=1).any(axis=1)
+    combined_mask = np.logical_or.reduce([mask.values for mask in masks])
 
     # Filter to rows which have at least one weight variable below the cutoff
     low_weight_precomputed_distances = precomputed_distances[combined_mask].copy()
