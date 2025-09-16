@@ -159,7 +159,10 @@ jobs:
     - name: Configure Docker for Artifact Registry
       run: gcloud auth configure-docker ${{ env.REGISTRY }}
 
-    - name: Build and push base image
+    - name: Build and push base image (single platform)
+      # Only run for single platform builds (no comma in platform string)
+      # Example: 'linux/amd64' or when input is empty (defaults to 'linux/amd64')
+      if: contains(inputs.docker_platforms || 'linux/amd64', ',') == false
       uses: docker/build-push-action@v5
       with:
         context: .
@@ -169,6 +172,24 @@ jobs:
         tags: |
           ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:latest
           ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:${{ needs.check-release-needed.outputs.version }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Build and push base image (multi-platform)
+      # Only run for multi-platform builds (comma detected in platform string)
+      # Example: 'linux/amd64,linux/arm64' - adds -multiplatform tags
+      if: contains(inputs.docker_platforms || 'linux/amd64', ',')
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.base
+        platforms: ${{ inputs.docker_platforms || 'linux/amd64' }}
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:latest
+          ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:${{ needs.check-release-needed.outputs.version }}
+          ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:latest-multiplatform
+          ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-base:${{ needs.check-release-needed.outputs.version }}-multiplatform
         cache-from: type=gha
         cache-to: type=gha,mode=max
     
