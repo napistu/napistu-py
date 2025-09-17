@@ -181,6 +181,23 @@ CONSENSUS_CHECKS = SimpleNamespace(
 
 CONSENSUS_CHECKS_LIST = list(CONSENSUS_CHECKS.__dict__.values())
 
+
+# identifiers
+IDENTIFIERS = SimpleNamespace(
+    ONTOLOGY="ontology", IDENTIFIER="identifier", BQB="bqb", URL="url"
+)
+
+IDENTIFIERS_REQUIRED_VARS = {
+    IDENTIFIERS.ONTOLOGY,
+    IDENTIFIERS.IDENTIFIER,
+    IDENTIFIERS.BQB,
+}
+
+SPECIES_IDENTIFIERS_REQUIRED_VARS = IDENTIFIERS_REQUIRED_VARS | {
+    SBML_DFS.S_ID,
+    SBML_DFS.S_NAME,
+}
+
 # SBML
 # Biological qualifiers
 # Biomodels qualifiers
@@ -215,28 +232,28 @@ BQB_DEFINING_ATTRS_LOOSE = [
     BQB.ENCODES,
 ]
 
-# identifiers
-IDENTIFIERS = SimpleNamespace(
-    ONTOLOGY="ontology", IDENTIFIER="identifier", BQB="bqb", URL="url"
-)
+# define an ordering where hier priority tiers BQB terms will be defined over lower priority tiers
+# these tiers are primarily used to de-duplicate identifiers
+# these BQB terms cover all kinds of properties so they usually won't conflict
+# but all terms are included for consistency
+_bqb_tiers = [
+    {BQB.IS},
+    {BQB.ENCODES, BQB.IS_ENCODED_BY},
+    {BQB.HAS_PART},
+    {BQB.IS_HOMOLOG_TO},
+    {BQB.HAS_PROPERTY, BQB.IS_PROPERTY_OF, BQB.IS_PART_OF, BQB.OCCURS_IN},
+    {BQB.IS_DESCRIBED_BY, BQB.HAS_VERSION, BQB.IS_VERSION_OF},
+    {BQB.HAS_TAXON},
+    {BQB.UNKNOWN},
+]
 
 BQB_PRIORITIES = pd.DataFrame(
     [
-        {IDENTIFIERS.BQB: BQB.IS, "bqb_rank": 1},
-        {IDENTIFIERS.BQB: BQB.HAS_PART, "bqb_rank": 2},
+        {IDENTIFIERS.BQB: bqb_term, "bqb_rank": rank + 1}
+        for rank, bqb_set in enumerate(_bqb_tiers)
+        for bqb_term in bqb_set
     ]
 )
-
-IDENTIFIERS_REQUIRED_VARS = {
-    IDENTIFIERS.ONTOLOGY,
-    IDENTIFIERS.IDENTIFIER,
-    IDENTIFIERS.BQB,
-}
-
-SPECIES_IDENTIFIERS_REQUIRED_VARS = IDENTIFIERS_REQUIRED_VARS | {
-    SBML_DFS.S_ID,
-    SBML_DFS.S_NAME,
-}
 
 
 def get_biological_qualifier_codes():
@@ -436,6 +453,7 @@ ONTOLOGIES = SimpleNamespace(
     PUBCHEM="pubchem",
     PUBMED="pubmed",
     REACTOME="reactome",
+    SGD="sgd",
     SIGNOR="signor",
     SMILES="smiles",
     SYMBOL="symbol",

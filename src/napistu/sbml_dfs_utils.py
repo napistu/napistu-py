@@ -784,7 +784,7 @@ def stub_compartments(
             ontology=ONTOLOGIES.GO,
             identifier=stubbed_compartment_id,
         ),
-        biological_qualifier_type=BQB.IS,
+        bqb=BQB.IS,
     )
 
     compartments_df = pd.DataFrame(

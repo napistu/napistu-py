@@ -9,7 +9,7 @@ import igraph as ig
 import pandas as pd
 from tqdm import tqdm
 
-from napistu import identifiers, indices, sbml_dfs_utils, source, utils
+from napistu import indices, sbml_dfs_utils, source, utils
 from napistu.constants import (
     BQB_DEFINING_ATTRS,
     ENTITIES_TO_ENTITY_DATA,
@@ -22,6 +22,7 @@ from napistu.constants import (
     SOURCE_SPEC,
     VALID_BQB_TERMS,
 )
+from napistu.identifiers import Identifiers
 from napistu.ingestion import sbml
 from napistu.matching.mount import resolve_matches
 from napistu.sbml_dfs_core import SBML_dfs
@@ -777,7 +778,7 @@ def _create_cluster_identifiers(
 
     # Create an Identifiers object for each cluster
     cluster_consensus_identifiers = {
-        k: identifiers.Identifiers(
+        k: Identifiers(
             list(
                 v[
                     [
@@ -796,7 +797,7 @@ def _create_cluster_identifiers(
 
     # Handle clusters that don't have any identifiers
     catchup_clusters = {
-        c: identifiers.Identifiers(list())
+        c: Identifiers(list())
         for c in set(ind_clusters["cluster"].tolist()).difference(
             cluster_consensus_identifiers
         )
@@ -1523,7 +1524,7 @@ def _merge_entity_identifiers(
     )
 
     # Merge identifier objects
-    return indexed_old_identifiers.agg(identifiers.merge_identifiers)
+    return indexed_old_identifiers.agg(Identifiers.merge)
 
 
 def _pre_consensus_compartment_check(
@@ -2308,6 +2309,6 @@ def _validate_meta_identifiers(meta_identifiers: pd.DataFrame) -> None:
     n_null = sum(meta_identifiers[IDENTIFIERS.BQB].isnull())
     if n_null > 0:
         msg = f"{n_null} identifiers were missing a bqb code and will not be mergeable"
-        logger.warn(msg)
+        logger.warning(msg)
 
     return None
