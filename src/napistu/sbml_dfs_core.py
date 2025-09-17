@@ -145,6 +145,8 @@ class SBML_dfs:
         Find entities by exact or partial name match.
     select_species_data(species_data_table)
         Select a species data table from the SBML_dfs object by name.
+    show_summary()
+        Display a formatted summary of the SBML_dfs model.
     species_status(s_id)
         Return all reactions a species participates in, with stoichiometry and formula information.
     to_pickle(path)
@@ -1923,6 +1925,26 @@ class SBML_dfs:
 
         # Get the species data
         return self.species_data[species_data_table]
+
+    def show_summary(self) -> None:
+        """
+        Display a formatted summary of the SBML_dfs model.
+
+        This method chains together get_network_summary(), format_model_summary(),
+        and utils.show() to provide a convenient way to display network statistics.
+
+        Returns
+        -------
+        None
+            Displays the formatted summary table to console
+
+        Examples
+        --------
+        >>> sbml_dfs.show_network_summary()
+        """
+        summary_stats = self.get_network_summary()
+        summary_table = sbml_dfs_utils.format_model_summary(summary_stats)
+        utils.show(summary_table)
 
     def species_status(self, s_id: str) -> pd.DataFrame:
         """

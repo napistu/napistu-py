@@ -67,6 +67,15 @@ def initialize_dir(output_dir_path: str, overwrite: bool):
             pass
 
 
+def check_unique_index(df, label=""):
+    """Validate that each index value only maps to a single row."""
+
+    if len(df.index) != len(df.index.unique()):
+        raise ValueError(f"{label} index entries are not unique")
+
+    return None
+
+
 def download_and_extract(
     url: str,
     output_dir_path: str = ".",
@@ -1108,15 +1117,6 @@ def safe_series_tolist(x):
         return x.tolist()
     else:
         raise TypeError(f"x was a {type(x)} but only str and pd.Series are supported")
-
-
-def check_unique_index(df, label=""):
-    """Validate that each index value only maps to a single row."""
-
-    if len(df.index) != len(df.index.unique()):
-        raise ValueError(f"{label} index entries are not unique")
-
-    return None
 
 
 def score_nameness(string: str):
