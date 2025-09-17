@@ -201,6 +201,112 @@ def compartmentalize_species_pairs(
     return target_species_paths
 
 
+def create_entity_attrs_from_data_tables(
+    entity_data_dict: dict[str, pd.DataFrame],
+    table_names: Optional[list[str]] = None,
+    name_prefix: bool = True,
+) -> dict[str, dict[str, str]]:
+    """
+    Create entity_attrs configuration from data tables.
+
+    This utility converts a dictionary of data tables into the entity_attrs
+    format expected by NapistuGraph methods, automatically generating
+    attribute configurations for all columns in the specified tables.
+
+    Parameters
+    ----------
+    entity_data_dict : dict[str, pd.DataFrame]
+        Dictionary mapping table names to DataFrames (e.g., sbml_dfs.species_data)
+    table_names : Optional[list[str]], default=None
+        Specific table names to include. If None, includes all available tables.
+    name_prefix : bool, default=True
+        Whether to prefix attribute names with table name (e.g., "table_name_column_name")
+
+    Returns
+    -------
+    dict[str, dict[str, str]]
+        Entity attributes configuration dictionary in the format:
+        {
+            "attr_name": {
+                "table": "table_name",
+                "variable": "column_name"
+            }
+        }
+
+    Raises
+    ------
+    ValueError
+        If requested table names don't exist in entity_data_dict
+
+    Examples
+    --------
+    Create attrs from all species data tables:
+    >>> entity_attrs = create_entity_attrs_from_data_tables(sbml_dfs.species_data)
+
+    Create attrs from specific tables:
+    >>> entity_attrs = create_entity_attrs_from_data_tables(
+    ...     sbml_dfs.reactions_data,
+    ...     table_names=["kinetics", "literature"]
+    ... )
+
+    Create attrs without table name prefixes:
+    >>> entity_attrs = create_entity_attrs_from_data_tables(
+    ...     sbml_dfs.species_data,
+    ...     name_prefix=False
+    ... )
+    """
+
+    if len(entity_data_dict) == 0:
+        logger.warning("entity_data_dict is empty")
+        return {}
+
+    # Validate and filter table names
+    if table_names is None:
+        table_names = list(entity_data_dict.keys())
+    else:
+        invalid_tables = set(table_names) - set(entity_data_dict.keys())
+        if invalid_tables:
+            available_tables = list(entity_data_dict.keys())
+            raise ValueError(
+                f"Requested tables not found in entity_data_dict: {invalid_tables}. "
+                f"Available tables: {available_tables}"
+            )
+
+    # Build entity_attrs configuration
+    entity_attrs = {}
+
+    for table_name in table_names:
+        table_data = entity_data_dict[table_name]
+
+        for column_name in table_data.columns:
+            # Create attribute name
+            if name_prefix:
+                attr_name = f"{table_name}_{column_name}"
+            else:
+                attr_name = column_name
+
+            # Handle potential naming conflicts when name_prefix=False
+            if not name_prefix and attr_name in entity_attrs:
+                logger.warning(
+                    f"Attribute name conflict: '{attr_name}' exists in multiple tables. "
+                    f"Consider using name_prefix=True to avoid conflicts."
+                )
+                # Auto-resolve by adding table prefix as fallback
+                attr_name = f"{table_name}_{column_name}"
+
+            entity_attrs[attr_name] = {
+                WEIGHTING_SPEC.TABLE: table_name,
+                WEIGHTING_SPEC.VARIABLE: column_name,
+            }
+
+    logger.debug(
+        f"Created {len(entity_attrs)} entity attributes from "
+        f"{len(table_names)} tables: {table_names}"
+    )
+
+    return entity_attrs
+
+
 def get_minimal_sources_edges(
     vertices: pd.DataFrame,
     sbml_dfs: sbml_dfs_core.SBML_dfs,

@@ -11,6 +11,7 @@ from napistu.constants import (
     SBML_DFS_SCHEMA,
     SCHEMA_DEFS,
     SOURCE_SPEC,
+    SOURCE_STANDARD_COLUMNS,
 )
 from napistu.statistics import hypothesis_testing
 from napistu.statistics.constants import CONTINGENCY_TABLE
@@ -426,7 +427,11 @@ def unnest_sources(source_table: pd.DataFrame, verbose: bool = False) -> pd.Data
 
         sources.append(source_tbl)
 
-    return pd.concat(sources)
+    combined_sources = pd.concat(sources)
+
+    return combined_sources[
+        [col for col in SOURCE_STANDARD_COLUMNS if col in combined_sources.columns]
+    ]
 
 
 def source_set_coverage(
