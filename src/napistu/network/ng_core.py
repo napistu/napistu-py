@@ -600,6 +600,7 @@ class NapistuGraph(ig.Graph):
             graph = self
 
         # Get vertex summaries from SBML_dfs
+        logger.info("Loading SBML_dfs vertex summaries")
         summaries_df = ng_utils.get_sbml_dfs_vertex_summaries(
             sbml_dfs,
             summary_types=summary_types,
@@ -609,6 +610,7 @@ class NapistuGraph(ig.Graph):
             dogmatic=dogmatic,
         )
 
+        logger.info("Creating graph attributes")
         graph_attrs = data_handling._create_graph_attrs_config(
             column_mapping={v: v for v in summaries_df.columns},
             data_type=SBML_DFS.SPECIES,
@@ -618,6 +620,7 @@ class NapistuGraph(ig.Graph):
 
         graph.set_graph_attrs(graph_attrs, mode=mode, overwrite=overwrite)
 
+        logger.info("Adding vertex data")
         graph.add_vertex_data(
             side_loaded_attributes={"sbml_dfs_summaries": summaries_df},
             mode=mode,

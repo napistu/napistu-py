@@ -367,9 +367,9 @@ def merge_sources(source_list: list | pd.Series) -> Source:
     return Source(pd.concat(existing_source_list))
 
 
-def unnest_sources(source_table: pd.DataFrame, verbose: bool = False) -> pd.DataFrame:
+def unnest_sources(source_table: pd.DataFrame) -> pd.DataFrame:
     """
-    Unnest Sources
+    Unnest Sources - Optimized Version
 
     Take a pd.DataFrame containing an array of Sources and
     return one-row per source.
@@ -378,60 +378,48 @@ def unnest_sources(source_table: pd.DataFrame, verbose: bool = False) -> pd.Data
     ----------
     source_table: pd.DataFrame
         a table containing an array of Sources
-    verbose: bool
-        print progress
 
     Returns
     -------
     pd.Dataframe containing the index of source_table but expanded
     to include one row per source
-
     """
-
-    sources = list()
 
     table_type = sbml_dfs_utils.infer_entity_type(source_table)
     source_table_schema = SBML_DFS_SCHEMA.SCHEMA[table_type]
+
     if SCHEMA_DEFS.SOURCE not in source_table_schema.keys():
         raise ValueError(f"{table_type} does not have a source attribute")
 
     source_var = source_table_schema[SCHEMA_DEFS.SOURCE]
-    source_table_index = source_table.index.to_frame().reset_index(drop=True)
 
-    for i in range(source_table.shape[0]):
-        if verbose:
-            logger.info(f"Processing {source_table_index.index.values[i]}")
-
-        # check that the entries of sourcevar are Source objects
-        source_value = source_table[source_var].iloc[i]
-
+    # Build dict mapping each source's primary key to its source DataFrame
+    source_dict = {}
+    for idx, source_value in source_table[source_var].items():
         if not isinstance(source_value, Source):
             raise TypeError(
                 f"source_value must be a Source, but got {type(source_value).__name__}"
             )
 
-        if source_value.source is None:
-            logger.warning("Some sources were only missing - returning None")
-            return None
+        # Skip None sources - they just won't appear in output
+        if source_value.source is not None:
+            source_dict[idx] = source_value.source
 
-        source_tbl = pd.DataFrame(source_value.source)
-        source_tbl.index.name = SOURCE_SPEC.ENTRY
-        source_tbl = source_tbl.reset_index()
+    # If no valid sources, return None (maintains original behavior)
+    if not source_dict:
+        logger.warning("Some sources were only missing - returning None")
+        return None
 
-        # add original index as variables and then set index
-        for j in range(source_table_index.shape[1]):
-            source_tbl[source_table_index.columns[j]] = source_table_index.iloc[i, j]
-        source_tbl = source_tbl.set_index(
-            list(source_table_index.columns) + [SOURCE_SPEC.ENTRY]
-        )
+    # Use pd.concat with keys parameter to create MultiIndex directly
+    result = pd.concat(source_dict, names=[source_table.index.name, SOURCE_SPEC.ENTRY])
 
-        sources.append(source_tbl)
-
-    combined_sources = pd.concat(sources)
-
-    return combined_sources[
-        [col for col in SOURCE_STANDARD_COLUMNS if col in combined_sources.columns]
+    # Only keep columns that actually exist in the result
+    available_columns = [
+        col for col in list(SOURCE_STANDARD_COLUMNS) if col in result.columns
     ]
+    result = result[available_columns]
+
+    return result
 
 
 def source_set_coverage(

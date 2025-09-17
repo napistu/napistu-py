@@ -690,7 +690,11 @@ class SBML_dfs:
         ValueError
             If id_type is invalid or identifiers are malformed
         """
-        selected_table = self.get_table(id_type, {SCHEMA_DEFS.ID})
+
+        if id_type == SBML_DFS.REACTIONS:
+            selected_table = self._get_non_interactor_reactions()
+        else:
+            selected_table = self.get_table(id_type, {SCHEMA_DEFS.ID})
         schema = SBML_DFS_SCHEMA.SCHEMA
 
         identifiers_dict = dict()
@@ -1136,22 +1140,10 @@ class SBML_dfs:
         if SCHEMA_DEFS.SOURCE not in entity_schema:
             raise ValueError(f"{entity_type} does not have a source attribute")
 
-        entity_table = self.get_table(entity_type)
-
         if entity_type == SBML_DFS.REACTIONS:
-
-            interactor_sbo_term = MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
-            reaction_species = self.get_table(SBML_DFS.REACTION_SPECIES)
-            valid_reactions = reaction_species[
-                ~reaction_species[SBML_DFS.SBO_TERM].isin([interactor_sbo_term])
-            ][SBML_DFS.R_ID].unique()
-
-            if valid_reactions.shape[0] != entity_table.shape[0]:
-                logger.info(
-                    "Excluding reactions which are all interactors from reaction source counts"
-                )
-
-            entity_table = entity_table.loc[valid_reactions]
+            entity_table = self._get_non_interactor_reactions()
+        else:
+            entity_table = self.get_table(entity_type)
 
         all_sources_table = source.unnest_sources(entity_table)
 
@@ -2312,6 +2304,29 @@ class SBML_dfs:
             identifiers_table = self.get_identifiers(entity_type)
 
         return identifiers_table
+
+    def _get_non_interactor_reactions(self) -> pd.DataFrame:
+        """
+        Get reactions table filtered to exclude reactions that are all interactors.
+
+        Returns
+        -------
+        pd.DataFrame
+            Reactions table with non-interactor reactions only
+        """
+        entity_table = self.get_table(SBML_DFS.REACTIONS)
+        interactor_sbo_term = MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
+        reaction_species = self.get_table(SBML_DFS.REACTION_SPECIES)
+        valid_reactions = reaction_species[
+            ~reaction_species[SBML_DFS.SBO_TERM].isin([interactor_sbo_term])
+        ][SBML_DFS.R_ID].unique()
+
+        if valid_reactions.shape[0] != entity_table.shape[0]:
+            logger.info(
+                f"Dropped {entity_table.shape[0] - valid_reactions.shape[0]} reactions which are all interactors from the reactions table"
+            )
+
+        return entity_table.loc[valid_reactions]
 
     def _get_unused_cspecies(self) -> set[str]:
         """Returns a set of compartmentalized species

@@ -397,6 +397,24 @@ def get_sbml_dfs_vertex_summaries(
     characteristic_only=False,
     dogmatic=False,
 ) -> pd.DataFrame:
+    """
+    Prepare species and reaction ontology and/or source occurrence summaries which are ready to be merged with NapistuGraph vertices.
+
+    Parameters
+    ----------
+    sbml_dfs : SBML_dfs
+        A pathway model
+    summary_types : list
+        The summary types to get
+    priority_pathways : list
+        The priority pathways to get
+    stratify_by_bqb : bool
+        Whether to stratify by BQB
+    characteristic_only : bool
+        Whether to only get characteristic ontologies
+    dogmatic : bool
+        Whether to use dogmatic ontologies
+    """
 
     if len(summary_types) == 0:
         raise ValueError(
@@ -419,15 +437,18 @@ def get_sbml_dfs_vertex_summaries(
 
         source_dfs = list()
         for entity_table in entity_tables:
+            logger.info(f"Getting source occurrence for {entity_table}")
             df = sbml_dfs.get_source_occurrence(entity_table, priority_pathways)
             df.columns.name = None
             source_dfs.append(df.rename_axis(NAPISTU_GRAPH_VERTICES.NAME))
 
+        logger.debug("Concatenating source occurrences")
         summaries.append(pd.concat(source_dfs).fillna(int(0)))
 
     if VERTEX_SBML_DFS_SUMMARIES.ONTOLOGIES in summary_types:
 
         # get reaction ontologies directly (since these are vertex names)
+        logger.info(f"Getting ontology occurrence for {SBML_DFS.REACTIONS}")
         df = sbml_dfs.get_ontology_occurrence(
             SBML_DFS.REACTIONS,
             stratify_by_bqb=stratify_by_bqb,
@@ -439,6 +460,7 @@ def get_sbml_dfs_vertex_summaries(
         reaction_ontologies = df.rename_axis(NAPISTU_GRAPH_VERTICES.NAME)
 
         # get species ontologies then map them to compartmentalized species (since the cspecies are the vertex names)
+        logger.info(f"Getting ontology occurrence for {SBML_DFS.SPECIES}")
         df = sbml_dfs.get_ontology_occurrence(
             SBML_DFS.SPECIES,
             stratify_by_bqb=stratify_by_bqb,
@@ -454,10 +476,12 @@ def get_sbml_dfs_vertex_summaries(
             .drop(columns=[SBML_DFS.S_ID])
         )
 
+        logger.debug("Concatenating reaction and species ontology occurrences")
         summaries.append(
             pd.concat([reaction_ontologies, species_ontologies]).fillna(int(0))
         )
 
+    logger.debug("Concatenating all summaries")
     out = pd.concat(summaries, axis=1).astype(int)
     out.index.name = NAPISTU_GRAPH_VERTICES.NAME
 
