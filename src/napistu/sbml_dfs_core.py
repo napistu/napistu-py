@@ -2433,21 +2433,21 @@ class SBML_dfs:
             if SCHEMA_DEFS.ID not in SCHEMA[table].keys():
                 continue
             id_series = self.get_table(table)[SCHEMA[table][SCHEMA_DEFS.ID]]
-            
+
             # Check for missing identifiers
             if id_series.isna().sum() > 0:
                 missing_ids = id_series[id_series.isna()].index
                 raise ValueError(
                     f"{table} has {len(missing_ids)} missing ids: {missing_ids}"
                 )
-            
+
             # Check that all Identifiers objects have a 'df' attribute
             for idx, identifiers_obj in id_series.items():
-                if not hasattr(identifiers_obj, 'df'):
+                if not hasattr(identifiers_obj, "df"):
                     raise ValueError(
                         f"{table} row {idx}: Identifiers object is missing 'df' attribute"
                     )
-                if not hasattr(identifiers_obj.df, 'empty'):
+                if not hasattr(identifiers_obj.df, "empty"):
                     raise ValueError(
                         f"{table} row {idx}: Identifiers.df is not a valid DataFrame"
                     )

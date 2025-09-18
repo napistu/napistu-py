@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 from napistu import indices, sbml_dfs_utils, source, utils
 from napistu.constants import (
+    BQB,
     BQB_DEFINING_ATTRS,
     ENTITIES_TO_ENTITY_DATA,
     EXPECTED_PW_INDEX_COLUMNS,
@@ -1274,15 +1275,28 @@ def _handle_entries_without_identifiers(
         "dummy_value_" + str(val)
         for val in random.sample(range(1, 100000000), filtered_entries.shape[0])
     ]
-    filtered_entries[IDENTIFIERS.URL] = None
-    filtered_entries[IDENTIFIERS.BQB] = None
+    filtered_entries[IDENTIFIERS.URL] = "dummy_url"
+    filtered_entries[IDENTIFIERS.BQB] = BQB.UNKNOWN
 
     filtered_entries = filtered_entries.set_index(
         sbml_df.index.names + [SOURCE_SPEC.ENTRY]
     )
 
     # Combine original valid identifiers with dummy identifiers
-    return pd.concat([valid_identifiers, filtered_entries])
+    # Build list of non-empty DataFrames to avoid FutureWarning
+
+    dfs_to_concat = []
+    if not valid_identifiers.empty:
+        dfs_to_concat.append(valid_identifiers)
+    if not filtered_entries.empty:
+        dfs_to_concat.append(filtered_entries)
+
+    if len(dfs_to_concat) == 0:
+        raise ValueError("No valid identifiers found after filtering")
+    elif len(dfs_to_concat) == 1:
+        return dfs_to_concat[0]
+    else:
+        return pd.concat(dfs_to_concat)
 
 
 def _merge_entity_data_create_consensus(
