@@ -130,6 +130,13 @@ def overwrite_option(f: Callable) -> Callable:
     )(f)
 
 
+def target_uri_output(f: Callable) -> Callable:
+    """
+    Decorator that adds a standardized target_uri argument.
+    """
+    return click.argument(NAPISTU_CLI.TARGET_URI, type=str)(f)
+
+
 def sbml_dfs_input(f: Callable) -> Callable:
     """
     Decorator that adds a standardized model_uri argument.

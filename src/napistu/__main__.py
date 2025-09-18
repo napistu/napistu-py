@@ -27,6 +27,7 @@ from napistu._cli import (
     sbml_dfs_io,
     sbml_dfs_output,
     setup_logging,
+    target_uri_output,
     verbosity_option,
 )
 from napistu.constants import ONTOLOGIES, RESOLVE_MATCHES_AGGREGATORS
@@ -101,7 +102,7 @@ def ingest_bigg(base_folder: str, overwrite: bool):
 
 
 @ingestion.command(name="trrust")
-@click.argument("target_uri", type=str)
+@target_uri_output
 @verbosity_option
 def ingest_ttrust(target_uri: str):
     logger.info("Start downloading TRRUST to %s", target_uri)
@@ -109,7 +110,7 @@ def ingest_ttrust(target_uri: str):
 
 
 @ingestion.command(name="proteinatlas_subcell")
-@click.argument("target_uri", type=str)
+@target_uri_output
 @click.option(
     "--url",
     type=str,
@@ -122,7 +123,7 @@ def ingest_proteinatlas_subcell(target_uri: str, url: str):
 
 
 @ingestion.command(name="gtex-rnaseq-expression")
-@click.argument("target_uri", type=str)
+@target_uri_output
 @click.option(
     "--url",
     type=str,
@@ -135,15 +136,15 @@ def ingest_gtex_rnaseq(target_uri: str, url: str):
 
 
 @ingestion.command(name="string_db")
-@click.argument("target_uri", type=str)
 @organismal_species_argument
+@target_uri_output
 @verbosity_option
 def ingest_string_db(organismal_species: str, target_uri: str):
     string.download_string(target_uri, organismal_species)
 
 
 @ingestion.command(name="string_aliases")
-@click.argument("target_uri", type=str)
+@target_uri_output
 @organismal_species_argument
 @verbosity_option
 def ingest_string_aliases(organismal_species: str, target_uri: str):
@@ -151,7 +152,7 @@ def ingest_string_aliases(organismal_species: str, target_uri: str):
 
 
 @ingestion.command(name="reactome_fi")
-@click.argument("target_uri", type=str)
+@target_uri_output
 @click.option(
     "--url",
     type=str,
@@ -494,8 +495,9 @@ def refine():
 
 
 @refine.command(name="add_reactome_entity_sets")
-@sbml_dfs_io
+@sbml_dfs_input
 @click.argument("entity_set_csv", type=str)
+@sbml_dfs_output
 def add_reactome_entity_sets(
     sbml_dfs_uri: str, entity_set_csv: str, output_model_uri: str
 ):
@@ -510,8 +512,9 @@ def add_reactome_entity_sets(
 
 
 @refine.command(name="add_reactome_identifiers")
-@sbml_dfs_io
+@sbml_dfs_input
 @click.argument("crossref_csv", type=str)
+@sbml_dfs_output
 def add_reactome_identifiers(
     sbml_dfs_uri: str, crossref_csv: str, output_model_uri: str
 ):
@@ -594,8 +597,9 @@ def add_transportation_reaction(
 
 
 @refine.command(name="apply_manual_curations")
-@sbml_dfs_io
+@sbml_dfs_input
 @click.argument("curation_dir", type=str)
+@sbml_dfs_output
 def apply_manual_curations(sbml_dfs_uri: str, curation_dir: str, output_model_uri: str):
     """Apply manual curations to a consensus model
 
@@ -608,8 +612,9 @@ def apply_manual_curations(sbml_dfs_uri: str, curation_dir: str, output_model_ur
 
 
 @refine.command(name="expand_identifiers")
-@sbml_dfs_io
+@sbml_dfs_input
 @organismal_species_argument
+@sbml_dfs_output
 @click.option(
     "--ontologies", "-o", multiple=True, type=str, help="Ontologies to add or complete"
 )
@@ -689,9 +694,10 @@ def dogmatic_scaffold(
 
 
 @refine.command(name="filter_gtex_tissue")
-@sbml_dfs_io
+@sbml_dfs_input
 @click.argument("gtex_file_uri", type=str)
 @click.argument("tissue", type=str)
+@sbml_dfs_output
 @verbosity_option
 def filter_gtex_tissue(
     sbml_dfs_uri: str, gtex_file_uri: str, output_model_uri: str, tissue: str
@@ -730,8 +736,9 @@ def filter_gtex_tissue(
 
 
 @refine.command(name="filter_hpa_compartments")
-@sbml_dfs_io
+@sbml_dfs_input
 @click.argument("hpa_file_uri", type=str)
+@sbml_dfs_output
 @verbosity_option
 def filter_hpa_gene_compartments(
     sbml_dfs_uri: str, hpa_file_uri: str, output_model_uri: str
@@ -1026,10 +1033,10 @@ def validate_sbml_dfs(sbml_dfs_uri):
     logger.info(f"Successfully validated: {sbml_dfs_uri}")
 
 
-@helpers.command(name="summary")
+@helpers.command(name="summarize_sbml_dfs")
 @sbml_dfs_input
 @verbosity_option
-def show_sbml_dfs_summary(sbml_dfs_uri):
+def summarize_sbml_dfs(sbml_dfs_uri):
     """Display a summary of an SBML_dfs object"""
     sbml_dfs = SBML_dfs.from_pickle(sbml_dfs_uri)
     sbml_dfs.show_summary()

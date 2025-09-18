@@ -554,7 +554,6 @@ def filter_to_characteristic_species_ids(
 
 def format_model_summary(data):
     """Format model data into a clean summary table for Jupyter display"""
-    import pandas as pd
 
     # Calculate species percentages
     total_species = data["n_species"]
@@ -578,8 +577,14 @@ def format_model_summary(data):
         ]
     )
 
-    # Add compartment breakdown
-    for comp in data["dict_n_species_per_compartment"]:
+    # Sort compartments by species count (descending) and add compartment breakdown
+    sorted_compartments = sorted(
+        data["dict_n_species_per_compartment"],
+        key=lambda x: x["n_species"],
+        reverse=True,
+    )
+
+    for comp in sorted_compartments:
         comp_pct = comp["n_species"] / data["n_cspecies"] * 100
         summary_data.append(
             [f"- {comp['c_name']}", f"{comp['n_species']:,} ({comp_pct:.1f}%)"]

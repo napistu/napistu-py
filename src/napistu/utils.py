@@ -1001,7 +1001,7 @@ def find_weakly_connected_subgraphs(edgelist: pd.DataFrame) -> pd.DataFrame:
     return ind_clusters
 
 
-def show(obj, method="auto", headers="keys", hide_index=False):
+def show(obj, method="auto", headers="keys", hide_index=False, left_align_strings=True):
     """Show a table using the appropriate method for the environment.
 
     Parameters
@@ -1015,6 +1015,8 @@ def show(obj, method="auto", headers="keys", hide_index=False):
         - "auto" : show the object in a Jupyter notebook if available, otherwise show as a string
     headers : str, list, or None
         The headers to use for the object
+    left_align_strings : bool
+        Should strings be left aligned?
 
     Returns
     -------
@@ -1026,7 +1028,12 @@ def show(obj, method="auto", headers="keys", hide_index=False):
     """
 
     if method == "string":
-        _show_as_string(obj, headers=headers, hide_index=hide_index)
+        _show_as_string(
+            obj,
+            headers=headers,
+            hide_index=hide_index,
+            left_align_strings=left_align_strings,
+        )
 
     elif method in ("jupyter", "auto"):
         try:
@@ -1039,11 +1046,21 @@ def show(obj, method="auto", headers="keys", hide_index=False):
                     else obj
                 )
             else:
-                _show_as_string(obj, headers=headers, hide_index=hide_index)
+                _show_as_string(
+                    obj,
+                    headers=headers,
+                    hide_index=hide_index,
+                    left_align_strings=left_align_strings,
+                )
         except ImportError:
             if method == "jupyter":
                 raise ImportError("IPython not available but jupyter method requested")
-            _show_as_string(obj, headers=headers, hide_index=hide_index)
+            _show_as_string(
+                obj,
+                headers=headers,
+                hide_index=hide_index,
+                left_align_strings=left_align_strings,
+            )
 
     else:
         raise ValueError(f"Unknown method: {method}")
@@ -1312,7 +1329,9 @@ def _merge_and_log_overwrites(
     return merged_df
 
 
-def _show_as_string(obj, headers="keys", hide_index=False, max_rows=20):
+def _show_as_string(
+    obj, headers="keys", hide_index=False, max_rows=20, left_align_strings=True
+):
     """
     Show object using string representation with styling support.
 
@@ -1328,6 +1347,8 @@ def _show_as_string(obj, headers="keys", hide_index=False, max_rows=20):
         Whether to hide the row index
     max_rows : int
         Maximum number of rows to display
+    left_align_strings : bool
+        Should strings be left aligned?
     """
 
     # Extract DataFrame based on actual type
@@ -1357,4 +1378,39 @@ def _show_as_string(obj, headers="keys", hide_index=False, max_rows=20):
     if df.shape[0] > max_rows:
         logger.info(f"Displaying {max_rows} of {df.shape[0]} rows")
 
-    print(df.to_string(max_rows=max_rows, index=not hide_index))
+    if left_align_strings:
+        formatters = _create_left_align_formatters(df)
+
+        display_string = df.to_string(
+            index=not hide_index,
+            max_rows=max_rows,
+            formatters=formatters,
+            justify="left",
+        )
+
+    else:
+        display_string = df.to_string(
+            index=not hide_index, max_rows=max_rows, justify="left"
+        )
+
+    print(display_string)
+
+
+def _create_left_align_formatters(df):
+    """Create formatters for left-aligning string columns."""
+    formatters = {}
+    for col in df.columns:
+        # Only apply to object/string columns
+        if df[col].dtype == "object":
+            # Calculate max width for this column
+            if len(df) > 0:
+                content_max = df[col].astype(str).str.len().max()
+            else:
+                content_max = 0
+            header_max = len(str(col))
+            width = max(content_max, header_max)
+
+            # Create left-align formatter
+            formatters[col] = lambda x, w=width: f"{str(x):<{w}}"
+
+    return formatters
