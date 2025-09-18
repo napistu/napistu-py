@@ -552,6 +552,54 @@ def filter_to_characteristic_species_ids(
     return characteristic_species_ids
 
 
+def format_model_summary(data):
+    """Format model data into a clean summary table for Jupyter display"""
+    import pandas as pd
+
+    # Calculate species percentages
+    total_species = data["n_species"]
+    species_data = data["dict_n_species_per_type"]
+
+    # Build the summary data
+    summary_data = [["Species", f"{total_species:,}"]]
+
+    # Add species breakdown sorted by count (descending)
+    for species_type, count in sorted(
+        species_data.items(), key=lambda x: x[1], reverse=True
+    ):
+        pct = count / total_species * 100
+        summary_data.append([f"- {species_type.title()}s", f"{count:,} ({pct:.1f}%)"])
+
+    # Add spacing and compartments section
+    summary_data.extend(
+        [
+            ["", ""],  # Empty row for spacing
+            ["Compartments", f"{data['n_compartments']:,}"],
+        ]
+    )
+
+    # Add compartment breakdown
+    for comp in data["dict_n_species_per_compartment"]:
+        comp_pct = comp["n_species"] / data["n_cspecies"] * 100
+        summary_data.append(
+            [f"- {comp['c_name']}", f"{comp['n_species']:,} ({comp_pct:.1f}%)"]
+        )
+
+    summary_data.extend(
+        [
+            ["", ""],  # Empty row for spacing
+            ["Compartmentalized Species", f"{data['n_cspecies']:,}"],
+            ["Reactions", f"{data['n_reactions']:,}"],
+            ["Reaction Species", f"{data['n_reaction_species']:,}"],
+        ]
+    )
+
+    # Create DataFrame and display
+    df = pd.DataFrame(summary_data, columns=["Metric", "Value"])
+
+    return df
+
+
 def get_current_max_id(sbml_dfs_table: pd.DataFrame) -> int:
     """
     Get Current Max ID
