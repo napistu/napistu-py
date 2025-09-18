@@ -2430,14 +2430,27 @@ class SBML_dfs:
 
         SCHEMA = SBML_DFS_SCHEMA.SCHEMA
         for table in SBML_DFS_SCHEMA.SCHEMA.keys():
-            if "id" not in SCHEMA[table].keys():
+            if SCHEMA_DEFS.ID not in SCHEMA[table].keys():
                 continue
-            id_series = self.get_table(table)[SCHEMA[table]["id"]]
+            id_series = self.get_table(table)[SCHEMA[table][SCHEMA_DEFS.ID]]
+            
+            # Check for missing identifiers
             if id_series.isna().sum() > 0:
                 missing_ids = id_series[id_series.isna()].index
                 raise ValueError(
                     f"{table} has {len(missing_ids)} missing ids: {missing_ids}"
                 )
+            
+            # Check that all Identifiers objects have a 'df' attribute
+            for idx, identifiers_obj in id_series.items():
+                if not hasattr(identifiers_obj, 'df'):
+                    raise ValueError(
+                        f"{table} row {idx}: Identifiers object is missing 'df' attribute"
+                    )
+                if not hasattr(identifiers_obj.df, 'empty'):
+                    raise ValueError(
+                        f"{table} row {idx}: Identifiers.df is not a valid DataFrame"
+                    )
 
     def _validate_pk_fk_correspondence(self):
         """
@@ -2446,18 +2459,18 @@ class SBML_dfs:
         """
 
         pk_df = pd.DataFrame(
-            [{"pk_table": k, "key": v["pk"]} for k, v in self.schema.items()]
+            [{"pk_table": k, "key": v[SCHEMA_DEFS.PK]} for k, v in self.schema.items()]
         )
 
         fk_df = (
             pd.DataFrame(
                 [
-                    {"fk_table": k, "fk": v["fk"]}
+                    {"fk_table": k, SCHEMA_DEFS.FK: v[SCHEMA_DEFS.FK]}
                     for k, v in self.schema.items()
-                    if "fk" in v.keys()
+                    if SCHEMA_DEFS.FK in v.keys()
                 ]
             )
-            .set_index("fk_table")["fk"]
+            .set_index("fk_table")[SCHEMA_DEFS.FK]
             .apply(pd.Series)
             .reset_index()
             .melt(id_vars="fk_table")
