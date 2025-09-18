@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import itertools
 import logging
 import re
 import sys
@@ -14,12 +13,15 @@ from pydantic import BaseModel
 from napistu import sbml_dfs_core, sbml_dfs_utils, utils
 from napistu.constants import (
     BIOLOGICAL_QUALIFIER_CODES,
+    BQB,
+    BQB_PRIORITIES,
     ENSEMBL_MOLECULE_TYPES_FROM_ONTOLOGY,
     ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY,
     ENSEMBL_SPECIES_FROM_CODE,
     ENSEMBL_SPECIES_TO_CODE,
     IDENTIFIERS,
     IDENTIFIERS_REQUIRED_VARS,
+    ONTOLOGIES,
     SBML_DFS_SCHEMA,
     SCHEMA_DEFS,
     SPECIES_IDENTIFIERS_REQUIRED_VARS,
@@ -41,7 +43,7 @@ class Identifiers:
 
     Methods
     -------
-    filter(ontologies, summarize)
+    has_ontology(ontologies)
         Returns a bool of whether 1+ of the ontologies was represented
     get_all_bqbs()
         Returns a set of all BQB entries
@@ -74,47 +76,30 @@ class Identifiers:
             "id_list"
         ]
 
-        if (len(id_list) == 0) and verbose:
-            logger.debug('zero identifiers in "id_list"')
-
-        if len(id_list) != 0:
-            # de-duplicate {identifier, ontology} tuples
-
-            coded_ids = [
-                x[IDENTIFIERS.ONTOLOGY] + "_" + x[IDENTIFIERS.IDENTIFIER]
-                for x in validated_id_list
-            ]
-            unique_cids = []
-            unique_cid_indices = []
-            i = 0
-            for cid in coded_ids:
-                if cid not in unique_cids:
-                    unique_cids.append(cid)
-                    unique_cid_indices.append(i)
-                i += 1
-            validated_id_list = [validated_id_list[i] for i in unique_cid_indices]
-
-        self.ids = validated_id_list
-
-    def filter(self, ontologies, summarize=True):
-        """Returns a bool of whether 1+ of the ontologies was represented"""
-
-        if isinstance(ontologies, str):
-            ontologies = [ontologies]
-
-        # filter based on whether any ontology of interest are present
-        # identifier_matches = [x['ontology'] == y for x in self.ids for y in ontologies]
-
-        identifier_matches = []
-        for an_id in self.ids:
-            identifier_matches.append(
-                any([an_id[IDENTIFIERS.ONTOLOGY] == y for y in ontologies])
+        if validated_id_list:
+            df = _deduplicate_identifiers_by_priority(
+                pd.DataFrame(validated_id_list),
+                [IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER],
+            )
+        else:
+            # Empty DataFrame with expected schema
+            df = pd.DataFrame(
+                columns=[
+                    IDENTIFIERS.ONTOLOGY,
+                    IDENTIFIERS.IDENTIFIER,
+                    IDENTIFIERS.URL,
+                    IDENTIFIERS.BQB,
+                ]
             )
 
-        if summarize:
-            return any(identifier_matches)
-        else:
-            return identifier_matches
+        self.df = df.astype(
+            {
+                IDENTIFIERS.ONTOLOGY: "string",
+                IDENTIFIERS.IDENTIFIER: "string",
+                IDENTIFIERS.URL: "string",
+                IDENTIFIERS.BQB: "string",
+            }
+        )
 
     def get_all_bqbs(self) -> set[str]:
         """Returns a set of all BQB entries
@@ -122,11 +107,7 @@ class Identifiers:
         Returns:
             set[str]: A set containing all unique BQB values from the identifiers
         """
-        return {
-            id_entry[IDENTIFIERS.BQB]
-            for id_entry in self.ids
-            if id_entry.get(IDENTIFIERS.BQB) is not None
-        }
+        return set(self.df[IDENTIFIERS.BQB].dropna().unique())
 
     def get_all_ontologies(self) -> set[str]:
         """Returns a set of all ontology entries
@@ -134,7 +115,31 @@ class Identifiers:
         Returns:
             set[str]: A set containing all unique ontology names from the identifiers
         """
-        return {id_entry[IDENTIFIERS.ONTOLOGY] for id_entry in self.ids}
+        return set(self.df[IDENTIFIERS.ONTOLOGY].unique())
+
+    def has_ontology(self, ontologies: str | list[str]) -> bool:
+        """
+        Check if specified ontologies are present in the identifiers.
+
+        Parameters
+        ----------
+        ontologies : str or list of str
+            Ontology name(s) to search for
+
+        Returns
+        -------
+        bool
+            True if any specified ontologies are present
+        """
+
+        if isinstance(ontologies, str):
+            ontologies = [ontologies]
+
+        if self.df.empty:
+            return False
+
+        # Check if any rows have matching ontologies
+        return bool(self.df[IDENTIFIERS.ONTOLOGY].isin(ontologies).any())
 
     def hoist(self, ontology: str, squeeze: bool = True) -> str | list[str] | None:
         """Returns value(s) from an ontology
@@ -152,10 +157,8 @@ class Identifiers:
             raise TypeError(f"{ontology} must be a str")
 
         # return the value(s) of an ontology of interest
-        ontology_matches = [
-            x for x, y in zip(self.ids, self.filter(ontology, summarize=False)) if y
-        ]
-        ontology_ids = [x[IDENTIFIERS.IDENTIFIER] for x in ontology_matches]
+        matches = self.df[self.df[IDENTIFIERS.ONTOLOGY] == ontology]
+        ontology_ids = matches[IDENTIFIERS.IDENTIFIER].tolist()
 
         if squeeze:
             if len(ontology_ids) == 0:
@@ -164,38 +167,52 @@ class Identifiers:
                 return ontology_ids[0]
         return ontology_ids
 
+    @property
+    def ids(self) -> list[dict]:
+
+        logger.warning("Identifiers.ids is deprecated. Use Identifiers.df instead.")
+        return self.df.to_dict("records") if self.df is not None else []
+
+    @classmethod
+    def merge(cls, identifier_series: pd.Series) -> "Identifiers":
+        """
+        Merge multiple Identifiers objects into a single Identifiers object.
+
+        Parameters
+        ----------
+        identifier_series : pd.Series
+            Series of Identifiers objects to merge
+
+        Returns
+        -------
+        Identifiers
+            New Identifiers object containing all unique identifiers
+        """
+
+        if len(identifier_series) == 1:
+            return identifier_series.iloc[0]
+
+        # Concatenate all DataFrames and let __init__ handle deduplication
+        all_dfs = [
+            identifiers.df
+            for identifiers in identifier_series
+            if not identifiers.df.empty
+        ]
+
+        if not all_dfs:
+            return cls([])  # Return empty Identifiers
+
+        merged_df = pd.concat(all_dfs, ignore_index=True)
+
+        # Convert back to list format for __init__ to handle deduplication and validation
+        merged_ids = merged_df.to_dict("records")
+
+        return cls(merged_ids)
+
     def print(self):
         """Print a table of identifiers"""
 
-        utils.show(pd.DataFrame(self.ids), hide_index=True)
-
-
-def merge_identifiers(identifier_series: pd.Series) -> Identifiers:
-    """
-    Aggregate Identifiers
-
-    Merge a pd.Series of Identifiers objects into a single Identifiers object
-
-    Args:
-    identifier_series: pd.Series
-        A pd.Series of of identifiers.Identifiers objects
-
-
-    Returns:
-    An identifiers.Identifiers object
-
-    """
-
-    if len(identifier_series) == 1:
-        # if there is only a single entry then just return it because no merge is needed
-        return identifier_series.iloc[0]
-    else:
-        # merge a list of identifiers objects into a single identifers object
-        # Identifiers will remove redundancy
-        merged_ids = list(
-            itertools.chain.from_iterable(identifier_series.map(lambda x: x.ids))
-        )
-        return Identifiers(merged_ids)
+        utils.show(self.df, hide_index=True)
 
 
 def df_to_identifiers(df: pd.DataFrame) -> pd.Series:
@@ -220,36 +237,25 @@ def df_to_identifiers(df: pd.DataFrame) -> pd.Series:
         raise ValueError(f"The entity type {entity_type} does not have an id column")
 
     table_pk_var = table_schema[SCHEMA_DEFS.PK]
-    expected_columns = set([table_pk_var]) | IDENTIFIERS_REQUIRED_VARS
-    missing_columns = expected_columns - set(df.columns)
-    if missing_columns:
-        raise ValueError(
-            f"The DataFrame does not contain the required columns: {missing_columns}"
-        )
+    required_vars = {table_pk_var} | IDENTIFIERS_REQUIRED_VARS
+    utils.match_pd_vars(df, required_vars).assert_present()
 
-    # Process identifiers to remove duplicates
-    indexed_df = (
-        df
-        # remove duplicated identifiers
-        .groupby([table_pk_var, IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER])
-        .first()
-        .reset_index()
-        .set_index(table_pk_var)
-    )
+    identifiers_dict = {}
+    for pk_value in df[table_pk_var].unique():
+        pk_rows = df[df[table_pk_var] == pk_value]
+        # Convert to list of dicts format for Identifiers constructor
+        id_list = pk_rows.drop(columns=[table_pk_var]).to_dict("records")
+        identifiers_dict[pk_value] = Identifiers(
+            id_list
+        )  # Handles deduplication internally
 
-    # create a dictionary of new Identifiers objects
-    expanded_identifiers_dict = {
-        i: _expand_identifiers_new_entries(i, indexed_df)
-        for i in indexed_df.index.unique()
-    }
-
-    output = pd.Series(expanded_identifiers_dict).rename(table_schema[SCHEMA_DEFS.ID])
+    output = pd.Series(identifiers_dict, name=table_schema[SCHEMA_DEFS.ID])
     output.index.name = table_pk_var
 
     return output
 
 
-def format_uri(uri: str, biological_qualifier_type: str | None = None) -> Identifiers:
+def format_uri(uri: str, bqb: str) -> Identifiers:
     """
     Convert a RDF URI into an Identifier object
     """
@@ -259,30 +265,26 @@ def format_uri(uri: str, biological_qualifier_type: str | None = None) -> Identi
     if identifier is None:
         raise NotImplementedError(f"{uri} is not a valid way of specifying a uri")
 
-    _validate_bqb(biological_qualifier_type)
-    identifier[IDENTIFIERS.BQB] = biological_qualifier_type
+    _validate_bqb(bqb)
+    identifier[IDENTIFIERS.BQB] = bqb
 
     return identifier
 
 
-def _validate_bqb(bqb):
-    if bqb is None:
-        logger.warning(
-            '"biological_qualifier_type" is None; consider adding a valid '
-            'BQB code. For a list of BQB codes see "BQB" in constants.py'
+def _validate_bqb(bqb: str) -> None:
+    if not isinstance(bqb, str):
+        raise TypeError(
+            f"biological_qualifier_type was a {type(bqb)} and must be a str or None"
         )
-    else:
-        if not isinstance(bqb, str):
-            raise TypeError(
-                f"biological_qualifier_type was a {type(bqb)} and must be a str or None"
-            )
 
-        if not bqb.startswith("BQB"):
-            raise ValueError(
-                f"The provided BQB code was {bqb} and all BQB codes start with "
-                'start with "BQB". Please either use a valid BQB code (see '
-                '"BQB" in constansts.py) or use None'
-            )
+    if not bqb.startswith("BQB"):
+        raise ValueError(
+            f"The provided BQB code was {bqb} and all BQB codes start with "
+            'start with "BQB". Please either use a valid BQB code (see '
+            '"BQB" in constansts.py) or use None'
+        )
+
+    return None
 
 
 def format_uri_url(uri: str) -> dict:
@@ -591,13 +593,15 @@ def cv_to_Identifiers(entity):
     """
     Convert an SBML controlled vocabulary element into a cpr Identifiers object.
 
-    Parameters:
+    Parameters
+    ----------
     entity: libsbml.Species
         An entity (species, reaction, compartment, ...) with attached CV terms
 
-    Returns:
-
-
+    Returns
+    -------
+    Identifiers
+        An Identifiers object containing the CV terms
     """
 
     # TO DO: add qualifier type http://sbml.org/Software/libSBML/5.18.0/docs/python-api/classlibsbml_1_1_c_v_term.html#a6a613cc17c6f853cf1c68da59286b373
@@ -630,14 +634,19 @@ def create_uri_url(ontology: str, identifier: str, strict: bool = True) -> str:
 
     Convert from an identifier and ontology to a URL reference for the identifier
 
-    Parameters:
-    ontology (str): An ontology for organizing genes, metabolites, etc.
-    identifier (str): A systematic identifier from the \"ontology\" ontology.
-    strict (bool): if strict then throw errors for invalid IDs otherwise return None
+    Parameters
+    ----------
+    ontology: str
+        An ontology for organizing genes, metabolites, etc.
+    identifier: str
+        A systematic identifier from the \"ontology\" ontology.
+    strict: bool
+        if strict then throw errors for invalid IDs otherwise return None
 
-    Returns:
-    url (str): A url representing a unique identifier
-
+    Returns
+    -------
+    url: str
+        A url representing a unique identifier
     """
 
     # default to no id_regex
@@ -830,52 +839,7 @@ def check_reactome_identifier_compatibility(
     return None
 
 
-def _infer_primary_reactome_species(reactome_series: pd.Series) -> tuple[str, int]:
-    """Infer the best supported species based on a set of Reactome identifiers"""
-
-    series_counts = _count_reactome_species(reactome_series)
-
-    if "ALL" in series_counts.index:
-        series_counts = series_counts.drop("ALL", axis=0)
-
-    return series_counts.index[0], series_counts.iloc[0]
-
-
-def _count_reactome_species(reactome_series: pd.Series) -> pd.Series:
-    """Count the number of species tags in a set of reactome IDs"""
-
-    return (
-        reactome_series.drop_duplicates().transform(_reactome_id_species).value_counts()
-    )
-
-
-def _reactome_id_species(reactome_id: str) -> str:
-    """Extract the species code from a Reactome ID"""
-
-    reactome_match = re.match("^R\\-([A-Z]{3})\\-[0-9]+", reactome_id)
-    if reactome_match:
-        try:
-            value = reactome_match[1]
-        except ValueError:
-            raise ValueError(f"{reactome_id} is not a valid reactome ID")
-    else:
-        raise ValueError(f"{reactome_id} is not a valid reactome ID")
-
-    return value
-
-
-def _format_Identifiers_pubmed(pubmed_id: str) -> Identifiers:
-    """
-    Format Identifiers for a single PubMed ID.
-
-    These will generally be used in an r_Identifiers field.
-    """
-
-    # create a url for lookup and validate the pubmed id
-    url = create_uri_url(ontology="pubmed", identifier=pubmed_id, strict=False)
-    id_entry = format_uri(uri=url, biological_qualifier_type="BQB_IS_DESCRIBED_BY")
-
-    return Identifiers([id_entry])
+# private utility functions
 
 
 def _check_species_identifiers_table(
@@ -893,6 +857,66 @@ def _check_species_identifiers_table(
         )
 
     return None
+
+
+def _count_reactome_species(reactome_series: pd.Series) -> pd.Series:
+    """Count the number of species tags in a set of reactome IDs"""
+
+    return (
+        reactome_series.drop_duplicates().transform(_reactome_id_species).value_counts()
+    )
+
+
+def _deduplicate_identifiers_by_priority(
+    df: pd.DataFrame, group_cols: list[str]
+) -> pd.DataFrame:
+    """
+    Deduplicate identifiers by prioritizing BQB terms and URL presence.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing identifier information with BQB and URL columns
+    group_cols : list[str]
+        Columns to group by for deduplication (e.g., [ontology, identifier] or [pk, ontology, identifier])
+
+    Returns
+    -------
+    pd.DataFrame
+        Deduplicated DataFrame with highest priority entries retained
+    """
+    return (
+        df.merge(BQB_PRIORITIES, how="left")
+        .assign(_has_url=lambda x: x[IDENTIFIERS.URL].notna().astype(int))
+        .sort_values(["bqb_rank", "_has_url"], ascending=[True, False])
+        .drop_duplicates(subset=group_cols)
+        .drop(columns=["bqb_rank", "_has_url"])
+    )
+
+
+def _format_Identifiers_pubmed(pubmed_id: str) -> Identifiers:
+    """
+    Format Identifiers for a single PubMed ID.
+
+    These will generally be used in an r_Identifiers field.
+    """
+
+    # create a url for lookup and validate the pubmed id
+    url = create_uri_url(ontology=ONTOLOGIES.PUBMED, identifier=pubmed_id, strict=False)
+    id_entry = format_uri(uri=url, bqb=BQB.IS_DESCRIBED_BY)
+
+    return Identifiers([id_entry])
+
+
+def _infer_primary_reactome_species(reactome_series: pd.Series) -> tuple[str, int]:
+    """Infer the best supported species based on a set of Reactome identifiers"""
+
+    series_counts = _count_reactome_species(reactome_series)
+
+    if "ALL" in series_counts.index:
+        series_counts = series_counts.drop("ALL", axis=0)
+
+    return series_counts.index[0], series_counts.iloc[0]
 
 
 def _prepare_species_identifiers(
@@ -921,6 +945,21 @@ def _prepare_species_identifiers(
             )
 
     return species_identifiers
+
+
+def _reactome_id_species(reactome_id: str) -> str:
+    """Extract the species code from a Reactome ID"""
+
+    reactome_match = re.match("^R\\-([A-Z]{3})\\-[0-9]+", reactome_id)
+    if reactome_match:
+        try:
+            value = reactome_match[1]
+        except ValueError:
+            raise ValueError(f"{reactome_id} is not a valid reactome ID")
+    else:
+        raise ValueError(f"{reactome_id} is not a valid reactome ID")
+
+    return value
 
 
 def _validate_assets_sbml_ids(
@@ -955,26 +994,14 @@ def _validate_assets_sbml_ids(
     return None
 
 
-def _expand_identifiers_new_entries(
-    sysid: str, expanded_identifiers_df: pd.DataFrame
-) -> Identifiers:
-    """Create an identifiers object from an index entry in a dataframe"""
-    entry = expanded_identifiers_df.loc[sysid]
-
-    if type(entry) is pd.Series:
-        sysis_id_list = [entry.to_dict()]
-    else:
-        # multiple annotations
-        sysis_id_list = list(entry.reset_index(drop=True).T.to_dict().values())
-
-    return Identifiers(sysis_id_list)
+# validators
 
 
 class _IdentifierValidator(BaseModel):
     ontology: str
     identifier: str
+    bqb: str
     url: Optional[str] = None
-    bqb: Optional[str] = None
 
 
 class _IdentifiersValidator(BaseModel):

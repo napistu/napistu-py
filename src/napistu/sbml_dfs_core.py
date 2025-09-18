@@ -702,7 +702,7 @@ class SBML_dfs:
             id_entry = selected_table[schema[id_type][SCHEMA_DEFS.ID]][sysid]
 
             if isinstance(id_entry, identifiers.Identifiers):
-                identifiers_dict[sysid] = pd.DataFrame(id_entry.ids)
+                identifiers_dict[sysid] = pd.DataFrame(id_entry.df)
             elif pd.isna(id_entry):
                 continue
             else:
@@ -715,7 +715,6 @@ class SBML_dfs:
             return pd.DataFrame(columns=[schema[id_type][SCHEMA_DEFS.PK], "entry"])
 
         identifiers_tbl = pd.concat(identifiers_dict)
-
         identifiers_tbl.index.names = [schema[id_type][SCHEMA_DEFS.PK], "entry"]
         identifiers_tbl = identifiers_tbl.reset_index()
 
@@ -1327,14 +1326,16 @@ class SBML_dfs:
             entity_table = entity_table.loc[entity_ids]
 
         # create a dataframe of all identifiers for the select entities
-        all_ids = pd.concat(
-            [
-                sbml_dfs_utils._id_dict_to_df(
-                    entity_table[schema[entity_type][SCHEMA_DEFS.ID]].iloc[i].ids
-                ).assign(id=entity_table.index[i])
-                for i in range(0, entity_table.shape[0])
-            ]
-        ).rename(columns={SCHEMA_DEFS.ID: schema[entity_type][SCHEMA_DEFS.PK]})
+        # Use unnest_identifiers for efficient vectorized operation
+        all_ids = sbml_dfs_utils.unnest_identifiers(
+            entity_table, schema[entity_type][SCHEMA_DEFS.ID]
+        ).reset_index()
+
+        # Rename the entity ID column to match the schema
+        entity_id_col = entity_table.index.name or entity_table.index.names[0]
+        all_ids = all_ids.rename(
+            columns={entity_id_col: schema[entity_type][SCHEMA_DEFS.PK]}
+        )
 
         # set priorities for ontologies and bqb terms
 
@@ -2466,14 +2467,27 @@ class SBML_dfs:
 
         SCHEMA = SBML_DFS_SCHEMA.SCHEMA
         for table in SBML_DFS_SCHEMA.SCHEMA.keys():
-            if "id" not in SCHEMA[table].keys():
+            if SCHEMA_DEFS.ID not in SCHEMA[table].keys():
                 continue
-            id_series = self.get_table(table)[SCHEMA[table]["id"]]
+            id_series = self.get_table(table)[SCHEMA[table][SCHEMA_DEFS.ID]]
+
+            # Check for missing identifiers
             if id_series.isna().sum() > 0:
                 missing_ids = id_series[id_series.isna()].index
                 raise ValueError(
                     f"{table} has {len(missing_ids)} missing ids: {missing_ids}"
                 )
+
+            # Check that all Identifiers objects have a 'df' attribute
+            for idx, identifiers_obj in id_series.items():
+                if not hasattr(identifiers_obj, "df"):
+                    raise ValueError(
+                        f"{table} row {idx}: Identifiers object is missing 'df' attribute"
+                    )
+                if not hasattr(identifiers_obj.df, "empty"):
+                    raise ValueError(
+                        f"{table} row {idx}: Identifiers.df is not a valid DataFrame"
+                    )
 
     def _validate_pk_fk_correspondence(self):
         """
@@ -2482,18 +2496,18 @@ class SBML_dfs:
         """
 
         pk_df = pd.DataFrame(
-            [{"pk_table": k, "key": v["pk"]} for k, v in self.schema.items()]
+            [{"pk_table": k, "key": v[SCHEMA_DEFS.PK]} for k, v in self.schema.items()]
         )
 
         fk_df = (
             pd.DataFrame(
                 [
-                    {"fk_table": k, "fk": v["fk"]}
+                    {"fk_table": k, SCHEMA_DEFS.FK: v[SCHEMA_DEFS.FK]}
                     for k, v in self.schema.items()
-                    if "fk" in v.keys()
+                    if SCHEMA_DEFS.FK in v.keys()
                 ]
             )
-            .set_index("fk_table")["fk"]
+            .set_index("fk_table")[SCHEMA_DEFS.FK]
             .apply(pd.Series)
             .reset_index()
             .melt(id_vars="fk_table")

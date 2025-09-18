@@ -637,7 +637,7 @@ def _define_compartments_missing_cvterms(
                             ontology=ONTOLOGIES.GO,
                             identifier=COMPARTMENTS_GO_TERMS[GENERIC_COMPARTMENT],
                         ),
-                        biological_qualifier_type=BQB.BQB_IS,
+                        bqb=BQB.BQB_IS,
                     )
                 ]
             ),
@@ -660,7 +660,7 @@ def _define_compartments_missing_cvterms(
                             ontology=ONTOLOGIES.GO,
                             identifier=COMPARTMENTS_GO_TERMS[mapped_compartment_key[0]],
                         ),
-                        biological_qualifier_type=BQB.IS,
+                        bqb=BQB.IS,
                     )
                 ]
             ),

@@ -11,6 +11,7 @@ from napistu.constants import (
     IDENTIFIERS,
     MINI_SBO_FROM_NAME,
     MINI_SBO_TO_NAME,
+    ONTOLOGIES,
     POLARITIES,
     POLARITY_TO_SYMBOL,
     SBML_DFS,
@@ -19,6 +20,8 @@ from napistu.constants import (
     VALID_SBO_TERMS,
 )
 from napistu.ingestion.constants import (
+    COMPARTMENTS_GO_TERMS,
+    GENERIC_COMPARTMENT,
     INTERACTION_EDGELIST_DEFAULTS,
     INTERACTION_EDGELIST_DEFS,
     INTERACTION_EDGELIST_OPTIONAL_VARS,
@@ -123,11 +126,13 @@ def test_formula(sbml_dfs):
     an_r_id = sbml_dfs.reactions.index[0]
 
     reaction_species_df = sbml_dfs.reaction_species[
-        sbml_dfs.reaction_species["r_id"] == an_r_id
-    ].merge(sbml_dfs.compartmentalized_species, left_on="sc_id", right_index=True)
+        sbml_dfs.reaction_species[SBML_DFS.R_ID] == an_r_id
+    ].merge(
+        sbml_dfs.compartmentalized_species, left_on=SBML_DFS.SC_ID, right_index=True
+    )
 
     formula_str = sbml_dfs_utils.construct_formula_string(
-        reaction_species_df, sbml_dfs.reactions, name_var="sc_name"
+        reaction_species_df, sbml_dfs.reactions, name_var=SBML_DFS.SC_NAME
     )
 
     assert isinstance(formula_str, str)
@@ -225,12 +230,19 @@ def test_find_underspecified_reactions():
 def test_stubbed_compartment():
     compartment = sbml_dfs_utils.stub_compartments()
 
-    assert compartment["c_Identifiers"].iloc[0].ids[0] == {
-        "ontology": "go",
-        "identifier": "GO:0005575",
-        "url": "https://www.ebi.ac.uk/QuickGO/term/GO:0005575",
-        "bqb": "BQB_IS",
-    }
+    compartment_ids = compartment[SBML_DFS.C_IDENTIFIERS].iloc[0].df
+    expected_ids = pd.DataFrame(
+        [
+            {
+                IDENTIFIERS.ONTOLOGY: ONTOLOGIES.GO,
+                IDENTIFIERS.IDENTIFIER: COMPARTMENTS_GO_TERMS[GENERIC_COMPARTMENT],
+                IDENTIFIERS.BQB: BQB.IS,
+                IDENTIFIERS.URL: "https://www.ebi.ac.uk/QuickGO/term/GO:0005575",
+            }
+        ]
+    )
+
+    pd.testing.assert_frame_equal(compartment_ids, expected_ids, check_dtype=False)
 
 
 def test_validate_sbo_values_success():

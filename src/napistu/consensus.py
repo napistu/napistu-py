@@ -9,8 +9,9 @@ import igraph as ig
 import pandas as pd
 from tqdm import tqdm
 
-from napistu import identifiers, indices, sbml_dfs_utils, source, utils
+from napistu import indices, sbml_dfs_utils, source, utils
 from napistu.constants import (
+    BQB,
     BQB_DEFINING_ATTRS,
     ENTITIES_TO_ENTITY_DATA,
     EXPECTED_PW_INDEX_COLUMNS,
@@ -22,6 +23,7 @@ from napistu.constants import (
     SOURCE_SPEC,
     VALID_BQB_TERMS,
 )
+from napistu.identifiers import Identifiers
 from napistu.ingestion import sbml
 from napistu.matching.mount import resolve_matches
 from napistu.sbml_dfs_core import SBML_dfs
@@ -595,23 +597,28 @@ def _build_consensus_identifiers(
         DataFrame mapping clusters to consensus identifiers (Identifiers objects).
     """
     # Step 1: Extract and validate identifiers
+    logger.debug("unnesting identifiers")
     meta_identifiers = sbml_dfs_utils.unnest_identifiers(
         sbml_df, table_schema[SCHEMA_DEFS.ID]
     )
     _validate_meta_identifiers(meta_identifiers)
 
     # Step 2: Filter identifiers by biological qualifier type
+    logger.debug("filtering identifiers by biological qualifier type")
     valid_identifiers = _filter_identifiers_by_qualifier(
         meta_identifiers, defining_biological_qualifiers
     )
 
     # Step 3: Handle entries that don't have identifiers
+    logger.debug("handling entries that don't have identifiers")
     valid_identifiers = _handle_entries_without_identifiers(sbml_df, valid_identifiers)
 
     # Step 4: Prepare edgelist for clustering
+    logger.debug("preparing identifier edgelist")
     id_edgelist = _prepare_identifier_edgelist(valid_identifiers, sbml_df)
 
     # Step 5: Cluster entities based on shared identifiers
+    logger.debug("clustering entities based on shared identifiers")
     ind_clusters = utils.find_weakly_connected_subgraphs(id_edgelist)
 
     # Step 6: Map entity indices to clusters
@@ -777,7 +784,7 @@ def _create_cluster_identifiers(
 
     # Create an Identifiers object for each cluster
     cluster_consensus_identifiers = {
-        k: identifiers.Identifiers(
+        k: Identifiers(
             list(
                 v[
                     [
@@ -796,7 +803,7 @@ def _create_cluster_identifiers(
 
     # Handle clusters that don't have any identifiers
     catchup_clusters = {
-        c: identifiers.Identifiers(list())
+        c: Identifiers(list())
         for c in set(ind_clusters["cluster"].tolist()).difference(
             cluster_consensus_identifiers
         )
@@ -1266,15 +1273,28 @@ def _handle_entries_without_identifiers(
         "dummy_value_" + str(val)
         for val in random.sample(range(1, 100000000), filtered_entries.shape[0])
     ]
-    filtered_entries[IDENTIFIERS.URL] = None
-    filtered_entries[IDENTIFIERS.BQB] = None
+    filtered_entries[IDENTIFIERS.URL] = "dummy_url"
+    filtered_entries[IDENTIFIERS.BQB] = BQB.UNKNOWN
 
     filtered_entries = filtered_entries.set_index(
         sbml_df.index.names + [SOURCE_SPEC.ENTRY]
     )
 
     # Combine original valid identifiers with dummy identifiers
-    return pd.concat([valid_identifiers, filtered_entries])
+    # Build list of non-empty DataFrames to avoid FutureWarning
+
+    dfs_to_concat = []
+    if not valid_identifiers.empty:
+        dfs_to_concat.append(valid_identifiers)
+    if not filtered_entries.empty:
+        dfs_to_concat.append(filtered_entries)
+
+    if len(dfs_to_concat) == 0:
+        raise ValueError("No valid identifiers found after filtering")
+    elif len(dfs_to_concat) == 1:
+        return dfs_to_concat[0]
+    else:
+        return pd.concat(dfs_to_concat)
 
 
 def _merge_entity_data_create_consensus(
@@ -1523,7 +1543,7 @@ def _merge_entity_identifiers(
     )
 
     # Merge identifier objects
-    return indexed_old_identifiers.agg(identifiers.merge_identifiers)
+    return indexed_old_identifiers.agg(Identifiers.merge)
 
 
 def _pre_consensus_compartment_check(
@@ -2197,7 +2217,8 @@ def _unnest_SBML_df(sbml_dfs_dict: dict[str, SBML_dfs], table: str) -> pd.DataFr
 
     # add model to index columns
     if df_concat.size != 0:
-        df_concat = df_concat.reset_index().set_index(
+        df_concat_reset = df_concat.reset_index()
+        df_concat = df_concat_reset.set_index(
             [SOURCE_SPEC.MODEL, table_schema[SCHEMA_DEFS.PK]]
         )
 
@@ -2308,6 +2329,6 @@ def _validate_meta_identifiers(meta_identifiers: pd.DataFrame) -> None:
     n_null = sum(meta_identifiers[IDENTIFIERS.BQB].isnull())
     if n_null > 0:
         msg = f"{n_null} identifiers were missing a bqb code and will not be mergeable"
-        logger.warn(msg)
+        logger.warning(msg)
 
     return None

@@ -512,11 +512,7 @@ def format_curated_entities(
 
             is_identified = not new_entity_series.isna()["uri"]
             if is_identified:
-                id = [
-                    identifiers.format_uri(
-                        new_entity_series["uri"], biological_qualifier_type=BQB.IS
-                    )
-                ]
+                id = [identifiers.format_uri(new_entity_series["uri"], bqb=BQB.IS)]
             else:
                 id = [
                     {

@@ -398,15 +398,15 @@ def test_build_consensus_identifiers_handles_merges_and_missing_ids():
     ids_obj = cluster_consensus_identifiers.loc[
         merged_cluster_id, schema[SCHEMA_DEFS.ID]
     ]
-    assert any(i[IDENTIFIERS.IDENTIFIER] == "X" for i in getattr(ids_obj, "ids", []))
+    assert "X" in ids_obj.df[IDENTIFIERS.IDENTIFIER].values
 
     # The consensus identifier for the entity with no identifiers should be empty
     noid_cluster_id = indexed_cluster.loc["B"]
     ids_obj_noid = cluster_consensus_identifiers.loc[
         noid_cluster_id, schema[SCHEMA_DEFS.ID]
     ]
-    assert hasattr(ids_obj_noid, "ids")
-    assert len(getattr(ids_obj_noid, "ids", [])) == 0
+    assert hasattr(ids_obj_noid, "df")
+    assert ids_obj_noid.df.shape[0] == 0
 
 
 def test_consensus_round_trip_consistency(

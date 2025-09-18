@@ -147,7 +147,7 @@ def convert_trrust_to_sbml_dfs(
         [
             identifiers.Identifiers(
                 [
-                    identifiers.format_uri(uri=x, biological_qualifier_type=BQB.IS)
+                    identifiers.format_uri(uri=x, bqb=BQB.IS)
                     for x in species_w_ids.loc[[ind]][IDENTIFIERS.URL].tolist()
                 ]
             )
@@ -186,7 +186,7 @@ def convert_trrust_to_sbml_dfs(
                             ontology=ONTOLOGIES.GO,
                             identifier=TRRUST_COMPARTMENT_NUCLEOPLASM_GO_ID,
                         ),
-                        biological_qualifier_type=BQB.IS,
+                        bqb=BQB.IS,
                     )
                 ]
             ),
@@ -264,9 +264,7 @@ def _format_pubmed_for_interactions(pubmed_set):
             ontology=ONTOLOGIES.PUBMED, identifier=p, strict=False
         )
         if url is not None:
-            valid_url = identifiers.format_uri(
-                uri=url, biological_qualifier_type=BQB.IS_DESCRIBED_BY
-            )
+            valid_url = identifiers.format_uri(uri=url, bqb=BQB.IS_DESCRIBED_BY)
 
             ids.append(valid_url)
 
