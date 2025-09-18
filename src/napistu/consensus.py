@@ -611,8 +611,6 @@ def _build_consensus_identifiers(
 
     # Step 3: Handle entries that don't have identifiers
     logger.debug("handling entries that don't have identifiers")
-    print(sbml_df)
-    print(valid_identifiers)
     valid_identifiers = _handle_entries_without_identifiers(sbml_df, valid_identifiers)
 
     # Step 4: Prepare edgelist for clustering
