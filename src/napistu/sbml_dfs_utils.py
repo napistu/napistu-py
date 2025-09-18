@@ -806,44 +806,45 @@ def unnest_identifiers(id_table: pd.DataFrame, id_var: str) -> pd.DataFrame:
     Take a pd.DataFrame containing an array of Identifiers and
     return one-row per identifier.
 
-    Parameters:
-    id_table: pd.DataFrame
-        a table containing an array of Identifiers
-    id_var: str
-        variable containing Identifiers
+    Parameters
+    ----------
+    id_table : pd.DataFrame
+        Table containing Identifiers objects
+    id_var : str
+        Column name containing Identifiers objects
 
-    Returns:
-    pd.Dataframe containing the index of id_table but expanded
-    to include one row per identifier
-
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with one row per identifier, MultiIndex with original index + entry
     """
-
-    # validate inputs
+    # Validate inputs
     utils.match_pd_vars(id_table, {id_var}).assert_present()
 
     N_invalid_ids = sum(id_table[id_var].isna())
     if N_invalid_ids != 0:
-
-        print("Rows with missing identifiers:")
-        print(id_table.loc[id_table[id_var].isna(), id_var])
-
+        utils.show("Rows with missing identifiers:")
+        utils.show(id_table.loc[id_table[id_var].isna(), id_var])
         raise ValueError(
-            f'{N_invalid_ids} entries in "id_table" were missing',
-            "entries with no identifiers should still include an Identifiers object",
+            f'{N_invalid_ids} entries in "id_table" were missing identifiers'
         )
 
-    # Get the identifier as a list of dicts
-    df = id_table[id_var].apply(lambda x: x.ids if len(x.ids) > 0 else 0).to_frame()
-    # Filter out zero length lists
-    df = df.query(f"{id_var} != 0")
-    # Unnest the list of dicts into one dict per row
-    df = df.explode(id_var)
-    # Unnest the dict into a dataframe
-    df = pd.DataFrame(df[id_var].values.tolist(), index=df.index)
-    # Add the entry number as an index
-    df["entry"] = df.groupby(df.index).cumcount()
-    df.set_index("entry", append=True, inplace=True)
-    return df
+    # Build dict mapping each index to its identifiers DataFrame
+    identifier_dict = {}
+    for idx, identifiers_obj in id_table[id_var].items():
+        if not identifiers_obj.df.empty:
+            identifier_dict[idx] = identifiers_obj.df
+
+    # If no valid identifiers, return empty DataFrame
+    if not identifier_dict:
+        return pd.DataFrame()
+
+    # Use pd.concat with keys to create MultiIndex directly
+    result = pd.concat(
+        identifier_dict, names=id_table.index.names + [SOURCE_SPEC.ENTRY]
+    )
+
+    return result
 
 
 def validate_sbml_dfs_table(table_data: pd.DataFrame, table_name: str) -> None:
@@ -1997,5 +1998,5 @@ def _validate_sbo_values(sbo_series: pd.Series, validate: str = "names") -> None
         invalid_counts = invalid_sbo_terms.value_counts(sbo_series.name).to_frame("N")
         if not isinstance(invalid_counts, pd.DataFrame):
             raise TypeError("invalid_counts must be a pandas DataFrame")
-        print(invalid_counts)
+        utils.show(invalid_counts)
         raise ValueError("Some reaction species have unusable SBO terms")

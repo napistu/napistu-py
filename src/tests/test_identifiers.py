@@ -30,7 +30,7 @@ def test_identifiers():
                     IDENTIFIERS.BQB: BQB.IS,
                 }
             ]
-        ).ids[0][IDENTIFIERS.ONTOLOGY]
+        ).df.iloc[0][IDENTIFIERS.ONTOLOGY]
         == ONTOLOGIES.KEGG
     )
 
@@ -72,16 +72,15 @@ def test_identifiers_from_urls():
             ]
         )
 
-        # print(f"ontology = {testIdentifiers.ids[0]['ontology']}; identifier = {testIdentifiers.ids[0]['identifier']}")
         assert (
-            testIdentifiers.ids[0][IDENTIFIERS.ONTOLOGY]
+            testIdentifiers.df.iloc[0][IDENTIFIERS.ONTOLOGY]
             == identifier_examples[IDENTIFIERS.ONTOLOGY][i]
-        ), f"ontology {testIdentifiers.ids[0][IDENTIFIERS.ONTOLOGY]} does not equal {identifier_examples[IDENTIFIERS.ONTOLOGY][i]}"
+        ), f"ontology {testIdentifiers.df.iloc[0][IDENTIFIERS.ONTOLOGY]} does not equal {identifier_examples[IDENTIFIERS.ONTOLOGY][i]}"
 
         assert (
-            testIdentifiers.ids[0][IDENTIFIERS.IDENTIFIER]
+            testIdentifiers.df.iloc[0][IDENTIFIERS.IDENTIFIER]
             == identifier_examples[IDENTIFIERS.IDENTIFIER][i]
-        ), f"identifier {testIdentifiers.ids[0][IDENTIFIERS.IDENTIFIER]} does not equal {identifier_examples[IDENTIFIERS.IDENTIFIER][i]}"
+        ), f"identifier {testIdentifiers.df.iloc[0][IDENTIFIERS.IDENTIFIER]} does not equal {identifier_examples[IDENTIFIERS.IDENTIFIER][i]}"
 
 
 def test_url_from_identifiers():

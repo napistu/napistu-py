@@ -596,23 +596,30 @@ def _build_consensus_identifiers(
         DataFrame mapping clusters to consensus identifiers (Identifiers objects).
     """
     # Step 1: Extract and validate identifiers
+    logger.debug("unnesting identifiers")
     meta_identifiers = sbml_dfs_utils.unnest_identifiers(
         sbml_df, table_schema[SCHEMA_DEFS.ID]
     )
     _validate_meta_identifiers(meta_identifiers)
 
     # Step 2: Filter identifiers by biological qualifier type
+    logger.debug("filtering identifiers by biological qualifier type")
     valid_identifiers = _filter_identifiers_by_qualifier(
         meta_identifiers, defining_biological_qualifiers
     )
 
     # Step 3: Handle entries that don't have identifiers
+    logger.debug("handling entries that don't have identifiers")
+    print(sbml_df)
+    print(valid_identifiers)
     valid_identifiers = _handle_entries_without_identifiers(sbml_df, valid_identifiers)
 
     # Step 4: Prepare edgelist for clustering
+    logger.debug("preparing identifier edgelist")
     id_edgelist = _prepare_identifier_edgelist(valid_identifiers, sbml_df)
 
     # Step 5: Cluster entities based on shared identifiers
+    logger.debug("clustering entities based on shared identifiers")
     ind_clusters = utils.find_weakly_connected_subgraphs(id_edgelist)
 
     # Step 6: Map entity indices to clusters
@@ -2198,7 +2205,8 @@ def _unnest_SBML_df(sbml_dfs_dict: dict[str, SBML_dfs], table: str) -> pd.DataFr
 
     # add model to index columns
     if df_concat.size != 0:
-        df_concat = df_concat.reset_index().set_index(
+        df_concat_reset = df_concat.reset_index()
+        df_concat = df_concat_reset.set_index(
             [SOURCE_SPEC.MODEL, table_schema[SCHEMA_DEFS.PK]]
         )
 

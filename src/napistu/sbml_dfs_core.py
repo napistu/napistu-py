@@ -696,7 +696,7 @@ class SBML_dfs:
             id_entry = selected_table[schema[id_type][SCHEMA_DEFS.ID]][sysid]
 
             if isinstance(id_entry, identifiers.Identifiers):
-                identifiers_dict[sysid] = pd.DataFrame(id_entry.ids)
+                identifiers_dict[sysid] = pd.DataFrame(id_entry.df)
             elif pd.isna(id_entry):
                 continue
             else:
@@ -709,7 +709,6 @@ class SBML_dfs:
             return pd.DataFrame(columns=[schema[id_type][SCHEMA_DEFS.PK], "entry"])
 
         identifiers_tbl = pd.concat(identifiers_dict)
-
         identifiers_tbl.index.names = [schema[id_type][SCHEMA_DEFS.PK], "entry"]
         identifiers_tbl = identifiers_tbl.reset_index()
 
@@ -1333,14 +1332,16 @@ class SBML_dfs:
             entity_table = entity_table.loc[entity_ids]
 
         # create a dataframe of all identifiers for the select entities
-        all_ids = pd.concat(
-            [
-                sbml_dfs_utils._id_dict_to_df(
-                    entity_table[schema[entity_type][SCHEMA_DEFS.ID]].iloc[i].ids
-                ).assign(id=entity_table.index[i])
-                for i in range(0, entity_table.shape[0])
-            ]
-        ).rename(columns={SCHEMA_DEFS.ID: schema[entity_type][SCHEMA_DEFS.PK]})
+        # Use unnest_identifiers for efficient vectorized operation
+        all_ids = sbml_dfs_utils.unnest_identifiers(
+            entity_table, schema[entity_type][SCHEMA_DEFS.ID]
+        ).reset_index()
+
+        # Rename the entity ID column to match the schema
+        entity_id_col = entity_table.index.name or entity_table.index.names[0]
+        all_ids = all_ids.rename(
+            columns={entity_id_col: schema[entity_type][SCHEMA_DEFS.PK]}
+        )
 
         # set priorities for ontologies and bqb terms
 

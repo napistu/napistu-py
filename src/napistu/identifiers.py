@@ -169,6 +169,7 @@ class Identifiers:
 
     @property
     def ids(self) -> list[dict]:
+
         logger.warning("Identifiers.ids is deprecated. Use Identifiers.df instead.")
         return self.df.to_dict("records") if self.df is not None else []
 
