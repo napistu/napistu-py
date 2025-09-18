@@ -201,6 +201,112 @@ def compartmentalize_species_pairs(
     return target_species_paths
 
 
+def create_entity_attrs_from_data_tables(
+    entity_data_dict: dict[str, pd.DataFrame],
+    table_names: Optional[list[str]] = None,
+    name_prefix: bool = True,
+) -> dict[str, dict[str, str]]:
+    """
+    Create entity_attrs configuration from data tables.
+
+    This utility converts a dictionary of data tables into the entity_attrs
+    format expected by NapistuGraph methods, automatically generating
+    attribute configurations for all columns in the specified tables.
+
+    Parameters
+    ----------
+    entity_data_dict : dict[str, pd.DataFrame]
+        Dictionary mapping table names to DataFrames (e.g., sbml_dfs.species_data)
+    table_names : Optional[list[str]], default=None
+        Specific table names to include. If None, includes all available tables.
+    name_prefix : bool, default=True
+        Whether to prefix attribute names with table name (e.g., "table_name_column_name")
+
+    Returns
+    -------
+    dict[str, dict[str, str]]
+        Entity attributes configuration dictionary in the format:
+        {
+            "attr_name": {
+                "table": "table_name",
+                "variable": "column_name"
+            }
+        }
+
+    Raises
+    ------
+    ValueError
+        If requested table names don't exist in entity_data_dict
+
+    Examples
+    --------
+    Create attrs from all species data tables:
+    >>> entity_attrs = create_entity_attrs_from_data_tables(sbml_dfs.species_data)
+
+    Create attrs from specific tables:
+    >>> entity_attrs = create_entity_attrs_from_data_tables(
+    ...     sbml_dfs.reactions_data,
+    ...     table_names=["kinetics", "literature"]
+    ... )
+
+    Create attrs without table name prefixes:
+    >>> entity_attrs = create_entity_attrs_from_data_tables(
+    ...     sbml_dfs.species_data,
+    ...     name_prefix=False
+    ... )
+    """
+
+    if len(entity_data_dict) == 0:
+        logger.warning("entity_data_dict is empty")
+        return {}
+
+    # Validate and filter table names
+    if table_names is None:
+        table_names = list(entity_data_dict.keys())
+    else:
+        invalid_tables = set(table_names) - set(entity_data_dict.keys())
+        if invalid_tables:
+            available_tables = list(entity_data_dict.keys())
+            raise ValueError(
+                f"Requested tables not found in entity_data_dict: {invalid_tables}. "
+                f"Available tables: {available_tables}"
+            )
+
+    # Build entity_attrs configuration
+    entity_attrs = {}
+
+    for table_name in table_names:
+        table_data = entity_data_dict[table_name]
+
+        for column_name in table_data.columns:
+            # Create attribute name
+            if name_prefix:
+                attr_name = f"{table_name}_{column_name}"
+            else:
+                attr_name = column_name
+
+            # Handle potential naming conflicts when name_prefix=False
+            if not name_prefix and attr_name in entity_attrs:
+                logger.warning(
+                    f"Attribute name conflict: '{attr_name}' exists in multiple tables. "
+                    f"Consider using name_prefix=True to avoid conflicts."
+                )
+                # Auto-resolve by adding table prefix as fallback
+                attr_name = f"{table_name}_{column_name}"
+
+            entity_attrs[attr_name] = {
+                WEIGHTING_SPEC.TABLE: table_name,
+                WEIGHTING_SPEC.VARIABLE: column_name,
+            }
+
+    logger.debug(
+        f"Created {len(entity_attrs)} entity attributes from "
+        f"{len(table_names)} tables: {table_names}"
+    )
+
+    return entity_attrs
+
+
 def get_minimal_sources_edges(
     vertices: pd.DataFrame,
     sbml_dfs: sbml_dfs_core.SBML_dfs,
@@ -291,6 +397,24 @@ def get_sbml_dfs_vertex_summaries(
     characteristic_only=False,
     dogmatic=False,
 ) -> pd.DataFrame:
+    """
+    Prepare species and reaction ontology and/or source occurrence summaries which are ready to be merged with NapistuGraph vertices.
+
+    Parameters
+    ----------
+    sbml_dfs : SBML_dfs
+        A pathway model
+    summary_types : list
+        The summary types to get
+    priority_pathways : list
+        The priority pathways to get
+    stratify_by_bqb : bool
+        Whether to stratify by BQB
+    characteristic_only : bool
+        Whether to only get characteristic ontologies
+    dogmatic : bool
+        Whether to use dogmatic ontologies
+    """
 
     if len(summary_types) == 0:
         raise ValueError(
@@ -313,15 +437,18 @@ def get_sbml_dfs_vertex_summaries(
 
         source_dfs = list()
         for entity_table in entity_tables:
+            logger.info(f"Getting source occurrence for {entity_table}")
             df = sbml_dfs.get_source_occurrence(entity_table, priority_pathways)
             df.columns.name = None
             source_dfs.append(df.rename_axis(NAPISTU_GRAPH_VERTICES.NAME))
 
+        logger.debug("Concatenating source occurrences")
         summaries.append(pd.concat(source_dfs).fillna(int(0)))
 
     if VERTEX_SBML_DFS_SUMMARIES.ONTOLOGIES in summary_types:
 
         # get reaction ontologies directly (since these are vertex names)
+        logger.info(f"Getting ontology occurrence for {SBML_DFS.REACTIONS}")
         df = sbml_dfs.get_ontology_occurrence(
             SBML_DFS.REACTIONS,
             stratify_by_bqb=stratify_by_bqb,
@@ -333,6 +460,7 @@ def get_sbml_dfs_vertex_summaries(
         reaction_ontologies = df.rename_axis(NAPISTU_GRAPH_VERTICES.NAME)
 
         # get species ontologies then map them to compartmentalized species (since the cspecies are the vertex names)
+        logger.info(f"Getting ontology occurrence for {SBML_DFS.SPECIES}")
         df = sbml_dfs.get_ontology_occurrence(
             SBML_DFS.SPECIES,
             stratify_by_bqb=stratify_by_bqb,
@@ -348,10 +476,12 @@ def get_sbml_dfs_vertex_summaries(
             .drop(columns=[SBML_DFS.S_ID])
         )
 
+        logger.debug("Concatenating reaction and species ontology occurrences")
         summaries.append(
             pd.concat([reaction_ontologies, species_ontologies]).fillna(int(0))
         )
 
+    logger.debug("Concatenating all summaries")
     out = pd.concat(summaries, axis=1).astype(int)
     out.index.name = NAPISTU_GRAPH_VERTICES.NAME
 

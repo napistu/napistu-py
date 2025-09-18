@@ -9,6 +9,8 @@ import pandas as pd
 
 from napistu import utils
 from napistu.constants import (
+    ENTITIES_TO_ENTITY_DATA,
+    ENTITIES_W_DATA,
     SBML_DFS,
 )
 from napistu.ingestion.constants import DEFAULT_PRIORITIZED_PATHWAYS
@@ -195,6 +197,143 @@ class NapistuGraph(ig.Graph):
     def weight_by(self) -> Optional[list[str]]:
         """Get the weight_by attributes used."""
         return self._metadata["weight_by"]
+
+    def add_all_entity_data(
+        self,
+        sbml_dfs: SBML_dfs,
+        entity_type: str,
+        target_entity: Optional[str] = None,
+        table_names: Optional[list[str]] = None,
+        name_prefix: bool = True,
+        mode: str = ADDING_ENTITY_DATA_DEFS.FRESH,
+        overwrite: bool = False,
+        inplace: bool = True,
+    ) -> Optional["NapistuGraph"]:
+        """
+        Add all data tables for a specific entity type to the graph.
+
+        This is a convenience method that automatically adds all available
+        data tables for species or reactions without requiring manual
+        configuration of each table and column.
+
+        Parameters
+        ----------
+        sbml_dfs : SBML_dfs
+            The SBML_dfs object containing entity data
+        entity_type : str
+            Either "species" or "reactions"
+        target_entity : Optional[str], default=None
+            Where to add the data: "vertices" or "edges". If None, uses default mapping:
+            - "species" -> "vertices"
+            - "reactions" -> "edges"
+            Explicit specification allows reactions data on vertices (bipartite graphs)
+            or species data on edges (if such use case exists).
+        table_names : Optional[list[str]], default=None
+            Specific table names to include. If None, includes all available tables.
+        name_prefix : bool, default=True
+            Whether to prefix attribute names with table name (e.g., "table_name_column_name")
+        mode : str, default="fresh"
+            Either "fresh" (replace existing) or "extend" (add new attributes only)
+        overwrite : bool, default=False
+            Whether to allow overwriting existing attributes when conflicts arise
+        inplace : bool, default=True
+            Whether to modify the graph in place
+
+        Returns
+        -------
+        Optional[NapistuGraph]
+            If inplace=True, returns None. Otherwise returns modified copy.
+
+        Raises
+        ------
+        ValueError
+            If entity_type is invalid or requested tables don't exist
+
+        Examples
+        --------
+        Add all species data to vertices (default):
+        >>> graph.add_all_entity_data(sbml_dfs, "species")
+
+        Add reactions data to reaction vertices (bipartite graph):
+        >>> graph.add_all_entity_data(sbml_dfs, "reactions", target_entity="vertices")
+
+        Add reactions data to edges (interaction graph):
+        >>> graph.add_all_entity_data(sbml_dfs, "reactions", target_entity="edges")
+
+        Add specific tables:
+        >>> graph.add_all_entity_data(sbml_dfs, "reactions",
+        ...                          table_names=["experiments", "literature"])
+        """
+
+        if not inplace:
+            graph = self.copy()
+        else:
+            graph = self
+
+        # Validate entity_type
+        if entity_type not in ENTITIES_W_DATA:
+            raise ValueError(f"entity_type must be one of {ENTITIES_W_DATA}")
+
+        # Determine target_entity if not specified
+        if target_entity is None:
+            if entity_type == SBML_DFS.SPECIES:
+                target_entity = NAPISTU_GRAPH.VERTICES
+            elif entity_type == SBML_DFS.REACTIONS:
+                target_entity = NAPISTU_GRAPH.EDGES
+        else:
+            # Validate explicit target_entity
+            if target_entity not in [NAPISTU_GRAPH.VERTICES, NAPISTU_GRAPH.EDGES]:
+                raise ValueError(
+                    f"target_entity must be '{NAPISTU_GRAPH.VERTICES}' or '{NAPISTU_GRAPH.EDGES}'"
+                )
+
+        # Get available data tables
+        entity_data_attr = ENTITIES_TO_ENTITY_DATA[entity_type]
+        entity_data_dict = getattr(sbml_dfs, entity_data_attr)
+
+        if len(entity_data_dict) == 0:
+            logger.warning(f"No data tables found in {entity_data_attr}")
+            return None if inplace else graph
+
+        # Validate and filter table names
+        if table_names is None:
+            table_names = list(entity_data_dict.keys())
+        else:
+            invalid_tables = set(table_names) - set(entity_data_dict.keys())
+            if invalid_tables:
+                available_tables = list(entity_data_dict.keys())
+                raise ValueError(
+                    f"Requested tables not found in {entity_data_attr}: {invalid_tables}. "
+                    f"Available tables: {available_tables}"
+                )
+
+        # Build entity_attrs configuration using utility function
+        entity_attrs = ng_utils.create_entity_attrs_from_data_tables(
+            entity_data_dict=entity_data_dict,
+            table_names=table_names,
+            name_prefix=name_prefix,
+        )
+
+        if not entity_attrs:
+            logger.warning("No attributes to add")
+            return None if inplace else graph
+
+        # Set graph attributes using existing infrastructure
+        graph_attrs_config = {entity_type: entity_attrs}
+        graph.set_graph_attrs(graph_attrs_config, mode=mode, overwrite=overwrite)
+
+        # Add the actual data using existing methods
+        if target_entity == NAPISTU_GRAPH.VERTICES:
+            graph.add_vertex_data(sbml_dfs, mode=mode, overwrite=overwrite)
+        else:  # edges
+            graph.add_edge_data(sbml_dfs, mode=mode, overwrite=overwrite)
+
+        logger.info(
+            f"Added {len(entity_attrs)} {entity_type} attributes to {target_entity} from "
+            f"{len(table_names)} tables: {table_names}"
+        )
+
+        return None if inplace else graph
 
     def add_degree_attributes(self, inplace: bool = True) -> Optional["NapistuGraph"]:
         """
@@ -461,6 +600,7 @@ class NapistuGraph(ig.Graph):
             graph = self
 
         # Get vertex summaries from SBML_dfs
+        logger.info("Loading SBML_dfs vertex summaries")
         summaries_df = ng_utils.get_sbml_dfs_vertex_summaries(
             sbml_dfs,
             summary_types=summary_types,
@@ -470,6 +610,7 @@ class NapistuGraph(ig.Graph):
             dogmatic=dogmatic,
         )
 
+        logger.info("Creating graph attributes")
         graph_attrs = data_handling._create_graph_attrs_config(
             column_mapping={v: v for v in summaries_df.columns},
             data_type=SBML_DFS.SPECIES,
@@ -479,6 +620,7 @@ class NapistuGraph(ig.Graph):
 
         graph.set_graph_attrs(graph_attrs, mode=mode, overwrite=overwrite)
 
+        logger.info("Adding vertex data")
         graph.add_vertex_data(
             side_loaded_attributes={"sbml_dfs_summaries": summaries_df},
             mode=mode,

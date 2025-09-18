@@ -708,3 +708,42 @@ def test_add_missing_ids_column(sbml_dfs):
     assert result_table.dtypes.apply(
         lambda x: pd.api.types.is_integer_dtype(x)
     ).all(), "Result should contain only integer values"
+
+
+def test_format_model_summary(sbml_dfs):
+    """Test format_model_summary function with sbml_dfs fixture."""
+    # Get network summary from the sbml_dfs
+    summary_stats = sbml_dfs.get_network_summary()
+
+    # Call format_model_summary
+    result = sbml_dfs_utils.format_model_summary(summary_stats)
+
+    # Test that result is a DataFrame
+    assert isinstance(result, pd.DataFrame), "Result should be a pandas DataFrame"
+
+    # Test that it has the expected columns
+    expected_columns = ["Metric", "Value"]
+    assert (
+        list(result.columns) == expected_columns
+    ), f"Expected columns {expected_columns}, got {list(result.columns)}"
+
+    # Test that it has some expected rows (basic structure)
+    metrics = result["Metric"].tolist()
+    assert "Species" in metrics, "Should contain 'Species' metric"
+    assert "Reactions" in metrics, "Should contain 'Reactions' metric"
+    assert "Compartments" in metrics, "Should contain 'Compartments' metric"
+    assert (
+        "Compartmentalized Species" in metrics
+    ), "Should contain 'Compartmentalized Species' metric"
+
+    # Test that all values are strings (formatted for display)
+    assert (
+        result["Value"].dtype == object
+    ), "Values should be strings/objects for display"
+
+    # Test that there are no empty values in the result
+    assert not result["Value"].isna().any(), "No values should be NaN"
+    assert not result["Metric"].isna().any(), "No metrics should be NaN"
+
+    # Test that the DataFrame is not empty
+    assert len(result) > 0, "Result should not be empty"
