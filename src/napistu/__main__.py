@@ -1026,6 +1026,15 @@ def validate_sbml_dfs(sbml_dfs_uri):
     logger.info(f"Successfully validated: {sbml_dfs_uri}")
 
 
+@helpers.command(name="summary")
+@sbml_dfs_input
+@verbosity_option
+def show_sbml_dfs_summary(sbml_dfs_uri):
+    """Display a summary of an SBML_dfs object"""
+    sbml_dfs = SBML_dfs.from_pickle(sbml_dfs_uri)
+    sbml_dfs.show_summary()
+
+
 @helpers.command(name="validate_assets")
 @sbml_dfs_input
 @click.option(
