@@ -1018,6 +1018,40 @@ class SBML_dfs:
 
         return stats
 
+    def get_sbo_term_occurrence(
+        self, name_terms=True, include_interactor_reactions=False
+    ) -> pd.DataFrame:
+        """
+        Get the occurrence of SBO terms for reactions.
+
+        Parameters
+        ----------
+        name_terms : bool, optional
+            Whether to name the SBO terms, by default True
+        include_interactor_reactions : bool, optional
+            Whether to exclude interactor reactions, by default True
+        """
+
+        reaction_species = self.reaction_species
+        if not include_interactor_reactions:
+            # ignore reactions which are all interactors
+            valid_reactions = self._get_non_interactor_reactions()
+            reaction_species = reaction_species[
+                reaction_species[SBML_DFS.R_ID].isin(valid_reactions.index.values)
+            ]
+
+        rxn_sbo_term_counts = reaction_species.pivot_table(
+            index=SBML_DFS.R_ID, columns=SBML_DFS.SBO_TERM, aggfunc="size", fill_value=0
+        )
+
+        if name_terms:
+            # map columns sbo_terms to sbo_term_names
+            rxn_sbo_term_counts.columns = rxn_sbo_term_counts.columns.map(
+                MINI_SBO_TO_NAME
+            )
+
+        return rxn_sbo_term_counts
+
     def get_source_cooccurrence(
         self,
         entity_type: str,
