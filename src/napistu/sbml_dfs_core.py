@@ -1052,6 +1052,79 @@ class SBML_dfs:
 
         return rxn_sbo_term_counts
 
+    def get_sbo_term_x_source_cooccurrence(
+        self,
+        # Parameters from get_sbo_term_occurrence
+        name_terms: bool = True,
+        include_interactor_reactions: bool = False,
+        # Parameters from get_source_occurrence
+        priority_pathways: list[str] = DEFAULT_PRIORITIZED_PATHWAYS,
+    ) -> pd.DataFrame:
+        """
+        Get SBO term × source co-occurrence matrix for reactions.
+
+        This method creates a co-occurrence matrix showing the relationship between
+        SBO terms and sources (pathways) by calculating how many reactions are shared
+        between each SBO term-source pair.
+
+        The method combines SBO term occurrence data with source occurrence data to
+        create a cross-tabulation matrix where:
+        - Rows represent SBO terms
+        - Columns represent sources/pathways
+        - Values represent the number of reactions shared between each SBO term-source pair
+
+        Parameters
+        ----------
+        name_terms : bool, optional
+            Whether to name the SBO terms using human-readable names, by default True
+        include_interactor_reactions : bool, optional
+            Whether to include interactor reactions from SBO term analysis, by default False
+        priority_pathways : list[str], optional
+            List of pathway IDs to prioritize in the source analysis, by default DEFAULT_PRIORITIZED_PATHWAYS
+
+        Returns
+        -------
+        pd.DataFrame
+            Co-occurrence matrix with SBO terms as rows and sources as columns.
+            Values represent the number of reactions shared between each SBO term-source pair.
+
+        Raises
+        ------
+        ValueError
+            If source tables are empty
+
+        Examples
+        --------
+        >>> # Get SBO term × source co-occurrence for reactions
+        >>> cooccurrence_matrix = sbml_dfs.get_sbo_term_x_source_cooccurrence()
+        >>>
+        >>> # Use numeric SBO term codes instead of names
+        >>> numeric_cooccurrence = sbml_dfs.get_sbo_term_x_source_cooccurrence(name_terms=False)
+        >>>
+        >>> # Include interactor reactions
+        >>> with_interactors = sbml_dfs.get_sbo_term_x_source_cooccurrence(
+        ...     include_interactor_reactions=True
+        ... )
+        """
+        sources = self.get_source_occurrence(
+            SBML_DFS.REACTIONS,
+            priority_pathways=priority_pathways,
+            include_missing=True,
+        )
+        sbo_terms = self.get_sbo_term_occurrence(
+            name_terms=name_terms,
+            include_interactor_reactions=include_interactor_reactions,
+        )
+
+        sbo_terms_matrix = (sbo_terms > 0).astype(int)
+        sources_matrix = (sources > 0).astype(int)
+
+        # Calculate co-occurrence matrix: SBO terms × sources
+        # This gives us the number of reactions shared between each SBO term-source pair
+        cooccurrences = sbo_terms_matrix.T @ sources_matrix
+
+        return cooccurrences
+
     def get_source_cooccurrence(
         self,
         entity_type: str,

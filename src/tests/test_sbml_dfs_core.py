@@ -1238,3 +1238,42 @@ def test_get_sbo_term_occurrence(sbml_dfs_metabolism):
     assert occurrence_df.dtypes.apply(
         lambda x: x.kind in "iu"
     ).all(), "All values should be integers"
+
+
+def test_get_sbo_term_x_source_cooccurrence(sbml_dfs_metabolism):
+    """Test get_sbo_term_x_source_cooccurrence method returns co-occurrence matrix."""
+    # Test basic functionality
+    cooccurrence_matrix = sbml_dfs_metabolism.get_sbo_term_x_source_cooccurrence()
+
+    # Verify the result is a DataFrame with correct data types
+    assert isinstance(cooccurrence_matrix, pd.DataFrame), "Should return a DataFrame"
+    assert cooccurrence_matrix.shape == (
+        5,
+        4,
+    ), f"Expected (5, 4), got {cooccurrence_matrix.shape}"
+    assert (cooccurrence_matrix >= 0).all().all(), "All values should be non-negative"
+    assert cooccurrence_matrix.dtypes.apply(
+        lambda x: pd.api.types.is_integer_dtype(x)
+    ).all(), "All values should be integers"
+
+    # Test that row names are valid SBO term names (default name_terms=True)
+    row_names = cooccurrence_matrix.index.tolist()
+    assert all(
+        name in VALID_SBO_TERM_NAMES for name in row_names
+    ), f"All row names should be valid SBO term names. Got: {row_names}"
+
+    # Test with name_terms=False
+    numeric_cooccurrence = sbml_dfs_metabolism.get_sbo_term_x_source_cooccurrence(
+        name_terms=False
+    )
+    assert isinstance(numeric_cooccurrence, pd.DataFrame), "Should return a DataFrame"
+    assert numeric_cooccurrence.shape == (
+        5,
+        4,
+    ), f"Expected (5, 4), got {numeric_cooccurrence.shape}"
+
+    # Test that row names are valid SBO terms (numeric codes) when name_terms=False
+    row_terms = numeric_cooccurrence.index.tolist()
+    assert all(
+        term in VALID_SBO_TERMS for term in row_terms
+    ), f"All row terms should be valid SBO terms. Got: {row_terms}"
