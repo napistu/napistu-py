@@ -834,7 +834,6 @@ def separate_entity_attrs_by_source(
         sbml_dfs and side_loaded_attributes have overlapping table names, if neither data
         source is provided, or if required table names are missing from both sources
     """
-    from napistu.network.constants import SBML_DFS, WEIGHTING_SPEC
 
     # Validate entity_type
     if entity_type not in [SBML_DFS.REACTIONS, SBML_DFS.SPECIES]:
@@ -1305,6 +1304,13 @@ def _validate_side_loaded_attributes(
                 f"side_loaded_attributes[{table_name}] has index names {current_index_names}, "
                 f"but other tables have index names {reference_index_names}. "
                 f"All DataFrames must have the same index names for concatenation."
+            )
+
+        # check that index is unique
+        if not df.index.is_unique:
+            raise ValueError(
+                f"side_loaded_attributes[{table_name}] has non-unique index. "
+                f"All DataFrames must have a unique index for concatenation."
             )
 
 
