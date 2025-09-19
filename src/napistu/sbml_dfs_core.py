@@ -740,6 +740,9 @@ class SBML_dfs:
         This method creates a co-occurrence matrix showing which ontologies share entities
         of the specified type, indicating ontology relationships and overlaps.
 
+        Note: When entity_type is 'reactions', reactions that consist entirely of interactor
+        species will be excluded from the analysis.
+
         Parameters
         ----------
         entity_type : str
@@ -785,6 +788,9 @@ class SBML_dfs:
 
         This method analyzes which ontologies are associated with entities of the specified type,
         providing a summary of ontology occurrence patterns.
+
+        Note: When entity_type is 'reactions', reactions that consist entirely of interactor
+        species will be excluded from the analysis.
 
         Parameters
         ----------
@@ -856,6 +862,9 @@ class SBML_dfs:
         - Rows represent ontologies
         - Columns represent sources/pathways
         - Values represent the number of entities shared between each ontology-source pair
+
+        Note: When entity_type is 'reactions', reactions that consist entirely of interactor
+        species will be excluded from the analysis.
 
         Parameters
         ----------
@@ -1018,6 +1027,112 @@ class SBML_dfs:
 
         return stats
 
+    def get_sbo_term_occurrence(
+        self, name_terms=True, include_interactor_reactions=False
+    ) -> pd.DataFrame:
+        """
+        Get the occurrence of SBO terms for reactions.
+
+        Note: By default, reactions that consist entirely of interactor species will
+        be excluded from the analysis. This is mandatory for most of the other occurrence and
+        co-occurrence methods.
+
+        Parameters
+        ----------
+        name_terms : bool, optional
+            Whether to name the SBO terms, by default True
+        include_interactor_reactions : bool, optional
+            Whether to exclude interactor reactions, by default True
+        """
+
+        reaction_species = self.reaction_species
+        if not include_interactor_reactions:
+            # ignore reactions which are all interactors
+            valid_reactions = self._get_non_interactor_reactions()
+            reaction_species = reaction_species[
+                reaction_species[SBML_DFS.R_ID].isin(valid_reactions.index.values)
+            ]
+
+        rxn_sbo_term_counts = reaction_species.pivot_table(
+            index=SBML_DFS.R_ID, columns=SBML_DFS.SBO_TERM, aggfunc="size", fill_value=0
+        )
+
+        if name_terms:
+            # map columns sbo_terms to sbo_term_names
+            rxn_sbo_term_counts.columns = rxn_sbo_term_counts.columns.map(
+                MINI_SBO_TO_NAME
+            )
+
+        return rxn_sbo_term_counts
+
+    def get_sbo_term_x_source_cooccurrence(
+        self,
+        # Parameters from get_sbo_term_occurrence
+        name_terms: bool = True,
+        # Parameters from get_source_occurrence
+        priority_pathways: list[str] = DEFAULT_PRIORITIZED_PATHWAYS,
+    ) -> pd.DataFrame:
+        """
+        Get SBO term × source co-occurrence matrix for reactions.
+
+        This method creates a co-occurrence matrix showing the relationship between
+        SBO terms and sources (pathways) by calculating how many reactions are shared
+        between each SBO term-source pair.
+
+        The method combines SBO term occurrence data with source occurrence data to
+        create a cross-tabulation matrix where:
+        - Rows represent SBO terms
+        - Columns represent sources/pathways
+        - Values represent the number of reactions shared between each SBO term-source pair
+
+        Note: Reactions that consist entirely of interactor species will be excluded
+        from the analysis.
+
+        Parameters
+        ----------
+        name_terms : bool, optional
+            Whether to name the SBO terms using human-readable names, by default True
+        priority_pathways : list[str], optional
+            List of pathway IDs to prioritize in the source analysis, by default DEFAULT_PRIORITIZED_PATHWAYS
+
+        Returns
+        -------
+        pd.DataFrame
+            Co-occurrence matrix with SBO terms as rows and sources as columns.
+            Values represent the number of reactions shared between each SBO term-source pair.
+
+        Raises
+        ------
+        ValueError
+            If source tables are empty
+
+        Examples
+        --------
+        >>> # Get SBO term × source co-occurrence for reactions
+        >>> cooccurrence_matrix = sbml_dfs.get_sbo_term_x_source_cooccurrence()
+        >>>
+        >>> # Use numeric SBO term codes instead of names
+        >>> numeric_cooccurrence = sbml_dfs.get_sbo_term_x_source_cooccurrence(name_terms=False)
+        """
+        sources = self.get_source_occurrence(
+            SBML_DFS.REACTIONS,
+            priority_pathways=priority_pathways,
+            include_missing=True,
+        )
+        sbo_terms = self.get_sbo_term_occurrence(
+            name_terms=name_terms,
+            include_interactor_reactions=False,
+        )
+
+        sbo_terms_matrix = (sbo_terms > 0).astype(int)
+        sources_matrix = (sources > 0).astype(int)
+
+        # Calculate co-occurrence matrix: SBO terms × sources
+        # This gives us the number of reactions shared between each SBO term-source pair
+        cooccurrences = sbo_terms_matrix.T @ sources_matrix
+
+        return cooccurrences
+
     def get_source_cooccurrence(
         self,
         entity_type: str,
@@ -1028,6 +1143,9 @@ class SBML_dfs:
 
         This method creates a co-occurrence matrix showing which pathways share entities
         of the specified type, indicating pathway relationships and overlaps.
+
+        Note: When entity_type is 'reactions', reactions that consist entirely of interactor
+        species will be excluded from the analysis.
 
         Parameters
         ----------
@@ -1071,6 +1189,9 @@ class SBML_dfs:
 
         This method analyzes which pathways contain entities of the specified type,
         providing a summary of pathway occurrence patterns.
+
+        Note: When entity_type is 'reactions', reactions that consist entirely of interactor
+        species will be excluded from the analysis.
 
         Parameters
         ----------
@@ -2337,7 +2458,12 @@ class SBML_dfs:
                 f"Dropped {entity_table.shape[0] - valid_reactions.shape[0]} reactions which are all interactors from the reactions table"
             )
 
-        return entity_table.loc[valid_reactions]
+        valid_reactions_df = entity_table.loc[valid_reactions]
+
+        if valid_reactions_df.shape[0] == 0:
+            logger.warning("Zero reactions left after removing interactors")
+
+        return valid_reactions_df
 
     def _get_unused_cspecies(self) -> set[str]:
         """Returns a set of compartmentalized species

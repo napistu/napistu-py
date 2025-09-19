@@ -1790,6 +1790,12 @@ class NapistuGraph(ig.Graph):
             entity_data, left_on=merge_keys, right_index=True, how="left"
         )
 
+        # validate that there wasn't a 1-to-many merge
+        if graph_with_attrs.shape[0] != graph_df.shape[0]:
+            raise ValueError(
+                f"1-to-many merge occurred when adding {entity_data.shape[0]} {entity_data.index.names} to graph {target_entity}"
+            )
+
         # Add new attributes directly to the graph
         added_count = 0
         for attr_name in attrs_to_add:
@@ -1804,6 +1810,8 @@ class NapistuGraph(ig.Graph):
         logger.info(
             f"Added {added_count} {entity_name} attributes to graph: {attrs_to_add}"
         )
+
+        return None
 
     def _transform_entity_attributes(
         self,
@@ -1978,6 +1986,8 @@ class NapistuGraph(ig.Graph):
         logger.info(
             f"Transformed {len(attrs_to_transform)} {target_entity} attributes: {list(attrs_to_transform)}"
         )
+
+        return None
 
 
 def _apply_edge_reversal_mapping(edges_df: pd.DataFrame) -> pd.DataFrame:

@@ -24,6 +24,8 @@ from napistu.constants import (
     SBOTERM_NAMES,
     SCHEMA_DEFS,
     SOURCE_SPEC,
+    VALID_SBO_TERM_NAMES,
+    VALID_SBO_TERMS,
 )
 from napistu.ingestion import sbml
 from napistu.ingestion.constants import (
@@ -1189,3 +1191,89 @@ def test_post_consensus_checks(sbml_dfs_metabolism):
             assert pd.api.types.is_numeric_dtype(
                 df.values
             ), f"Values for {entity_type}/{check_type} should be numeric"
+
+
+def test_get_sbo_term_occurrence(sbml_dfs_metabolism):
+    """Test get_sbo_term_occurrence method returns SBO term occurrence summary."""
+    # Test basic functionality
+    occurrence_df = sbml_dfs_metabolism.get_sbo_term_occurrence()
+
+    # Print dimensions for inspection
+    print(f"SBO term occurrence dimensions: {occurrence_df.shape}")
+    print(f"Columns: {list(occurrence_df.columns)}")
+
+    assert isinstance(occurrence_df, pd.DataFrame), "Should return a DataFrame"
+    assert occurrence_df.shape == (
+        86,
+        5,
+    ), f"Expected (86, 5), got {occurrence_df.shape}"
+
+    # Test that columns are valid SBO term names (default name_terms=True)
+    column_names = occurrence_df.columns.tolist()
+    assert all(
+        isinstance(col, str) for col in column_names
+    ), "Column names should be strings when name_terms=True"
+    assert all(
+        col in VALID_SBO_TERM_NAMES for col in column_names
+    ), f"All column names should be valid SBO term names. Got: {column_names}"
+
+    # Test with name_terms=False
+    occurrence_df_numeric = sbml_dfs_metabolism.get_sbo_term_occurrence(
+        name_terms=False
+    )
+    assert isinstance(occurrence_df_numeric, pd.DataFrame), "Should return a DataFrame"
+    assert occurrence_df_numeric.shape == (
+        86,
+        5,
+    ), f"Expected (86, 5), got {occurrence_df_numeric.shape}"
+
+    # Test that columns are valid SBO terms (numeric codes) when name_terms=False
+    column_terms = occurrence_df_numeric.columns.tolist()
+    assert all(
+        col in VALID_SBO_TERMS for col in column_terms
+    ), f"All column terms should be valid SBO terms. Got: {column_terms}"
+
+    # Values should be non-negative integers (counts)
+    assert (occurrence_df >= 0).all().all(), "All values should be non-negative"
+    assert occurrence_df.dtypes.apply(
+        lambda x: x.kind in "iu"
+    ).all(), "All values should be integers"
+
+
+def test_get_sbo_term_x_source_cooccurrence(sbml_dfs_metabolism):
+    """Test get_sbo_term_x_source_cooccurrence method returns co-occurrence matrix."""
+    # Test basic functionality
+    cooccurrence_matrix = sbml_dfs_metabolism.get_sbo_term_x_source_cooccurrence()
+
+    # Verify the result is a DataFrame with correct data types
+    assert isinstance(cooccurrence_matrix, pd.DataFrame), "Should return a DataFrame"
+    assert cooccurrence_matrix.shape == (
+        5,
+        4,
+    ), f"Expected (5, 4), got {cooccurrence_matrix.shape}"
+    assert (cooccurrence_matrix >= 0).all().all(), "All values should be non-negative"
+    assert cooccurrence_matrix.dtypes.apply(
+        lambda x: pd.api.types.is_integer_dtype(x)
+    ).all(), "All values should be integers"
+
+    # Test that row names are valid SBO term names (default name_terms=True)
+    row_names = cooccurrence_matrix.index.tolist()
+    assert all(
+        name in VALID_SBO_TERM_NAMES for name in row_names
+    ), f"All row names should be valid SBO term names. Got: {row_names}"
+
+    # Test with name_terms=False
+    numeric_cooccurrence = sbml_dfs_metabolism.get_sbo_term_x_source_cooccurrence(
+        name_terms=False
+    )
+    assert isinstance(numeric_cooccurrence, pd.DataFrame), "Should return a DataFrame"
+    assert numeric_cooccurrence.shape == (
+        5,
+        4,
+    ), f"Expected (5, 4), got {numeric_cooccurrence.shape}"
+
+    # Test that row names are valid SBO terms (numeric codes) when name_terms=False
+    row_terms = numeric_cooccurrence.index.tolist()
+    assert all(
+        term in VALID_SBO_TERMS for term in row_terms
+    ), f"All row terms should be valid SBO terms. Got: {row_terms}"
