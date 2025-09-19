@@ -10,7 +10,7 @@ import libsbml
 import pandas as pd
 from pydantic import BaseModel
 
-from napistu import sbml_dfs_core, sbml_dfs_utils, utils
+from napistu import sbml_dfs_core, utils
 from napistu.constants import (
     BIOLOGICAL_QUALIFIER_CODES,
     BQB,
@@ -231,7 +231,7 @@ def df_to_identifiers(df: pd.DataFrame) -> pd.Series:
         Series indexed by index_col containing Identifiers objects
     """
 
-    entity_type = sbml_dfs_utils.infer_entity_type(df)
+    entity_type = utils.infer_entity_type(df)
     table_schema = SBML_DFS_SCHEMA.SCHEMA[entity_type]
     if SCHEMA_DEFS.ID not in table_schema:
         raise ValueError(f"The entity type {entity_type} does not have an id column")

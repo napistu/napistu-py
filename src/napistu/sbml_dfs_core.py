@@ -97,14 +97,14 @@ class SBML_dfs:
         Compute and return additional features for compartmentalized species, such as degree and type.
     get_identifiers(id_type)
         Retrieve a table of identifiers for a specified entity type (e.g., species or reactions).
-    get_network_summary()
-        Return a dictionary of diagnostic statistics summarizing the network structure.
     get_ontology_cooccurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False)
         Get ontology co-occurrence matrix for a specific entity type.
     get_ontology_occurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False)
         Get ontology occurrence summary for a specific entity type.
     get_ontology_x_source_cooccurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False, characteristic_only=False, dogmatic=True, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS)
         Get ontology × source co-occurrence matrix for a specific entity type.
+    get_sbml_dfs_summary()
+        Return a dictionary of diagnostic statistics summarizing the SBML_dfs structure.
     get_source_cooccurrence(entity_type, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS)
         Get pathway co-occurrence matrix for a specific entity type.
     get_source_occurrence(entity_type, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS)
@@ -726,105 +726,6 @@ class SBML_dfs:
 
         return named_identifiers
 
-    def get_network_summary(self) -> Mapping[str, Any]:
-        """
-        Get diagnostic statistics about the network.
-
-        Returns
-        -------
-        Mapping[str, Any]
-            Dictionary of diagnostic statistics including:
-            - n_species_types: Number of species types
-            - dict_n_species_per_type: Number of species per type
-            - n_species: Number of species
-            - n_cspecies: Number of compartmentalized species
-            - n_reaction_species: Number of reaction species
-            - n_reactions: Number of reactions
-            - n_compartments: Number of compartments
-            - dict_n_species_per_compartment: Number of species per compartment
-            - stats_species_per_reaction: Statistics on reactands per reaction
-            - top10_species_per_reaction: Top 10 reactions by number of reactands
-            - stats_degree: Statistics on species connectivity
-            - top10_degree: Top 10 species by connectivity
-            - stats_identifiers_per_species: Statistics on identifiers per species
-            - top10_identifiers_per_species: Top 10 species by number of identifiers
-        """
-        stats: MutableMapping[str, Any] = {}
-        species_features = self.get_species_features()
-        stats["n_species_types"] = species_features["species_type"].nunique()
-        stats["dict_n_species_per_type"] = (
-            species_features.groupby(by="species_type").size().to_dict()
-        )
-        stats["n_species"] = self.species.shape[0]
-        stats["n_cspecies"] = self.compartmentalized_species.shape[0]
-        stats["n_reaction_species"] = self.reaction_species.shape[0]
-        stats["n_reactions"] = self.reactions.shape[0]
-        stats["n_compartments"] = self.compartments.shape[0]
-        stats["dict_n_species_per_compartment"] = (
-            self.compartmentalized_species.groupby(SBML_DFS.C_ID)
-            .size()
-            .rename("n_species")  # type:ignore
-            .to_frame()
-            .join(self.compartments[[SBML_DFS.C_NAME]])
-            .reset_index(drop=False)
-            .to_dict(orient="records")
-        )
-        per_reaction_stats = self.reaction_species.groupby(SBML_DFS.R_ID).size()
-        stats["stats_species_per_reactions"] = per_reaction_stats.describe().to_dict()
-        stats["top10_species_per_reactions"] = (
-            per_reaction_stats.sort_values(ascending=False)  # type:ignore
-            .head(10)
-            .rename("n_species")
-            .to_frame()
-            .join(self.reactions[[SBML_DFS.R_NAME]])
-            .reset_index(drop=False)
-            .to_dict(orient="records")
-        )
-
-        cspecies_features = self.get_cspecies_features()
-        stats["stats_degree"] = (
-            cspecies_features[SBML_DFS_METHOD_DEFS.SC_DEGREE].describe().to_dict()
-        )
-        stats["top10_degree"] = (
-            cspecies_features.sort_values(
-                SBML_DFS_METHOD_DEFS.SC_DEGREE, ascending=False
-            )
-            .head(10)[
-                [
-                    SBML_DFS_METHOD_DEFS.SC_DEGREE,
-                    SBML_DFS_METHOD_DEFS.SC_CHILDREN,
-                    SBML_DFS_METHOD_DEFS.SC_PARENTS,
-                    SBML_DFS_METHOD_DEFS.SPECIES_TYPE,
-                ]
-            ]
-            .merge(
-                self.compartmentalized_species[[SBML_DFS.S_ID, SBML_DFS.C_ID]],
-                on=SBML_DFS.SC_ID,
-            )
-            .merge(self.compartments[[SBML_DFS.C_NAME]], on=SBML_DFS.C_ID)
-            .merge(self.species[[SBML_DFS.S_NAME]], on=SBML_DFS.S_ID)
-            .reset_index(drop=False)
-            .to_dict(orient="records")
-        )
-        s_identifiers = sbml_dfs_utils.unnest_identifiers(
-            self.species, SBML_DFS.S_IDENTIFIERS
-        )
-        identifiers_stats = s_identifiers.groupby(SBML_DFS.S_ID).size()
-        stats["stats_identifiers_per_species"] = identifiers_stats.describe().to_dict()
-        stats["top10_identifiers_per_species"] = (
-            identifiers_stats.sort_values(ascending=False)
-            .head(10)
-            .rename("n_identifiers")
-            .to_frame()
-            .join(
-                species_features[[SBML_DFS.S_NAME, SBML_DFS_METHOD_DEFS.SPECIES_TYPE]]
-            )
-            .reset_index(drop=False)
-            .to_dict(orient="records")
-        )
-
-        return stats
-
     def get_ontology_cooccurrence(
         self,
         entity_type: str,
@@ -923,7 +824,11 @@ class SBML_dfs:
 
         if include_missing:
             # Get the reference table (all entities of this type)
-            reference_table = self.get_table(entity_type)
+            if entity_type == SBML_DFS.REACTIONS:
+                reference_table = self._get_non_interactor_reactions()
+            else:
+                reference_table = self.get_table(entity_type, {SCHEMA_DEFS.ID})
+
             result = sbml_dfs_utils.add_missing_ids_column(result, reference_table)
 
         return result
@@ -1014,6 +919,105 @@ class SBML_dfs:
 
         return cooccurrences
 
+    def get_sbml_dfs_summary(self) -> Mapping[str, Any]:
+        """
+        Get diagnostic statistics about the SBML_dfs.
+
+        Returns
+        -------
+        Mapping[str, Any]
+            Dictionary of diagnostic statistics including:
+            - n_species_types: Number of species types
+            - dict_n_species_per_type: Number of species per type
+            - n_species: Number of species
+            - n_cspecies: Number of compartmentalized species
+            - n_reaction_species: Number of reaction species
+            - n_reactions: Number of reactions
+            - n_compartments: Number of compartments
+            - dict_n_species_per_compartment: Number of species per compartment
+            - stats_species_per_reaction: Statistics on reactands per reaction
+            - top10_species_per_reaction: Top 10 reactions by number of reactands
+            - stats_degree: Statistics on species connectivity
+            - top10_degree: Top 10 species by connectivity
+            - stats_identifiers_per_species: Statistics on identifiers per species
+            - top10_identifiers_per_species: Top 10 species by number of identifiers
+        """
+        stats: MutableMapping[str, Any] = {}
+        species_features = self.get_species_features()
+        stats["n_species_types"] = species_features["species_type"].nunique()
+        stats["dict_n_species_per_type"] = (
+            species_features.groupby(by="species_type").size().to_dict()
+        )
+        stats["n_species"] = self.species.shape[0]
+        stats["n_cspecies"] = self.compartmentalized_species.shape[0]
+        stats["n_reaction_species"] = self.reaction_species.shape[0]
+        stats["n_reactions"] = self.reactions.shape[0]
+        stats["n_compartments"] = self.compartments.shape[0]
+        stats["dict_n_species_per_compartment"] = (
+            self.compartmentalized_species.groupby(SBML_DFS.C_ID)
+            .size()
+            .rename("n_species")  # type:ignore
+            .to_frame()
+            .join(self.compartments[[SBML_DFS.C_NAME]])
+            .reset_index(drop=False)
+            .to_dict(orient="records")
+        )
+        per_reaction_stats = self.reaction_species.groupby(SBML_DFS.R_ID).size()
+        stats["stats_species_per_reactions"] = per_reaction_stats.describe().to_dict()
+        stats["top10_species_per_reactions"] = (
+            per_reaction_stats.sort_values(ascending=False)  # type:ignore
+            .head(10)
+            .rename("n_species")
+            .to_frame()
+            .join(self.reactions[[SBML_DFS.R_NAME]])
+            .reset_index(drop=False)
+            .to_dict(orient="records")
+        )
+
+        cspecies_features = self.get_cspecies_features()
+        stats["stats_degree"] = (
+            cspecies_features[SBML_DFS_METHOD_DEFS.SC_DEGREE].describe().to_dict()
+        )
+        stats["top10_degree"] = (
+            cspecies_features.sort_values(
+                SBML_DFS_METHOD_DEFS.SC_DEGREE, ascending=False
+            )
+            .head(10)[
+                [
+                    SBML_DFS_METHOD_DEFS.SC_DEGREE,
+                    SBML_DFS_METHOD_DEFS.SC_CHILDREN,
+                    SBML_DFS_METHOD_DEFS.SC_PARENTS,
+                    SBML_DFS_METHOD_DEFS.SPECIES_TYPE,
+                ]
+            ]
+            .merge(
+                self.compartmentalized_species[[SBML_DFS.S_ID, SBML_DFS.C_ID]],
+                on=SBML_DFS.SC_ID,
+            )
+            .merge(self.compartments[[SBML_DFS.C_NAME]], on=SBML_DFS.C_ID)
+            .merge(self.species[[SBML_DFS.S_NAME]], on=SBML_DFS.S_ID)
+            .reset_index(drop=False)
+            .to_dict(orient="records")
+        )
+        s_identifiers = sbml_dfs_utils.unnest_identifiers(
+            self.species, SBML_DFS.S_IDENTIFIERS
+        )
+        identifiers_stats = s_identifiers.groupby(SBML_DFS.S_ID).size()
+        stats["stats_identifiers_per_species"] = identifiers_stats.describe().to_dict()
+        stats["top10_identifiers_per_species"] = (
+            identifiers_stats.sort_values(ascending=False)
+            .head(10)
+            .rename("n_identifiers")
+            .to_frame()
+            .join(
+                species_features[[SBML_DFS.S_NAME, SBML_DFS_METHOD_DEFS.SPECIES_TYPE]]
+            )
+            .reset_index(drop=False)
+            .to_dict(orient="records")
+        )
+
+        return stats
+
     def get_source_cooccurrence(
         self,
         entity_type: str,
@@ -1103,7 +1107,11 @@ class SBML_dfs:
 
         if include_missing:
             # Get the reference table (all entities of this type)
-            reference_table = self.get_table(entity_type)
+            if entity_type == SBML_DFS.REACTIONS:
+                reference_table = self._get_non_interactor_reactions()
+            else:
+                reference_table = self.get_table(entity_type, {SCHEMA_DEFS.ID})
+
             result = sbml_dfs_utils.add_missing_ids_column(result, reference_table)
 
         return result
@@ -1838,7 +1846,7 @@ class SBML_dfs:
         """
         # validate inputs
 
-        entity_type = sbml_dfs_utils.infer_entity_type(id_table)
+        entity_type = utils.infer_entity_type(id_table)
         entity_table = self.get_table(entity_type, required_attributes={SCHEMA_DEFS.ID})
         entity_pk = self.schema[entity_type][SCHEMA_DEFS.PK]
 
@@ -1879,8 +1887,10 @@ class SBML_dfs:
         pd.DataFrame
             Matching entities
         """
-        entity_table = self.get_table(entity_type, required_attributes={"label"})
-        label_attr = self.schema[entity_type]["label"]
+        entity_table = self.get_table(
+            entity_type, required_attributes={SCHEMA_DEFS.LABEL}
+        )
+        label_attr = self.schema[entity_type][SCHEMA_DEFS.LABEL]
 
         if partial_match:
             matches = entity_table.loc[
@@ -1923,7 +1933,7 @@ class SBML_dfs:
         """
         Display a formatted summary of the SBML_dfs model.
 
-        This method chains together get_network_summary(), format_model_summary(),
+        This method chains together get_sbml_dfs_summary(), format_model_summary(),
         and utils.show() to provide a convenient way to display network statistics.
 
         Returns
@@ -1935,7 +1945,7 @@ class SBML_dfs:
         --------
         >>> sbml_dfs.show_network_summary()
         """
-        summary_stats = self.get_network_summary()
+        summary_stats = self.get_sbml_dfs_summary()
         summary_table = sbml_dfs_utils.format_model_summary(summary_stats)
         utils.show(summary_table)
 

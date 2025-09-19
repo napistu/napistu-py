@@ -17,6 +17,7 @@ from pytest import fixture
 from testcontainers.core.container import DockerContainer
 
 from napistu import utils
+from napistu.constants import SBML_DFS
 from napistu.network.constants import DISTANCES
 from napistu.utils import drop_extra_cols
 
@@ -765,3 +766,91 @@ def test_show():
 
     # Test with auto method (should work in test environment)
     utils.show(df, method="auto")
+
+
+def test_infer_entity_type():
+    """Test entity type inference with valid keys"""
+    # when index matches primary key.
+    # Test compartments with index as primary key
+    df = pd.DataFrame(
+        {SBML_DFS.C_NAME: ["cytoplasm"], SBML_DFS.C_IDENTIFIERS: ["GO:0005737"]}
+    )
+    df.index.name = SBML_DFS.C_ID
+    result = utils.infer_entity_type(df)
+    assert result == SBML_DFS.COMPARTMENTS
+
+    # Test species with index as primary key
+    df = pd.DataFrame(
+        {SBML_DFS.S_NAME: ["glucose"], SBML_DFS.S_IDENTIFIERS: ["CHEBI:17234"]}
+    )
+    df.index.name = SBML_DFS.S_ID
+    result = utils.infer_entity_type(df)
+    assert result == SBML_DFS.SPECIES
+
+    # Test entity type inference by exact column matching.
+    # Test compartmentalized_species (has foreign keys)
+    df = pd.DataFrame(
+        {
+            SBML_DFS.SC_ID: ["glucose_c"],
+            SBML_DFS.S_ID: ["glucose"],
+            SBML_DFS.C_ID: ["cytoplasm"],
+        }
+    )
+    result = utils.infer_entity_type(df)
+    assert result == "compartmentalized_species"
+
+    # Test reaction_species (has foreign keys)
+    df = pd.DataFrame(
+        {
+            SBML_DFS.RSC_ID: ["rxn1_glc"],
+            SBML_DFS.R_ID: ["rxn1"],
+            SBML_DFS.SC_ID: ["glucose_c"],
+        }
+    )
+    result = utils.infer_entity_type(df)
+    assert result == SBML_DFS.REACTION_SPECIES
+
+    # Test reactions (only primary key)
+    df = pd.DataFrame({SBML_DFS.R_ID: ["rxn1"]})
+    result = utils.infer_entity_type(df)
+    assert result == SBML_DFS.REACTIONS
+
+
+def test_infer_entity_type_errors():
+    """Test error cases for entity type inference."""
+    # Test no matching entity type
+    df = pd.DataFrame({"random_column": ["value"], "another_col": ["data"]})
+    with pytest.raises(ValueError, match="No entity type matches DataFrame"):
+        utils.infer_entity_type(df)
+
+    # Test partial match (missing required foreign key)
+    df = pd.DataFrame(
+        {SBML_DFS.SC_ID: ["glucose_c"], SBML_DFS.S_ID: ["glucose"]}
+    )  # Missing c_id
+    with pytest.raises(ValueError):
+        utils.infer_entity_type(df)
+
+    # Test extra primary keys that shouldn't be there
+    df = pd.DataFrame(
+        {SBML_DFS.R_ID: ["rxn1"], SBML_DFS.S_ID: ["glucose"]}
+    )  # Two primary keys
+    with pytest.raises(ValueError):
+        utils.infer_entity_type(df)
+
+
+def test_infer_entity_type_multindex():
+    # DataFrame with MultiIndex (r_id, foo), should infer as reactions
+    df = pd.DataFrame({"some_col": [1, 2]})
+    df.index = pd.MultiIndex.from_tuples(
+        [("rxn1", "a"), ("rxn2", "b")], names=[SBML_DFS.R_ID, "foo"]
+    )
+    result = utils.infer_entity_type(df)
+    assert result == SBML_DFS.REACTIONS
+
+    # DataFrame with MultiIndex (sc_id, bar), should infer as compartmentalized_species
+    df = pd.DataFrame({"some_col": [1, 2]})
+    df.index = pd.MultiIndex.from_tuples(
+        [("glucose_c", "a"), ("atp_c", "b")], names=[SBML_DFS.SC_ID, "bar"]
+    )
+    result = utils.infer_entity_type(df)
+    assert result == SBML_DFS.COMPARTMENTALIZED_SPECIES

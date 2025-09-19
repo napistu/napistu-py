@@ -24,6 +24,7 @@ NAPISTU_CLI = SimpleNamespace(
     SBML_DFS_URI="sbml_dfs_uri",
     OUTPUT_MODEL_URI="output_model_uri",
     OVERWRITE="overwrite",
+    TARGET_URI="target_uri",
 )
 
 FILE_EXT_ZIP = "zip"

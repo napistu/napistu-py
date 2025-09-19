@@ -36,7 +36,7 @@ with warnings.catch_warnings():
     from fs.tempfs import TempFS
     from fs.zipfs import ZipFS
 
-from napistu.constants import FILE_EXT_GZ, FILE_EXT_ZIP
+from napistu.constants import FILE_EXT_GZ, FILE_EXT_ZIP, SBML_DFS_SCHEMA, SCHEMA_DEFS
 
 logger = logging.getLogger(__name__)
 
@@ -87,14 +87,21 @@ def download_and_extract(
 
     Download an archive and then extract to a new folder
 
-    Args:
-        url (str): Url of archive.
-        output_dir_path (str): Path to output directory.
-        overwrite (bool): Overwrite an existing output directory.
+    Parameters
+    ----------
+    url : str
+        Url of archive.
+    output_dir_path : str
+        Path to output directory.
+    download_method : str
+        Method to use to download the archive.
+    overwrite : bool
+        Overwrite an existing output directory.
 
-
-    Returns:
-        None
+    Returns
+    -------
+    None
+        Files are downloaded and extracted to the specified directory
     """
 
     # initialize output directory
@@ -1001,7 +1008,7 @@ def find_weakly_connected_subgraphs(edgelist: pd.DataFrame) -> pd.DataFrame:
     return ind_clusters
 
 
-def show(obj, method="auto", headers="keys", hide_index=False):
+def show(obj, method="auto", headers="keys", hide_index=False, left_align_strings=True):
     """Show a table using the appropriate method for the environment.
 
     Parameters
@@ -1015,6 +1022,8 @@ def show(obj, method="auto", headers="keys", hide_index=False):
         - "auto" : show the object in a Jupyter notebook if available, otherwise show as a string
     headers : str, list, or None
         The headers to use for the object
+    left_align_strings : bool
+        Should strings be left aligned?
 
     Returns
     -------
@@ -1026,7 +1035,12 @@ def show(obj, method="auto", headers="keys", hide_index=False):
     """
 
     if method == "string":
-        _show_as_string(obj, headers=headers, hide_index=hide_index)
+        _show_as_string(
+            obj,
+            headers=headers,
+            hide_index=hide_index,
+            left_align_strings=left_align_strings,
+        )
 
     elif method in ("jupyter", "auto"):
         try:
@@ -1039,11 +1053,21 @@ def show(obj, method="auto", headers="keys", hide_index=False):
                     else obj
                 )
             else:
-                _show_as_string(obj, headers=headers, hide_index=hide_index)
+                _show_as_string(
+                    obj,
+                    headers=headers,
+                    hide_index=hide_index,
+                    left_align_strings=left_align_strings,
+                )
         except ImportError:
             if method == "jupyter":
                 raise ImportError("IPython not available but jupyter method requested")
-            _show_as_string(obj, headers=headers, hide_index=hide_index)
+            _show_as_string(
+                obj,
+                headers=headers,
+                hide_index=hide_index,
+                left_align_strings=left_align_strings,
+            )
 
     else:
         raise ValueError(f"Unknown method: {method}")
@@ -1312,7 +1336,9 @@ def _merge_and_log_overwrites(
     return merged_df
 
 
-def _show_as_string(obj, headers="keys", hide_index=False, max_rows=20):
+def _show_as_string(
+    obj, headers="keys", hide_index=False, max_rows=20, left_align_strings=True
+):
     """
     Show object using string representation with styling support.
 
@@ -1328,6 +1354,8 @@ def _show_as_string(obj, headers="keys", hide_index=False, max_rows=20):
         Whether to hide the row index
     max_rows : int
         Maximum number of rows to display
+    left_align_strings : bool
+        Should strings be left aligned?
     """
 
     # Extract DataFrame based on actual type
@@ -1357,4 +1385,109 @@ def _show_as_string(obj, headers="keys", hide_index=False, max_rows=20):
     if df.shape[0] > max_rows:
         logger.info(f"Displaying {max_rows} of {df.shape[0]} rows")
 
-    print(df.to_string(max_rows=max_rows, index=not hide_index))
+    if left_align_strings:
+        formatters = _create_left_align_formatters(df)
+
+        display_string = df.to_string(
+            index=not hide_index,
+            max_rows=max_rows,
+            formatters=formatters,
+            justify="left",
+        )
+
+    else:
+        display_string = df.to_string(
+            index=not hide_index, max_rows=max_rows, justify="left"
+        )
+
+    print(display_string)
+
+
+def _create_left_align_formatters(df):
+    """Create formatters for left-aligning string columns."""
+    formatters = {}
+    for col in df.columns:
+        # Only apply to object/string columns
+        if df[col].dtype == "object":
+            # Calculate max width for this column
+            if len(df) > 0:
+                content_max = df[col].astype(str).str.len().max()
+            else:
+                content_max = 0
+            header_max = len(str(col))
+            width = max(content_max, header_max)
+
+            # Create left-align formatter
+            formatters[col] = lambda x, w=width: f"{str(x):<{w}}"
+
+    return formatters
+
+
+def infer_entity_type(df: pd.DataFrame) -> str:
+    """
+    Infer the entity type of a DataFrame based on its structure and schema.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The DataFrame to analyze
+
+    Returns
+    -------
+    str
+        The inferred entity type name
+
+    Raises
+    ------
+    ValueError
+        If no entity type can be determined
+    """
+    schema = SBML_DFS_SCHEMA.SCHEMA
+
+    # Get all primary keys
+    primary_keys = [
+        entity_schema.get(SCHEMA_DEFS.PK) for entity_schema in schema.values()
+    ]
+    primary_keys = [pk for pk in primary_keys if pk is not None]
+
+    # Check if index matches a primary key
+    if df.index.name in primary_keys:
+        for entity_type, entity_schema in schema.items():
+            if entity_schema.get(SCHEMA_DEFS.PK) == df.index.name:
+                return entity_type
+
+    # Get DataFrame columns that are also primary keys, including index or MultiIndex names
+    index_names = []
+    if isinstance(df.index, pd.MultiIndex):
+        index_names = [name for name in df.index.names if name is not None]
+    elif df.index.name is not None:
+        index_names = [df.index.name]
+
+    df_columns = set(df.columns).union(index_names).intersection(primary_keys)
+
+    # Check for exact match with primary key + foreign keys
+    for entity_type, entity_schema in schema.items():
+        expected_keys = set()
+
+        # Add primary key
+        pk = entity_schema.get(SCHEMA_DEFS.PK)
+        if pk:
+            expected_keys.add(pk)
+
+        # Add foreign keys
+        fks = entity_schema.get(SCHEMA_DEFS.FK, [])
+        expected_keys.update(fks)
+
+        # Check for exact match
+        if len(df_columns) == 1 and set(df_columns) == {pk}:
+            # only a single key is present and its this entities pk
+            return entity_type
+
+        if df_columns == expected_keys:
+            # all primary and foreign keys are present
+            return entity_type
+
+    # No match found
+    raise ValueError(
+        f"No entity type matches DataFrame with index: {df.index.names} and columns: {sorted(df_columns)}"
+    )
