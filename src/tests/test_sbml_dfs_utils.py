@@ -285,94 +285,6 @@ def test_sbo_constants_internal_consistency():
         assert MINI_SBO_FROM_NAME[name] == term
 
 
-def test_infer_entity_type():
-    """Test entity type inference with valid keys"""
-    # when index matches primary key.
-    # Test compartments with index as primary key
-    df = pd.DataFrame(
-        {SBML_DFS.C_NAME: ["cytoplasm"], SBML_DFS.C_IDENTIFIERS: ["GO:0005737"]}
-    )
-    df.index.name = SBML_DFS.C_ID
-    result = sbml_dfs_utils.infer_entity_type(df)
-    assert result == SBML_DFS.COMPARTMENTS
-
-    # Test species with index as primary key
-    df = pd.DataFrame(
-        {SBML_DFS.S_NAME: ["glucose"], SBML_DFS.S_IDENTIFIERS: ["CHEBI:17234"]}
-    )
-    df.index.name = SBML_DFS.S_ID
-    result = sbml_dfs_utils.infer_entity_type(df)
-    assert result == SBML_DFS.SPECIES
-
-    # Test entity type inference by exact column matching.
-    # Test compartmentalized_species (has foreign keys)
-    df = pd.DataFrame(
-        {
-            SBML_DFS.SC_ID: ["glucose_c"],
-            SBML_DFS.S_ID: ["glucose"],
-            SBML_DFS.C_ID: ["cytoplasm"],
-        }
-    )
-    result = sbml_dfs_utils.infer_entity_type(df)
-    assert result == "compartmentalized_species"
-
-    # Test reaction_species (has foreign keys)
-    df = pd.DataFrame(
-        {
-            SBML_DFS.RSC_ID: ["rxn1_glc"],
-            SBML_DFS.R_ID: ["rxn1"],
-            SBML_DFS.SC_ID: ["glucose_c"],
-        }
-    )
-    result = sbml_dfs_utils.infer_entity_type(df)
-    assert result == SBML_DFS.REACTION_SPECIES
-
-    # Test reactions (only primary key)
-    df = pd.DataFrame({SBML_DFS.R_ID: ["rxn1"]})
-    result = sbml_dfs_utils.infer_entity_type(df)
-    assert result == SBML_DFS.REACTIONS
-
-
-def test_infer_entity_type_errors():
-    """Test error cases for entity type inference."""
-    # Test no matching entity type
-    df = pd.DataFrame({"random_column": ["value"], "another_col": ["data"]})
-    with pytest.raises(ValueError, match="No entity type matches DataFrame"):
-        sbml_dfs_utils.infer_entity_type(df)
-
-    # Test partial match (missing required foreign key)
-    df = pd.DataFrame(
-        {SBML_DFS.SC_ID: ["glucose_c"], SBML_DFS.S_ID: ["glucose"]}
-    )  # Missing c_id
-    with pytest.raises(ValueError):
-        sbml_dfs_utils.infer_entity_type(df)
-
-    # Test extra primary keys that shouldn't be there
-    df = pd.DataFrame(
-        {SBML_DFS.R_ID: ["rxn1"], SBML_DFS.S_ID: ["glucose"]}
-    )  # Two primary keys
-    with pytest.raises(ValueError):
-        sbml_dfs_utils.infer_entity_type(df)
-
-
-def test_infer_entity_type_multindex():
-    # DataFrame with MultiIndex (r_id, foo), should infer as reactions
-    df = pd.DataFrame({"some_col": [1, 2]})
-    df.index = pd.MultiIndex.from_tuples(
-        [("rxn1", "a"), ("rxn2", "b")], names=[SBML_DFS.R_ID, "foo"]
-    )
-    result = sbml_dfs_utils.infer_entity_type(df)
-    assert result == SBML_DFS.REACTIONS
-
-    # DataFrame with MultiIndex (sc_id, bar), should infer as compartmentalized_species
-    df = pd.DataFrame({"some_col": [1, 2]})
-    df.index = pd.MultiIndex.from_tuples(
-        [("glucose_c", "a"), ("atp_c", "b")], names=[SBML_DFS.SC_ID, "bar"]
-    )
-    result = sbml_dfs_utils.infer_entity_type(df)
-    assert result == SBML_DFS.COMPARTMENTALIZED_SPECIES
-
-
 def test_get_interaction_symbol():
 
     # Test SBO names (strings)
@@ -725,7 +637,7 @@ def test_add_missing_ids_column(sbml_dfs):
 def test_format_model_summary(sbml_dfs):
     """Test format_model_summary function with sbml_dfs fixture."""
     # Get network summary from the sbml_dfs
-    summary_stats = sbml_dfs.get_network_summary()
+    summary_stats = sbml_dfs.get_sbml_dfs_summary()
 
     # Call format_model_summary
     result = sbml_dfs_utils.format_model_summary(summary_stats)

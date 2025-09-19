@@ -1120,7 +1120,7 @@ def stats():
 def calculate_sbml_dfs_stats(sbml_dfs_uri, output_uri):
     """Calculate statistics for a sbml_dfs object"""
     model = SBML_dfs.from_pickle(sbml_dfs_uri)
-    stats = model.get_network_summary()
+    stats = model.get_sbml_dfs_summary()
     utils.save_json(output_uri, stats)
 
 

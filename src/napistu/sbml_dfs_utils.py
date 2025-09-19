@@ -87,6 +87,7 @@ def add_missing_ids_column(
         If the index names don't match between the two tables
     """
 
+    logger.debug("Validating contingency and reference tables")
     # Check that index names match
     if contingency_table.index.name != reference_table.index.name:
         raise ValueError(
@@ -94,26 +95,26 @@ def add_missing_ids_column(
             f"Reference table index name: '{reference_table.index.name}'"
         )
 
-    # Check that all index values are unique in both tables
-    for name, table in [
-        ("Contingency", contingency_table),
-        ("Reference", reference_table),
-    ]:
-        if table.index.duplicated().any():
-            duplicates = table.index[table.index.duplicated()].unique()
-            raise ValueError(
-                f"{name} table has duplicate index values: {sorted(duplicates)}"
-            )
-
-    # Get the indices
+    # Get the indices as sets (we'll use these for duplicate checking too)
     contingency_ids = set(contingency_table.index)
     reference_ids = set(reference_table.index)
+
+    # Check that all index values are unique in both tables (using set length comparison)
+    if len(contingency_ids) != len(contingency_table.index):
+        raise ValueError(
+            f"Contingency table has duplicate index values. Expected {len(contingency_ids)} unique values, got {len(contingency_table.index)} total values."
+        )
+
+    if len(reference_ids) != len(reference_table.index):
+        raise ValueError(
+            f"Reference table has duplicate index values. Expected {len(reference_ids)} unique values, got {len(reference_table.index)} total values."
+        )
 
     # Check that contingency_ids is a subset of reference_ids
     if not contingency_ids.issubset(reference_ids):
         extra_ids = contingency_ids - reference_ids
         raise ValueError(
-            f"Contingency table contains IDs not found in reference table: {sorted(extra_ids)}"
+            f"Contingency table contains {len(extra_ids)} IDs not found in reference table. First few: {list(extra_ids)[:5]}"
         )
 
     # Find missing IDs
@@ -135,19 +136,25 @@ def add_missing_ids_column(
     # Add the 'other' column
     result_table[other_column] = int(0)
 
-    # Add missing IDs as new rows
-    for missing_id in missing_ids:
-        new_row = pd.Series(0, index=result_table.columns, name=missing_id)
-        new_row[other_column] = int(1)
-        result_table = pd.concat([result_table, new_row.to_frame().T])
+    # Add missing IDs as new rows (optimized to avoid iterative concat)
+    if missing_ids:
+        logger.debug(f"Adding {len(missing_ids)} missing IDs to the result table")
+        # Create all missing rows at once
+        missing_data = pd.DataFrame(
+            0, index=list(missing_ids), columns=result_table.columns
+        )
+        missing_data[other_column] = 1
+
+        # Single concat operation instead of iterative ones
+        result_table = pd.concat([result_table, missing_data])
 
     # Sort the index to maintain order
     result_table = result_table.sort_index()
 
-    # Verify that the result index equals the reference table index
-    if not result_table.index.equals(reference_table.index.sort_values()):
+    # Verify that the result has the expected number of rows (fast length check)
+    if len(result_table.index) != len(reference_table.index):
         raise ValueError(
-            "Result table index does not match reference table index. This is an internal error."
+            f"Result table has {len(result_table.index)} rows, expected {len(reference_table.index)}. This is an internal error."
         )
 
     return result_table
@@ -584,10 +591,26 @@ def format_model_summary(data):
         reverse=True,
     )
 
-    for comp in sorted_compartments:
+    # Show top 10 compartments, bundle rest into "other"
+    top_compartments = sorted_compartments[:10]
+    other_compartments = sorted_compartments[10:]
+
+    for comp in top_compartments:
         comp_pct = comp["n_species"] / data["n_cspecies"] * 100
         summary_data.append(
             [f"- {comp['c_name']}", f"{comp['n_species']:,} ({comp_pct:.1f}%)"]
+        )
+
+    # Add "other" category if there are more than 10 compartments
+    if other_compartments:
+        other_cspecies_count = sum(comp["n_species"] for comp in other_compartments)
+        other_pct = other_cspecies_count / data["n_cspecies"] * 100
+        n_other_compartments = len(other_compartments)
+        summary_data.append(
+            [
+                f"- Other ({n_other_compartments} compartments)",
+                f"{other_cspecies_count:,} ({other_pct:.1f}%)",
+            ]
         )
 
     summary_data.extend(
@@ -656,76 +679,6 @@ def id_formatter_inv(ids: list[str]) -> list[int]:
             id_val.append(np.nan)  # type: ignore
 
     return id_val
-
-
-def infer_entity_type(df: pd.DataFrame) -> str:
-    """
-    Infer the entity type of a DataFrame based on its structure and schema.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        The DataFrame to analyze
-
-    Returns
-    -------
-    str
-        The inferred entity type name
-
-    Raises
-    ------
-    ValueError
-        If no entity type can be determined
-    """
-    schema = SBML_DFS_SCHEMA.SCHEMA
-
-    # Get all primary keys
-    primary_keys = [
-        entity_schema.get(SCHEMA_DEFS.PK) for entity_schema in schema.values()
-    ]
-    primary_keys = [pk for pk in primary_keys if pk is not None]
-
-    # Check if index matches a primary key
-    if df.index.name in primary_keys:
-        for entity_type, entity_schema in schema.items():
-            if entity_schema.get(SCHEMA_DEFS.PK) == df.index.name:
-                return entity_type
-
-    # Get DataFrame columns that are also primary keys, including index or MultiIndex names
-    index_names = []
-    if isinstance(df.index, pd.MultiIndex):
-        index_names = [name for name in df.index.names if name is not None]
-    elif df.index.name is not None:
-        index_names = [df.index.name]
-
-    df_columns = set(df.columns).union(index_names).intersection(primary_keys)
-
-    # Check for exact match with primary key + foreign keys
-    for entity_type, entity_schema in schema.items():
-        expected_keys = set()
-
-        # Add primary key
-        pk = entity_schema.get(SCHEMA_DEFS.PK)
-        if pk:
-            expected_keys.add(pk)
-
-        # Add foreign keys
-        fks = entity_schema.get(SCHEMA_DEFS.FK, [])
-        expected_keys.update(fks)
-
-        # Check for exact match
-        if len(df_columns) == 1 and set(df_columns) == {pk}:
-            # only a single key is present and its this entities pk
-            return entity_type
-
-        if df_columns == expected_keys:
-            # all primary and foreign keys are present
-            return entity_type
-
-    # No match found
-    raise ValueError(
-        f"No entity type matches DataFrame with index: {df.index.names} and columns: {sorted(df_columns)}"
-    )
 
 
 def match_entitydata_index_to_entity(
@@ -807,18 +760,28 @@ def species_type_types(x):
 
 def stub_compartments(
     stubbed_compartment: str = GENERIC_COMPARTMENT,
+    with_source: bool = False,
 ) -> pd.DataFrame:
     """Stub Compartments
 
     Create a compartments table with only a single compartment
 
-    Args:
-    stubbed_compartment (str): the name of a compartment which should match the
-        keys in ingestion.constants.VALID_COMPARTMENTS and ingestion.constants.COMPARTMENTS_GO_TERMS
+    Parameters
+    ----------
+    stubbed_compartment : str
+        the name of a compartment which should match the keys in
+        ingestion.constants.VALID_COMPARTMENTS and ingestion.constants.COMPARTMENTS_GO_TERMS
+    with_source : bool
+        whether to include a source column in the compartments dataframe. Defaults to False which is the standard approach for edgelist creation. True will create a valid compartments table with a c_Source column.
 
-    Returns:
-    compartments_df (pd.DataFrame): compartments dataframe
+    Returns
+    -------
+    compartments_df : pd.DataFrame
+        compartments dataframe
     """
+
+    # import Source here to avoid circular import
+    from napistu.source import Source
 
     if stubbed_compartment not in VALID_COMPARTMENTS:
         raise ValueError(
@@ -848,6 +811,9 @@ def stub_compartments(
     )
     compartments_df.index = id_formatter([0], SBML_DFS.C_ID)  # type: ignore
     compartments_df.index.name = SBML_DFS.C_ID
+
+    if with_source:
+        compartments_df[SBML_DFS.C_SOURCE] = [Source.empty()]
 
     return compartments_df
 
@@ -1849,7 +1815,7 @@ def _summarize_ontology_occurrence(
         a table with entities as rows and ontologies as columns
     """
 
-    entity_type = infer_entity_type(df)
+    entity_type = utils.infer_entity_type(df)
     pk = SBML_DFS_SCHEMA.SCHEMA[entity_type][SCHEMA_DEFS.PK]
 
     required_vars = {pk, SOURCE_SPEC.ENTRY} | IDENTIFIERS_REQUIRED_VARS
@@ -1923,7 +1889,7 @@ def _summarize_source_occurrence(df: pd.DataFrame) -> pd.DataFrame:
 
     """
 
-    entity_type = infer_entity_type(df)
+    entity_type = utils.infer_entity_type(df)
     pk = SBML_DFS_SCHEMA.SCHEMA[entity_type][SCHEMA_DEFS.PK]
 
     expected_multindex = [pk, SOURCE_SPEC.ENTRY]

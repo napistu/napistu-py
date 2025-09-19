@@ -260,6 +260,12 @@ class SBML:
                     }
                 )
 
+        if len(compartments) == 0:
+            logger.warning(
+                "No compartments were found in the SBML model. using default compartment GO CELLULAR_COMPONENT"
+            )
+            return sbml_dfs_utils.stub_compartments(with_source=True)
+
         return pd.DataFrame(compartments).set_index(SBML_DFS.C_ID)
 
     def _define_cspecies(self) -> pd.DataFrame:
@@ -302,6 +308,11 @@ class SBML:
         comp_species_df[SBML_DFS.C_ID] = comp_species_df[SBML_DFS.C_ID].replace(
             "", None
         )
+
+        # if all entries are missing then c_id was likely stubbed with sbml_dfs_utils.stub_compartments()
+        if all(comp_species_df[SBML_DFS.C_ID].isnull()):
+            default_cid = sbml_dfs_utils.stub_compartments().index[0]
+            comp_species_df[SBML_DFS.C_ID] = default_cid
 
         return comp_species_df
 

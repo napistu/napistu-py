@@ -3,7 +3,7 @@ from typing import Optional, Set, Union
 
 import pandas as pd
 
-from napistu import sbml_dfs_utils, utils
+from napistu import utils
 from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS_LOOSE,
@@ -47,7 +47,7 @@ def filter_id_table(
         If the id_table or filter values are invalid, or required columns are missing.
     """
 
-    entity_type = sbml_dfs_utils.infer_entity_type(id_table)
+    entity_type = utils.infer_entity_type(id_table)
     _validate_id_table(id_table, entity_type)
 
     # bqbs

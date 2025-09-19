@@ -6,7 +6,7 @@ from typing import Optional, Union
 import numpy as np
 import pandas as pd
 
-from napistu import indices, sbml_dfs_core, sbml_dfs_utils, utils
+from napistu import indices, sbml_dfs_core, utils
 from napistu.constants import (
     SBML_DFS_SCHEMA,
     SCHEMA_DEFS,
@@ -385,7 +385,7 @@ def unnest_sources(source_table: pd.DataFrame) -> pd.DataFrame:
     to include one row per source
     """
 
-    table_type = sbml_dfs_utils.infer_entity_type(source_table)
+    table_type = utils.infer_entity_type(source_table)
     source_table_schema = SBML_DFS_SCHEMA.SCHEMA[table_type]
 
     if SCHEMA_DEFS.SOURCE not in source_table_schema.keys():
@@ -461,7 +461,7 @@ def source_set_coverage(
 
     """
 
-    table_type = sbml_dfs_utils.infer_entity_type(select_sources_df)
+    table_type = utils.infer_entity_type(select_sources_df)
     pk = SBML_DFS_SCHEMA.SCHEMA[table_type][SCHEMA_DEFS.PK]
 
     if source_total_counts is not None:
@@ -537,7 +537,7 @@ def source_set_coverage(
 def _deduplicate_source_df(source_df: pd.DataFrame) -> pd.DataFrame:
     """Combine entries in a source table when multiple models have the same members."""
 
-    table_type = sbml_dfs_utils.infer_entity_type(source_df)
+    table_type = utils.infer_entity_type(source_df)
     source_table_schema = SBML_DFS_SCHEMA.SCHEMA[table_type]
 
     # drop entries which are missing required attributes and throw an error if none are left
@@ -813,7 +813,7 @@ def _update_unaccounted_for_members(
         the dataframe of unaccounted for members with the top pathway removed
     """
 
-    table_type = sbml_dfs_utils.infer_entity_type(unaccounted_for_members)
+    table_type = utils.infer_entity_type(unaccounted_for_members)
     pk = SBML_DFS_SCHEMA.SCHEMA[table_type][SCHEMA_DEFS.PK]
 
     members_captured = (
