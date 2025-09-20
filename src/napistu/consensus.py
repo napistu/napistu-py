@@ -136,7 +136,7 @@ def construct_meta_entities_fk(
     agg_tbl = _unnest_SBML_df(sbml_dfs_dict, table=table)
 
     # since all sbml_dfs have the same schema pull out one schema for reference
-    table_schema = sbml_dfs_dict[list(sbml_dfs_dict.keys())[0]].schema[table]
+    table_schema = SBML_DFS_SCHEMA.SCHEMA[table]
 
     # update foreign keys using provided lookup tables
     agg_tbl = _update_foreign_keys(agg_tbl, table_schema, fk_lookup_tables)
@@ -1985,6 +1985,21 @@ def _reduce_to_consensus_ids(
     logger.debug(f"Validating consensus table for {table_name}")
     _validate_consensus_table(new_id_table, sbml_df)
 
+    # Step 8: Validate that all primary keys in new_id_table are represented in lookup_table
+    new_id_pks = set(new_id_table.index)
+    lookup_new_ids = set(lookup_table.values)
+    
+    if new_id_pks != lookup_new_ids:
+
+        missing_pks = new_id_pks - lookup_new_ids
+        extra_pks = lookup_new_ids - new_id_pks
+
+        raise ValueError(
+            "The keys from the new_id_table and values from lookup_table do not match:"
+            f"- There are {len(missing_pks)} keys from new_id_table are missing from lookup_table 'new_id' values"
+            f"- There are {len(extra_pks)} keys from lookup_table which are missing from new_id_table"
+        )
+
     return new_id_table, lookup_table
 
 
@@ -2171,20 +2186,52 @@ def _update_foreign_keys(
 ) -> pd.DataFrame:
     """Update one or more foreign keys based on old-to-new foreign key lookup table(s)."""
 
-    for fk in table_schema["fk"]:
-        updated_fks = (
-            agg_tbl[fk]
+    working_agg_tbl = agg_tbl.copy()
+
+    for fk in table_schema[SCHEMA_DEFS.FK]:
+
+        # Merge agg_tbl with lookup table for validation and FK updates
+        full_merge = (
+            working_agg_tbl[fk]
             .reset_index()
             .merge(
-                fk_lookup_tables[fk], left_on=[SOURCE_SPEC.MODEL, fk], right_index=True
+                fk_lookup_tables[fk], 
+                left_on=[SOURCE_SPEC.MODEL, fk], 
+                right_index=True,
+                how='outer',
+                indicator=True
             )
-            .drop(fk, axis=1)
-            .rename(columns={"new_id": fk})
-            .set_index(["model", table_schema["pk"]])
         )
-        agg_tbl = agg_tbl.drop(columns=fk).join(updated_fks)
+        
+        # Find missing keys (present in agg_tbl but not in lookup table)
+        missing_keys = full_merge[full_merge['_merge'] == 'left_only']
+        if len(missing_keys) > 0:
+            missing_pairs = missing_keys[[SOURCE_SPEC.MODEL, fk]].values.tolist()
+            raise ValueError(
+                f"{len(missing_keys)} keys from agg_tbl are missing from the {fk} lookup table: {missing_pairs[:5]}..."
+            )
+        
+        # Find extra keys (present in lookup table but not used in agg_tbl)
+        extra_keys = full_merge[full_merge['_merge'] == 'right_only']
+        if len(extra_keys) > 0:
+            extra_pairs = extra_keys[[SOURCE_SPEC.MODEL, fk]].values.tolist()
+            raise ValueError(
+                f"{len(extra_keys)} keys are present in the {fk} lookup table but not used in agg_tbl: {extra_pairs[:5]}..."
+            )
+        
+        # Reuse the merge result for updated FKs (only successful matches, excluding right_only)
+        updated_fks = (
+            full_merge[full_merge['_merge'] == 'both']
+            .drop([fk, '_merge'], axis=1)
+            .rename(columns={"new_id": fk})
+            .set_index([SOURCE_SPEC.MODEL, table_schema[SCHEMA_DEFS.PK]])
+        )
+        working_agg_tbl = working_agg_tbl.drop(columns=fk).join(updated_fks)
 
-    return agg_tbl
+    if working_agg_tbl.shape[0] != agg_tbl.shape[0]:
+        raise ValueError("The output agg table had a different number of rows than the input agg table")
+
+    return working_agg_tbl
 
 
 def _unnest_SBML_df(sbml_dfs_dict: dict[str, SBML_dfs], table: str) -> pd.DataFrame:

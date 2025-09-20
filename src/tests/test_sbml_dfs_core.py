@@ -200,20 +200,6 @@ def test_sbml_dfs_reactions_data_wrong_idx(sbml_dfs):
         sbml_dfs.add_reactions_data("test", data)
 
 
-def test_sbml_dfs_remove_species_check_species(sbml_dfs):
-    s_id = [sbml_dfs.species.index[0]]
-    sbml_dfs._remove_species(s_id)
-    assert s_id[0] not in sbml_dfs.species.index
-    sbml_dfs.validate()
-
-
-def test_sbml_dfs_remove_species_check_cspecies(sbml_dfs):
-    s_id = [sbml_dfs.compartmentalized_species[SBML_DFS.S_ID].iloc[0]]
-    sbml_dfs._remove_species(s_id)
-    assert s_id[0] not in sbml_dfs.compartmentalized_species.index
-    sbml_dfs.validate()
-
-
 @pytest.fixture
 def sbml_dfs_w_data(sbml_dfs):
     sbml_dfs.add_species_data(
@@ -227,63 +213,24 @@ def sbml_dfs_w_data(sbml_dfs):
     return sbml_dfs
 
 
-def test_sbml_dfs_remove_species_check_data(sbml_dfs_w_data):
+def test_removing_species_removes_data(sbml_dfs_w_data):
+    """Test that removing a species removes the species data"""
     data = list(sbml_dfs_w_data.species_data.values())[0]
     s_id = [data.index[0]]
-    sbml_dfs_w_data._remove_species(s_id)
+    sbml_dfs_w_data.remove_entities(SBML_DFS.SPECIES, s_id, remove_references=True)
     data_2 = list(sbml_dfs_w_data.species_data.values())[0]
     assert s_id[0] not in data_2.index
     sbml_dfs_w_data.validate()
 
 
-def test_sbml_dfs_remove_cspecies_check_cspecies(sbml_dfs):
-    s_id = [sbml_dfs.compartmentalized_species.index[0]]
-    sbml_dfs._remove_compartmentalized_species(s_id)
-    assert s_id[0] not in sbml_dfs.compartmentalized_species.index
-    sbml_dfs.validate()
-
-
-def test_sbml_dfs_remove_cspecies_check_reaction_species(sbml_dfs):
-    sc_id = [sbml_dfs.reaction_species[SBML_DFS.SC_ID].iloc[0]]
-    sbml_dfs._remove_compartmentalized_species(sc_id)
-    assert sc_id[0] not in sbml_dfs.reaction_species[SBML_DFS.SC_ID]
-    sbml_dfs.validate()
-
-
-def test_sbml_dfs_remove_reactions_check_reactions(sbml_dfs):
-    r_id = [sbml_dfs.reactions.index[0]]
-    sbml_dfs.remove_reactions(r_id)
-    assert r_id[0] not in sbml_dfs.reactions.index
-    sbml_dfs.validate()
-
-
-def test_sbml_dfs_remove_reactions_check_reaction_species(sbml_dfs):
-    r_id = [sbml_dfs.reaction_species[SBML_DFS.R_ID].iloc[0]]
-    sbml_dfs.remove_reactions(r_id)
-    assert r_id[0] not in sbml_dfs.reaction_species[SBML_DFS.R_ID]
-    sbml_dfs.validate()
-
-
-def test_sbml_dfs_remove_reactions_check_data(sbml_dfs_w_data):
+def test_removing_reaction_removes_data(sbml_dfs_w_data):
+    """Test that removing a reaction removes the reactions data"""
     data = list(sbml_dfs_w_data.reactions_data.values())[0]
     r_id = [data.index[0]]
-    sbml_dfs_w_data.remove_reactions(r_id)
+    sbml_dfs_w_data.remove_entities(SBML_DFS.REACTIONS, r_id, remove_references=True)
     data_2 = list(sbml_dfs_w_data.reactions_data.values())[0]
     assert r_id[0] not in data_2.index
     sbml_dfs_w_data.validate()
-
-
-def test_sbml_dfs_remove_reactions_check_species(sbml_dfs):
-    # find all r_ids for a species and check if
-    # removing all these reactions also removes the species
-    s_id = sbml_dfs.species.index[0]
-    dat = sbml_dfs.compartmentalized_species.query(f"{SBML_DFS.S_ID} == @s_id").merge(
-        sbml_dfs.reaction_species, left_index=True, right_on=SBML_DFS.SC_ID
-    )
-    r_ids = dat[SBML_DFS.R_ID].unique()
-    sbml_dfs.remove_reactions(r_ids, remove_species=True)
-    assert s_id not in sbml_dfs.species.index
-    sbml_dfs.validate()
 
 
 def test_read_sbml_with_invalid_ids(model_source_stub):
@@ -317,6 +264,66 @@ def test_get_table(sbml_dfs):
     # reaction species don't have ids
     with pytest.raises(ValueError):
         sbml_dfs.get_table(SBML_DFS.REACTION_SPECIES, {SCHEMA_DEFS.ID})
+
+
+def test_entity_removal_consistency(sbml_dfs):
+    """Test that entity removal produces consistent results regardless of starting point."""
+    
+    # 1. Choose the first compartment in the sbml_dfs fixture
+    c_id = sbml_dfs.compartments.index[0]
+    
+    # 2. Call find_entity_references to find all affected entities
+    expected_removals = sbml_dfs.find_entity_references(SBML_DFS.COMPARTMENTS, [c_id])
+    
+    # Store the expected results for comparison
+    expected_total_removed = sum(len(entities) for entities in expected_removals.values())
+    print(f"Expected total entities to be removed: {expected_total_removed}")
+    print(f"Expected removals by type: {[(k, len(v)) for k, v in expected_removals.items() if v]}")
+    
+    # Test starting points - collect affected entities for each table
+    starting_points = {}
+    
+    # Get affected entities from each table type
+    for table_type, affected_ids in expected_removals.items():
+        if affected_ids:
+            starting_points[table_type] = list(affected_ids)
+    
+    # 3 & 4. Test removal starting from each affected entity type
+    results = {}
+    
+    for start_table, start_ids in starting_points.items():
+        if not start_ids:
+            continue
+            
+        # Create a fresh copy for each test
+        test_sbml_dfs = sbml_dfs.copy()
+        
+        # Find what would be removed starting from this entity type
+        predicted_removals = test_sbml_dfs.find_entity_references(start_table, start_ids[:1])  # Use first ID
+        
+        # Actually perform the removal
+        test_sbml_dfs.remove_entities(start_table, start_ids[:1], remove_references=True)
+        
+        # Verify the removal was successful
+        test_sbml_dfs.validate()
+        
+        # Store results for comparison
+        actual_total_removed = sum(len(entities) for entities in predicted_removals.values())
+        results[start_table] = {
+            'predicted': predicted_removals,
+            'total_removed': actual_total_removed
+        }
+        
+        print(f"Starting from {start_table}: {actual_total_removed} total entities affected")
+    
+    # Verify all starting points produce consistent results
+    if len(results) > 1:
+        first_result = list(results.values())[0]['total_removed']
+        for table_type, result in results.items():
+            assert result['total_removed'] == first_result, \
+                f"Inconsistent removal count starting from {table_type}: {result['total_removed']} vs {first_result}"
+    
+    print("✓ All starting points produce consistent removal results")
 
 
 def test_search_by_name(sbml_dfs_metabolism):

@@ -445,6 +445,10 @@ def format_uri_url(uri: str) -> dict:
             ).lower()
             ontology = f"matrixdb_{molecule_class}"
             identifier = utils.extract_regex_match(".*value=([0-9A-Za-z]+).*", uri)
+        elif netloc == "users.rcn.com":
+            # Handle users.rcn.com URLs as generic web references
+            ontology = "web_reference"
+            identifier = uri  # Use the full URI as the identifier
         else:
             raise NotImplementedError(
                 f"{netloc} in the {uri} url has not been associated with a known ontology"

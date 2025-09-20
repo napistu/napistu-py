@@ -443,6 +443,9 @@ class SBML:
             columns={"new_id": SBML_DFS.S_ID}
         )[CSPECIES_VARS]
 
+        # Internal validation: Check consistency between species and compartmentalized species
+        _validate_species_consistency(species, compartmentalized_species)
+
         return species, compartmentalized_species
 
 
@@ -626,10 +629,101 @@ def sbml_dfs_from_sbml(self, sbml_model: SBML, compartment_aliases: dict | None 
     # 2. Process species and compartmentalized species
     self.species, self.compartmentalized_species = sbml_model._define_species()
 
+    # Refine compartments to only those actually used by species
+    self.compartments = _refine_compartments(self.compartments, self.compartmentalized_species)
+
     # 3. Process reactions and their participating species
     self.reactions, self.reaction_species = sbml_model._define_reactions()
 
     return self
+
+
+def _validate_species_consistency(species_df, compartmentalized_species_df):
+    """Validate consistency between species and compartmentalized species tables.
+    
+    Parameters
+    ----------
+    species_df : pd.DataFrame
+        DataFrame of species with s_id as index
+    compartmentalized_species_df : pd.DataFrame
+        DataFrame of compartmentalized species with s_id column
+        
+    Raises
+    ------
+    ValueError
+        If there are inconsistencies between the two tables
+    """
+    species_ids_in_species = set(species_df.index)
+    species_ids_in_cspecies = set(compartmentalized_species_df[SBML_DFS.S_ID])
+    
+    missing_in_species = species_ids_in_cspecies - species_ids_in_species
+    missing_in_cspecies = species_ids_in_species - species_ids_in_cspecies
+    
+    if missing_in_species:
+        raise ValueError(
+            f"Species extraction validation error: {len(missing_in_species)} species IDs "
+            f"found in compartmentalized_species but missing from species table. "
+            f"Missing species: {sorted(list(missing_in_species))[:10]}"
+        )
+    
+    if missing_in_cspecies:
+        raise ValueError(
+            f"Species extraction validation error: {len(missing_in_cspecies)} species IDs "
+            f"found in species table but missing from compartmentalized_species table. "
+            f"Missing from compartmentalized_species: {sorted(list(missing_in_cspecies))[:10]}"
+        )
+
+
+def _refine_compartments(compartments_df, compartmentalized_species_df):
+    """Refine compartments to only those actually used by compartmentalized species.
+    
+    This function filters the compartments DataFrame to include only compartments
+    that are referenced by compartmentalized species, and validates that all
+    required compartments exist.
+    
+    Parameters
+    ----------
+    compartments_df : pd.DataFrame
+        DataFrame of all extracted compartments with c_id as index
+    compartmentalized_species_df : pd.DataFrame
+        DataFrame of compartmentalized species with c_id column
+        
+    Returns
+    -------
+    pd.DataFrame
+        Filtered compartments DataFrame containing only used compartments
+        
+    Raises
+    ------
+    ValueError
+        If compartmentalized species reference compartments that don't exist
+    """
+    compartment_ids_in_compartments = set(compartments_df.index)
+    compartment_ids_in_cspecies = set(compartmentalized_species_df[SBML_DFS.C_ID])
+    
+    # Check that all required compartments exist
+    missing_compartments = compartment_ids_in_cspecies - compartment_ids_in_compartments
+    if missing_compartments:
+        raise ValueError(
+            f"Compartment refinement error: {len(missing_compartments)} compartment IDs "
+            f"found in compartmentalized_species but missing from compartments table. "
+            f"Missing compartments: {sorted(list(missing_compartments))[:10]}"
+        )
+    
+    # Filter to only compartments that are actually used
+    unused_compartments = compartment_ids_in_compartments - compartment_ids_in_cspecies
+    if unused_compartments:
+        logger.debug(
+            f"Filtering out {len(unused_compartments)} unused compartments from compartments table. "
+            f"Unused compartments: {sorted(list(unused_compartments))[:10]}"
+        )
+    
+    # Return only the compartments that are referenced by species
+    used_compartments = compartments_df.loc[compartments_df.index.isin(compartment_ids_in_cspecies)]
+    
+    logger.debug(f"Refined compartments: {len(used_compartments)} of {len(compartments_df)} compartments retained")
+    
+    return used_compartments
 
 
 def _define_compartments_missing_cvterms(
