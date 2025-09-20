@@ -1988,7 +1988,7 @@ def _reduce_to_consensus_ids(
     # Step 8: Validate that all primary keys in new_id_table are represented in lookup_table
     new_id_pks = set(new_id_table.index)
     lookup_new_ids = set(lookup_table.values)
-    
+
     if new_id_pks != lookup_new_ids:
 
         missing_pks = new_id_pks - lookup_new_ids
@@ -2195,41 +2195,43 @@ def _update_foreign_keys(
             working_agg_tbl[fk]
             .reset_index()
             .merge(
-                fk_lookup_tables[fk], 
-                left_on=[SOURCE_SPEC.MODEL, fk], 
+                fk_lookup_tables[fk],
+                left_on=[SOURCE_SPEC.MODEL, fk],
                 right_index=True,
-                how='outer',
-                indicator=True
+                how="outer",
+                indicator=True,
             )
         )
-        
+
         # Find missing keys (present in agg_tbl but not in lookup table)
-        missing_keys = full_merge[full_merge['_merge'] == 'left_only']
+        missing_keys = full_merge[full_merge["_merge"] == "left_only"]
         if len(missing_keys) > 0:
             missing_pairs = missing_keys[[SOURCE_SPEC.MODEL, fk]].values.tolist()
             raise ValueError(
                 f"{len(missing_keys)} keys from agg_tbl are missing from the {fk} lookup table: {missing_pairs[:5]}..."
             )
-        
+
         # Find extra keys (present in lookup table but not used in agg_tbl)
-        extra_keys = full_merge[full_merge['_merge'] == 'right_only']
+        extra_keys = full_merge[full_merge["_merge"] == "right_only"]
         if len(extra_keys) > 0:
             extra_pairs = extra_keys[[SOURCE_SPEC.MODEL, fk]].values.tolist()
             raise ValueError(
                 f"{len(extra_keys)} keys are present in the {fk} lookup table but not used in agg_tbl: {extra_pairs[:5]}..."
             )
-        
+
         # Reuse the merge result for updated FKs (only successful matches, excluding right_only)
         updated_fks = (
-            full_merge[full_merge['_merge'] == 'both']
-            .drop([fk, '_merge'], axis=1)
+            full_merge[full_merge["_merge"] == "both"]
+            .drop([fk, "_merge"], axis=1)
             .rename(columns={"new_id": fk})
             .set_index([SOURCE_SPEC.MODEL, table_schema[SCHEMA_DEFS.PK]])
         )
         working_agg_tbl = working_agg_tbl.drop(columns=fk).join(updated_fks)
 
     if working_agg_tbl.shape[0] != agg_tbl.shape[0]:
-        raise ValueError("The output agg table had a different number of rows than the input agg table")
+        raise ValueError(
+            "The output agg table had a different number of rows than the input agg table"
+        )
 
     return working_agg_tbl
 

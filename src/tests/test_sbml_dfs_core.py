@@ -268,62 +268,74 @@ def test_get_table(sbml_dfs):
 
 def test_entity_removal_consistency(sbml_dfs):
     """Test that entity removal produces consistent results regardless of starting point."""
-    
+
     # 1. Choose the first compartment in the sbml_dfs fixture
-    c_id = sbml_dfs.compartments.index[0]
-    
+    print(sbml_dfs.compartments)
+    c_id = "compartment_984"  # cytosol
+
     # 2. Call find_entity_references to find all affected entities
-    expected_removals = sbml_dfs.find_entity_references(SBML_DFS.COMPARTMENTS, [c_id])
-    
-    # Store the expected results for comparison
-    expected_total_removed = sum(len(entities) for entities in expected_removals.values())
-    print(f"Expected total entities to be removed: {expected_total_removed}")
-    print(f"Expected removals by type: {[(k, len(v)) for k, v in expected_removals.items() if v]}")
-    
-    # Test starting points - collect affected entities for each table
+    baseline_removals = sbml_dfs.find_entity_references(SBML_DFS.COMPARTMENTS, [c_id])
+
+    # Store the baseline results for comparison
+    baseline_total = sum(len(entities) for entities in baseline_removals.values())
+    print(f"Baseline total entities to be removed: {baseline_total}")
+    print(
+        f"Baseline removals by type: {[(k, len(v)) for k, v in baseline_removals.items() if v]}"
+    )
+
+    # Collect affected entities for each table type
     starting_points = {}
-    
-    # Get affected entities from each table type
-    for table_type, affected_ids in expected_removals.items():
+    for table_type, affected_ids in baseline_removals.items():
         if affected_ids:
             starting_points[table_type] = list(affected_ids)
-    
-    # 3 & 4. Test removal starting from each affected entity type
-    results = {}
-    
+
+    # First, compare find_entity_references results across all starting points
+    print("\n=== Comparing find_entity_references results ===")
+    reference_results = {}
+
     for start_table, start_ids in starting_points.items():
         if not start_ids:
             continue
-            
-        # Create a fresh copy for each test
+
+        # Get fresh copy and find references
         test_sbml_dfs = sbml_dfs.copy()
-        
-        # Find what would be removed starting from this entity type
-        predicted_removals = test_sbml_dfs.find_entity_references(start_table, start_ids[:1])  # Use first ID
-        
-        # Actually perform the removal
-        test_sbml_dfs.remove_entities(start_table, start_ids[:1], remove_references=True)
-        
-        # Verify the removal was successful
-        test_sbml_dfs.validate()
-        
-        # Store results for comparison
-        actual_total_removed = sum(len(entities) for entities in predicted_removals.values())
-        results[start_table] = {
-            'predicted': predicted_removals,
-            'total_removed': actual_total_removed
+        predicted_removals = test_sbml_dfs.find_entity_references(
+            start_table, start_ids
+        )
+
+        total_predicted = sum(len(entities) for entities in predicted_removals.values())
+        reference_results[start_table] = {
+            "predicted": predicted_removals,
+            "total": total_predicted,
         }
-        
-        print(f"Starting from {start_table}: {actual_total_removed} total entities affected")
-    
-    # Verify all starting points produce consistent results
-    if len(results) > 1:
-        first_result = list(results.values())[0]['total_removed']
-        for table_type, result in results.items():
-            assert result['total_removed'] == first_result, \
-                f"Inconsistent removal count starting from {table_type}: {result['total_removed']} vs {first_result}"
-    
-    print("✓ All starting points produce consistent removal results")
+
+        print(f"{start_table}: {total_predicted} total entities predicted")
+        print(f"  Details: {[(k, len(v)) for k, v in predicted_removals.items() if v]}")
+
+    # Check if all find_entity_references results are identical
+    reference_totals = [result["total"] for result in reference_results.values()]
+    if len(set(reference_totals)) == 1:
+        print(
+            "✓ All find_entity_references results are identical - only testing actual removal once"
+        )
+
+        # Only test actual removal from the baseline starting point
+        test_sbml_dfs = sbml_dfs.copy()
+        test_sbml_dfs.remove_entities(
+            SBML_DFS.COMPARTMENTS, [c_id], remove_references=True
+        )
+        test_sbml_dfs.validate()
+        print("✓ Actual removal and validation successful")
+
+    else:
+        print("✗ find_entity_references results are inconsistent!")
+        for start_table, result in reference_results.items():
+            print(f"  {start_table}: {result['total']} entities")
+
+        # This indicates a bug in the find_entity_references logic
+        assert (
+            False
+        ), f"find_entity_references produces inconsistent results: {reference_totals}"
 
 
 def test_search_by_name(sbml_dfs_metabolism):

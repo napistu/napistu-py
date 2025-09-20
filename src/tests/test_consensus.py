@@ -577,111 +577,130 @@ def test_pre_consensus_ontology_check_incompatible(
 def test_consensus_species_merged(sbml_dfs_metabolism):
     """Test that species identifiers are properly merged during consensus building."""
     # Check for species merging; are defining IDs shared across species?
-    species_ids = sbml_dfs_metabolism.get_identifiers(SBML_DFS.SPECIES, filter_by_bqb="defining")
-    assert all(species_ids.value_counts([IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER]) == 1)
+    species_ids = sbml_dfs_metabolism.get_identifiers(
+        SBML_DFS.SPECIES, filter_by_bqb="defining"
+    )
+    assert all(
+        species_ids.value_counts([IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER]) == 1
+    )
 
 
 def test_update_foreign_keys():
     """Test _update_foreign_keys function with various scenarios."""
     # Create test data
-    agg_tbl = pd.DataFrame({
-        SOURCE_SPEC.MODEL: ['model_a', 'model_a', 'model_b', 'model_b'],
-        'entity_id': ['e1', 'e2', 'e3', 'e4'],
-        SBML_DFS.S_ID: ['s1', 's2', 's1', 's3'],
-        'data': [10, 20, 30, 40]
-    }).set_index([SOURCE_SPEC.MODEL, 'entity_id'])
-    
+    agg_tbl = pd.DataFrame(
+        {
+            SOURCE_SPEC.MODEL: ["model_a", "model_a", "model_b", "model_b"],
+            "entity_id": ["e1", "e2", "e3", "e4"],
+            SBML_DFS.S_ID: ["s1", "s2", "s1", "s3"],
+            "data": [10, 20, 30, 40],
+        }
+    ).set_index([SOURCE_SPEC.MODEL, "entity_id"])
+
     # Create FK lookup table (multiindex: model, old_id -> new_id)
-    fk_lookup = pd.DataFrame({
-        'new_id': ['new_s1', 'new_s2', 'new_s1', 'new_s3']
-    }, index=pd.MultiIndex.from_tuples([
-        ('model_a', 's1'), ('model_a', 's2'), ('model_b', 's1'), ('model_b', 's3')
-    ], names=[SOURCE_SPEC.MODEL, SBML_DFS.S_ID]))
-    
+    fk_lookup = pd.DataFrame(
+        {"new_id": ["new_s1", "new_s2", "new_s1", "new_s3"]},
+        index=pd.MultiIndex.from_tuples(
+            [
+                ("model_a", "s1"),
+                ("model_a", "s2"),
+                ("model_b", "s1"),
+                ("model_b", "s3"),
+            ],
+            names=[SOURCE_SPEC.MODEL, SBML_DFS.S_ID],
+        ),
+    )
+
     # Create table schema
-    table_schema = {
-        SCHEMA_DEFS.FK: [SBML_DFS.S_ID],
-        SCHEMA_DEFS.PK: 'entity_id'
-    }
-    
+    table_schema = {SCHEMA_DEFS.FK: [SBML_DFS.S_ID], SCHEMA_DEFS.PK: "entity_id"}
+
     fk_lookup_tables = {SBML_DFS.S_ID: fk_lookup}
-    
+
     # Test successful FK update
     result = consensus._update_foreign_keys(agg_tbl, table_schema, fk_lookup_tables)
-    
+
     # Verify the foreign keys were updated correctly
-    expected_species_ids = ['new_s1', 'new_s2', 'new_s1', 'new_s3']
+    expected_species_ids = ["new_s1", "new_s2", "new_s1", "new_s3"]
     assert result[SBML_DFS.S_ID].tolist() == expected_species_ids
-    assert result['data'].tolist() == [10, 20, 30, 40]  # Other data preserved
+    assert result["data"].tolist() == [10, 20, 30, 40]  # Other data preserved
 
 
 def test_update_foreign_keys_missing_key():
     """Test _update_foreign_keys raises ValueError for missing keys."""
     # Create test data with a key that won't be in the lookup table
-    agg_tbl = pd.DataFrame({
-        SOURCE_SPEC.MODEL: ['model_a', 'model_a'],
-        'entity_id': ['e1', 'e2'],
-        SBML_DFS.S_ID: ['s1', 's_missing'],  # s_missing not in lookup
-        'data': [10, 20]
-    }).set_index([SOURCE_SPEC.MODEL, 'entity_id'])
-    
+    agg_tbl = pd.DataFrame(
+        {
+            SOURCE_SPEC.MODEL: ["model_a", "model_a"],
+            "entity_id": ["e1", "e2"],
+            SBML_DFS.S_ID: ["s1", "s_missing"],  # s_missing not in lookup
+            "data": [10, 20],
+        }
+    ).set_index([SOURCE_SPEC.MODEL, "entity_id"])
+
     # Create FK lookup table (missing s_missing)
-    fk_lookup = pd.DataFrame({
-        'new_id': ['new_s1']
-    }, index=pd.MultiIndex.from_tuples([
-        ('model_a', 's1')
-    ], names=[SOURCE_SPEC.MODEL, SBML_DFS.S_ID]))
-    
-    table_schema = {
-        SCHEMA_DEFS.FK: [SBML_DFS.S_ID],
-        SCHEMA_DEFS.PK: 'entity_id'
-    }
-    
+    fk_lookup = pd.DataFrame(
+        {"new_id": ["new_s1"]},
+        index=pd.MultiIndex.from_tuples(
+            [("model_a", "s1")], names=[SOURCE_SPEC.MODEL, SBML_DFS.S_ID]
+        ),
+    )
+
+    table_schema = {SCHEMA_DEFS.FK: [SBML_DFS.S_ID], SCHEMA_DEFS.PK: "entity_id"}
+
     fk_lookup_tables = {SBML_DFS.S_ID: fk_lookup}
-    
+
     # Should raise ValueError for missing key
-    with pytest.raises(ValueError, match=f"keys from agg_tbl are missing from the {SBML_DFS.S_ID} lookup table"):
+    with pytest.raises(
+        ValueError,
+        match=f"keys from agg_tbl are missing from the {SBML_DFS.S_ID} lookup table",
+    ):
         consensus._update_foreign_keys(agg_tbl, table_schema, fk_lookup_tables)
 
 
 def test_update_foreign_keys_multiple_fks():
     """Test _update_foreign_keys with multiple foreign keys using compartmentalized species."""
     # Create test data for compartmentalized species (has both s_id and c_id FKs)
-    agg_tbl = pd.DataFrame({
-        SOURCE_SPEC.MODEL: ['model_a', 'model_a'],
-        SBML_DFS.SC_ID: ['sc1', 'sc2'],
-        SBML_DFS.S_ID: ['s1', 's2'],
-        SBML_DFS.C_ID: ['c1', 'c2'],
-        'data': [10, 20]
-    }).set_index([SOURCE_SPEC.MODEL, SBML_DFS.SC_ID])
-    
+    agg_tbl = pd.DataFrame(
+        {
+            SOURCE_SPEC.MODEL: ["model_a", "model_a"],
+            SBML_DFS.SC_ID: ["sc1", "sc2"],
+            SBML_DFS.S_ID: ["s1", "s2"],
+            SBML_DFS.C_ID: ["c1", "c2"],
+            "data": [10, 20],
+        }
+    ).set_index([SOURCE_SPEC.MODEL, SBML_DFS.SC_ID])
+
     # Create lookup tables for both FKs
-    species_lookup = pd.DataFrame({
-        'new_id': ['new_s1', 'new_s2']
-    }, index=pd.MultiIndex.from_tuples([
-        ('model_a', 's1'), ('model_a', 's2')
-    ], names=[SOURCE_SPEC.MODEL, SBML_DFS.S_ID]))
-    
-    compartment_lookup = pd.DataFrame({
-        'new_id': ['new_c1', 'new_c2']
-    }, index=pd.MultiIndex.from_tuples([
-        ('model_a', 'c1'), ('model_a', 'c2')
-    ], names=[SOURCE_SPEC.MODEL, SBML_DFS.C_ID]))
-    
+    species_lookup = pd.DataFrame(
+        {"new_id": ["new_s1", "new_s2"]},
+        index=pd.MultiIndex.from_tuples(
+            [("model_a", "s1"), ("model_a", "s2")],
+            names=[SOURCE_SPEC.MODEL, SBML_DFS.S_ID],
+        ),
+    )
+
+    compartment_lookup = pd.DataFrame(
+        {"new_id": ["new_c1", "new_c2"]},
+        index=pd.MultiIndex.from_tuples(
+            [("model_a", "c1"), ("model_a", "c2")],
+            names=[SOURCE_SPEC.MODEL, SBML_DFS.C_ID],
+        ),
+    )
+
     table_schema = {
         SCHEMA_DEFS.FK: [SBML_DFS.S_ID, SBML_DFS.C_ID],
-        SCHEMA_DEFS.PK: SBML_DFS.SC_ID
+        SCHEMA_DEFS.PK: SBML_DFS.SC_ID,
     }
-    
+
     fk_lookup_tables = {
         SBML_DFS.S_ID: species_lookup,
-        SBML_DFS.C_ID: compartment_lookup
+        SBML_DFS.C_ID: compartment_lookup,
     }
-    
+
     # Test updating both FKs
     result = consensus._update_foreign_keys(agg_tbl, table_schema, fk_lookup_tables)
-    
+
     # Verify both FKs were updated
-    assert result[SBML_DFS.S_ID].tolist() == ['new_s1', 'new_s2']
-    assert result[SBML_DFS.C_ID].tolist() == ['new_c1', 'new_c2']
-    assert result['data'].tolist() == [10, 20]  # Other data preserved
+    assert result[SBML_DFS.S_ID].tolist() == ["new_s1", "new_s2"]
+    assert result[SBML_DFS.C_ID].tolist() == ["new_c1", "new_c2"]
+    assert result["data"].tolist() == [10, 20]  # Other data preserved

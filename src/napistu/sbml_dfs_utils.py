@@ -1639,7 +1639,7 @@ def _perform_sbml_dfs_table_validation(
         )
 
     # check index
-    expected_index_name = table_schema["pk"]
+    expected_index_name = table_schema[SCHEMA_DEFS.PK]
     if table_data.index.name != expected_index_name:
         raise ValueError(
             f"the index name for {table_name} was not the pk: {expected_index_name}"
@@ -1657,7 +1657,7 @@ def _perform_sbml_dfs_table_validation(
         )
 
     # check variables
-    expected_vars = set(table_schema["vars"])
+    expected_vars = set(table_schema[SCHEMA_DEFS.VARS])
     table_vars = set(list(table_data.columns))
 
     extra_vars = table_vars.difference(expected_vars)

@@ -79,7 +79,9 @@ def filter_species_by_attribute(
         f"Removing {len(species_to_remove)} species from {species_data_table} table with filter {filter_str}"
     )
 
-    sbml_dfs.remove_entities(SBML_DFS.SPECIES, species_to_remove, remove_references=True)
+    sbml_dfs.remove_entities(
+        SBML_DFS.SPECIES, species_to_remove, remove_references=True
+    )
 
     return None if inplace else sbml_dfs
 
