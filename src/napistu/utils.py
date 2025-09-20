@@ -1008,7 +1008,14 @@ def find_weakly_connected_subgraphs(edgelist: pd.DataFrame) -> pd.DataFrame:
     return ind_clusters
 
 
-def show(obj, method="auto", headers="keys", hide_index=False, left_align_strings=True):
+def show(
+    obj,
+    method="auto",
+    headers="keys",
+    hide_index=False,
+    left_align_strings=True,
+    max_rows=20,
+):
     """Show a table using the appropriate method for the environment.
 
     Parameters
@@ -1024,6 +1031,8 @@ def show(obj, method="auto", headers="keys", hide_index=False, left_align_string
         The headers to use for the object
     left_align_strings : bool
         Should strings be left aligned?
+    max_rows : int
+        The maximum number of rows to show
 
     Returns
     -------
@@ -1039,6 +1048,7 @@ def show(obj, method="auto", headers="keys", hide_index=False, left_align_string
             obj,
             headers=headers,
             hide_index=hide_index,
+            max_rows=max_rows,
             left_align_strings=left_align_strings,
         )
 
@@ -1057,6 +1067,7 @@ def show(obj, method="auto", headers="keys", hide_index=False, left_align_string
                     obj,
                     headers=headers,
                     hide_index=hide_index,
+                    max_rows=max_rows,
                     left_align_strings=left_align_strings,
                 )
         except ImportError:
@@ -1066,6 +1077,7 @@ def show(obj, method="auto", headers="keys", hide_index=False, left_align_string
                 obj,
                 headers=headers,
                 hide_index=hide_index,
+                max_rows=max_rows,
                 left_align_strings=left_align_strings,
             )
 

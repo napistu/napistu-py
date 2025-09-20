@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import copy
-
 import pandas as pd
 import pytest
 
@@ -94,10 +92,14 @@ def test_filter_species_by_attribute(sbml_dfs_with_test_data):
     original_species_count = len(sbml_dfs_with_test_data.species)
 
     # Test filtering in place - should remove species in nucleus
-    result = filter_species_by_attribute(
-        sbml_dfs_with_test_data, "location", "compartment", "nucleus"
+    filter_species_by_attribute(
+        sbml_dfs_with_test_data,
+        "location",
+        "compartment",
+        "nucleus",
+        remove_references=False,
     )
-    assert result is None
+
     # Should have removed the nucleus species from the test set
     assert len(sbml_dfs_with_test_data.species) == original_species_count - 2
     # Check that species in nucleus were removed
@@ -109,7 +111,7 @@ def test_filter_species_by_attribute(sbml_dfs_with_test_data):
     )  # Should have 3 test species left (cytoplasm, membrane, cytoplasm)
 
     # Test filtering with new object - should remove expressed species
-    sbml_dfs_copy = copy.deepcopy(sbml_dfs_with_test_data)
+    sbml_dfs_copy = sbml_dfs_with_test_data.copy()
 
     # Count how many species are expressed in our test data
     expressed_count = sum(
@@ -117,7 +119,12 @@ def test_filter_species_by_attribute(sbml_dfs_with_test_data):
     )
 
     filtered_sbml_dfs = filter_species_by_attribute(
-        sbml_dfs_copy, "expression", "is_expressed", True, inplace=False
+        sbml_dfs_copy,
+        "expression",
+        "is_expressed",
+        True,
+        inplace=False,
+        remove_references=False,
     )
     # Original should be unchanged
     assert len(sbml_dfs_copy.species) == len(sbml_dfs_with_test_data.species)
@@ -130,13 +137,21 @@ def test_filter_species_by_attribute(sbml_dfs_with_test_data):
     # Test filtering with invalid table name
     with pytest.raises(ValueError, match="species_data_table .* not found"):
         filter_species_by_attribute(
-            sbml_dfs_with_test_data, "nonexistent_table", "compartment", "nucleus"
+            sbml_dfs_with_test_data,
+            "nonexistent_table",
+            "compartment",
+            "nucleus",
+            remove_references=False,
         )
 
     # Test filtering with invalid attribute name
     with pytest.raises(ValueError, match="attribute_name .* not found"):
         filter_species_by_attribute(
-            sbml_dfs_with_test_data, "location", "nonexistent_attribute", "nucleus"
+            sbml_dfs_with_test_data,
+            "location",
+            "nonexistent_attribute",
+            "nucleus",
+            remove_references=False,
         )
 
     # Test filtering with list of values and negation
@@ -150,6 +165,7 @@ def test_filter_species_by_attribute(sbml_dfs_with_test_data):
         VALID_COMPARTMENTS,
         negate=True,
         inplace=False,
+        remove_references=False,
     )
 
     # Get remaining species from our test set

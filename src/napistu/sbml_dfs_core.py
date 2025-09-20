@@ -2079,7 +2079,7 @@ class SBML_dfs:
         """
         summary_stats = self.get_sbml_dfs_summary()
         summary_table = sbml_dfs_utils.format_model_summary(summary_stats)
-        utils.show(summary_table)
+        utils.show(summary_table, max_rows=50)
 
     def species_status(self, s_id: str) -> pd.DataFrame:
         """
@@ -2542,6 +2542,9 @@ class SBML_dfs:
                 entity_type, entity_ids
             )
         else:
+            logger.warning(
+                "Removing entities without removing references, because remove_references=False. This may result in a validation error."
+            )
             # Only remove the directly requested entities
             to_be_removed_entities = {entity_type: set(entity_ids)}
 
