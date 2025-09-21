@@ -213,6 +213,7 @@ def format_omnipath_as_sbml_dfs(
         model_source=model_source,
         keep_reactions_data=DATA_SOURCES.OMNIPATH,
         keep_species_data=DATA_SOURCES.OMNIPATH,
+        force_edgelist_consistency=True,
     )
 
     return sbml_dfs
@@ -1067,14 +1068,20 @@ def _patch_degenerate_s_names(
 
     # Find non-unique names (count > 1)
     non_unique_names = name_counts[name_counts > 1].index
-
-    # Update s_name for non-unique entries
     mask = working_df[name_col].isin(non_unique_names)
-    working_df.loc[mask, name_col] = (
-        working_df.loc[mask, id_col].astype(str)
-        + ":"
-        + working_df.loc[mask, name_col].astype(str)
-    )
+
+    if mask.sum() > 0:
+        logger.info(
+            f"Patching {mask.sum()} degenerate species names so they are unique"
+        )
+
+        working_df.loc[mask, name_col] = (
+            working_df.loc[mask, id_col].astype(str)
+            + ":"
+            + working_df.loc[mask, name_col].astype(str)
+        )
+    else:
+        logger.debug("No degenerate species names found")
 
     return working_df
 

@@ -559,6 +559,62 @@ def filter_to_characteristic_species_ids(
     return characteristic_species_ids
 
 
+def force_edgelist_consistency(
+    interaction_edgelist: pd.DataFrame,
+    species_df: pd.DataFrame,
+    compartments_df: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Force the edgelist to be consistent with the species and compartments dataframes.
+
+    Parameters
+    ----------
+    interaction_edgelist : pd.DataFrame
+        The interaction edgelist to force consistency with
+    species_df : pd.DataFrame
+        The species dataframe to force consistency with
+    compartments_df : pd.DataFrame
+        The compartments dataframe to force consistency with
+
+    Returns
+    -------
+    tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
+        A tuple containing the filtered interaction edgelist, species dataframe, and compartments dataframe
+    """
+
+    # Check what's missing (warnings only)
+    _validate_edgelist_consistency(
+        interaction_edgelist, species_df, compartments_df, raise_on_missing=False
+    )
+
+    # Filter to valid species
+    available_species = set(species_df[SBML_DFS.S_NAME])
+    valid_mask = interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME].isin(
+        available_species
+    ) & interaction_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME].isin(
+        available_species
+    )
+
+    filtered_interactions = interaction_edgelist[valid_mask]
+    if filtered_interactions.shape[0] != interaction_edgelist.shape[0]:
+        logger.warning(
+            f"Filtered {interaction_edgelist.shape[0] - filtered_interactions.shape[0]} interactions out of {interaction_edgelist.shape[0]} interactions due to missing species"
+        )
+
+    # Filter species to used ones
+    used_species = set(
+        filtered_interactions[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME]
+    ) | set(filtered_interactions[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME])
+    filtered_species = species_df[species_df[SBML_DFS.S_NAME].isin(used_species)]
+
+    if filtered_species.shape[0] != species_df.shape[0]:
+        logger.warning(
+            f"Filtered {species_df.shape[0] - filtered_species.shape[0]} species out of {species_df.shape[0]} species due to not being used in the interaction edgelist"
+        )
+
+    return filtered_interactions, filtered_species, compartments_df
+
+
 def format_model_summary(data):
     """Format model data into a clean summary table for Jupyter display"""
 
@@ -1441,6 +1497,45 @@ def _edgelist_validate_inputs(
         interaction_edgelist, INTERACTION_EDGELIST_EXPECTED_VARS, "interaction_edgelist"
     )
 
+    # check for extra or missing species and compartments
+    defined_interactors = set(
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME]
+    ) | set(interaction_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME])
+    defined_interaction_compartments = set(
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT]
+    ) | set(interaction_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT])
+    species_df_names = set(species_df[SBML_DFS.S_NAME])
+    compartments_df_names = set(compartments_df[SBML_DFS.C_NAME])
+
+    invalid_references = []
+
+    extra_species = species_df_names - defined_interactors
+    if len(extra_species) > 0:
+        invalid_references.append(
+            f"{len(extra_species)} species are defined in the interaction edgelist but not in the species_df: {extra_species}"
+        )
+
+    extra_compartments = compartments_df_names - defined_interaction_compartments
+    if len(extra_compartments) > 0:
+        invalid_references.append(
+            f"{len(extra_compartments)} compartments are defined in the interaction edgelist but not in the compartments_df: {extra_compartments}"
+        )
+
+    missing_species = defined_interactors - species_df_names
+    if len(missing_species) > 0:
+        invalid_references.append(
+            f"{len(missing_species)} species are defined in the interaction edgelist but not in the species_df: {missing_species}"
+        )
+
+    missing_compartments = defined_interaction_compartments - compartments_df_names
+    if len(missing_compartments) > 0:
+        invalid_references.append(
+            f"{len(missing_compartments)} compartments are defined in the interaction edgelist but not in the compartments_df: {missing_compartments}"
+        )
+
+    if len(invalid_references) > 0:
+        raise ValueError(f"Invalid references: {invalid_references}")
+
     return None
 
 
@@ -1844,6 +1939,72 @@ def _summarize_ontology_occurrence(
         fill_value=0,
         aggfunc="count",  # Count occurrences
     )
+
+
+def _validate_edgelist_consistency(
+    interaction_edgelist: pd.DataFrame,
+    species_df: pd.DataFrame,
+    compartments_df: pd.DataFrame,
+    raise_on_missing: bool = True,
+) -> None:
+    """
+    Check for missing entity references, optionally raising or warning.
+
+    This function is used to validate the consistency of the interaction edgelist, species_df, and compartments_df.
+
+    Parameters
+    ----------
+    interaction_edgelist : pd.DataFrame
+        The interaction edgelist to validate
+    species_df : pd.DataFrame
+        The species dataframe to validate
+    compartments_df : pd.DataFrame
+        The compartments dataframe to validate
+    raise_on_missing : bool, optional
+        Whether to raise an error if missing entities are found
+
+    Returns
+    -------
+    None
+    """
+    # Get referenced names
+    upstream_species = set(
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME]
+    )
+    downstream_species = set(
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME]
+    )
+    edgelist_species = upstream_species | downstream_species
+
+    upstream_compartments = set(
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT]
+    )
+    downstream_compartments = set(
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT]
+    )
+    edgelist_compartments = upstream_compartments | downstream_compartments
+
+    # Get available names
+    available_species = set(species_df[SBML_DFS.S_NAME])
+    available_compartments = set(compartments_df[SBML_DFS.C_NAME])
+
+    # Find missing
+    missing_species = edgelist_species - available_species
+    missing_compartments = edgelist_compartments - available_compartments
+
+    # Handle missing compartments - always raise
+    if missing_compartments:
+        raise ValueError(f"Missing compartments: {missing_compartments}")
+
+    # Handle missing species
+    if missing_species:
+        message = f"{len(missing_species)} species in edgelist but not in species_df: {missing_species}"
+        if raise_on_missing:
+            raise ValueError(f'Invalid references: ["{message}"]')
+        else:
+            logger.warning(message)
+
+    return None
 
 
 def _summarize_source_cooccurrence(df: pd.DataFrame) -> pd.DataFrame:

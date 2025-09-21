@@ -205,6 +205,13 @@ SBML_DFS_CLEANUP_ORDER = {
         (SBML_DFS.REACTIONS, SBML_DFS.REACTION_SPECIES),
         *SBML_DFS_CLEANUP_PASS,
     ],
+    "cofactors": [
+        # for cofactors, references will be removed directly without
+        # respecting the defining constraints which would remove a reaction
+        # if its substrates or products were removed
+        (SBML_DFS.REACTIONS, SBML_DFS.REACTION_SPECIES),
+        *SBML_DFS_CLEANUP_PASS,
+    ],
 }
 
 NAPISTU_STANDARD_OUTPUTS = SimpleNamespace(

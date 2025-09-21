@@ -9,8 +9,7 @@ import pandas as pd
 import pytest
 from fs.errors import ResourceNotFound
 
-from napistu import identifiers
-from napistu import identifiers as napistu_identifiers
+from napistu import sbml_dfs_utils
 from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS,
@@ -27,6 +26,7 @@ from napistu.constants import (
     VALID_SBO_TERM_NAMES,
     VALID_SBO_TERMS,
 )
+from napistu.identifiers import Identifiers
 from napistu.ingestion import sbml
 from napistu.ingestion.constants import (
     INTERACTION_EDGELIST_DEFAULTS,
@@ -40,7 +40,7 @@ from napistu.source import Source
 def test_data():
     """Create test data for SBML integration tests."""
 
-    blank_id = identifiers.Identifiers([])
+    blank_id = Identifiers([])
 
     # Test compartments
     compartments_df = pd.DataFrame(
@@ -402,7 +402,7 @@ def test_get_identifiers_handles_missing_values(model_source_stub):
         {
             SBML_DFS.S_NAME: ["A", "B", "C", "D"],
             SBML_DFS.S_IDENTIFIERS: [
-                napistu_identifiers.Identifiers([]),
+                Identifiers([]),
                 None,
                 np.nan,
                 pd.NA,
@@ -644,8 +644,8 @@ def test_validate_table(minimal_valid_sbml_dfs):
         {
             SBML_DFS.S_NAME: ["ATP", "ADP"],
             SBML_DFS.S_IDENTIFIERS: [
-                identifiers.Identifiers([]),
-                identifiers.Identifiers([]),
+                Identifiers([]),
+                Identifiers([]),
             ],
             SBML_DFS.S_SOURCE: [Source.empty(), Source.empty()],
         },
@@ -1296,3 +1296,197 @@ def test_get_sbo_term_x_source_cooccurrence(sbml_dfs_metabolism):
     assert all(
         term in VALID_SBO_TERMS for term in row_terms
     ), f"All row terms should be valid SBO terms. Got: {row_terms}"
+
+
+def test_force_edgelist_consistency(model_source_stub):
+    """Test that force_edgelist_consistency filters out invalid species references."""
+
+    # Create species table with only some of the species that will be referenced
+    species_df = pd.DataFrame(
+        {
+            SBML_DFS.S_NAME: ["protein_A", "protein_B", "metabolite_X"],
+            SBML_DFS.S_IDENTIFIERS: [
+                Identifiers(
+                    [{"ontology": "uniprot", "identifier": "P12345", "bqb": "is"}]
+                ),
+                Identifiers(
+                    [{"ontology": "uniprot", "identifier": "P67890", "bqb": "is"}]
+                ),
+                Identifiers(
+                    [{"ontology": "chebi", "identifier": "CHEBI:123", "bqb": "is"}]
+                ),
+            ],
+        }
+    )
+
+    # Create compartments
+    compartments_df = sbml_dfs_utils.stub_compartments()
+
+    # Create interaction edgelist with INVALID species references
+    interaction_edgelist = pd.DataFrame(
+        {
+            "upstream_name": [
+                "protein_A",
+                "protein_B",
+                "missing_protein_C",
+                "protein_A",
+            ],
+            "downstream_name": [
+                "protein_B",
+                "missing_protein_D",
+                "metabolite_X",
+                "missing_protein_D",
+            ],
+            "upstream_compartment": ["cellular_component"] * 4,
+            "downstream_compartment": ["cellular_component"] * 4,
+            "upstream_sbo_term_name": ["stimulator"] * 4,
+            "downstream_sbo_term_name": ["modified"] * 4,
+            "upstream_stoichiometry": [0, 0, 0, 0],
+            "downstream_stoichiometry": [0, 0, 0, 0],
+            "r_isreversible": [False] * 4,
+            "r_name": ["rxn1", "rxn2", "rxn3", "rxn4"],
+            "r_Identifiers": [Identifiers([]) for _ in range(4)],
+        }
+    )
+
+    # Test WITHOUT force_edgelist_consistency - should fail validation
+    with pytest.raises(ValueError, match="Invalid references"):
+        sbml_dfs = SBML_dfs.from_edgelist(
+            interaction_edgelist=interaction_edgelist,
+            species_df=species_df,
+            compartments_df=compartments_df,
+            model_source=model_source_stub,
+            force_edgelist_consistency=False,
+        )
+
+    # Test WITH force_edgelist_consistency - should succeed with warnings
+    with patch("napistu.sbml_dfs_utils.logger") as mock_logger:
+
+        sbml_dfs = SBML_dfs.from_edgelist(
+            interaction_edgelist=interaction_edgelist,
+            species_df=species_df,
+            compartments_df=compartments_df,
+            model_source=model_source_stub,
+            force_edgelist_consistency=True,
+        )
+
+        # Should have logged warnings about missing species and filtering
+        assert mock_logger.warning.call_count > 0
+
+        # Check that warnings about missing species were logged
+        warning_messages = [call[0][0] for call in mock_logger.warning.call_args_list]
+        assert any(
+            "missing_protein_C" in msg and "missing_protein_D" in msg
+            for msg in warning_messages
+        )
+
+        # Check that filtering warning was logged
+        assert any(
+            "Filtered" in msg and "interactions" in msg for msg in warning_messages
+        )
+
+    # Verify the resulting SBML_dfs only contains valid interactions
+    assert sbml_dfs.reactions.shape[0] == 1  # Only rxn1 is valid should remain
+    assert (
+        sbml_dfs.species.shape[0] == 2
+    )  # metabolite X is droppeed since its only linked to missing species
+    assert sbml_dfs.reaction_species.shape[0] == 2  # 2 reaction species for 1 reaction
+
+
+def test_force_edgelist_consistency_with_valid_data(model_source_stub):
+    """Test that force_edgelist_consistency doesn't modify valid data."""
+
+    # Create completely valid data
+    species_df = pd.DataFrame(
+        {
+            SBML_DFS.S_NAME: ["protein_A", "protein_B"],
+            SBML_DFS.S_IDENTIFIERS: [
+                Identifiers(
+                    [{"ontology": "uniprot", "identifier": "P12345", "bqb": "is"}]
+                ),
+                Identifiers(
+                    [{"ontology": "uniprot", "identifier": "P67890", "bqb": "is"}]
+                ),
+            ],
+        }
+    )
+
+    compartments_df = sbml_dfs_utils.stub_compartments()
+
+    interaction_edgelist = pd.DataFrame(
+        {
+            "upstream_name": ["protein_A"],
+            "downstream_name": ["protein_B"],
+            "upstream_compartment": ["cellular_component"],
+            "downstream_compartment": ["cellular_component"],
+            "upstream_sbo_term_name": ["stimulator"],
+            "downstream_sbo_term_name": ["modified"],
+            "upstream_stoichiometry": [0],
+            "downstream_stoichiometry": [0],
+            "r_isreversible": [False],
+            "r_name": ["rxn1"],
+            "r_Identifiers": [Identifiers([])],
+        }
+    )
+
+    # Should work with or without force_edgelist_consistency
+    for force_consistency in [True, False]:
+        sbml_dfs = SBML_dfs.from_edgelist(
+            interaction_edgelist=interaction_edgelist,
+            species_df=species_df,
+            compartments_df=compartments_df,
+            model_source=model_source_stub,
+            force_edgelist_consistency=force_consistency,
+        )
+
+        assert sbml_dfs.reactions.shape[0] == 1
+        assert sbml_dfs.species.shape[0] == 2
+
+
+def test_force_edgelist_consistency_invalid_compartments(model_source_stub):
+    """Test that invalid compartments still raise errors even with force_edgelist_consistency=True."""
+
+    species_df = pd.DataFrame(
+        {
+            SBML_DFS.S_NAME: ["protein_A", "protein_B"],
+            SBML_DFS.S_IDENTIFIERS: [
+                Identifiers(
+                    [{"ontology": "uniprot", "identifier": "P12345", "bqb": "is"}]
+                ),
+                Identifiers(
+                    [{"ontology": "uniprot", "identifier": "P67890", "bqb": "is"}]
+                ),
+            ],
+        }
+    )
+
+    compartments_df = (
+        sbml_dfs_utils.stub_compartments()
+    )  # Only has "cellular_component"
+
+    # Create edgelist with invalid compartment reference
+    interaction_edgelist = pd.DataFrame(
+        {
+            "upstream_name": ["protein_A"],
+            "downstream_name": ["protein_B"],
+            "upstream_compartment": ["invalid_compartment"],  # Invalid!
+            "downstream_compartment": ["cellular_component"],
+            "upstream_sbo_term_name": ["stimulator"],
+            "downstream_sbo_term_name": ["modified"],
+            "upstream_stoichiometry": [0],
+            "downstream_stoichiometry": [0],
+            "r_isreversible": [False],
+            "r_name": ["rxn1"],
+            "r_Identifiers": [Identifiers([])],
+        }
+    )
+
+    # Should still raise error for invalid compartments even with force_edgelist_consistency=True
+    with pytest.raises(ValueError, match="Missing compartments"):
+        _ = SBML_dfs.from_edgelist(
+            interaction_edgelist=interaction_edgelist,
+            species_df=species_df,
+            compartments_df=compartments_df,
+            model_source=model_source_stub,
+            force_edgelist_consistency=True,
+        )

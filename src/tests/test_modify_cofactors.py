@@ -294,13 +294,13 @@ def test_drop_cofactors(sbml_dfs):
         4,
     ), "Filtered reaction_species should have 12 rows and 4 columns"
     assert sbml_dfs_filtered.species.shape == (
-        18,
+        18 - 7,
         3,
-    ), "Filtered species should remain unchanged with 18 rows and 3 columns"
+    ), "Filtered species should drop 7 species which were only present as cofactors"
     assert sbml_dfs_filtered.compartmentalized_species.shape == (
-        23,
+        23 - 11,
         4,
-    ), "Filtered compartmentalized_species should remain unchanged with 23 rows and 4 columns"
+    ), "Filtered compartmentalized_species should drop 11 cspecies which only acted as cofactors"
 
     # Calculate and validate counts
     original_count = sbml_dfs.reaction_species.shape[0]
@@ -322,11 +322,4 @@ def test_drop_cofactors(sbml_dfs):
         for rsc_id in sbml_dfs_filtered.reaction_species.index
     ), "All remaining rsc_ids should exist in original"
 
-    # Validate that other DataFrames remain unchanged
-    assert (
-        sbml_dfs_filtered.species.shape == sbml_dfs.species.shape
-    ), "Species DataFrame should remain unchanged"
-    assert (
-        sbml_dfs_filtered.compartmentalized_species.shape
-        == sbml_dfs.compartmentalized_species.shape
-    ), "Compartmentalized species DataFrame should remain unchanged"
+    sbml_dfs_filtered.validate()

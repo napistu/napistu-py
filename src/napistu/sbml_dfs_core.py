@@ -428,6 +428,94 @@ class SBML_dfs:
 
         return None
 
+    def find_entity_references(
+        self, entity_type: str, entity_ids: list[str]
+    ) -> dict[str, set[str]]:
+        """Find all entities that directly depend on the set of requested entities.
+
+        Parameters
+        ----------
+        entity_type : str
+            The initial entity type to remove
+        entity_ids : list[str]
+            IDs of entities to remove
+
+        Returns
+        -------
+        dict[str, set[str]]
+            Dictionary mapping entity types to sets of IDs that directly depend on the requested entities
+        """
+
+        dependents = {
+            SBML_DFS.COMPARTMENTS: set(),
+            SBML_DFS.SPECIES: set(),
+            SBML_DFS.COMPARTMENTALIZED_SPECIES: set(),
+            SBML_DFS.REACTIONS: set(),
+            SBML_DFS.REACTION_SPECIES: set(),
+        }
+
+        if entity_type == "cofactors":
+            entity_type = SBML_DFS.REACTION_SPECIES
+            literal_cleanup = True
+        else:
+            literal_cleanup = False
+
+        # Start with the directly requested entities
+        dependents[entity_type] = set(entity_ids)
+        logger.debug(
+            f"Starting find_entity_references from {entity_type} with {len(entity_ids)} entities"
+        )
+
+        # Iterate through cleanup order to find cascading removals
+        cleanup_order = SBML_DFS_CLEANUP_ORDER[entity_type]
+        logger.debug(f"Cleanup order for {entity_type}: {cleanup_order}")
+
+        for updated_table, reference_table in cleanup_order:
+            # Get orphaned entities based on type
+            if (updated_table == SBML_DFS.REACTIONS) and not literal_cleanup:
+                # Special handling for reactions - check for underspecified reactions
+                invalid_reactions, invalid_reaction_species = (
+                    self._find_underspecified_reactions_by_reference(
+                        reference_table, dependents[reference_table]
+                    )
+                )
+
+                new_invalid_reactions = (
+                    invalid_reactions - dependents[SBML_DFS.REACTIONS]
+                )
+                new_invalid_reaction_species = (
+                    invalid_reaction_species - dependents[SBML_DFS.REACTION_SPECIES]
+                )
+                logger.debug(
+                    f"Registering {len(new_invalid_reactions)} new invalid reactions and {len(new_invalid_reaction_species)} new invalid reaction species"
+                )
+                logger.debug(f"Invalid reactions: {new_invalid_reactions}")
+                logger.debug(
+                    f"Invalid reaction species: {new_invalid_reaction_species}"
+                )
+                dependents[SBML_DFS.REACTIONS] = (
+                    dependents[SBML_DFS.REACTIONS] | new_invalid_reactions
+                )
+                dependents[SBML_DFS.REACTION_SPECIES] = (
+                    dependents[SBML_DFS.REACTION_SPECIES] | new_invalid_reaction_species
+                )
+            else:
+                # Standard orphaned entity removal - find all orphaned entities
+                invalid_entities = self._find_invalid_entities_by_reference(
+                    updated_table, reference_table, dependents[reference_table]
+                )
+
+                new_invalid_entities = invalid_entities - dependents[updated_table]
+                logger.debug(
+                    f"Registering {len(new_invalid_entities)} new invalid {updated_table}"
+                )
+                logger.debug(f"Invalid {updated_table}: {new_invalid_entities}")
+                dependents[updated_table] = (
+                    dependents[updated_table] | new_invalid_entities
+                )
+
+        return dependents
+
     @classmethod
     def from_edgelist(
         cls,
@@ -438,6 +526,7 @@ class SBML_dfs:
         interaction_edgelist_defaults: dict[str, Any] = INTERACTION_EDGELIST_DEFAULTS,
         keep_species_data: bool | str = False,
         keep_reactions_data: bool | str = False,
+        force_edgelist_consistency: bool = False,
     ) -> "SBML_dfs":
         """
         Create SBML_dfs from interaction edgelist.
@@ -478,6 +567,11 @@ class SBML_dfs:
         keep_reactions_data : bool or str, default False
             Whether to preserve extra reaction columns. If True, saves as 'source' label.
             If string, uses as custom label. If False, discards extra data.
+        force_edgelist_consistency : bool, default False
+            Whether to force the edgelist to be consistent with the species and compartments dataframes
+            This is useful for cases where there may be reasonable departures between the edgelist and
+            the species and compartments dataframes but the user wants to create an SBML_dfs model anyway
+
 
         Returns
         -------
@@ -504,6 +598,13 @@ class SBML_dfs:
             interaction_edgelist, interaction_edgelist_defaults
         )
 
+        if force_edgelist_consistency:
+            interaction_edgelist_with_defaults, species_df, compartments_df = (
+                sbml_dfs_utils.force_edgelist_consistency(
+                    interaction_edgelist_with_defaults, species_df, compartments_df
+                )
+            )
+
         # 1. Validate inputs
         sbml_dfs_utils._edgelist_validate_inputs(
             interaction_edgelist_with_defaults, species_df, compartments_df
@@ -524,6 +625,8 @@ class SBML_dfs:
         processed_species, species_data = sbml_dfs_utils._edgelist_process_species(
             species_df, interaction_source, extra_columns[SBML_DFS.SPECIES]
         )
+
+        # drop extra species and compartments and warn
 
         # 4. Create compartmentalized species
         comp_species = sbml_dfs_utils._edgelist_create_compartmentalized_species(
@@ -560,6 +663,7 @@ class SBML_dfs:
             model_source=model_source,
         )
 
+        sbml_dfs.validate()
         return sbml_dfs
 
     @classmethod
@@ -1929,6 +2033,63 @@ class SBML_dfs:
 
         return reaction_summareis_df
 
+    def remove_entities(
+        self,
+        entity_type: str,
+        entity_ids: Iterable[str],
+        remove_references: bool = True,
+    ):
+        """Public method to remove entities and optionally clean up orphaned references.
+
+        Special handling for "cofactors" where literal cleanup of reactions based on reaction_species is allowed
+        normally, removing substrates/products would remove the reaction.
+
+        Parameters
+        ----------
+        entity_type : str
+            The entity type (e.g., 'reactions', 'compartmentalized_species', 'species', 'compartments', or "cofactors")
+        entity_ids : Iterable[str]
+            IDs of entities to remove
+        remove_references : bool, default True
+            Whether to remove orphaned references after entity removal
+        """
+
+        entity_ids = list(entity_ids)
+        if not entity_ids:
+            return
+
+        # Find all entities that need to be removed (including cascading references)
+        if remove_references:
+            to_be_removed_entities = self.find_entity_references(
+                entity_type, entity_ids
+            )
+        else:
+            logger.warning(
+                "Removing entities without removing references, because remove_references=False. This may result in a validation error."
+            )
+            # Only remove the directly requested entities
+            to_be_removed_entities = {entity_type: set(entity_ids)}
+
+        # now treat entity_type as actual table to remove if this was "cofactors"
+        if entity_type == "cofactors":
+            entity_type = SBML_DFS.REACTION_SPECIES
+
+        # iterate through to-be-removed and remove
+        logger.info(f"Removing the requested {len(entity_ids)} {entity_type} entities")
+        self._remove_entities_direct(entity_type, entity_ids)
+
+        # these would be entries of the requested table which are indirectly removed
+        # e.g., if we request to remove the substrate of a reaction, it removes the reaction and the products
+        # in turn which may result in removal of the cspecies if it isn't used elsewhere
+        to_be_removed_entities[entity_type] = to_be_removed_entities[entity_type] - set(
+            entity_ids
+        )
+        for k, v in to_be_removed_entities.items():
+            if not v:
+                continue
+            logger.info(f"Removing {len(v)} orphaned {k}")
+            self._remove_entities_direct(k, list(v))
+
     def remove_reactions_data(self, label: str):
         """
         Remove reactions data by label.
@@ -2514,55 +2675,61 @@ class SBML_dfs:
         )
         return s_ids  # type: ignore
 
-    def remove_entities(
-        self,
-        entity_type: str,
-        entity_ids: Iterable[str],
-        remove_references: bool = True,
-    ):
-        """Public method to remove entities and optionally clean up orphaned references.
+    def _find_invalid_entities_by_reference(
+        self, entity_type: str, reference_type: str, reference_ids: set[str]
+    ) -> set[str]:
+        """Find and return orphaned entities based on broken foreign key references.
 
         Parameters
         ----------
         entity_type : str
-            The entity type (e.g., 'reactions', 'compartmentalized_species', 'species', 'compartments')
-        entity_ids : Iterable[str]
-            IDs of entities to remove
-        remove_references : bool, default True
-            Whether to remove orphaned references after entity removal
+            The entity type to check for orphans (the table with primary keys)
+        reference_type : str
+            The type of foreign key reference to check
+        reference_ids : set[str]
+            Specific reference IDs that were removed
+
+        Returns
+        -------
+        set[str]
+            Set of primary keys that are orphaned and should be removed
         """
 
-        entity_ids = list(entity_ids)
-        if not entity_ids:
-            return
+        # Get the entity table and its schema
+        entity_schema = SBML_DFS_SCHEMA.SCHEMA[entity_type]
+        entity_pk = entity_schema[SCHEMA_DEFS.PK]
+        reference_schema = SBML_DFS_SCHEMA.SCHEMA[reference_type]
+        reference_pk = reference_schema[SCHEMA_DEFS.PK]
 
-        # Find all entities that need to be removed (including cascading references)
-        if remove_references:
-            to_be_removed_entities = self.find_entity_references(
-                entity_type, entity_ids
+        # figure out whether the entity_type or reference type is primary or foreign key
+        if SCHEMA_DEFS.FK in entity_schema and (
+            reference_pk in entity_schema[SCHEMA_DEFS.FK]
+        ):
+            # this is the daughter table remove all reverences to the reference ids
+            entity_df = getattr(self, entity_type)
+            should_be_removed_ids = entity_df[
+                entity_df[reference_pk].isin(reference_ids)
+            ].index.tolist()
+        elif SCHEMA_DEFS.FK in reference_schema and (
+            entity_pk in reference_schema[SCHEMA_DEFS.FK]
+        ):
+            # this is the parent table, look at the reference table and see what entries
+            # would be totally removed once the reference ids are removed
+            # e.g., are any compartments removed becasue we removed all the relevant cspecies
+            reference_df = getattr(self, reference_type).copy()
+
+            # add the mask of to-be-removed reference ids
+            reference_df["to_be_removed"] = reference_df.index.isin(reference_ids)
+            is_orphaned = reference_df.groupby(entity_pk)["to_be_removed"].apply(
+                lambda x: x.all()
             )
+            should_be_removed_ids = is_orphaned[is_orphaned].index.tolist()
         else:
-            logger.warning(
-                "Removing entities without removing references, because remove_references=False. This may result in a validation error."
+            raise ValueError(
+                f"Entity type {entity_type} does not have a foreign key to {reference_type}"
             )
-            # Only remove the directly requested entities
-            to_be_removed_entities = {entity_type: set(entity_ids)}
 
-        # iterate through to-be-removed and remove
-        logger.info(f"Removing the requested {len(entity_ids)} {entity_type} entities")
-        self._remove_entities_direct(entity_type, entity_ids)
-
-        # these would be entries of the requested table which are indirectly removed
-        # e.g., if we request to remove the substrate of a reaction, it removes the reaction and the products
-        # in turn which may result in removal of the cspecies if it isn't used elsewhere
-        to_be_removed_entities[entity_type] = to_be_removed_entities[entity_type] - set(
-            entity_ids
-        )
-        for k, v in to_be_removed_entities.items():
-            if not v:
-                continue
-            logger.info(f"Removing {len(v)} orphaned {k}")
-            self._remove_entities_direct(k, list(v))
+        return set(should_be_removed_ids)
 
     def _remove_entities_direct(self, entity_type: str, entity_ids: list[str]):
         """Directly remove entities without cascading cleanup.
@@ -2606,149 +2773,6 @@ class SBML_dfs:
             logger.warning(
                 f"Attempted to remove {len(missing_ids_set)} {entity_type} that don't exist: {missing_list[:5]}{'...' if len(missing_list) > 5 else ''}"
             )
-
-    def _find_invalid_entities_by_reference(
-        self, entity_type: str, reference_type: str, reference_ids: set[str]
-    ) -> set[str]:
-        """Find and return orphaned entities based on broken foreign key references.
-
-        Parameters
-        ----------
-        entity_type : str
-            The entity type to check for orphans (the table with primary keys)
-        reference_type : str
-            The type of foreign key reference to check
-        reference_ids : set[str]
-            Specific reference IDs that were removed
-
-        Returns
-        -------
-        set[str]
-            Set of primary keys that are orphaned and should be removed
-        """
-        # Reactions have special handling - use the dedicated method
-        if entity_type == SBML_DFS.REACTIONS:
-            raise ValueError(
-                "Use _find_underspecified_reactions for reactions, not _remove_entity_references"
-            )
-
-        # Get the entity table and its schema
-        entity_schema = SBML_DFS_SCHEMA.SCHEMA[entity_type]
-        entity_pk = entity_schema[SCHEMA_DEFS.PK]
-        reference_schema = SBML_DFS_SCHEMA.SCHEMA[reference_type]
-        reference_pk = reference_schema[SCHEMA_DEFS.PK]
-
-        # figure out whether the entity_type or reference type is primary or foreign key
-        if SCHEMA_DEFS.FK in entity_schema and (
-            reference_pk in entity_schema[SCHEMA_DEFS.FK]
-        ):
-            # this is the daughter table remove all reverences to the reference ids
-            entity_df = getattr(self, entity_type)
-            should_be_removed_ids = entity_df[
-                entity_df[reference_pk].isin(reference_ids)
-            ].index.tolist()
-        elif SCHEMA_DEFS.FK in reference_schema and (
-            entity_pk in reference_schema[SCHEMA_DEFS.FK]
-        ):
-            # this is the parent table, look at the reference table and see what entries
-            # would be totally removed once the reference ids are removed
-            # e.g., are any compartments removed becasue we removed all the relevant cspecies
-            reference_df = getattr(self, reference_type).copy()
-
-            # add the mask of to-be-removed reference ids
-            reference_df["to_be_removed"] = reference_df.index.isin(reference_ids)
-            is_orphaned = reference_df.groupby(entity_pk)["to_be_removed"].apply(
-                lambda x: x.all()
-            )
-            should_be_removed_ids = is_orphaned[is_orphaned].index.tolist()
-        else:
-            raise ValueError(
-                f"Entity type {entity_type} does not have a foreign key to {reference_type}"
-            )
-
-        return set(should_be_removed_ids)
-
-    def find_entity_references(
-        self, entity_type: str, entity_ids: list[str]
-    ) -> dict[str, set[str]]:
-        """Find all entities that directly depend on the set of requested entities.
-
-        Parameters
-        ----------
-        entity_type : str
-            The initial entity type to remove
-        entity_ids : list[str]
-            IDs of entities to remove
-
-        Returns
-        -------
-        dict[str, set[str]]
-            Dictionary mapping entity types to sets of IDs that directly depend on the requested entities
-        """
-
-        dependents = {
-            SBML_DFS.COMPARTMENTS: set(),
-            SBML_DFS.SPECIES: set(),
-            SBML_DFS.COMPARTMENTALIZED_SPECIES: set(),
-            SBML_DFS.REACTIONS: set(),
-            SBML_DFS.REACTION_SPECIES: set(),
-        }
-
-        # Start with the directly requested entities
-        dependents[entity_type] = set(entity_ids)
-        logger.debug(
-            f"Starting find_entity_references from {entity_type} with {len(entity_ids)} entities"
-        )
-
-        # Iterate through cleanup order to find cascading removals
-        cleanup_order = SBML_DFS_CLEANUP_ORDER[entity_type]
-        logger.debug(f"Cleanup order for {entity_type}: {cleanup_order}")
-
-        for updated_table, reference_table in cleanup_order:
-            # Get orphaned entities based on type
-            if updated_table == SBML_DFS.REACTIONS:
-                # Special handling for reactions - check for underspecified reactions
-                invalid_reactions, invalid_reaction_species = (
-                    self._find_underspecified_reactions_by_reference(
-                        reference_table, dependents[reference_table]
-                    )
-                )
-
-                new_invalid_reactions = (
-                    invalid_reactions - dependents[SBML_DFS.REACTIONS]
-                )
-                new_invalid_reaction_species = (
-                    invalid_reaction_species - dependents[SBML_DFS.REACTION_SPECIES]
-                )
-                logger.debug(
-                    f"Registering {len(new_invalid_reactions)} new invalid reactions and {len(new_invalid_reaction_species)} new invalid reaction species"
-                )
-                logger.debug(f"Invalid reactions: {new_invalid_reactions}")
-                logger.debug(
-                    f"Invalid reaction species: {new_invalid_reaction_species}"
-                )
-                dependents[SBML_DFS.REACTIONS] = (
-                    dependents[SBML_DFS.REACTIONS] | new_invalid_reactions
-                )
-                dependents[SBML_DFS.REACTION_SPECIES] = (
-                    dependents[SBML_DFS.REACTION_SPECIES] | new_invalid_reaction_species
-                )
-            else:
-                # Standard orphaned entity removal - find all orphaned entities
-                invalid_entities = self._find_invalid_entities_by_reference(
-                    updated_table, reference_table, dependents[reference_table]
-                )
-
-                new_invalid_entities = invalid_entities - dependents[updated_table]
-                logger.debug(
-                    f"Registering {len(new_invalid_entities)} new invalid {updated_table}"
-                )
-                logger.debug(f"Invalid {updated_table}: {new_invalid_entities}")
-                dependents[updated_table] = (
-                    dependents[updated_table] | new_invalid_entities
-                )
-
-        return dependents
 
     def _remove_entity_data(self, entity_type: str, label: str) -> None:
         """

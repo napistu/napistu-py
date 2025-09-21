@@ -56,8 +56,10 @@ def test_consensus():
     assert consensus_model.reactions.shape == (30, 4)
     assert consensus_model.reaction_species.shape == (137, 4)
 
+    consensus_model.validate()
+
     consensus_model = drop_cofactors(consensus_model)
-    assert consensus_model.species.shape == (38, 3)
+    assert consensus_model.species.shape == (30, 3)
     assert consensus_model.reaction_species.shape == (52, 4)
     # update reaction_species.shape after more cofactors identified
 
