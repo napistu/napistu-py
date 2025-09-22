@@ -46,7 +46,7 @@ def uncompartmentalize_sbml_dfs(
         Modifies the SBML_dfs object in-place if inplace is True, otherwise returns a new SBML_dfs object
     """
 
-    if inplace:
+    if not inplace:
         sbml_dfs = sbml_dfs.copy()
 
     if sbml_dfs.compartments.shape[0] == 1:
