@@ -562,8 +562,8 @@ def name_compartmentalized_species(sbml_dfs_uri: str, output_model_uri: str):
 def merge_model_compartments(sbml_dfs_uri: str, output_model_uri: str):
     """Take a compartmentalized mechanistic model and merge all of the compartments."""
     sbml_dfs = SBML_dfs.from_pickle(sbml_dfs_uri)
-    uncompartmentalized_sbml_dfs = uncompartmentalize_sbml_dfs(sbml_dfs)
-    uncompartmentalized_sbml_dfs.to_pickle(output_model_uri)
+    uncompartmentalize_sbml_dfs(sbml_dfs, inplace=True)
+    sbml_dfs.to_pickle(output_model_uri)
 
 
 @refine.command(name="drop_cofactors")

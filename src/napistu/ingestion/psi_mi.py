@@ -108,7 +108,7 @@ def aggregate_psi_mis(
             # autoincrement study id
             study_id = len(all_studies) + 100000
 
-            species_df, species_ids = _create_species_df(study)
+            species_df, species_ids = _create_study_species_df(study)
 
             study_tables = {
                 PSI_MI_STUDY_TABLES.REACTION_SPECIES: _create_reaction_species_df(
@@ -629,7 +629,9 @@ def _create_reaction_species_df(one_study: Dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame(reaction_species)
 
 
-def _create_species_df(one_study: Dict[str, Any]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def _create_study_species_df(
+    one_study: Dict[str, Any],
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Create species and species identifiers DataFrames from study data.
 

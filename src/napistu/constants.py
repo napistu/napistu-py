@@ -487,6 +487,7 @@ SOURCE_STANDARD_COLUMNS = EXPECTED_PW_INDEX_COLUMNS | {
 
 # rules for specific ontologies
 ONTOLOGIES = SimpleNamespace(
+    BIORXIV="biorxiv",
     CHEBI="chebi",
     CORUM="corum",
     DRUGBANK="drugbank",
@@ -507,10 +508,12 @@ ONTOLOGIES = SimpleNamespace(
     PUBCHEM="pubchem",
     PUBMED="pubmed",
     REACTOME="reactome",
+    RNACENTRAL="rnacentral",
     SGD="sgd",
     SIGNOR="signor",
     SMILES="smiles",
     SYMBOL="symbol",
+    URL="url",
     UNIPROT="uniprot",
     WIKIPATHWAYS="wikipathways",
 )

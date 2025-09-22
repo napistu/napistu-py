@@ -18,29 +18,36 @@ logger = logging.getLogger(__name__)
 
 
 def uncompartmentalize_sbml_dfs(
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
-) -> sbml_dfs_core.SBML_dfs:
+    sbml_dfs: sbml_dfs_core.SBML_dfs, inplace: bool = True
+) -> None:
     """Uncompartmentalize SBML_dfs
 
     Take a compartmentalized mechanistic model and merge all of the compartments.
 
-    Args:
-        rxn_consensus_species (pd.DataFrame): reactions
-        rxnspec_consensus_instances (pd.DataFrame): reaction species
+    To remove compartmentalization we can:
+    1. update the compartments table to the stubbed default level: GO CELLULAR_COMPONENT
+    2. ignore the species table (it will be the same in the compartmentalized and uncompartmenalzied model)
+    3. create a 1-1 correspondence between species and new compartmentalized species. w/ GO CELLULAR_COMPONENT
+    4. update reaction species to the new compartmentalized species
+    5. drop reactions if:
+       - they are redundant (e.g., the same reaction occurred in multiple compartments)
+       - substrates and products are identical (e.g., a transportation reaction)
 
-    Returns:
-        reactions (pd.DataFrame): reactions with trivial reactions dropped
-        reaction_species (pd.DataFrame): reaction species with trivial reaction species dropped
+    Parameters
+    ----------
+    sbml_dfs : sbml_dfs_core.SBML_dfs
+        The SBML_dfs object to uncompartmentalize
+    inplace : bool
+        Whether to modify the SBML_dfs object in-place or return a new object
+
+    Returns
+    -------
+    None
+        Modifies the SBML_dfs object in-place if inplace is True, otherwise returns a new SBML_dfs object
     """
 
-    # to remove compartmentalization we can:
-    # 1. update the compartments table to the stubbed default level: GO CELLULAR_COMPONENT
-    # 2. ignore the species table (it will be the same in the compartmentalized and uncompartmenalzied model)
-    # 3. create a 1-1 correspondence between species and new compartmentalized species. w/ GO CELLULAR_COMPONENT
-    # 4. update reaction species to the new compartmentalized species
-    # 5. drop reactions if:
-    #   - they are redundant (e.g., the same reaction occurred in multiple compartments)
-    #   - substrates and products are identical (e.g., a transportation reaction)
+    if inplace:
+        sbml_dfs = sbml_dfs.copy()
 
     if sbml_dfs.compartments.shape[0] == 1:
         logger.warning(
@@ -71,9 +78,10 @@ def uncompartmentalize_sbml_dfs(
     sbml_dfs.reactions = reactions
     sbml_dfs.reaction_species = reaction_species
 
+    sbml_dfs.remove_unused()
     sbml_dfs.validate()
 
-    return sbml_dfs
+    return None if inplace else sbml_dfs
 
 
 def _uncompartmentalize_cspecies(
@@ -143,12 +151,12 @@ def _uncompartmentalize_reactions(
         table=SBML_DFS.REACTIONS,
         defined_by=SBML_DFS.REACTION_SPECIES,
         defined_lookup_tables={SBML_DFS.SC_ID: compspec_lookup_table},
-        defining_attrs=[SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY],
+        defining_attrs=[SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY, SBML_DFS.SBO_TERM],
     )
 
     (
         rxnspec_consensus_instances,
-        rxnspec_lookup_table,
+        _,
     ) = consensus.construct_meta_entities_fk(
         sbml_dfs_dict=sbml_dfs_dict,  # a single dict entry
         pw_index=stubbed_index,

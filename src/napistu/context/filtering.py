@@ -57,7 +57,7 @@ def filter_species_by_attribute(
 
     # If not inplace, make a copy
     if not inplace:
-        sbml_dfs = copy.deepcopy(sbml_dfs)
+        sbml_dfs = sbml_dfs.copy()
 
     # Get the species data
     species_data = sbml_dfs.select_species_data(species_data_table)

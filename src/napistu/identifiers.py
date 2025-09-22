@@ -255,15 +255,33 @@ def df_to_identifiers(df: pd.DataFrame) -> pd.Series:
     return output
 
 
-def format_uri(uri: str, bqb: str) -> Identifiers:
+def format_uri(uri: str, bqb: str, strict: bool = True) -> list[dict]:
     """
-    Convert a RDF URI into an Identifier object
+    Convert a RDF URI into an identifier list
+
+    Parameters
+    ----------
+    uri : str
+        The RDF URI to convert
+    bqb : str
+        The BQB to add to the identifier
+    strict : bool
+        Whether to raise an error if the URI is not valid
+
+    Returns
+    -------
+    list[dict]
+        The identifier list
     """
 
-    identifier = format_uri_url(uri)
+    identifier = format_uri_url(uri, strict=strict)
 
     if identifier is None:
-        raise NotImplementedError(f"{uri} is not a valid way of specifying a uri")
+        if strict:
+            raise NotImplementedError(f"{uri} is not a valid way of specifying a uri")
+        else:
+            # Return empty list for non-strict mode
+            return list()
 
     _validate_bqb(bqb)
     identifier[IDENTIFIERS.BQB] = bqb
@@ -272,6 +290,26 @@ def format_uri(uri: str, bqb: str) -> Identifiers:
 
 
 def _validate_bqb(bqb: str) -> None:
+    """
+    Validate a BQB code
+
+    Parameters
+    ----------
+    bqb : str
+        The BQB code to validate
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    TypeError
+        If the BQB code is not a string
+    ValueError
+        If the BQB code does not start with 'BQB'
+    """
+
     if not isinstance(bqb, str):
         raise TypeError(
             f"biological_qualifier_type was a {type(bqb)} and must be a str or None"
@@ -287,7 +325,32 @@ def _validate_bqb(bqb: str) -> None:
     return None
 
 
-def format_uri_url(uri: str) -> dict:
+def format_uri_url(uri: str, strict: bool = True) -> dict:
+    """
+    Convert a URI into an identifier dictionary
+
+    Parameters
+    ----------
+    uri : str
+        The URI to convert
+    strict : bool
+        Whether to raise an error if the URI is not valid
+
+    Returns
+    -------
+    dict
+        The identifier dictionary
+
+    Raises
+    ------
+    NotImplementedError
+        If a parsing precedure has not been implemented for the netloc
+    TypeError
+        If the URI is not valid
+    ValueError
+        If there is a pathological identifier within ontology-specific parsing
+    """
+
     # check whether the uri is specified using a url
     result = urlparse(uri)
     if not all([result.scheme, result.netloc, result.path]):
@@ -302,11 +365,11 @@ def format_uri_url(uri: str) -> dict:
         if netloc == "identifiers.org":
             ontology, identifier = format_uri_url_identifiers_dot_org(split_path)
         elif netloc == "reactome.org":
-            ontology = "reactome"
+            ontology = ONTOLOGIES.REACTOME
             identifier = split_path[-1]
         # genes and gene products
         elif netloc == "www.ensembl.org" and split_path[-1] == "geneview":
-            ontology = "ensembl_gene"
+            ontology = ONTOLOGIES.ENSEMBL_GENE
             identifier, id_ontology, _ = parse_ensembl_id(result.query)  # type: ignore
             if ontology != id_ontology:
                 raise ValueError(
@@ -316,14 +379,14 @@ def format_uri_url(uri: str) -> dict:
             "transview",
             "Transcript",
         ]:
-            ontology = "ensembl_transcript"
+            ontology = ONTOLOGIES.ENSEMBL_TRANSCRIPT
             identifier, id_ontology, _ = parse_ensembl_id(result.query)  # type: ignore
             if ontology != id_ontology:
                 raise ValueError(
                     f"Ontology mismatch: expected {ontology}, got {id_ontology}"
                 )
         elif netloc == "www.ensembl.org" and split_path[-1] == "ProteinSummary":
-            ontology = "ensembl_protein"
+            ontology = ONTOLOGIES.ENSEMBL_PROTEIN
             identifier, id_ontology, _ = parse_ensembl_id(result.query)  # type: ignore
             if ontology != id_ontology:
                 raise ValueError(
@@ -337,7 +400,7 @@ def format_uri_url(uri: str) -> dict:
             identifier, ontology, _ = parse_ensembl_id(split_path[-1])
 
         elif netloc == "www.mirbase.org" or netloc == "mirbase.org":
-            ontology = "mirbase"
+            ontology = ONTOLOGIES.MIRBASE
             if re.search("MI[0-9]+", split_path[-1]):
                 identifier = utils.extract_regex_search("MI[0-9]+", split_path[-1])
             elif re.search("MIMAT[0-9]+", split_path[-1]):
@@ -351,17 +414,17 @@ def format_uri_url(uri: str) -> dict:
                     f"{result.query} does not appear to match MiRBase identifiers"
                 )
         elif netloc == "purl.uniprot.org":
-            ontology = "uniprot"
+            ontology = ONTOLOGIES.UNIPROT
             identifier = split_path[-1]
         elif netloc == "rnacentral.org":
-            ontology = "rnacentral"
+            ontology = ONTOLOGIES.RNACENTRAL
             identifier = split_path[-1]
         # chemicals
         elif split_path[1] == "chebi":
-            ontology = "chebi"
+            ontology = ONTOLOGIES.CHEBI
             identifier = utils.extract_regex_search("[0-9]+$", result.query)
         elif netloc == "pubchem.ncbi.nlm.nih.gov":
-            ontology = "pubchem"
+            ontology = ONTOLOGIES.PUBCHEM
             if result.query != "":
                 identifier = utils.extract_regex_search("[0-9]+$", result.query)
             else:
@@ -380,7 +443,7 @@ def format_uri_url(uri: str) -> dict:
             identifier = split_path[-1]
         # reactions
         elif split_path[1] == "ec-code":
-            ontology = "ec-code"
+            ontology = ONTOLOGIES.EC_CODE
             identifier = split_path[-1]
         elif netloc == "www.rhea-db.org":
             ontology = "rhea"
@@ -390,10 +453,10 @@ def format_uri_url(uri: str) -> dict:
             ontology = "ols"
             identifier = split_path[-1]
         elif split_path[1] == "QuickGO":
-            ontology = "go"
+            ontology = ONTOLOGIES.GO
             identifier = split_path[-1]
         elif split_path[1] == "pubmed":
-            ontology = "pubmed"
+            ontology = ONTOLOGIES.PUBMED
             identifier = split_path[-1]
         # DNA sequences
         elif netloc == "www.ncbi.nlm.nih.gov" and split_path[1] == "nuccore":
@@ -447,24 +510,34 @@ def format_uri_url(uri: str) -> dict:
             identifier = utils.extract_regex_match(".*value=([0-9A-Za-z]+).*", uri)
         elif netloc == "users.rcn.com":
             # Handle users.rcn.com URLs as generic web references
-            ontology = "web_reference"
+            ontology = ONTOLOGIES.URL
             identifier = uri  # Use the full URI as the identifier
+        elif netloc == "www.biorxiv.org":
+            ontology = ONTOLOGIES.BIORXIV
+            identifier = split_path[-1]
         else:
-            raise NotImplementedError(
-                f"{netloc} in the {uri} url has not been associated with a known ontology"
+            error_msg = f"{netloc} in the {uri} url has not been associated with a known ontology"
+            if strict:
+                raise NotImplementedError(error_msg)
+            else:
+                logger.warning(error_msg)
+                return None
+    except (TypeError, AttributeError):
+        if strict:
+            logger.warning(
+                f"An identifier could not be found using the specified regex for {uri} based on the {ontology} ontology"
             )
-    except TypeError:
-        logger.warning(
-            f"An identifier could not be found using the specified regex for {uri} based on the {ontology} ontology"
-        )
-        logger.warning(result)
-        logger.warning("ERROR")
-        sys.exit(1)
+            logger.warning(result)
+            logger.warning("ERROR")
+            sys.exit(1)
+        else:
+            logger.warning(f"Could not extract identifier from URI using regex: {uri}")
+            return None
 
     # rename some entries
 
     if ontology == "ncbi_gene":
-        ontology = "ncbi_entrez_gene"
+        ontology = ONTOLOGIES.NCBI_ENTREZ_GENE
 
     id_dict = {"ontology": ontology, "identifier": identifier, "url": uri}
 
@@ -593,7 +666,7 @@ def format_uri_url_identifiers_dot_org(split_path: list[str]):
     return ontology, identifier
 
 
-def cv_to_Identifiers(entity):
+def cv_to_Identifiers(entity, strict: bool = False):
     """
     Convert an SBML controlled vocabulary element into a cpr Identifiers object.
 
@@ -601,14 +674,15 @@ def cv_to_Identifiers(entity):
     ----------
     entity: libsbml.Species
         An entity (species, reaction, compartment, ...) with attached CV terms
+    strict: bool, default True
+        If True, log full tracebacks for parsing failures.
+        If False, use simple warning messages.
 
     Returns
     -------
     Identifiers
         An Identifiers object containing the CV terms
     """
-
-    # TO DO: add qualifier type http://sbml.org/Software/libSBML/5.18.0/docs/python-api/classlibsbml_1_1_c_v_term.html#a6a613cc17c6f853cf1c68da59286b373
 
     cv_list = list()
     for cv in entity.getCVTerms():
@@ -621,12 +695,22 @@ def cv_to_Identifiers(entity):
         ]
         out_list = list()
         for i in range(cv.getNumResources()):
+            uri = cv.getResourceURI(i)
+
+            # Pre-check for known unsupported URIs
+            if is_known_unsupported_uri(uri):
+                logger.warning(f"Skipping known unsupported URI: {uri}")
+                continue
+
             try:
                 out_list.append(
-                    format_uri(cv.getResourceURI(i), biological_qualifier_type)
+                    format_uri(uri, biological_qualifier_type, strict=strict)
                 )
             except NotImplementedError:
-                logger.warning("Not all identifiers resolved: ", exc_info=True)
+                if strict:
+                    logger.warning("Not all identifiers resolved: ", exc_info=True)
+                else:
+                    logger.warning(f"Could not parse URI (not implemented): {uri}")
 
         cv_list.extend(out_list)
     return Identifiers(cv_list)
@@ -744,7 +828,7 @@ def create_uri_url(ontology: str, identifier: str, strict: bool = True) -> str:
             if strict:
                 raise TypeError(failure_msg)
             else:
-                print(failure_msg + " returning None")
+                logger.warning(failure_msg + " returning None")
                 return None
 
     return url
@@ -841,6 +925,43 @@ def check_reactome_identifier_compatibility(
         )
 
     return None
+
+
+def is_known_unsupported_uri(uri: str) -> bool:
+    """
+    Check if a URI is known to be unsupported/pathological.
+
+    This prevents throwing exceptions for URIs we know we can't parse,
+    allowing for cleaner logging and batch processing.
+
+    Parameters
+    ----------
+    uri : str
+        The URI to check
+
+    Returns
+    -------
+    bool
+        True if the URI is known to be unsupported
+    """
+    parsed = urlparse(uri)
+    netloc = parsed.netloc
+    path_parts = parsed.path.split("/")
+
+    # Known problematic patterns
+    if netloc == "www.proteinatlas.org":
+        return True
+
+    # Specific Ensembl pattern: /id/EBT... (not supported)
+    if (
+        netloc == "www.ensembl.org"
+        and len(path_parts) >= 3
+        and path_parts[1] == "id"
+        and path_parts[2].startswith("EBT")
+    ):
+        return True
+
+    return False
 
 
 # private utility functions

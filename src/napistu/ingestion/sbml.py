@@ -702,6 +702,10 @@ def _refine_compartments(compartments_df, compartmentalized_species_df):
     """
     compartment_ids_in_compartments = set(compartments_df.index)
     compartment_ids_in_cspecies = set(compartmentalized_species_df[SBML_DFS.C_ID])
+    # ignore None in compartment_ids_in_cspecies - this can likely be resolved downstream
+    compartment_ids_in_cspecies = {
+        c for c in compartment_ids_in_cspecies if c is not None
+    }
 
     # Check that all required compartments exist
     missing_compartments = compartment_ids_in_cspecies - compartment_ids_in_compartments

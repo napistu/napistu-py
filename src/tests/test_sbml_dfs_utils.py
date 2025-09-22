@@ -671,3 +671,67 @@ def test_format_model_summary(sbml_dfs):
 
     # Test that the DataFrame is not empty
     assert len(result) > 0, "Result should not be empty"
+
+
+def test_find_unused_entities():
+
+    # Create example SBML_dfs tables with unused entities
+    CASCADING_CLEANUP_EXAMPLE_DATA = {
+        # Compartments - c3 is unused (not referenced by any compartmentalized species)
+        SBML_DFS.COMPARTMENTS: pd.DataFrame(
+            {
+                SBML_DFS.C_ID: ["c1", "c2", "c3"],
+                SBML_DFS.C_NAME: [
+                    "cytoplasm",
+                    "unused_compartment",
+                    "removed_due_to_cspecies_cleanup",
+                ],
+            }
+        ).set_index(SBML_DFS.C_ID),
+        # Species - s3 is unused (not referenced by any compartmentalized species)
+        SBML_DFS.SPECIES: pd.DataFrame(
+            {
+                SBML_DFS.S_ID: ["s1", "s2", "s3", "s4"],
+                SBML_DFS.S_NAME: [
+                    "glucose",
+                    "pyruvate",
+                    "unused_metabolite",
+                    "removed_due_to_cspecies_cleanup",
+                ],
+            }
+        ).set_index(SBML_DFS.S_ID),
+        # Compartmentalized species - sc3, sc4 are unused (not in reaction_species)
+        SBML_DFS.COMPARTMENTALIZED_SPECIES: pd.DataFrame(
+            {
+                SBML_DFS.SC_ID: ["sc1", "sc2", "sc3", "sc4"],
+                SBML_DFS.S_ID: ["s1", "s2", "s2", "s4"],  # Foreign key to species
+                SBML_DFS.C_ID: ["c1", "c1", "c3", "c3"],  # Foreign key to compartments
+            }
+        ).set_index(SBML_DFS.SC_ID),
+        # Reactions -
+        SBML_DFS.REACTIONS: pd.DataFrame(
+            {
+                SBML_DFS.R_ID: ["r1", "r2"],
+                SBML_DFS.R_NAME: ["glycolysis_step1", "unused_reaction"],
+            }
+        ).set_index(SBML_DFS.R_ID),
+        # Reaction species - only sc1, sc2 are referenced (sc3, sc4 are unused)
+        SBML_DFS.REACTION_SPECIES: pd.DataFrame(
+            {
+                SBML_DFS.RSC_ID: ["rsc1", "rsc2"],
+                SBML_DFS.R_ID: ["r1", "r1"],  # Foreign key to reactions
+                SBML_DFS.SC_ID: [
+                    "sc1",
+                    "sc2",
+                ],  # Foreign key to compartmentalized_species
+            }
+        ).set_index(SBML_DFS.RSC_ID),
+    }
+
+    unused_entities = sbml_dfs_utils.find_unused_entities(
+        CASCADING_CLEANUP_EXAMPLE_DATA
+    )
+    assert set(unused_entities[SBML_DFS.COMPARTMENTS]) == {"c2", "c3"}
+    assert set(unused_entities[SBML_DFS.SPECIES]) == {"s3", "s4"}
+    assert set(unused_entities[SBML_DFS.COMPARTMENTALIZED_SPECIES]) == {"sc3", "sc4"}
+    assert set(unused_entities[SBML_DFS.REACTIONS]) == {"r2"}

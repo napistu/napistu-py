@@ -946,7 +946,7 @@ def _create_consensus_entities(
         table=SBML_DFS.REACTIONS,
         defined_by=SBML_DFS.REACTION_SPECIES,
         defined_lookup_tables={SBML_DFS.SC_ID: compspec_lookup_table},
-        defining_attrs=[SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY],
+        defining_attrs=[SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY, SBML_DFS.SBO_TERM],
     )
 
     logger.info("Annotating reversibility based on merged reactions")

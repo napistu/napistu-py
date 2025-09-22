@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Iterable, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Optional, Union
+
+if TYPE_CHECKING:
+    from napistu.sbml_dfs_core import SBML_dfs
 
 import numpy as np
 import pandas as pd
@@ -463,6 +466,77 @@ def find_underspecified_reactions(
     )
 
     return underspecified_reactions
+
+
+def find_unused_entities(
+    sbml_dfs_or_dict: Union[SBML_dfs, dict[str, pd.DataFrame]],
+) -> dict[str, set[str]]:
+
+    from napistu.sbml_dfs_core import SBML_dfs
+
+    if isinstance(sbml_dfs_or_dict, SBML_dfs):
+        d = sbml_dfs_or_dict.to_dict()
+    else:
+        d = sbml_dfs_or_dict
+
+    EXPECTED_KEYS = {
+        SBML_DFS.REACTION_SPECIES,
+        SBML_DFS.REACTIONS,
+        SBML_DFS.COMPARTMENTALIZED_SPECIES,
+        SBML_DFS.SPECIES,
+        SBML_DFS.COMPARTMENTS,
+    }
+
+    if set(d.keys()) != EXPECTED_KEYS:
+        raise ValueError(f"sbml_dfs must contain the following keys: {EXPECTED_KEYS}")
+
+    cleaned_entities = {}
+
+    # cleanup reactions and compartmentalized species based on reaction_species
+    defined_rxn_species_reactions = d[SBML_DFS.REACTION_SPECIES][SBML_DFS.R_ID].unique()
+    defined_rxn_species_cspecies = d[SBML_DFS.REACTION_SPECIES][SBML_DFS.SC_ID].unique()
+    cleaned_entities[SBML_DFS.REACTIONS] = (
+        d[SBML_DFS.REACTIONS]
+        .index[~d[SBML_DFS.REACTIONS].index.isin(defined_rxn_species_reactions)]
+        .tolist()
+    )
+    cleaned_entities[SBML_DFS.COMPARTMENTALIZED_SPECIES] = (
+        d[SBML_DFS.COMPARTMENTALIZED_SPECIES]
+        .index[
+            ~d[SBML_DFS.COMPARTMENTALIZED_SPECIES].index.isin(
+                defined_rxn_species_cspecies
+            )
+        ]
+        .tolist()
+    )
+
+    # cleanup species and compartments based on compartmentalized_species
+    post_cleanup_cspecies = d[SBML_DFS.COMPARTMENTALIZED_SPECIES].loc[
+        ~d[SBML_DFS.COMPARTMENTALIZED_SPECIES].index.isin(
+            cleaned_entities[SBML_DFS.COMPARTMENTALIZED_SPECIES]
+        )
+    ]
+    defined_cspecies_species = post_cleanup_cspecies[SBML_DFS.S_ID].unique()
+    defined_cspecies_compartments = post_cleanup_cspecies[SBML_DFS.C_ID].unique()
+    cleaned_entities[SBML_DFS.SPECIES] = (
+        d[SBML_DFS.SPECIES]
+        .index[~d[SBML_DFS.SPECIES].index.isin(defined_cspecies_species)]
+        .tolist()
+    )
+    cleaned_entities[SBML_DFS.COMPARTMENTS] = (
+        d[SBML_DFS.COMPARTMENTS]
+        .index[~d[SBML_DFS.COMPARTMENTS].index.isin(defined_cspecies_compartments)]
+        .tolist()
+    )
+
+    # summarize the cleanup
+    non_empty_cleaned_entities = {
+        k: v for k, v in cleaned_entities.items() if len(v) > 0
+    }
+    for k, v in non_empty_cleaned_entities.items():
+        logger.info(f"Found {len(v)} unused {k} entities")
+
+    return cleaned_entities
 
 
 def filter_to_characteristic_species_ids(

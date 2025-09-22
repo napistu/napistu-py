@@ -22,7 +22,9 @@ def test_uncompartmentalize(model_source_stub):
     assert sbml_dfs.reactions.shape[0] == 50
     assert sbml_dfs.reaction_species.shape[0] == 250
 
-    uncomp_sbml_dfs = uncompartmentalize.uncompartmentalize_sbml_dfs(sbml_dfs)
+    uncomp_sbml_dfs = uncompartmentalize.uncompartmentalize_sbml_dfs(
+        sbml_dfs, inplace=False
+    )
     uncomp_sbml_dfs.validate()
 
     assert uncomp_sbml_dfs.compartments.shape[0] == 1

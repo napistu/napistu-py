@@ -141,6 +141,8 @@ class SBML_dfs:
         Remove a reactions data table by label.
     remove_species_data(label)
         Remove a species data table by label.
+    remove_unused()
+        Find and remove unused entities from the model with cascading cleanup.
     search_by_ids(id_table, identifiers=None, ontologies=None, bqbs=None)
         Find entities and identifiers matching a set of query IDs.
     search_by_name(name, entity_type, partial_match=True)
@@ -151,6 +153,8 @@ class SBML_dfs:
         Display a formatted summary of the SBML_dfs model.
     species_status(s_id)
         Return all reactions a species participates in, with stoichiometry and formula information.
+    to_dict()
+        Return the 5 major SBML_dfs tables as a dictionary.
     to_pickle(path)
         Save the SBML_dfs to a pickle file.
     validate()
@@ -165,8 +169,6 @@ class SBML_dfs:
     _find_underspecified_reactions_by_scids(sc_ids)
     _get_entity_data(entity_type, label)
     _get_identifiers_table_for_ontology_occurrence(entity_type, characteristic_only=False, dogmatic=True)
-    _get_unused_cspecies()
-    _get_unused_species()
     _remove_compartmentalized_species(sc_ids)
     _remove_entity_data(entity_type, label)
     _remove_species(s_ids)
@@ -2102,6 +2104,27 @@ class SBML_dfs:
         """
         self._remove_entity_data(SBML_DFS.SPECIES, label)
 
+    def remove_unused(self) -> None:
+        """
+        Find and remove unused entities from the model.
+
+        This method identifies unused entities using find_unused_entities and
+        then cleans them up using the existing remove_entities method which
+        properly handles cleanup of species_data and reactions_data as needed.
+
+        Returns
+        -------
+        None
+            Modifies the SBML_dfs object in-place
+        """
+
+        unused_entities = sbml_dfs_utils.find_unused_entities(self)
+
+        for k, v in unused_entities.items():
+            self.remove_entities(k, v, remove_references=False)
+
+        return None
+
     def search_by_ids(
         self,
         id_table: pd.DataFrame,
@@ -2301,6 +2324,28 @@ class SBML_dfs:
         )
 
         return status
+
+    def to_dict(self) -> dict[str, pd.DataFrame]:
+        """
+        Return the 5 major SBML_dfs tables as a dictionary.
+
+        Returns
+        -------
+        dict[str, pd.DataFrame]
+            Dictionary containing the core SBML_dfs tables:
+            - 'compartments': Compartments table
+            - 'species': Species table
+            - 'compartmentalized_species': Compartmentalized species table
+            - 'reactions': Reactions table
+            - 'reaction_species': Reaction species table
+        """
+        return {
+            SBML_DFS.COMPARTMENTS: self.compartments,
+            SBML_DFS.SPECIES: self.species,
+            SBML_DFS.COMPARTMENTALIZED_SPECIES: self.compartmentalized_species,
+            SBML_DFS.REACTIONS: self.reactions,
+            SBML_DFS.REACTION_SPECIES: self.reaction_species,
+        }
 
     def to_pickle(self, path: str) -> None:
         """
@@ -2659,21 +2704,6 @@ class SBML_dfs:
             logger.warning("Zero reactions left after removing interactors")
 
         return valid_reactions_df
-
-    def _get_unused_cspecies(self) -> set[str]:
-        """Returns a set of compartmentalized species
-        that are not part of any reactions"""
-        sc_ids = set(self.compartmentalized_species.index) - set(
-            self.reaction_species[SBML_DFS.SC_ID]
-        )
-        return sc_ids  # type: ignore
-
-    def _get_unused_species(self) -> set[str]:
-        """Returns a list of species that are not part of any reactions"""
-        s_ids = set(self.species.index) - set(
-            self.compartmentalized_species[SBML_DFS.S_ID]
-        )
-        return s_ids  # type: ignore
 
     def _find_invalid_entities_by_reference(
         self, entity_type: str, reference_type: str, reference_ids: set[str]
