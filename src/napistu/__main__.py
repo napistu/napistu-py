@@ -994,9 +994,9 @@ def import_sbml_dfs_from_sbml(input_uri, output_model_uri):
     # We could also just copy the file, but I think validating
     # the filetype is a good idea to prevent downstream errors.
     sbml_file = SBML(input_uri)
-    logger.info("Convert file to sbml_dfs")
+    logger.info("Converting file to sbml_dfs")
     sbml_dfs = SBML_dfs(sbml_file)
-    logger.info("Save file to %s", output_model_uri)
+    logger.info("Saving file to %s", output_model_uri)
     sbml_dfs.to_pickle(output_model_uri)
 
 
@@ -1019,7 +1019,7 @@ def helpers():
 @verbosity_option
 def copy_uri(input_uri, output_uri, is_file=True):
     """Copy a uri representing a file or folder from one location to another"""
-    logger.info("Copy uri from %s to %s", input_uri, output_uri)
+    logger.info("Copying uri from %s to %s", input_uri, output_uri)
     utils.copy_uri(input_uri, output_uri, is_file=is_file)
 
 

@@ -2,10 +2,10 @@ import logging
 from typing import Dict, List, Optional, Set
 
 import pandas as pd
-from pydantic import BaseModel, Field, field_validator
 
 from napistu import identifiers, sbml_dfs_core
 from napistu.constants import IDENTIFIERS, ONTOLOGIES, SBML_DFS, SBML_DFS_SCHEMA
+from napistu.ontologies._validation import GenodexitoConfig
 from napistu.ontologies.constants import (
     GENODEXITO_DEFS,
     INTERCONVERTIBLE_GENIC_ONTOLOGIES,
@@ -610,59 +610,3 @@ class Genodexito:
         output = identifiers.df_to_identifiers(expanded_identifiers_df)
 
         return output
-
-
-class GenodexitoConfig(BaseModel):
-    """Configuration for Genodexito with validation.
-
-    Attributes
-    ----------
-    organismal_species: str
-        Species name to use for mapping
-    preferred_method: str
-        Which mapping method to try first
-    allow_fallback: bool
-        Whether to allow fallback to other method
-    r_paths: Optional[List[str]]
-        Optional paths to R libraries
-    test_mode: bool
-        allow_fallback: Whether to allow fallback to other method
-        r_paths: Optional paths to R libraries
-        test_mode: Whether to limit queries for testing
-    """
-
-    organismal_species: str = Field(
-        default="Homo sapiens", description="Species name to use"
-    )
-    preferred_method: str = Field(
-        default=GENODEXITO_DEFS.BIOCONDUCTOR,
-        description="Which mapping method to try first",
-    )
-    allow_fallback: bool = Field(
-        default=True, description="Whether to allow fallback to other method"
-    )
-    r_paths: Optional[List[str]] = Field(
-        default=None, description="Optional paths to R libraries"
-    )
-    test_mode: bool = Field(
-        default=False, description="Whether to limit queries for testing"
-    )
-
-    @field_validator("preferred_method")
-    @classmethod
-    def validate_preferred_method(cls, v: str) -> str:
-        """Validate that preferred_method is one of the allowed values."""
-        if v not in {GENODEXITO_DEFS.BIOCONDUCTOR, GENODEXITO_DEFS.PYTHON}:
-            raise ValueError(
-                f"Invalid preferred_method: {v}. "
-                f"Must be one of: {GENODEXITO_DEFS.BIOCONDUCTOR}, {GENODEXITO_DEFS.PYTHON}"
-            )
-        return v
-
-    @field_validator("r_paths")
-    @classmethod
-    def validate_r_paths(cls, v: Optional[List[str]]) -> Optional[List[str]]:
-        """Validate that r_paths contains only strings."""
-        if v is not None and not all(isinstance(path, str) for path in v):
-            raise ValueError("All elements in r_paths must be strings")
-        return v

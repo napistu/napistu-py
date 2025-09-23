@@ -19,6 +19,7 @@ from napistu.constants import (
     VALID_SBO_TERM_NAMES,
     VALID_SBO_TERMS,
 )
+from napistu.identifiers import Identifiers
 from napistu.ingestion.constants import (
     COMPARTMENTS_GO_TERMS,
     GENERIC_COMPARTMENT,
@@ -26,6 +27,7 @@ from napistu.ingestion.constants import (
     INTERACTION_EDGELIST_DEFS,
     INTERACTION_EDGELIST_OPTIONAL_VARS,
 )
+from napistu.ontologies.constants import SPECIES_TYPES
 
 
 def test_id_formatter():
@@ -735,3 +737,155 @@ def test_find_unused_entities():
     assert set(unused_entities[SBML_DFS.SPECIES]) == {"s3", "s4"}
     assert set(unused_entities[SBML_DFS.COMPARTMENTALIZED_SPECIES]) == {"sc3", "sc4"}
     assert set(unused_entities[SBML_DFS.REACTIONS]) == {"r2"}
+
+
+def test_species_type_types():
+    """Test the species_type_types function with various Identifiers objects."""
+
+    # Test 1: Complex with HAS_PART (should return "complex" regardless of other ontologies)
+    complex_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CORUM,
+            IDENTIFIERS.IDENTIFIER: "123",
+            IDENTIFIERS.BQB: BQB.HAS_PART,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.UNIPROT,
+            IDENTIFIERS.IDENTIFIER: "P12345",
+            IDENTIFIERS.BQB: BQB.IS,
+        },  # This should be ignored
+    ]
+    complex_identifiers = Identifiers(complex_ids)
+    assert (
+        sbml_dfs_utils.species_type_types(complex_identifiers) == SPECIES_TYPES.COMPLEX
+    )
+
+    # Test 2: Clear metabolite (only CHEBI)
+    metabolite_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CHEBI,
+            IDENTIFIERS.IDENTIFIER: "CHEBI:15377",
+            IDENTIFIERS.BQB: BQB.IS,
+        }
+    ]
+    metabolite_identifiers = Identifiers(metabolite_ids)
+    assert (
+        sbml_dfs_utils.species_type_types(metabolite_identifiers)
+        == SPECIES_TYPES.METABOLITE
+    )
+
+    # Test 3: Clear protein (only Ensembl gene)
+    protein_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.ENSEMBL_GENE,
+            IDENTIFIERS.IDENTIFIER: "ENSG00000139618",
+            IDENTIFIERS.BQB: BQB.IS_ENCODED_BY,
+        }
+    ]
+    protein_identifiers = Identifiers(protein_ids)
+    assert (
+        sbml_dfs_utils.species_type_types(protein_identifiers) == SPECIES_TYPES.PROTEIN
+    )
+
+    # Test 4: Clear regulatory RNA (only miRBase)
+    rna_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.MIRBASE,
+            IDENTIFIERS.IDENTIFIER: "MIMAT0000062",
+            IDENTIFIERS.BQB: BQB.IS,
+        }
+    ]
+    rna_identifiers = Identifiers(rna_ids)
+    assert (
+        sbml_dfs_utils.species_type_types(rna_identifiers)
+        == SPECIES_TYPES.REGULATORY_RNAS
+    )
+
+    # Test 5: Multiple ontologies from same species type (should work)
+    multi_protein_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.ENSEMBL_GENE,
+            IDENTIFIERS.IDENTIFIER: "ENSG00000139618",
+            IDENTIFIERS.BQB: BQB.IS_ENCODED_BY,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.UNIPROT,
+            IDENTIFIERS.IDENTIFIER: "P12345",
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.SYMBOL,
+            IDENTIFIERS.IDENTIFIER: "BRCA2",
+            IDENTIFIERS.BQB: BQB.IS_ENCODED_BY,
+        },
+    ]
+    multi_protein_identifiers = Identifiers(multi_protein_ids)
+    assert (
+        sbml_dfs_utils.species_type_types(multi_protein_identifiers)
+        == SPECIES_TYPES.PROTEIN
+    )
+
+    # Test 6: Mixed species types (should return "unknown")
+    mixed_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CHEBI,
+            IDENTIFIERS.IDENTIFIER: "CHEBI:15377",
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.UNIPROT,
+            IDENTIFIERS.IDENTIFIER: "P12345",
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+    ]
+    mixed_identifiers = Identifiers(mixed_ids)
+    assert sbml_dfs_utils.species_type_types(mixed_identifiers) == SPECIES_TYPES.UNKNOWN
+
+    # Test 7: Empty identifiers (should return "unknown")
+    empty_identifiers = Identifiers([])
+    assert sbml_dfs_utils.species_type_types(empty_identifiers) == SPECIES_TYPES.UNKNOWN
+
+    # Test 8: Ontologies not in mapping (should return "unknown")
+    unmapped_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: "some_random_ontology",
+            IDENTIFIERS.IDENTIFIER: "12345",
+            IDENTIFIERS.BQB: BQB.IS,
+        }
+    ]
+    unmapped_identifiers = Identifiers(unmapped_ids)
+    assert (
+        sbml_dfs_utils.species_type_types(unmapped_identifiers) == SPECIES_TYPES.UNKNOWN
+    )
+
+    # Test 9: Non-Identifiers object (should return "unknown")
+    assert (
+        sbml_dfs_utils.species_type_types("not_an_identifiers_object")
+        == SPECIES_TYPES.UNKNOWN
+    )
+    assert sbml_dfs_utils.species_type_types(None) == SPECIES_TYPES.UNKNOWN
+    assert sbml_dfs_utils.species_type_types(123) == SPECIES_TYPES.UNKNOWN
+
+    # Test 10: Complex with HAS_PART overrides everything else
+    complex_override_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CHEBI,
+            IDENTIFIERS.IDENTIFIER: "CHEBI:15377",
+            IDENTIFIERS.BQB: BQB.HAS_PART,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.UNIPROT,
+            IDENTIFIERS.IDENTIFIER: "P12345",
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.MIRBASE,
+            IDENTIFIERS.IDENTIFIER: "MIMAT0000062",
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+    ]
+    complex_override_identifiers = Identifiers(complex_override_ids)
+    assert (
+        sbml_dfs_utils.species_type_types(complex_override_identifiers)
+        == SPECIES_TYPES.COMPLEX
+    )

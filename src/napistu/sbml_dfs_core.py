@@ -1106,30 +1106,33 @@ class SBML_dfs:
             Dictionary of diagnostic statistics including:
             - n_species_types: Number of species types
             - dict_n_species_per_type: Number of species per type
-            - n_species: Number of species
-            - n_cspecies: Number of compartmentalized species
-            - n_reaction_species: Number of reaction species
-            - n_reactions: Number of reactions
-            - n_compartments: Number of compartments
+            - n_entity_types: Dictionary of entity counts by type
             - dict_n_species_per_compartment: Number of species per compartment
-            - stats_species_per_reaction: Statistics on reactands per reaction
-            - top10_species_per_reaction: Top 10 reactions by number of reactands
+            - stats_species_per_reactions: Statistics on reactands per reaction
+            - top10_species_per_reactions: Top 10 reactions by number of reactands
+            - sbo_name_counts: Count of reaction species by SBO term name
             - stats_degree: Statistics on species connectivity
             - top10_degree: Top 10 species by connectivity
-            - stats_identifiers_per_species: Statistics on identifiers per species
-            - top10_identifiers_per_species: Top 10 species by number of identifiers
+            - species_ontology_counts: Count of species by ontology identifiers
+            - data_summary: Summary of species and reaction data
         """
         stats: MutableMapping[str, Any] = {}
+
+        # species_summaries
         species_features = self.get_species_features()
         stats["n_species_types"] = species_features["species_type"].nunique()
         stats["dict_n_species_per_type"] = (
             species_features.groupby(by="species_type").size().to_dict()
         )
-        stats["n_species"] = self.species.shape[0]
-        stats["n_cspecies"] = self.compartmentalized_species.shape[0]
-        stats["n_reaction_species"] = self.reaction_species.shape[0]
-        stats["n_reactions"] = self.reactions.shape[0]
-        stats["n_compartments"] = self.compartments.shape[0]
+
+        # schema summaries
+        stats["n_entity_types"] = {
+            SBML_DFS.SPECIES: self.species.shape[0],
+            SBML_DFS.REACTIONS: self.reactions.shape[0],
+            SBML_DFS.COMPARTMENTS: self.compartments.shape[0],
+            SBML_DFS.COMPARTMENTALIZED_SPECIES: self.compartmentalized_species.shape[0],
+            SBML_DFS.REACTION_SPECIES: self.reaction_species.shape[0],
+        }
         stats["dict_n_species_per_compartment"] = (
             self.compartmentalized_species.groupby(SBML_DFS.C_ID)
             .size()
@@ -1139,6 +1142,8 @@ class SBML_dfs:
             .reset_index(drop=False)
             .to_dict(orient="records")
         )
+
+        # reaction summaries
         per_reaction_stats = self.reaction_species.groupby(SBML_DFS.R_ID).size()
         stats["stats_species_per_reactions"] = per_reaction_stats.describe().to_dict()
         stats["top10_species_per_reactions"] = (
@@ -1150,7 +1155,11 @@ class SBML_dfs:
             .reset_index(drop=False)
             .to_dict(orient="records")
         )
+        sbo_name_counts = self.reaction_species.value_counts(SBML_DFS.SBO_TERM)
+        sbo_name_counts.index = sbo_name_counts.index.map(MINI_SBO_TO_NAME)
+        stats["sbo_name_counts"] = sbo_name_counts.to_dict()
 
+        # cspecies summaries
         cspecies_features = self.get_cspecies_features()
         stats["stats_degree"] = (
             cspecies_features[SBML_DFS_METHOD_DEFS.SC_DEGREE].describe().to_dict()
@@ -1179,19 +1188,12 @@ class SBML_dfs:
         s_identifiers = sbml_dfs_utils.unnest_identifiers(
             self.species, SBML_DFS.S_IDENTIFIERS
         )
-        identifiers_stats = s_identifiers.groupby(SBML_DFS.S_ID).size()
-        stats["stats_identifiers_per_species"] = identifiers_stats.describe().to_dict()
-        stats["top10_identifiers_per_species"] = (
-            identifiers_stats.sort_values(ascending=False)
-            .head(10)
-            .rename("n_identifiers")
-            .to_frame()
-            .join(
-                species_features[[SBML_DFS.S_NAME, SBML_DFS_METHOD_DEFS.SPECIES_TYPE]]
-            )
-            .reset_index(drop=False)
-            .to_dict(orient="records")
-        )
+        stats["species_ontology_counts"] = s_identifiers.value_counts(
+            IDENTIFIERS.ONTOLOGY
+        ).to_dict()
+
+        # data summaries
+        stats["data_summary"] = self._get_data_summary()
 
         return stats
 
@@ -2476,6 +2478,10 @@ class SBML_dfs:
             logger.warning(str_e)
             logger.warning("Attempting to resolve with infer_sbo_terms()")
             self.infer_sbo_terms()
+        elif re.search("Referential completeness violation", str_e):
+            logger.warning(str_e)
+            logger.warning("Attempting to resolve with remove_unused()")
+            self.remove_unused()
         else:
             logger.warning(
                 "An error occurred which could not be automatically resolved"
@@ -2608,6 +2614,22 @@ class SBML_dfs:
         )
 
         return set(underspecified_reactions), invalid_reaction_species
+
+    def _get_data_summary(self):
+        """Summarize the data tables in the SBML_dfs object"""
+
+        data_types = {}
+        for entity in ENTITIES_W_DATA:
+            entity_data = getattr(self, ENTITIES_TO_ENTITY_DATA[entity])
+            data_types[entity] = {
+                k: {
+                    "entity_type": entity,
+                    "columns": v.columns.tolist(),
+                    "n_rows": v.shape[0],
+                }
+                for k, v in entity_data.items()
+            }
+        return data_types
 
     def _get_entity_data(self, entity_type: str, label: str) -> pd.DataFrame:
         """

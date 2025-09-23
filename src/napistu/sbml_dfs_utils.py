@@ -50,6 +50,11 @@ from napistu.ingestion.constants import (
     INTERACTION_EDGELIST_OPTIONAL_VARS,
     VALID_COMPARTMENTS,
 )
+from napistu.ontologies.constants import (
+    ONTOLOGY_TO_SPECIES,
+    SPECIES_TYPE_PLURAL,
+    SPECIES_TYPES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -693,7 +698,11 @@ def format_model_summary(data):
     """Format model data into a clean summary table for Jupyter display"""
 
     # Calculate species percentages
-    total_species = data["n_species"]
+    total_species = data["n_entity_types"][SBML_DFS.SPECIES]
+    total_compartments = data["n_entity_types"][SBML_DFS.COMPARTMENTS]
+    total_cspecies = data["n_entity_types"][SBML_DFS.COMPARTMENTALIZED_SPECIES]
+    total_reactions = data["n_entity_types"][SBML_DFS.REACTIONS]
+    total_reaction_species = data["n_entity_types"][SBML_DFS.REACTION_SPECIES]
     species_data = data["dict_n_species_per_type"]
 
     # Build the summary data
@@ -704,13 +713,18 @@ def format_model_summary(data):
         species_data.items(), key=lambda x: x[1], reverse=True
     ):
         pct = count / total_species * 100
-        summary_data.append([f"- {species_type.title()}s", f"{count:,} ({pct:.1f}%)"])
+        summary_data.append(
+            [
+                f"- {SPECIES_TYPE_PLURAL[species_type].title()}s",
+                f"{count:,} ({pct:.1f}%)",
+            ]
+        )
 
     # Add spacing and compartments section
     summary_data.extend(
         [
             ["", ""],  # Empty row for spacing
-            ["Compartments", f"{data['n_compartments']:,}"],
+            ["Compartments", f"{total_compartments:,}"],
         ]
     )
 
@@ -726,7 +740,7 @@ def format_model_summary(data):
     other_compartments = sorted_compartments[10:]
 
     for comp in top_compartments:
-        comp_pct = comp["n_species"] / data["n_cspecies"] * 100
+        comp_pct = comp["n_species"] / total_cspecies * 100
         summary_data.append(
             [f"- {comp['c_name']}", f"{comp['n_species']:,} ({comp_pct:.1f}%)"]
         )
@@ -734,7 +748,7 @@ def format_model_summary(data):
     # Add "other" category if there are more than 10 compartments
     if other_compartments:
         other_cspecies_count = sum(comp["n_species"] for comp in other_compartments)
-        other_pct = other_cspecies_count / data["n_cspecies"] * 100
+        other_pct = other_cspecies_count / total_cspecies * 100
         n_other_compartments = len(other_compartments)
         summary_data.append(
             [
@@ -746,9 +760,9 @@ def format_model_summary(data):
     summary_data.extend(
         [
             ["", ""],  # Empty row for spacing
-            ["Compartmentalized Species", f"{data['n_cspecies']:,}"],
-            ["Reactions", f"{data['n_reactions']:,}"],
-            ["Reaction Species", f"{data['n_reaction_species']:,}"],
+            ["Compartmentalized Species", f"{total_cspecies:,}"],
+            ["Reactions", f"{total_reactions:,}"],
+            ["Reaction Species", f"{total_reaction_species:,}"],
         ]
     )
 
@@ -870,22 +884,55 @@ def match_entitydata_index_to_entity(
 
 
 def species_type_types(x):
-    """Assign a high-level molecule type to a molecular species"""
+    """
+    Assign a high-level molecule type to a molecular species
+
+    Parameters
+    ----------
+    x : identifiers.Identifiers
+        The identifiers object to assign a species type to
+
+    Returns
+    -------
+    str
+        The high-level molecule type of the species
+
+    Examples
+    --------
+    >>> identifiers = identifiers.Identifiers([{'ontology': 'CHEBI', 'identifier': '123456'}])
+    >>> species_type_types(identifiers)
+    'metabolite'
+    """
 
     if isinstance(x, identifiers.Identifiers):
         bqbs = x.get_all_bqbs()
-        if BQB.HAS_PART in bqbs:
-            return "complex"
 
-        ontologies = x.get_all_ontologies()
-        if ONTOLOGIES.CHEBI in ontologies:
-            return "metabolite"
-        elif ONTOLOGIES.DRUGBANK in ontologies:  # no current sources for drugs
-            return "drug"
+        # Check for HAS_PART first (indicates complex)
+        if BQB.HAS_PART in bqbs:
+            return SPECIES_TYPES.COMPLEX
+
+        # Work with the identifiers dataframe directly
+        df = x.df
+        if df.empty:
+            return SPECIES_TYPES.UNKNOWN
+
+        # Map ontologies in the df to species types and count non-null values
+        df_ontologies = df[IDENTIFIERS.ONTOLOGY].dropna()
+        species_matches = df_ontologies.map(ONTOLOGY_TO_SPECIES).dropna()
+
+        if len(species_matches) == 0:
+            return SPECIES_TYPES.UNKNOWN
+        elif len(species_matches.unique()) == 1:
+            return species_matches.iloc[0]
         else:
-            return "protein"
+            # Multiple different species types found
+            return SPECIES_TYPES.UNKNOWN
+
     else:
-        return "unknown"
+        logger.warning(
+            f"Invalid input type: {type(x)}; returning {SPECIES_TYPES.UNKNOWN}"
+        )
+        return SPECIES_TYPES.UNKNOWN
 
 
 def stub_compartments(
