@@ -1,4 +1,3 @@
-import copy
 import logging
 from typing import List, Optional, Union
 
@@ -129,7 +128,7 @@ def filter_reactions_with_disconnected_cspecies(
     """
 
     if inplace:
-        sbml_dfs = copy.deepcopy(sbml_dfs)
+        sbml_dfs = sbml_dfs.copy()
 
     # find how many conditions a pair of species cooccur in
     cooccurence_edgelist = _create_cooccurence_edgelist(sbml_dfs, species_data_table)

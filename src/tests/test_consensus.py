@@ -706,3 +706,41 @@ def test_update_foreign_keys_multiple_fks():
     assert result[SBML_DFS.S_ID].tolist() == ["new_s1", "new_s2"]
     assert result[SBML_DFS.C_ID].tolist() == ["new_c1", "new_c2"]
     assert result["data"].tolist() == [10, 20]  # Other data preserved
+
+
+def test_construct_consensus_model_no_rxn_pathway_ids(
+    sbml_dfs_dict_metabolism, pw_index_metabolism, sbml_dfs_metabolism
+):
+    """Test construct_consensus_model with no_rxn_pathway_ids parameter."""
+    # Test with one pathway marked as no_rxn_pathway_ids
+    no_rxn_pathway_ids = ["tca"]  # Select TCA cycle as no-reaction pathway
+
+    # Create consensus model with no_rxn_pathway_ids
+    consensus_model = consensus.construct_consensus_model(
+        sbml_dfs_dict_metabolism,
+        pw_index_metabolism,
+        no_rxn_pathway_ids=no_rxn_pathway_ids,
+    )
+
+    assert consensus_model.reactions.shape[0] < sbml_dfs_metabolism.reactions.shape[0]
+    # cleanup generally removes some unused cspecies, species, and in some cases compartments
+    assert consensus_model.species.shape[0] < sbml_dfs_metabolism.species.shape[0]
+    assert (
+        consensus_model.compartmentalized_species.shape[0]
+        < sbml_dfs_metabolism.compartmentalized_species.shape[0]
+    )
+
+    # Test with invalid pathway ID
+    invalid_no_rxn_pathway_ids = ["invalid_pathway_id"]
+
+    # Should raise ValueError when invalid pathway ID is provided
+    with pytest.raises(ValueError) as exc_info:
+        consensus.construct_consensus_model(
+            sbml_dfs_dict_metabolism,
+            pw_index_metabolism,
+            no_rxn_pathway_ids=invalid_no_rxn_pathway_ids,
+        )
+
+    # Verify the error message mentions the invalid pathway ID
+    assert "invalid_pathway_id" in str(exc_info.value)
+    assert "not found in the pw_index" in str(exc_info.value)

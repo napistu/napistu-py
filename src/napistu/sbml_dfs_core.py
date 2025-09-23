@@ -89,6 +89,8 @@ class SBML_dfs:
         Return a deep copy of the SBML_dfs object.
     export_sbml_dfs(model_prefix, outdir, overwrite=False, dogmatic=True)
         Export the SBML_dfs model and its tables to files in a specified directory.
+    find_entity_references(entity_type, entity_ids, reference_type, reference_ids)
+        Find entities that reference specified entities through a given reference type.
     from_edgelist(interaction_edgelist, species_df, compartments_df, interaction_source=source.Source(init=True), interaction_edgelist_defaults=INTERACTION_EDGELIST_DEFAULTS, keep_species_data=False, keep_reactions_data=False)
         Create SBML_dfs from interaction edgelist.
     from_pickle(path)
@@ -107,6 +109,10 @@ class SBML_dfs:
         Get ontology × source co-occurrence matrix for a specific entity type.
     get_sbml_dfs_summary()
         Return a dictionary of diagnostic statistics summarizing the SBML_dfs structure.
+    get_sbo_term_occurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False)
+        Get SBO term occurrence summary for a specific entity type.
+    get_sbo_term_x_source_cooccurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False, characteristic_only=False, dogmatic=True, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS)
+        Get SBO term × source co-occurrence matrix for a specific entity type.
     get_source_cooccurrence(entity_type, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS)
         Get pathway co-occurrence matrix for a specific entity type.
     get_source_occurrence(entity_type, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS)
@@ -133,10 +139,8 @@ class SBML_dfs:
         Generate human-readable reaction formulas for specified reactions.
     reaction_summaries(r_ids=None)
         Return a summary DataFrame for specified reactions, including names and formulas.
-    remove_compartmentalized_species(sc_ids)
-        Remove specified compartmentalized species and associated reactions from the model.
-    remove_reactions(r_ids, remove_species=False)
-        Remove specified reactions and optionally remove unused species.
+    remove_entities(entity_type, entity_ids, remove_species=False)
+        Remove specified entities and optionally remove unused species.
     remove_reactions_data(label)
         Remove a reactions data table by label.
     remove_species_data(label)
@@ -166,14 +170,13 @@ class SBML_dfs:
     -----------------------------------------------------------------
     _attempt_resolve(e)
     _edgelist_assemble_sbml_model(compartments, species, comp_species, reactions, reaction_species, species_data, reactions_data, keep_species_data, keep_reactions_data, extra_columns)
-    _find_underspecified_reactions_by_scids(sc_ids)
+    _find_invalid_entities_by_reference(entity_type, reference_type, reference_ids)
+    _find_underspecified_reactions_by_reference(reference_type, reference_ids)
     _get_entity_data(entity_type, label)
     _get_identifiers_table_for_ontology_occurrence(entity_type, characteristic_only=False, dogmatic=True)
-    _remove_compartmentalized_species(sc_ids)
+    _get_non_interactor_reactions()
+    _remove_entities_direct(entity_type, entity_ids)
     _remove_entity_data(entity_type, label)
-    _remove_species(s_ids)
-    _remove_unused_cspecies()
-    _remove_unused_species()
     _validate_entity_data_access(entity_type, label)
     _validate_identifiers()
     _validate_pk_fk_correspondence()

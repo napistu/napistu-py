@@ -1083,7 +1083,7 @@ def _add_edgelist_defaults(
 
         if len(na_values) > 0:
             default_value = edgelist_defaults[var_with_default]
-            logger.warning(
+            logger.info(
                 f"Replacing {len(na_values)} missing values with default value for {var_with_default}: {default_value}"
             )
             interaction_edgelist_w_defaults.loc[na_values, var_with_default] = (

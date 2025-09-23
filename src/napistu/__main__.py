@@ -144,8 +144,8 @@ def ingest_string_db(organismal_species: str, target_uri: str):
 
 
 @ingestion.command(name="string_aliases")
-@target_uri_output
 @organismal_species_argument
+@target_uri_output
 @verbosity_option
 def ingest_string_aliases(organismal_species: str, target_uri: str):
     string.download_string_aliases(target_uri, organismal_species)
@@ -467,6 +467,7 @@ def create_consensus(
         dogmatic=dogmatic,
         check_mergeability=check_mergeability,
     )
+
     consensus_model.to_pickle(output_model_uri)
 
 
