@@ -487,6 +487,7 @@ SOURCE_STANDARD_COLUMNS = EXPECTED_PW_INDEX_COLUMNS | {
 
 # rules for specific ontologies
 ONTOLOGIES = SimpleNamespace(
+    BIGG_METABOLITE="bigg.metabolite",
     BIORXIV="biorxiv",
     CHEBI="chebi",
     CORUM="corum",
@@ -502,6 +503,7 @@ ONTOLOGIES = SimpleNamespace(
     GO="go",
     INTACT="intact",
     KEGG="kegg",
+    KEGG_DRUG="kegg.drug",
     MIRBASE="mirbase",
     NCBI_ENTREZ_GENE="ncbi_entrez_gene",
     PHAROS="pharos",

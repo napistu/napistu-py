@@ -636,13 +636,13 @@ def test_add_missing_ids_column(sbml_dfs):
     ).all(), "Result should contain only integer values"
 
 
-def test_format_model_summary(sbml_dfs):
-    """Test format_model_summary function with sbml_dfs fixture."""
+def test_format_sbml_dfs_summary(sbml_dfs):
+    """Test format_sbml_dfs_summary function with sbml_dfs fixture."""
     # Get network summary from the sbml_dfs
-    summary_stats = sbml_dfs.get_sbml_dfs_summary()
+    summary_stats = sbml_dfs.get_summary()
 
-    # Call format_model_summary
-    result = sbml_dfs_utils.format_model_summary(summary_stats)
+    # Call format_sbml_dfs_summary
+    result = sbml_dfs_utils.format_sbml_dfs_summary(summary_stats)
 
     # Test that result is a DataFrame
     assert isinstance(result, pd.DataFrame), "Result should be a pandas DataFrame"
@@ -798,7 +798,7 @@ def test_species_type_types():
     rna_identifiers = Identifiers(rna_ids)
     assert (
         sbml_dfs_utils.species_type_types(rna_identifiers)
-        == SPECIES_TYPES.REGULATORY_RNAS
+        == SPECIES_TYPES.REGULATORY_RNA
     )
 
     # Test 5: Multiple ontologies from same species type (should work)
@@ -825,7 +825,7 @@ def test_species_type_types():
         == SPECIES_TYPES.PROTEIN
     )
 
-    # Test 6: Mixed species types (should return "unknown")
+    # Test 6: Mixed species types (should return "other")
     mixed_ids = [
         {
             IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CHEBI,
@@ -855,7 +855,7 @@ def test_species_type_types():
     ]
     unmapped_identifiers = Identifiers(unmapped_ids)
     assert (
-        sbml_dfs_utils.species_type_types(unmapped_identifiers) == SPECIES_TYPES.UNKNOWN
+        sbml_dfs_utils.species_type_types(unmapped_identifiers) == SPECIES_TYPES.OTHER
     )
 
     # Test 9: Non-Identifiers object (should return "unknown")
@@ -888,4 +888,92 @@ def test_species_type_types():
     assert (
         sbml_dfs_utils.species_type_types(complex_override_identifiers)
         == SPECIES_TYPES.COMPLEX
+    )
+
+
+def test_species_type_types_prioritized():
+    """Test the species_type_types function with prioritized species types argument."""
+
+    # Test 1: Drug should be prioritized over metabolite
+    drug_metabolite_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CHEBI,
+            IDENTIFIERS.IDENTIFIER: "CHEBI:15377",  # metabolite
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.DRUGBANK,
+            IDENTIFIERS.IDENTIFIER: "DB00001",  # drug
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+    ]
+    drug_metabolite_identifiers = Identifiers(drug_metabolite_ids)
+
+    # With default prioritized types (drug and complex), should return drug
+    assert (
+        sbml_dfs_utils.species_type_types(drug_metabolite_identifiers)
+        == SPECIES_TYPES.DRUG
+    )
+
+    # Test 2: Custom prioritized types - prioritize protein over metabolite
+    custom_prioritized = {SPECIES_TYPES.PROTEIN}
+    protein_metabolite_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CHEBI,
+            IDENTIFIERS.IDENTIFIER: "CHEBI:15377",  # metabolite
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.UNIPROT,
+            IDENTIFIERS.IDENTIFIER: "P12345",  # protein
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+    ]
+    protein_metabolite_identifiers = Identifiers(protein_metabolite_ids)
+
+    # With custom prioritized types, should return protein
+    assert (
+        sbml_dfs_utils.species_type_types(
+            protein_metabolite_identifiers, prioritized_species_types=custom_prioritized
+        )
+        == SPECIES_TYPES.PROTEIN
+    )
+
+    # Test 3: Multiple prioritized types should return UNKNOWN
+    multiple_prioritized_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.DRUGBANK,
+            IDENTIFIERS.IDENTIFIER: "DB00001",  # drug
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CORUM,
+            IDENTIFIERS.IDENTIFIER: "123",  # complex
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+    ]
+    multiple_prioritized_identifiers = Identifiers(multiple_prioritized_ids)
+
+    # With default prioritized types (both drug and complex), should return UNKNOWN
+    assert (
+        sbml_dfs_utils.species_type_types(multiple_prioritized_identifiers)
+        == SPECIES_TYPES.UNKNOWN
+    )
+
+    # Test 4: No prioritized types should return the single species type
+    metabolite_only_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CHEBI,
+            IDENTIFIERS.IDENTIFIER: "CHEBI:15377",  # metabolite
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+    ]
+    metabolite_only_identifiers = Identifiers(metabolite_only_ids)
+
+    # With empty prioritized types, should return metabolite
+    assert (
+        sbml_dfs_utils.species_type_types(
+            metabolite_only_identifiers, prioritized_species_types=set()
+        )
+        == SPECIES_TYPES.METABOLITE
     )

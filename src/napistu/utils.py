@@ -1503,3 +1503,10 @@ def infer_entity_type(df: pd.DataFrame) -> str:
     raise ValueError(
         f"No entity type matches DataFrame with index: {df.index.names} and columns: {sorted(df_columns)}"
     )
+
+
+def safe_capitalize(text: str) -> str:
+    """Capitalize first letter only, preserve case of rest."""
+    if not text:
+        return text
+    return text[0].upper() + text[1:]

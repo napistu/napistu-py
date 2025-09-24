@@ -854,3 +854,11 @@ def test_infer_entity_type_multindex():
     )
     result = utils.infer_entity_type(df)
     assert result == SBML_DFS.COMPARTMENTALIZED_SPECIES
+
+
+def test_safe_capitalize():
+    """Test that safe_capitalize preserves acronyms."""
+    assert utils.safe_capitalize("regulatory RNAs") == "Regulatory RNAs"
+    assert utils.safe_capitalize("proteins") == "Proteins"
+    assert utils.safe_capitalize("DNA sequences") == "DNA sequences"
+    assert utils.safe_capitalize("") == ""

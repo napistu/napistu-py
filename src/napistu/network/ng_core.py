@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 import logging
-from typing import Any, Optional, Union
+from typing import Any, Mapping, MutableMapping, Optional, Union
 
 import igraph as ig
 import pandas as pd
@@ -11,6 +11,7 @@ from napistu import utils
 from napistu.constants import (
     ENTITIES_TO_ENTITY_DATA,
     ENTITIES_W_DATA,
+    MINI_SBO_TO_NAME,
     SBML_DFS,
 )
 from napistu.ingestion.constants import DEFAULT_PRIORITIZED_PATHWAYS
@@ -904,6 +905,43 @@ class NapistuGraph(ig.Graph):
             return self._metadata.copy()
         return self._metadata.get(key)
 
+    def get_summary(self) -> Mapping[str, Any]:
+        """
+        Get summary statistics for the graph.
+
+        Returns
+        -------
+        Mapping[str, Any]
+            A dictionary of summary statistics.
+            - n_vertices: Number of vertices
+            - vertex_node_type_dict: Dictionary of node type counts
+            - vertex_species_type_dict: Dictionary of species type counts
+            - vertex_attributes: List of vertex attributes
+            - n_edges: Number of edges
+            - sbo_name_counts_dict: Dictionary of SBO name counts
+            - edge_attributes: List of edge attributes
+        """
+
+        stats: MutableMapping[str, Any] = {}
+
+        # vertex summaries
+        vertex_df = self.get_vertex_dataframe()
+        stats["n_vertices"] = vertex_df.shape[0]
+        stats["vertex_node_type_dict"] = vertex_df.value_counts("node_type").to_dict()
+        stats["vertex_species_type_dict"] = vertex_df.value_counts(
+            "species_type"
+        ).to_dict()
+        stats["vertex_attributes"] = vertex_df.columns.tolist()
+
+        # edge summaries
+        stats["n_edges"] = len(self.es)
+        sbo_name_counts = pd.Series([e["sbo_term"] for e in self.es]).value_counts()
+        sbo_name_counts.index = sbo_name_counts.index.map(MINI_SBO_TO_NAME)
+        stats["sbo_name_counts_dict"] = sbo_name_counts.to_dict()
+        stats["edge_attributes"] = self.es.attributes()
+
+        return stats
+
     def get_vertex_dataframe(self) -> pd.DataFrame:
         """
         Get vertices as a Pandas DataFrame.
@@ -980,6 +1018,14 @@ class NapistuGraph(ig.Graph):
                 overwrite,
             )
             self.set_metadata(reaction_attrs=merged_reactions)
+
+    def show_summary(self) -> None:
+        """
+        Show summary statistics for the graph.
+        """
+        summary_stats = self.get_summary()
+        summary_table = ng_utils.format_napistu_graph_summary(summary_stats)
+        utils.show(summary_table)
 
     def remove_isolated_vertices(self, node_types: str = SBML_DFS.REACTIONS):
         """

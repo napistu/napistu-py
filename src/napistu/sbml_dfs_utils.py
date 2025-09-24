@@ -51,7 +51,8 @@ from napistu.ingestion.constants import (
     VALID_COMPARTMENTS,
 )
 from napistu.ontologies.constants import (
-    ONTOLOGY_TO_SPECIES,
+    ONTOLOGY_TO_SPECIES_TYPE,
+    PRIORITIZED_SPECIES_TYPES,
     SPECIES_TYPE_PLURAL,
     SPECIES_TYPES,
 )
@@ -694,7 +695,7 @@ def force_edgelist_consistency(
     return filtered_interactions, filtered_species, compartments_df
 
 
-def format_model_summary(data):
+def format_sbml_dfs_summary(data):
     """Format model data into a clean summary table for Jupyter display"""
 
     # Calculate species percentages
@@ -703,7 +704,7 @@ def format_model_summary(data):
     total_cspecies = data["n_entity_types"][SBML_DFS.COMPARTMENTALIZED_SPECIES]
     total_reactions = data["n_entity_types"][SBML_DFS.REACTIONS]
     total_reaction_species = data["n_entity_types"][SBML_DFS.REACTION_SPECIES]
-    species_data = data["dict_n_species_per_type"]
+    species_data = data["n_species_per_type"]
 
     # Build the summary data
     summary_data = [["Species", f"{total_species:,}"]]
@@ -715,7 +716,7 @@ def format_model_summary(data):
         pct = count / total_species * 100
         summary_data.append(
             [
-                f"- {SPECIES_TYPE_PLURAL[species_type].title()}s",
+                f"- {utils.safe_capitalize(SPECIES_TYPE_PLURAL[species_type])}",
                 f"{count:,} ({pct:.1f}%)",
             ]
         )
@@ -883,7 +884,11 @@ def match_entitydata_index_to_entity(
     return entity_data_df
 
 
-def species_type_types(x):
+def species_type_types(
+    x,
+    ontology_to_species_type: dict = ONTOLOGY_TO_SPECIES_TYPE,
+    prioritized_species_types: set[str] = PRIORITIZED_SPECIES_TYPES,
+) -> str:
     """
     Assign a high-level molecule type to a molecular species
 
@@ -891,6 +896,10 @@ def species_type_types(x):
     ----------
     x : identifiers.Identifiers
         The identifiers object to assign a species type to
+    ontology_to_species_type : dict
+        The mapping of ontologies to species types
+    prioritized_species_types : set[str]
+        The set of prioritized species types
 
     Returns
     -------
@@ -899,33 +908,42 @@ def species_type_types(x):
 
     Examples
     --------
-    >>> identifiers = identifiers.Identifiers([{'ontology': 'CHEBI', 'identifier': '123456'}])
+    >>> identifiers = identifiers.Identifiers([{'ontology': 'CHEBI', 'identifier': '123456', 'bqb': 'BQB.IS'}])
     >>> species_type_types(identifiers)
     'metabolite'
     """
 
     if isinstance(x, identifiers.Identifiers):
-        bqbs = x.get_all_bqbs()
 
         # Check for HAS_PART first (indicates complex)
+        bqbs = x.get_all_bqbs()
         if BQB.HAS_PART in bqbs:
             return SPECIES_TYPES.COMPLEX
 
-        # Work with the identifiers dataframe directly
-        df = x.df
-        if df.empty:
+        ontologies = x.get_all_ontologies([BQB.IS, BQB.IS_ENCODED_BY, BQB.ENCODES])
+        if len(ontologies) == 0:
             return SPECIES_TYPES.UNKNOWN
 
-        # Map ontologies in the df to species types and count non-null values
-        df_ontologies = df[IDENTIFIERS.ONTOLOGY].dropna()
-        species_matches = df_ontologies.map(ONTOLOGY_TO_SPECIES).dropna()
+        # check for prioritized ontologies
+        ontologies_w_species_types = ontologies & ontology_to_species_type.keys()
 
-        if len(species_matches) == 0:
+        # Then map to species types
+        species_types = {
+            ontology_to_species_type[ont] for ont in ontologies_w_species_types
+        }
+
+        prioritized_types = species_types & prioritized_species_types
+        if len(prioritized_types) == 1:
+            return prioritized_types.pop()
+        elif len(prioritized_types) > 1:
             return SPECIES_TYPES.UNKNOWN
-        elif len(species_matches.unique()) == 1:
-            return species_matches.iloc[0]
-        else:
-            # Multiple different species types found
+
+        if len(species_types) == 0:
+            # none of the defined ontologies are associated with a species type
+            return SPECIES_TYPES.OTHER
+        elif len(species_types) == 1:
+            return species_types.pop()
+        elif len(species_types) > 1:
             return SPECIES_TYPES.UNKNOWN
 
     else:

@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 from fs.errors import ResourceNotFound
 
-from napistu.constants import SBML_DFS
+from napistu.constants import SBML_DFS, SBOTERM_NAMES
 from napistu.network import ng_utils
 from napistu.network.constants import (
     DEFAULT_WT_TRANS,
@@ -303,7 +303,7 @@ def test_graph_attrs_extend_and_overwrite_protection(test_graph):
 def test_add_edge_data_basic_functionality(test_graph, minimal_valid_sbml_dfs):
     """Test basic add_edge_data functionality with mock reaction data."""
     # Update the test graph to have the correct r_ids that match the SBML data
-    test_graph.es["r_id"] = [
+    test_graph.es[SBML_DFS.R_ID] = [
         "R00001",
         "R00001",
     ]  # Both edges should map to the same reaction
@@ -349,7 +349,7 @@ def test_add_edge_data_basic_functionality(test_graph, minimal_valid_sbml_dfs):
 def test_add_edge_data_mode_and_overwrite(test_graph, minimal_valid_sbml_dfs):
     """Test mode and overwrite behavior for add_edge_data."""
     # Update the test graph to have the correct r_ids that match the SBML data
-    test_graph.es["r_id"] = [
+    test_graph.es[SBML_DFS.R_ID] = [
         "R00001",
         "R00001",
     ]  # Both edges should map to the same reaction
@@ -1540,3 +1540,118 @@ def test_add_edge_data_side_loaded_only(napistu_graph):
     assert any(
         source is not None and not pd.isna(source) for source in source_dbs
     ), "No valid source_db values found"
+
+
+def test_show_summary(napistu_graph):
+    """Test that show_summary method runs without errors."""
+
+    # Call show_summary - should not raise any exceptions
+    napistu_graph.show_summary()
+
+    # If we get here, the method ran successfully
+    # We can also verify that get_summary works and returns expected structure
+    summary_stats = napistu_graph.get_summary()
+
+    # Print the actual summary stats for inspection
+    print("\n=== Summary Stats ===")
+    print(f"n_vertices: {summary_stats['n_vertices']}")
+    print(f"n_edges: {summary_stats['n_edges']}")
+    print(f"vertex_node_type_dict: {summary_stats['vertex_node_type_dict']}")
+    print(f"vertex_species_type_dict: {summary_stats['vertex_species_type_dict']}")
+    print(f"sbo_name_counts_dict: {summary_stats['sbo_name_counts_dict']}")
+    print(f"vertex_attributes: {summary_stats['vertex_attributes']}")
+    print(f"edge_attributes: {summary_stats['edge_attributes']}")
+    print("===================\n")
+
+    # Verify the summary has the expected keys
+    expected_keys = [
+        "n_vertices",
+        "vertex_node_type_dict",
+        "vertex_species_type_dict",
+        "vertex_attributes",
+        "n_edges",
+        "sbo_name_counts_dict",
+        "edge_attributes",
+    ]
+
+    for key in expected_keys:
+        assert key in summary_stats, f"Missing key: {key}"
+
+    # Test vertices: type and count
+    assert isinstance(summary_stats["n_vertices"], int)
+    assert (
+        summary_stats["n_vertices"] == 30
+    ), f"Expected 30 vertices, got {summary_stats['n_vertices']}"
+
+    # Test edges: type and count
+    assert isinstance(summary_stats["n_edges"], int)
+    assert (
+        summary_stats["n_edges"] == 32
+    ), f"Expected 32 edges, got {summary_stats['n_edges']}"
+
+    # Test vertex node type breakdown: type and content
+    assert isinstance(summary_stats["vertex_node_type_dict"], dict)
+    expected_node_types = {
+        NAPISTU_GRAPH_NODE_TYPES.SPECIES: 23,
+        NAPISTU_GRAPH_NODE_TYPES.REACTION: 7,
+    }
+    assert (
+        summary_stats["vertex_node_type_dict"] == expected_node_types
+    ), f"Expected {expected_node_types}, got {summary_stats['vertex_node_type_dict']}"
+
+    # Test vertex species type breakdown: type and content
+    assert isinstance(summary_stats["vertex_species_type_dict"], dict)
+    expected_species_types = {"metabolite": 13, "complex": 9, "protein": 1}
+    assert (
+        summary_stats["vertex_species_type_dict"] == expected_species_types
+    ), f"Expected {expected_species_types}, got {summary_stats['vertex_species_type_dict']}"
+
+    # Test SBO term breakdown: type and content
+    assert isinstance(summary_stats["sbo_name_counts_dict"], dict)
+    expected_sbo_terms = {
+        SBOTERM_NAMES.PRODUCT: 13,
+        SBOTERM_NAMES.REACTANT: 13,
+        SBOTERM_NAMES.CATALYST: 6,
+    }
+    assert (
+        summary_stats["sbo_name_counts_dict"] == expected_sbo_terms
+    ), f"Expected {expected_sbo_terms}, got {summary_stats['sbo_name_counts_dict']}"
+
+    # Test vertex attributes: type and content
+    assert isinstance(summary_stats["vertex_attributes"], list)
+    expected_vertex_attrs = {
+        NAPISTU_GRAPH_VERTICES.NAME,
+        NAPISTU_GRAPH_VERTICES.NODE_NAME,
+        NAPISTU_GRAPH_VERTICES.NODE_TYPE,
+        NAPISTU_GRAPH_VERTICES.SPECIES_TYPE,
+        SBML_DFS.S_ID,
+        SBML_DFS.C_ID,
+    }
+    actual_vertex_attrs = set(summary_stats["vertex_attributes"])
+    assert (
+        actual_vertex_attrs == expected_vertex_attrs
+    ), f"Expected {expected_vertex_attrs}, got {actual_vertex_attrs}"
+
+    # Test edge attributes: type and content
+    assert isinstance(summary_stats["edge_attributes"], list)
+    expected_edge_attrs = {
+        NAPISTU_GRAPH_EDGES.FROM,
+        NAPISTU_GRAPH_EDGES.TO,
+        NAPISTU_GRAPH_EDGES.STOICHIOMETRY,
+        NAPISTU_GRAPH_EDGES.SBO_TERM,
+        SBML_DFS.R_ID,
+        NAPISTU_GRAPH_EDGES.SPECIES_TYPE,
+        SBML_DFS.R_ISREVERSIBLE,
+        NAPISTU_GRAPH_EDGES.DIRECTION,
+        NAPISTU_GRAPH_EDGES.SC_DEGREE,
+        NAPISTU_GRAPH_EDGES.SC_CHILDREN,
+        NAPISTU_GRAPH_EDGES.SC_PARENTS,
+        "topo_weights",
+        "upstream_topo_weights",
+        NAPISTU_GRAPH_EDGES.WEIGHT,
+        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+    }
+    actual_edge_attrs = set(summary_stats["edge_attributes"])
+    assert (
+        actual_edge_attrs == expected_edge_attrs
+    ), f"Expected {expected_edge_attrs}, got {actual_edge_attrs}"

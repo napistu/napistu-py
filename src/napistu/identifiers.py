@@ -109,13 +109,19 @@ class Identifiers:
         """
         return set(self.df[IDENTIFIERS.BQB].dropna().unique())
 
-    def get_all_ontologies(self) -> set[str]:
+    def get_all_ontologies(self, bqb_terms: list[str] = None) -> set[str]:
         """Returns a set of all ontology entries
 
         Returns:
             set[str]: A set containing all unique ontology names from the identifiers
         """
-        return set(self.df[IDENTIFIERS.ONTOLOGY].unique())
+
+        if bqb_terms is not None:
+            return set(
+                self.df[self.df[IDENTIFIERS.BQB].isin(bqb_terms)][IDENTIFIERS.ONTOLOGY]
+            )
+        else:
+            return set(self.df[IDENTIFIERS.ONTOLOGY])
 
     def has_ontology(self, ontologies: str | list[str]) -> bool:
         """

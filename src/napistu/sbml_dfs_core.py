@@ -107,8 +107,6 @@ class SBML_dfs:
         Get ontology occurrence summary for a specific entity type.
     get_ontology_x_source_cooccurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False, characteristic_only=False, dogmatic=True, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS)
         Get ontology × source co-occurrence matrix for a specific entity type.
-    get_sbml_dfs_summary()
-        Return a dictionary of diagnostic statistics summarizing the SBML_dfs structure.
     get_sbo_term_occurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False)
         Get SBO term occurrence summary for a specific entity type.
     get_sbo_term_x_source_cooccurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False, characteristic_only=False, dogmatic=True, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS)
@@ -123,6 +121,8 @@ class SBML_dfs:
         Get the total counts of each source for a given entity type.
     get_species_features()
         Compute and return additional features for species, such as species type.
+    get_summary()
+        Return a dictionary of diagnostic statistics summarizing the SBML_dfs structure.
     get_table(entity_type, required_attributes=None)
         Retrieve a table for a given entity type, optionally validating required attributes.
     get_uri_urls(entity_type, entity_ids=None, required_ontology=None)
@@ -1096,7 +1096,7 @@ class SBML_dfs:
 
         return cooccurrences
 
-    def get_sbml_dfs_summary(self) -> Mapping[str, Any]:
+    def get_summary(self) -> Mapping[str, Any]:
         """
         Get diagnostic statistics about the SBML_dfs.
 
@@ -1105,7 +1105,7 @@ class SBML_dfs:
         Mapping[str, Any]
             Dictionary of diagnostic statistics including:
             - n_species_types: Number of species types
-            - dict_n_species_per_type: Number of species per type
+            - n_species_per_type: Number of species per type
             - n_entity_types: Dictionary of entity counts by type
             - dict_n_species_per_compartment: Number of species per compartment
             - stats_species_per_reactions: Statistics on reactands per reaction
@@ -1121,7 +1121,7 @@ class SBML_dfs:
         # species_summaries
         species_features = self.get_species_features()
         stats["n_species_types"] = species_features["species_type"].nunique()
-        stats["dict_n_species_per_type"] = (
+        stats["n_species_per_type"] = (
             species_features.groupby(by="species_type").size().to_dict()
         )
 
@@ -2254,7 +2254,7 @@ class SBML_dfs:
         """
         Display a formatted summary of the SBML_dfs model.
 
-        This method chains together get_sbml_dfs_summary(), format_model_summary(),
+        This method chains together get_summary(), format_sbml_dfs_summary(),
         and utils.show() to provide a convenient way to display network statistics.
 
         Returns
@@ -2266,8 +2266,8 @@ class SBML_dfs:
         --------
         >>> sbml_dfs.show_network_summary()
         """
-        summary_stats = self.get_sbml_dfs_summary()
-        summary_table = sbml_dfs_utils.format_model_summary(summary_stats)
+        summary_stats = self.get_summary()
+        summary_table = sbml_dfs_utils.format_sbml_dfs_summary(summary_stats)
         utils.show(summary_table, max_rows=50)
 
     def species_status(self, s_id: str) -> pd.DataFrame:

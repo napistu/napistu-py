@@ -184,7 +184,7 @@ class SpeciesTypeOntologyMapping(BaseModel):
         all_ontologies = []
         invalid_ontologies = set()
 
-        for species_type, ontology_list in v.items():
+        for ontology_list in v.values():
             for ontology in ontology_list:
                 all_ontologies.append(ontology)
                 if ontology not in valid_ontologies:
@@ -201,7 +201,7 @@ class SpeciesTypeOntologyMapping(BaseModel):
         seen_ontologies = set()
         duplicate_ontologies = set()
 
-        for species_type, ontology_list in v.items():
+        for ontology_list in v.values():
             for ontology in ontology_list:
                 if ontology in seen_ontologies:
                     duplicate_ontologies.add(ontology)
@@ -222,7 +222,7 @@ class SpeciesTypeOntologyMapping(BaseModel):
 
         return v
 
-    def create_ontology_to_species_mapping(self) -> Dict[str, str]:
+    def create_ontology_to_species_type_mapping(self) -> Dict[str, str]:
         """Create a flattened mapping from ontology to species type.
 
         Returns
@@ -230,8 +230,8 @@ class SpeciesTypeOntologyMapping(BaseModel):
         Dict[str, str]
             Dictionary mapping each ontology to its species type
         """
-        ontology_to_species = {}
+        ontology_to_species_type = {}
         for species_type, ontologies in self.mappings.items():
             for ontology in ontologies:
-                ontology_to_species[ontology] = species_type
-        return ontology_to_species
+                ontology_to_species_type[ontology] = species_type
+        return ontology_to_species_type
