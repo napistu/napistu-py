@@ -56,8 +56,10 @@ def test_consensus():
     assert consensus_model.reactions.shape == (30, 4)
     assert consensus_model.reaction_species.shape == (137, 4)
 
+    consensus_model.validate()
+
     consensus_model = drop_cofactors(consensus_model)
-    assert consensus_model.species.shape == (38, 3)
+    assert consensus_model.species.shape == (30, 3)
     assert consensus_model.reaction_species.shape == (52, 4)
     # update reaction_species.shape after more cofactors identified
 
@@ -572,3 +574,173 @@ def test_pre_consensus_ontology_check_incompatible(
         "incompatible" in record.message.lower() or "overlap" in record.message.lower()
         for record in caplog.records
     )
+
+
+def test_consensus_species_merged(sbml_dfs_metabolism):
+    """Test that species identifiers are properly merged during consensus building."""
+    # Check for species merging; are defining IDs shared across species?
+    species_ids = sbml_dfs_metabolism.get_identifiers(
+        SBML_DFS.SPECIES, filter_by_bqb="defining"
+    )
+    assert all(
+        species_ids.value_counts([IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER]) == 1
+    )
+
+
+def test_update_foreign_keys():
+    """Test _update_foreign_keys function with various scenarios."""
+    # Create test data
+    agg_tbl = pd.DataFrame(
+        {
+            SOURCE_SPEC.MODEL: ["model_a", "model_a", "model_b", "model_b"],
+            "entity_id": ["e1", "e2", "e3", "e4"],
+            SBML_DFS.S_ID: ["s1", "s2", "s1", "s3"],
+            "data": [10, 20, 30, 40],
+        }
+    ).set_index([SOURCE_SPEC.MODEL, "entity_id"])
+
+    # Create FK lookup table (multiindex: model, old_id -> new_id)
+    fk_lookup = pd.DataFrame(
+        {"new_id": ["new_s1", "new_s2", "new_s1", "new_s3"]},
+        index=pd.MultiIndex.from_tuples(
+            [
+                ("model_a", "s1"),
+                ("model_a", "s2"),
+                ("model_b", "s1"),
+                ("model_b", "s3"),
+            ],
+            names=[SOURCE_SPEC.MODEL, SBML_DFS.S_ID],
+        ),
+    )
+
+    # Create table schema
+    table_schema = {SCHEMA_DEFS.FK: [SBML_DFS.S_ID], SCHEMA_DEFS.PK: "entity_id"}
+
+    fk_lookup_tables = {SBML_DFS.S_ID: fk_lookup}
+
+    # Test successful FK update
+    result = consensus._update_foreign_keys(agg_tbl, table_schema, fk_lookup_tables)
+
+    # Verify the foreign keys were updated correctly
+    expected_species_ids = ["new_s1", "new_s2", "new_s1", "new_s3"]
+    assert result[SBML_DFS.S_ID].tolist() == expected_species_ids
+    assert result["data"].tolist() == [10, 20, 30, 40]  # Other data preserved
+
+
+def test_update_foreign_keys_missing_key():
+    """Test _update_foreign_keys raises ValueError for missing keys."""
+    # Create test data with a key that won't be in the lookup table
+    agg_tbl = pd.DataFrame(
+        {
+            SOURCE_SPEC.MODEL: ["model_a", "model_a"],
+            "entity_id": ["e1", "e2"],
+            SBML_DFS.S_ID: ["s1", "s_missing"],  # s_missing not in lookup
+            "data": [10, 20],
+        }
+    ).set_index([SOURCE_SPEC.MODEL, "entity_id"])
+
+    # Create FK lookup table (missing s_missing)
+    fk_lookup = pd.DataFrame(
+        {"new_id": ["new_s1"]},
+        index=pd.MultiIndex.from_tuples(
+            [("model_a", "s1")], names=[SOURCE_SPEC.MODEL, SBML_DFS.S_ID]
+        ),
+    )
+
+    table_schema = {SCHEMA_DEFS.FK: [SBML_DFS.S_ID], SCHEMA_DEFS.PK: "entity_id"}
+
+    fk_lookup_tables = {SBML_DFS.S_ID: fk_lookup}
+
+    # Should raise ValueError for missing key
+    with pytest.raises(
+        ValueError,
+        match=f"keys from agg_tbl are missing from the {SBML_DFS.S_ID} lookup table",
+    ):
+        consensus._update_foreign_keys(agg_tbl, table_schema, fk_lookup_tables)
+
+
+def test_update_foreign_keys_multiple_fks():
+    """Test _update_foreign_keys with multiple foreign keys using compartmentalized species."""
+    # Create test data for compartmentalized species (has both s_id and c_id FKs)
+    agg_tbl = pd.DataFrame(
+        {
+            SOURCE_SPEC.MODEL: ["model_a", "model_a"],
+            SBML_DFS.SC_ID: ["sc1", "sc2"],
+            SBML_DFS.S_ID: ["s1", "s2"],
+            SBML_DFS.C_ID: ["c1", "c2"],
+            "data": [10, 20],
+        }
+    ).set_index([SOURCE_SPEC.MODEL, SBML_DFS.SC_ID])
+
+    # Create lookup tables for both FKs
+    species_lookup = pd.DataFrame(
+        {"new_id": ["new_s1", "new_s2"]},
+        index=pd.MultiIndex.from_tuples(
+            [("model_a", "s1"), ("model_a", "s2")],
+            names=[SOURCE_SPEC.MODEL, SBML_DFS.S_ID],
+        ),
+    )
+
+    compartment_lookup = pd.DataFrame(
+        {"new_id": ["new_c1", "new_c2"]},
+        index=pd.MultiIndex.from_tuples(
+            [("model_a", "c1"), ("model_a", "c2")],
+            names=[SOURCE_SPEC.MODEL, SBML_DFS.C_ID],
+        ),
+    )
+
+    table_schema = {
+        SCHEMA_DEFS.FK: [SBML_DFS.S_ID, SBML_DFS.C_ID],
+        SCHEMA_DEFS.PK: SBML_DFS.SC_ID,
+    }
+
+    fk_lookup_tables = {
+        SBML_DFS.S_ID: species_lookup,
+        SBML_DFS.C_ID: compartment_lookup,
+    }
+
+    # Test updating both FKs
+    result = consensus._update_foreign_keys(agg_tbl, table_schema, fk_lookup_tables)
+
+    # Verify both FKs were updated
+    assert result[SBML_DFS.S_ID].tolist() == ["new_s1", "new_s2"]
+    assert result[SBML_DFS.C_ID].tolist() == ["new_c1", "new_c2"]
+    assert result["data"].tolist() == [10, 20]  # Other data preserved
+
+
+def test_construct_consensus_model_no_rxn_pathway_ids(
+    sbml_dfs_dict_metabolism, pw_index_metabolism, sbml_dfs_metabolism
+):
+    """Test construct_consensus_model with no_rxn_pathway_ids parameter."""
+    # Test with one pathway marked as no_rxn_pathway_ids
+    no_rxn_pathway_ids = ["tca"]  # Select TCA cycle as no-reaction pathway
+
+    # Create consensus model with no_rxn_pathway_ids
+    consensus_model = consensus.construct_consensus_model(
+        sbml_dfs_dict_metabolism,
+        pw_index_metabolism,
+        no_rxn_pathway_ids=no_rxn_pathway_ids,
+    )
+
+    assert consensus_model.reactions.shape[0] < sbml_dfs_metabolism.reactions.shape[0]
+    # cleanup generally removes some unused cspecies, species, and in some cases compartments
+    assert consensus_model.species.shape[0] < sbml_dfs_metabolism.species.shape[0]
+    assert (
+        consensus_model.compartmentalized_species.shape[0]
+        < sbml_dfs_metabolism.compartmentalized_species.shape[0]
+    )
+
+    # Test with invalid pathway ID
+    invalid_no_rxn_pathway_ids = ["invalid_pathway_id"]
+
+    # Should raise ValueError when invalid pathway ID is provided
+    with pytest.raises(ValueError) as exc_info:
+        consensus.construct_consensus_model(
+            sbml_dfs_dict_metabolism,
+            pw_index_metabolism,
+            no_rxn_pathway_ids=invalid_no_rxn_pathway_ids,
+        )
+
+    # Verify the error message mentions the invalid pathway ID
+    assert "invalid_pathway_id" in str(exc_info.value)
+    assert "not found in the pw_index" in str(exc_info.value)

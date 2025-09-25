@@ -6,15 +6,14 @@ import logging
 from typing import Dict, Set
 
 import pandas as pd
-from pydantic import BaseModel, field_validator
 
 from napistu import identifiers, sbml_dfs_core
 from napistu.constants import (
     IDENTIFIERS,
-    ONTOLOGIES_LIST,
     ONTOLOGY_SPECIES_ALIASES,
     SBML_DFS,
 )
+from napistu.ontologies._validation import OntologySet
 
 logger = logging.getLogger(__name__)
 
@@ -77,75 +76,7 @@ def rename_species_ontologies(
         SBML_DFS.S_IDENTIFIERS
     ].fillna(identifiers.Identifiers([]))
 
-    setattr(sbml_dfs, "species", updated_species)
-
-
-class OntologySet(BaseModel):
-    """Validate ontology mappings.
-
-    This model ensures that:
-    1. All keys are valid ontologies from ONTOLOGIES_LIST
-    2. The dict maps strings to sets of strings
-    3. Values in the sets do not overlap between different keys
-    4. Values in the sets are not also used as keys
-
-    Attributes
-    ----------
-    ontologies : Dict[str, Set[str]]
-        Dictionary mapping ontology names to sets of their aliases
-    """
-
-    ontologies: Dict[str, Set[str]]
-
-    @field_validator("ontologies")
-    @classmethod
-    def validate_ontologies(cls, v: Dict[str, Set[str]]) -> Dict[str, Set[str]]:
-        """Validate the ontology mapping structure.
-
-        Parameters
-        ----------
-        v : Dict[str, Set[str]]
-            Dictionary mapping ontology names to sets of their aliases
-
-        Returns
-        -------
-        Dict[str, Set[str]]
-            The validated ontology mapping dictionary
-
-        Raises
-        ------
-        ValueError
-            If any keys are not valid ontologies from ONTOLOGIES_LIST
-            If any values overlap between different ontologies
-            If any values are also used as ontology keys
-        """
-        # Check that all keys are valid ontologies
-        invalid_ontologies = set(v.keys()) - set(ONTOLOGIES_LIST)
-        if invalid_ontologies:
-            raise ValueError(
-                f"Invalid ontologies: {', '.join(invalid_ontologies)}. "
-                f"Must be one of: {', '.join(ONTOLOGIES_LIST)}"
-            )
-
-        # Check that values don't overlap between keys and aren't used as keys
-        all_values = set()
-        keys = set(v.keys())
-        for key, values in v.items():
-            # Check for overlap with other values
-            overlap = values & all_values
-            if overlap:
-                raise ValueError(
-                    f"Found overlapping values {overlap} under multiple ontologies"
-                )
-            # Check for overlap with keys
-            key_overlap = values & keys
-            if key_overlap:
-                raise ValueError(
-                    f"Found values {key_overlap} that are also used as ontology keys"
-                )
-            all_values.update(values)
-
-        return v
+    setattr(sbml_dfs, SBML_DFS.SPECIES, updated_species)
 
 
 def _create_alias_mapping(ontology_dict: Dict[str, Set[str]]) -> Dict[str, str]:

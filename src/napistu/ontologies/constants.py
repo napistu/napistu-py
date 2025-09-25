@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from typing import Dict
 
 from napistu.constants import ONTOLOGIES
+from napistu.ontologies._validation import SpeciesTypeOntologyMapping
 
 logger = logging.getLogger(__name__)
 
@@ -166,3 +167,54 @@ MIRBASE_TABLE_SPECS = {
         ],
     },
 }
+
+# Add your species type mappings
+
+SPECIES_TYPES = SimpleNamespace(
+    COMPLEX="complex",
+    DRUG="drug",
+    METABOLITE="metabolite",
+    PROTEIN="protein",
+    REGULATORY_RNA="regulatory_rna",
+    OTHER="other",
+    UNKNOWN="unknown",
+)
+
+SPECIES_TYPE_PLURAL = {
+    SPECIES_TYPES.COMPLEX: "complexes",
+    SPECIES_TYPES.DRUG: "drugs",
+    SPECIES_TYPES.METABOLITE: "metabolites",
+    SPECIES_TYPES.PROTEIN: "proteins",
+    SPECIES_TYPES.REGULATORY_RNA: "regulatory RNAs",
+    SPECIES_TYPES.OTHER: "other",
+    SPECIES_TYPES.UNKNOWN: "unknowns",
+}
+
+SPECIES_TYPE_ONTOLOGIES = {
+    SPECIES_TYPES.COMPLEX: [ONTOLOGIES.CORUM],
+    SPECIES_TYPES.DRUG: [ONTOLOGIES.DRUGBANK, ONTOLOGIES.KEGG_DRUG],
+    SPECIES_TYPES.METABOLITE: [
+        ONTOLOGIES.BIGG_METABOLITE,
+        ONTOLOGIES.CHEBI,
+        ONTOLOGIES.KEGG,
+        ONTOLOGIES.PUBCHEM,
+        ONTOLOGIES.SMILES,
+    ],
+    SPECIES_TYPES.PROTEIN: [
+        ONTOLOGIES.ENSEMBL_GENE,
+        ONTOLOGIES.ENSEMBL_TRANSCRIPT,
+        ONTOLOGIES.ENSEMBL_PROTEIN,
+        ONTOLOGIES.NCBI_ENTREZ_GENE,
+        ONTOLOGIES.UNIPROT,
+        ONTOLOGIES.SYMBOL,
+        ONTOLOGIES.GENE_NAME,
+    ],
+    SPECIES_TYPES.REGULATORY_RNA: [ONTOLOGIES.MIRBASE, ONTOLOGIES.RNACENTRAL],
+}
+
+# if the ontology's associated with these categories are seen then other categories are ignored
+PRIORITIZED_SPECIES_TYPES = {SPECIES_TYPES.DRUG, SPECIES_TYPES.COMPLEX}
+
+# Validate the mapping and create the flattened lookup at module load time
+validated_mapping = SpeciesTypeOntologyMapping(mappings=SPECIES_TYPE_ONTOLOGIES)
+ONTOLOGY_TO_SPECIES_TYPE = validated_mapping.create_ontology_to_species_type_mapping()

@@ -1,4 +1,3 @@
-import copy
 import logging
 from typing import List, Optional, Union
 
@@ -16,6 +15,7 @@ def filter_species_by_attribute(
     attribute_name: str,
     attribute_value: Union[int, bool, str, List[str]],
     negate: bool = False,
+    remove_references: bool = True,
     inplace: bool = True,
 ) -> Optional[sbml_dfs_core.SBML_dfs]:
     """
@@ -34,6 +34,9 @@ def filter_species_by_attribute(
     negate : bool, optional
         Whether to negate the filter, by default False.
         If True, keeps species with the attribute defined that do NOT match the attribute value.
+    remove_references : bool, optional
+        Whether to remove references to the filtered species, by default True.
+        If False, keeps references to the filtered species which may result in a validation error.
     inplace : bool, optional
         Whether to filter the SBML_dfs in place, by default True.
         If False, returns a new SBML_dfs object with the filtered species.
@@ -53,7 +56,7 @@ def filter_species_by_attribute(
 
     # If not inplace, make a copy
     if not inplace:
-        sbml_dfs = copy.deepcopy(sbml_dfs)
+        sbml_dfs = sbml_dfs.copy()
 
     # Get the species data
     species_data = sbml_dfs.select_species_data(species_data_table)
@@ -79,7 +82,9 @@ def filter_species_by_attribute(
         f"Removing {len(species_to_remove)} species from {species_data_table} table with filter {filter_str}"
     )
 
-    sbml_dfs._remove_species(species_to_remove)
+    sbml_dfs.remove_entities(
+        SBML_DFS.SPECIES, species_to_remove, remove_references=remove_references
+    )
 
     return None if inplace else sbml_dfs
 
@@ -123,7 +128,7 @@ def filter_reactions_with_disconnected_cspecies(
     """
 
     if inplace:
-        sbml_dfs = copy.deepcopy(sbml_dfs)
+        sbml_dfs = sbml_dfs.copy()
 
     # find how many conditions a pair of species cooccur in
     cooccurence_edgelist = _create_cooccurence_edgelist(sbml_dfs, species_data_table)
@@ -138,7 +143,9 @@ def filter_reactions_with_disconnected_cspecies(
         logger.info(
             f"Pruning {len(reactions_to_remove)} reactions based on non-cooccurrence."
         )
-        sbml_dfs.remove_reactions(reactions_to_remove)
+        sbml_dfs.remove_entities(
+            SBML_DFS.REACTIONS, reactions_to_remove, remove_references=True
+        )
 
     return None if inplace else sbml_dfs
 

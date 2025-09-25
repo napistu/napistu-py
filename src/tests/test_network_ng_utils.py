@@ -479,3 +479,47 @@ def test_validate_assets_all_valid_assets(
         identifiers_df=species_identifiers_metabolism,
     )
     assert result is None
+
+
+def test_format_napistu_graph_summary(napistu_graph):
+    """Test that format_napistu_graph_summary creates a properly structured summary table."""
+
+    summary_data = napistu_graph.get_summary()
+    result_df = ng_utils.format_napistu_graph_summary(summary_data)
+    print(result_df)
+
+    # Verify it's a DataFrame
+    assert isinstance(result_df, pd.DataFrame)
+
+    # Verify column structure
+    assert "Metric" in result_df.columns
+    assert "Value" in result_df.columns
+
+    # Create expected DataFrame based on the actual format shown (excluding attribute rows)
+    expected_data = [
+        ["Vertices", "30"],
+        ["- Species", "23 (76.7%)"],
+        ["- Reaction", "7 (23.3%)"],
+        ["", ""],
+        ["Species Types", ""],
+        ["- Metabolite", "13 (0.0%)"],
+        ["- Complex", "9 (0.0%)"],
+        ["- Protein", "1 (0.0%)"],
+        ["", ""],
+        ["Edges", "32"],
+        ["- product", "13 (40.6%)"],
+        ["- reactant", "13 (40.6%)"],
+        ["- catalyst", "6 (18.8%)"],
+        ["", ""],
+    ]
+    expected_df = pd.DataFrame(expected_data, columns=["Metric", "Value"])
+
+    # Compare the DataFrames up to the attribute rows
+    pd.testing.assert_frame_equal(
+        result_df.iloc[:-2], expected_df, check_exact=False, check_dtype=False
+    )
+
+    # Verify that Vertex Attributes and Edge Attributes entries exist
+    metrics = result_df["Metric"].tolist()
+    assert "Vertex Attributes" in metrics, "Should have Vertex Attributes entry"
+    assert "Edge Attributes" in metrics, "Should have Edge Attributes entry"

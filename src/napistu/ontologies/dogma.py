@@ -97,7 +97,11 @@ def create_dogmatic_sbml_dfs(
 
     # remove all reactions except 1 (so it still passes sbml_dfs.validate())
     # this self reaction will be removed when creating the graph
-    dogmatic_sbml_dfs.remove_reactions(dogmatic_sbml_dfs.reactions.index.tolist()[1::])
+    dogmatic_sbml_dfs.remove_entities(
+        SBML_DFS.REACTIONS,
+        dogmatic_sbml_dfs.reactions.index.tolist()[1::],
+        remove_references=False,
+    )
 
     return dogmatic_sbml_dfs
 

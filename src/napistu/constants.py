@@ -165,6 +165,55 @@ SBML_DFS_METHOD_DEFS = SimpleNamespace(
     SC_PARENTS="sc_parents",  # produced by sbml_dfs_core.get_cspecies_features
 )
 
+
+# if you remove an entity and want to maintain referential integrity, you need to remove the
+# entities that depend on it in this order
+# the first element indicates the table that needs to be updated; the second the table that is providing the update.
+# all of these pairs should be primary key - foreign key relationships. If the first entry is the foreign (daughter)
+# key then all downstream entries will be removed. if the first entry the primary key (mother) of the pk-fk pair
+# then entries will only be removed which no longer exist in the second table at all.
+SBML_DFS_CLEANUP_PASS = [
+    (SBML_DFS.COMPARTMENTALIZED_SPECIES, SBML_DFS.REACTION_SPECIES),
+    (SBML_DFS.SPECIES, SBML_DFS.COMPARTMENTALIZED_SPECIES),
+    (SBML_DFS.COMPARTMENTS, SBML_DFS.COMPARTMENTALIZED_SPECIES),
+]
+
+SBML_DFS_CLEANUP_ORDER = {
+    SBML_DFS.COMPARTMENTS: [
+        (SBML_DFS.COMPARTMENTALIZED_SPECIES, SBML_DFS.COMPARTMENTS),
+        (SBML_DFS.SPECIES, SBML_DFS.COMPARTMENTALIZED_SPECIES),
+        (SBML_DFS.REACTIONS, SBML_DFS.COMPARTMENTALIZED_SPECIES),
+        *SBML_DFS_CLEANUP_PASS,
+    ],
+    SBML_DFS.SPECIES: [
+        (SBML_DFS.COMPARTMENTALIZED_SPECIES, SBML_DFS.SPECIES),
+        (SBML_DFS.COMPARTMENTS, SBML_DFS.COMPARTMENTALIZED_SPECIES),
+        (SBML_DFS.REACTIONS, SBML_DFS.COMPARTMENTALIZED_SPECIES),
+        *SBML_DFS_CLEANUP_PASS,
+    ],
+    SBML_DFS.COMPARTMENTALIZED_SPECIES: [
+        (SBML_DFS.SPECIES, SBML_DFS.COMPARTMENTALIZED_SPECIES),
+        (SBML_DFS.COMPARTMENTS, SBML_DFS.COMPARTMENTALIZED_SPECIES),
+        (SBML_DFS.REACTIONS, SBML_DFS.COMPARTMENTALIZED_SPECIES),
+        *SBML_DFS_CLEANUP_PASS,
+    ],
+    SBML_DFS.REACTIONS: [
+        (SBML_DFS.REACTION_SPECIES, SBML_DFS.REACTIONS),
+        *SBML_DFS_CLEANUP_PASS,
+    ],
+    SBML_DFS.REACTION_SPECIES: [
+        (SBML_DFS.REACTIONS, SBML_DFS.REACTION_SPECIES),
+        *SBML_DFS_CLEANUP_PASS,
+    ],
+    "cofactors": [
+        # for cofactors, references will be removed directly without
+        # respecting the defining constraints which would remove a reaction
+        # if its substrates or products were removed
+        (SBML_DFS.REACTIONS, SBML_DFS.REACTION_SPECIES),
+        *SBML_DFS_CLEANUP_PASS,
+    ],
+}
+
 NAPISTU_STANDARD_OUTPUTS = SimpleNamespace(
     SPECIES_IDENTIFIERS="species_identifiers.tsv",
     SPECIES="species.json",
@@ -437,8 +486,9 @@ SOURCE_STANDARD_COLUMNS = EXPECTED_PW_INDEX_COLUMNS | {
 }
 
 # rules for specific ontologies
-
 ONTOLOGIES = SimpleNamespace(
+    BIGG_METABOLITE="bigg.metabolite",
+    BIORXIV="biorxiv",
     CHEBI="chebi",
     CORUM="corum",
     DRUGBANK="drugbank",
@@ -453,16 +503,19 @@ ONTOLOGIES = SimpleNamespace(
     GO="go",
     INTACT="intact",
     KEGG="kegg",
+    KEGG_DRUG="kegg.drug",
     MIRBASE="mirbase",
     NCBI_ENTREZ_GENE="ncbi_entrez_gene",
     PHAROS="pharos",
     PUBCHEM="pubchem",
     PUBMED="pubmed",
     REACTOME="reactome",
+    RNACENTRAL="rnacentral",
     SGD="sgd",
     SIGNOR="signor",
     SMILES="smiles",
     SYMBOL="symbol",
+    URL="url",
     UNIPROT="uniprot",
     WIKIPATHWAYS="wikipathways",
 )

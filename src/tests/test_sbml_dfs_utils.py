@@ -19,6 +19,7 @@ from napistu.constants import (
     VALID_SBO_TERM_NAMES,
     VALID_SBO_TERMS,
 )
+from napistu.identifiers import Identifiers
 from napistu.ingestion.constants import (
     COMPARTMENTS_GO_TERMS,
     GENERIC_COMPARTMENT,
@@ -26,6 +27,7 @@ from napistu.ingestion.constants import (
     INTERACTION_EDGELIST_DEFS,
     INTERACTION_EDGELIST_OPTIONAL_VARS,
 )
+from napistu.ontologies.constants import SPECIES_TYPES
 
 
 def test_id_formatter():
@@ -634,13 +636,13 @@ def test_add_missing_ids_column(sbml_dfs):
     ).all(), "Result should contain only integer values"
 
 
-def test_format_model_summary(sbml_dfs):
-    """Test format_model_summary function with sbml_dfs fixture."""
+def test_format_sbml_dfs_summary(sbml_dfs):
+    """Test format_sbml_dfs_summary function with sbml_dfs fixture."""
     # Get network summary from the sbml_dfs
-    summary_stats = sbml_dfs.get_sbml_dfs_summary()
+    summary_stats = sbml_dfs.get_summary()
 
-    # Call format_model_summary
-    result = sbml_dfs_utils.format_model_summary(summary_stats)
+    # Call format_sbml_dfs_summary
+    result = sbml_dfs_utils.format_sbml_dfs_summary(summary_stats)
 
     # Test that result is a DataFrame
     assert isinstance(result, pd.DataFrame), "Result should be a pandas DataFrame"
@@ -671,3 +673,307 @@ def test_format_model_summary(sbml_dfs):
 
     # Test that the DataFrame is not empty
     assert len(result) > 0, "Result should not be empty"
+
+
+def test_find_unused_entities():
+
+    # Create example SBML_dfs tables with unused entities
+    CASCADING_CLEANUP_EXAMPLE_DATA = {
+        # Compartments - c3 is unused (not referenced by any compartmentalized species)
+        SBML_DFS.COMPARTMENTS: pd.DataFrame(
+            {
+                SBML_DFS.C_ID: ["c1", "c2", "c3"],
+                SBML_DFS.C_NAME: [
+                    "cytoplasm",
+                    "unused_compartment",
+                    "removed_due_to_cspecies_cleanup",
+                ],
+            }
+        ).set_index(SBML_DFS.C_ID),
+        # Species - s3 is unused (not referenced by any compartmentalized species)
+        SBML_DFS.SPECIES: pd.DataFrame(
+            {
+                SBML_DFS.S_ID: ["s1", "s2", "s3", "s4"],
+                SBML_DFS.S_NAME: [
+                    "glucose",
+                    "pyruvate",
+                    "unused_metabolite",
+                    "removed_due_to_cspecies_cleanup",
+                ],
+            }
+        ).set_index(SBML_DFS.S_ID),
+        # Compartmentalized species - sc3, sc4 are unused (not in reaction_species)
+        SBML_DFS.COMPARTMENTALIZED_SPECIES: pd.DataFrame(
+            {
+                SBML_DFS.SC_ID: ["sc1", "sc2", "sc3", "sc4"],
+                SBML_DFS.S_ID: ["s1", "s2", "s2", "s4"],  # Foreign key to species
+                SBML_DFS.C_ID: ["c1", "c1", "c3", "c3"],  # Foreign key to compartments
+            }
+        ).set_index(SBML_DFS.SC_ID),
+        # Reactions -
+        SBML_DFS.REACTIONS: pd.DataFrame(
+            {
+                SBML_DFS.R_ID: ["r1", "r2"],
+                SBML_DFS.R_NAME: ["glycolysis_step1", "unused_reaction"],
+            }
+        ).set_index(SBML_DFS.R_ID),
+        # Reaction species - only sc1, sc2 are referenced (sc3, sc4 are unused)
+        SBML_DFS.REACTION_SPECIES: pd.DataFrame(
+            {
+                SBML_DFS.RSC_ID: ["rsc1", "rsc2"],
+                SBML_DFS.R_ID: ["r1", "r1"],  # Foreign key to reactions
+                SBML_DFS.SC_ID: [
+                    "sc1",
+                    "sc2",
+                ],  # Foreign key to compartmentalized_species
+            }
+        ).set_index(SBML_DFS.RSC_ID),
+    }
+
+    unused_entities = sbml_dfs_utils.find_unused_entities(
+        CASCADING_CLEANUP_EXAMPLE_DATA
+    )
+    assert set(unused_entities[SBML_DFS.COMPARTMENTS]) == {"c2", "c3"}
+    assert set(unused_entities[SBML_DFS.SPECIES]) == {"s3", "s4"}
+    assert set(unused_entities[SBML_DFS.COMPARTMENTALIZED_SPECIES]) == {"sc3", "sc4"}
+    assert set(unused_entities[SBML_DFS.REACTIONS]) == {"r2"}
+
+
+def test_species_type_types():
+    """Test the species_type_types function with various Identifiers objects."""
+
+    # Test 1: Complex with HAS_PART (should return "complex" regardless of other ontologies)
+    complex_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CORUM,
+            IDENTIFIERS.IDENTIFIER: "123",
+            IDENTIFIERS.BQB: BQB.HAS_PART,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.UNIPROT,
+            IDENTIFIERS.IDENTIFIER: "P12345",
+            IDENTIFIERS.BQB: BQB.IS,
+        },  # This should be ignored
+    ]
+    complex_identifiers = Identifiers(complex_ids)
+    assert (
+        sbml_dfs_utils.species_type_types(complex_identifiers) == SPECIES_TYPES.COMPLEX
+    )
+
+    # Test 2: Clear metabolite (only CHEBI)
+    metabolite_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CHEBI,
+            IDENTIFIERS.IDENTIFIER: "CHEBI:15377",
+            IDENTIFIERS.BQB: BQB.IS,
+        }
+    ]
+    metabolite_identifiers = Identifiers(metabolite_ids)
+    assert (
+        sbml_dfs_utils.species_type_types(metabolite_identifiers)
+        == SPECIES_TYPES.METABOLITE
+    )
+
+    # Test 3: Clear protein (only Ensembl gene)
+    protein_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.ENSEMBL_GENE,
+            IDENTIFIERS.IDENTIFIER: "ENSG00000139618",
+            IDENTIFIERS.BQB: BQB.IS_ENCODED_BY,
+        }
+    ]
+    protein_identifiers = Identifiers(protein_ids)
+    assert (
+        sbml_dfs_utils.species_type_types(protein_identifiers) == SPECIES_TYPES.PROTEIN
+    )
+
+    # Test 4: Clear regulatory RNA (only miRBase)
+    rna_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.MIRBASE,
+            IDENTIFIERS.IDENTIFIER: "MIMAT0000062",
+            IDENTIFIERS.BQB: BQB.IS,
+        }
+    ]
+    rna_identifiers = Identifiers(rna_ids)
+    assert (
+        sbml_dfs_utils.species_type_types(rna_identifiers)
+        == SPECIES_TYPES.REGULATORY_RNA
+    )
+
+    # Test 5: Multiple ontologies from same species type (should work)
+    multi_protein_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.ENSEMBL_GENE,
+            IDENTIFIERS.IDENTIFIER: "ENSG00000139618",
+            IDENTIFIERS.BQB: BQB.IS_ENCODED_BY,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.UNIPROT,
+            IDENTIFIERS.IDENTIFIER: "P12345",
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.SYMBOL,
+            IDENTIFIERS.IDENTIFIER: "BRCA2",
+            IDENTIFIERS.BQB: BQB.IS_ENCODED_BY,
+        },
+    ]
+    multi_protein_identifiers = Identifiers(multi_protein_ids)
+    assert (
+        sbml_dfs_utils.species_type_types(multi_protein_identifiers)
+        == SPECIES_TYPES.PROTEIN
+    )
+
+    # Test 6: Mixed species types (should return "other")
+    mixed_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CHEBI,
+            IDENTIFIERS.IDENTIFIER: "CHEBI:15377",
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.UNIPROT,
+            IDENTIFIERS.IDENTIFIER: "P12345",
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+    ]
+    mixed_identifiers = Identifiers(mixed_ids)
+    assert sbml_dfs_utils.species_type_types(mixed_identifiers) == SPECIES_TYPES.UNKNOWN
+
+    # Test 7: Empty identifiers (should return "unknown")
+    empty_identifiers = Identifiers([])
+    assert sbml_dfs_utils.species_type_types(empty_identifiers) == SPECIES_TYPES.UNKNOWN
+
+    # Test 8: Ontologies not in mapping (should return "unknown")
+    unmapped_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: "some_random_ontology",
+            IDENTIFIERS.IDENTIFIER: "12345",
+            IDENTIFIERS.BQB: BQB.IS,
+        }
+    ]
+    unmapped_identifiers = Identifiers(unmapped_ids)
+    assert (
+        sbml_dfs_utils.species_type_types(unmapped_identifiers) == SPECIES_TYPES.OTHER
+    )
+
+    # Test 9: Non-Identifiers object (should return "unknown")
+    assert (
+        sbml_dfs_utils.species_type_types("not_an_identifiers_object")
+        == SPECIES_TYPES.UNKNOWN
+    )
+    assert sbml_dfs_utils.species_type_types(None) == SPECIES_TYPES.UNKNOWN
+    assert sbml_dfs_utils.species_type_types(123) == SPECIES_TYPES.UNKNOWN
+
+    # Test 10: Complex with HAS_PART overrides everything else
+    complex_override_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CHEBI,
+            IDENTIFIERS.IDENTIFIER: "CHEBI:15377",
+            IDENTIFIERS.BQB: BQB.HAS_PART,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.UNIPROT,
+            IDENTIFIERS.IDENTIFIER: "P12345",
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.MIRBASE,
+            IDENTIFIERS.IDENTIFIER: "MIMAT0000062",
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+    ]
+    complex_override_identifiers = Identifiers(complex_override_ids)
+    assert (
+        sbml_dfs_utils.species_type_types(complex_override_identifiers)
+        == SPECIES_TYPES.COMPLEX
+    )
+
+
+def test_species_type_types_prioritized():
+    """Test the species_type_types function with prioritized species types argument."""
+
+    # Test 1: Drug should be prioritized over metabolite
+    drug_metabolite_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CHEBI,
+            IDENTIFIERS.IDENTIFIER: "CHEBI:15377",  # metabolite
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.DRUGBANK,
+            IDENTIFIERS.IDENTIFIER: "DB00001",  # drug
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+    ]
+    drug_metabolite_identifiers = Identifiers(drug_metabolite_ids)
+
+    # With default prioritized types (drug and complex), should return drug
+    assert (
+        sbml_dfs_utils.species_type_types(drug_metabolite_identifiers)
+        == SPECIES_TYPES.DRUG
+    )
+
+    # Test 2: Custom prioritized types - prioritize protein over metabolite
+    custom_prioritized = {SPECIES_TYPES.PROTEIN}
+    protein_metabolite_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CHEBI,
+            IDENTIFIERS.IDENTIFIER: "CHEBI:15377",  # metabolite
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.UNIPROT,
+            IDENTIFIERS.IDENTIFIER: "P12345",  # protein
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+    ]
+    protein_metabolite_identifiers = Identifiers(protein_metabolite_ids)
+
+    # With custom prioritized types, should return protein
+    assert (
+        sbml_dfs_utils.species_type_types(
+            protein_metabolite_identifiers, prioritized_species_types=custom_prioritized
+        )
+        == SPECIES_TYPES.PROTEIN
+    )
+
+    # Test 3: Multiple prioritized types should return UNKNOWN
+    multiple_prioritized_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.DRUGBANK,
+            IDENTIFIERS.IDENTIFIER: "DB00001",  # drug
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CORUM,
+            IDENTIFIERS.IDENTIFIER: "123",  # complex
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+    ]
+    multiple_prioritized_identifiers = Identifiers(multiple_prioritized_ids)
+
+    # With default prioritized types (both drug and complex), should return UNKNOWN
+    assert (
+        sbml_dfs_utils.species_type_types(multiple_prioritized_identifiers)
+        == SPECIES_TYPES.UNKNOWN
+    )
+
+    # Test 4: No prioritized types should return the single species type
+    metabolite_only_ids = [
+        {
+            IDENTIFIERS.ONTOLOGY: ONTOLOGIES.CHEBI,
+            IDENTIFIERS.IDENTIFIER: "CHEBI:15377",  # metabolite
+            IDENTIFIERS.BQB: BQB.IS,
+        },
+    ]
+    metabolite_only_identifiers = Identifiers(metabolite_only_ids)
+
+    # With empty prioritized types, should return metabolite
+    assert (
+        sbml_dfs_utils.species_type_types(
+            metabolite_only_identifiers, prioritized_species_types=set()
+        )
+        == SPECIES_TYPES.METABOLITE
+    )

@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Iterable, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Optional, Union
+
+if TYPE_CHECKING:
+    from napistu.sbml_dfs_core import SBML_dfs
 
 import numpy as np
 import pandas as pd
@@ -46,6 +49,12 @@ from napistu.ingestion.constants import (
     INTERACTION_EDGELIST_EXPECTED_VARS,
     INTERACTION_EDGELIST_OPTIONAL_VARS,
     VALID_COMPARTMENTS,
+)
+from napistu.ontologies.constants import (
+    ONTOLOGY_TO_SPECIES_TYPE,
+    PRIORITIZED_SPECIES_TYPES,
+    SPECIES_TYPE_PLURAL,
+    SPECIES_TYPES,
 )
 
 logger = logging.getLogger(__name__)
@@ -465,6 +474,77 @@ def find_underspecified_reactions(
     return underspecified_reactions
 
 
+def find_unused_entities(
+    sbml_dfs_or_dict: Union[SBML_dfs, dict[str, pd.DataFrame]],
+) -> dict[str, set[str]]:
+
+    from napistu.sbml_dfs_core import SBML_dfs
+
+    if isinstance(sbml_dfs_or_dict, SBML_dfs):
+        d = sbml_dfs_or_dict.to_dict()
+    else:
+        d = sbml_dfs_or_dict
+
+    EXPECTED_KEYS = {
+        SBML_DFS.REACTION_SPECIES,
+        SBML_DFS.REACTIONS,
+        SBML_DFS.COMPARTMENTALIZED_SPECIES,
+        SBML_DFS.SPECIES,
+        SBML_DFS.COMPARTMENTS,
+    }
+
+    if set(d.keys()) != EXPECTED_KEYS:
+        raise ValueError(f"sbml_dfs must contain the following keys: {EXPECTED_KEYS}")
+
+    cleaned_entities = {}
+
+    # cleanup reactions and compartmentalized species based on reaction_species
+    defined_rxn_species_reactions = d[SBML_DFS.REACTION_SPECIES][SBML_DFS.R_ID].unique()
+    defined_rxn_species_cspecies = d[SBML_DFS.REACTION_SPECIES][SBML_DFS.SC_ID].unique()
+    cleaned_entities[SBML_DFS.REACTIONS] = (
+        d[SBML_DFS.REACTIONS]
+        .index[~d[SBML_DFS.REACTIONS].index.isin(defined_rxn_species_reactions)]
+        .tolist()
+    )
+    cleaned_entities[SBML_DFS.COMPARTMENTALIZED_SPECIES] = (
+        d[SBML_DFS.COMPARTMENTALIZED_SPECIES]
+        .index[
+            ~d[SBML_DFS.COMPARTMENTALIZED_SPECIES].index.isin(
+                defined_rxn_species_cspecies
+            )
+        ]
+        .tolist()
+    )
+
+    # cleanup species and compartments based on compartmentalized_species
+    post_cleanup_cspecies = d[SBML_DFS.COMPARTMENTALIZED_SPECIES].loc[
+        ~d[SBML_DFS.COMPARTMENTALIZED_SPECIES].index.isin(
+            cleaned_entities[SBML_DFS.COMPARTMENTALIZED_SPECIES]
+        )
+    ]
+    defined_cspecies_species = post_cleanup_cspecies[SBML_DFS.S_ID].unique()
+    defined_cspecies_compartments = post_cleanup_cspecies[SBML_DFS.C_ID].unique()
+    cleaned_entities[SBML_DFS.SPECIES] = (
+        d[SBML_DFS.SPECIES]
+        .index[~d[SBML_DFS.SPECIES].index.isin(defined_cspecies_species)]
+        .tolist()
+    )
+    cleaned_entities[SBML_DFS.COMPARTMENTS] = (
+        d[SBML_DFS.COMPARTMENTS]
+        .index[~d[SBML_DFS.COMPARTMENTS].index.isin(defined_cspecies_compartments)]
+        .tolist()
+    )
+
+    # summarize the cleanup
+    non_empty_cleaned_entities = {
+        k: v for k, v in cleaned_entities.items() if len(v) > 0
+    }
+    for k, v in non_empty_cleaned_entities.items():
+        logger.info(f"Found {len(v)} unused {k} entities")
+
+    return cleaned_entities
+
+
 def filter_to_characteristic_species_ids(
     species_ids: pd.DataFrame,
     max_complex_size: int = 4,
@@ -559,12 +639,72 @@ def filter_to_characteristic_species_ids(
     return characteristic_species_ids
 
 
-def format_model_summary(data):
+def force_edgelist_consistency(
+    interaction_edgelist: pd.DataFrame,
+    species_df: pd.DataFrame,
+    compartments_df: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Force the edgelist to be consistent with the species and compartments dataframes.
+
+    Parameters
+    ----------
+    interaction_edgelist : pd.DataFrame
+        The interaction edgelist to force consistency with
+    species_df : pd.DataFrame
+        The species dataframe to force consistency with
+    compartments_df : pd.DataFrame
+        The compartments dataframe to force consistency with
+
+    Returns
+    -------
+    tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
+        A tuple containing the filtered interaction edgelist, species dataframe, and compartments dataframe
+    """
+
+    # Check what's missing (warnings only)
+    _validate_edgelist_consistency(
+        interaction_edgelist, species_df, compartments_df, raise_on_missing=False
+    )
+
+    # Filter to valid species
+    available_species = set(species_df[SBML_DFS.S_NAME])
+    valid_mask = interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME].isin(
+        available_species
+    ) & interaction_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME].isin(
+        available_species
+    )
+
+    filtered_interactions = interaction_edgelist[valid_mask]
+    if filtered_interactions.shape[0] != interaction_edgelist.shape[0]:
+        logger.warning(
+            f"Filtered {interaction_edgelist.shape[0] - filtered_interactions.shape[0]} interactions out of {interaction_edgelist.shape[0]} interactions due to missing species"
+        )
+
+    # Filter species to used ones
+    used_species = set(
+        filtered_interactions[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME]
+    ) | set(filtered_interactions[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME])
+    filtered_species = species_df[species_df[SBML_DFS.S_NAME].isin(used_species)]
+
+    if filtered_species.shape[0] != species_df.shape[0]:
+        logger.warning(
+            f"Filtered {species_df.shape[0] - filtered_species.shape[0]} species out of {species_df.shape[0]} species due to not being used in the interaction edgelist"
+        )
+
+    return filtered_interactions, filtered_species, compartments_df
+
+
+def format_sbml_dfs_summary(data):
     """Format model data into a clean summary table for Jupyter display"""
 
     # Calculate species percentages
-    total_species = data["n_species"]
-    species_data = data["dict_n_species_per_type"]
+    total_species = data["n_entity_types"][SBML_DFS.SPECIES]
+    total_compartments = data["n_entity_types"][SBML_DFS.COMPARTMENTS]
+    total_cspecies = data["n_entity_types"][SBML_DFS.COMPARTMENTALIZED_SPECIES]
+    total_reactions = data["n_entity_types"][SBML_DFS.REACTIONS]
+    total_reaction_species = data["n_entity_types"][SBML_DFS.REACTION_SPECIES]
+    species_data = data["n_species_per_type"]
 
     # Build the summary data
     summary_data = [["Species", f"{total_species:,}"]]
@@ -574,13 +714,18 @@ def format_model_summary(data):
         species_data.items(), key=lambda x: x[1], reverse=True
     ):
         pct = count / total_species * 100
-        summary_data.append([f"- {species_type.title()}s", f"{count:,} ({pct:.1f}%)"])
+        summary_data.append(
+            [
+                f"- {utils.safe_capitalize(SPECIES_TYPE_PLURAL[species_type])}",
+                f"{count:,} ({pct:.1f}%)",
+            ]
+        )
 
     # Add spacing and compartments section
     summary_data.extend(
         [
             ["", ""],  # Empty row for spacing
-            ["Compartments", f"{data['n_compartments']:,}"],
+            ["Compartments", f"{total_compartments:,}"],
         ]
     )
 
@@ -596,7 +741,7 @@ def format_model_summary(data):
     other_compartments = sorted_compartments[10:]
 
     for comp in top_compartments:
-        comp_pct = comp["n_species"] / data["n_cspecies"] * 100
+        comp_pct = comp["n_species"] / total_cspecies * 100
         summary_data.append(
             [f"- {comp['c_name']}", f"{comp['n_species']:,} ({comp_pct:.1f}%)"]
         )
@@ -604,7 +749,7 @@ def format_model_summary(data):
     # Add "other" category if there are more than 10 compartments
     if other_compartments:
         other_cspecies_count = sum(comp["n_species"] for comp in other_compartments)
-        other_pct = other_cspecies_count / data["n_cspecies"] * 100
+        other_pct = other_cspecies_count / total_cspecies * 100
         n_other_compartments = len(other_compartments)
         summary_data.append(
             [
@@ -616,9 +761,9 @@ def format_model_summary(data):
     summary_data.extend(
         [
             ["", ""],  # Empty row for spacing
-            ["Compartmentalized Species", f"{data['n_cspecies']:,}"],
-            ["Reactions", f"{data['n_reactions']:,}"],
-            ["Reaction Species", f"{data['n_reaction_species']:,}"],
+            ["Compartmentalized Species", f"{total_cspecies:,}"],
+            ["Reactions", f"{total_reactions:,}"],
+            ["Reaction Species", f"{total_reaction_species:,}"],
         ]
     )
 
@@ -739,23 +884,73 @@ def match_entitydata_index_to_entity(
     return entity_data_df
 
 
-def species_type_types(x):
-    """Assign a high-level molecule type to a molecular species"""
+def species_type_types(
+    x,
+    ontology_to_species_type: dict = ONTOLOGY_TO_SPECIES_TYPE,
+    prioritized_species_types: set[str] = PRIORITIZED_SPECIES_TYPES,
+) -> str:
+    """
+    Assign a high-level molecule type to a molecular species
+
+    Parameters
+    ----------
+    x : identifiers.Identifiers
+        The identifiers object to assign a species type to
+    ontology_to_species_type : dict
+        The mapping of ontologies to species types
+    prioritized_species_types : set[str]
+        The set of prioritized species types
+
+    Returns
+    -------
+    str
+        The high-level molecule type of the species
+
+    Examples
+    --------
+    >>> identifiers = identifiers.Identifiers([{'ontology': 'CHEBI', 'identifier': '123456', 'bqb': 'BQB.IS'}])
+    >>> species_type_types(identifiers)
+    'metabolite'
+    """
 
     if isinstance(x, identifiers.Identifiers):
+
+        # Check for HAS_PART first (indicates complex)
         bqbs = x.get_all_bqbs()
         if BQB.HAS_PART in bqbs:
-            return "complex"
+            return SPECIES_TYPES.COMPLEX
 
-        ontologies = x.get_all_ontologies()
-        if ONTOLOGIES.CHEBI in ontologies:
-            return "metabolite"
-        elif ONTOLOGIES.DRUGBANK in ontologies:  # no current sources for drugs
-            return "drug"
-        else:
-            return "protein"
+        ontologies = x.get_all_ontologies([BQB.IS, BQB.IS_ENCODED_BY, BQB.ENCODES])
+        if len(ontologies) == 0:
+            return SPECIES_TYPES.UNKNOWN
+
+        # check for prioritized ontologies
+        ontologies_w_species_types = ontologies & ontology_to_species_type.keys()
+
+        # Then map to species types
+        species_types = {
+            ontology_to_species_type[ont] for ont in ontologies_w_species_types
+        }
+
+        prioritized_types = species_types & prioritized_species_types
+        if len(prioritized_types) == 1:
+            return prioritized_types.pop()
+        elif len(prioritized_types) > 1:
+            return SPECIES_TYPES.UNKNOWN
+
+        if len(species_types) == 0:
+            # none of the defined ontologies are associated with a species type
+            return SPECIES_TYPES.OTHER
+        elif len(species_types) == 1:
+            return species_types.pop()
+        elif len(species_types) > 1:
+            return SPECIES_TYPES.UNKNOWN
+
     else:
-        return "unknown"
+        logger.warning(
+            f"Invalid input type: {type(x)}; returning {SPECIES_TYPES.UNKNOWN}"
+        )
+        return SPECIES_TYPES.UNKNOWN
 
 
 def stub_compartments(
@@ -953,7 +1148,7 @@ def _add_edgelist_defaults(
 
         if len(na_values) > 0:
             default_value = edgelist_defaults[var_with_default]
-            logger.warning(
+            logger.info(
                 f"Replacing {len(na_values)} missing values with default value for {var_with_default}: {default_value}"
             )
             interaction_edgelist_w_defaults.loc[na_values, var_with_default] = (
@@ -1441,6 +1636,45 @@ def _edgelist_validate_inputs(
         interaction_edgelist, INTERACTION_EDGELIST_EXPECTED_VARS, "interaction_edgelist"
     )
 
+    # check for extra or missing species and compartments
+    defined_interactors = set(
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME]
+    ) | set(interaction_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME])
+    defined_interaction_compartments = set(
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT]
+    ) | set(interaction_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT])
+    species_df_names = set(species_df[SBML_DFS.S_NAME])
+    compartments_df_names = set(compartments_df[SBML_DFS.C_NAME])
+
+    invalid_references = []
+
+    extra_species = species_df_names - defined_interactors
+    if len(extra_species) > 0:
+        invalid_references.append(
+            f"{len(extra_species)} species are defined in the interaction edgelist but not in the species_df: {extra_species}"
+        )
+
+    extra_compartments = compartments_df_names - defined_interaction_compartments
+    if len(extra_compartments) > 0:
+        invalid_references.append(
+            f"{len(extra_compartments)} compartments are defined in the interaction edgelist but not in the compartments_df: {extra_compartments}"
+        )
+
+    missing_species = defined_interactors - species_df_names
+    if len(missing_species) > 0:
+        invalid_references.append(
+            f"{len(missing_species)} species are defined in the interaction edgelist but not in the species_df: {missing_species}"
+        )
+
+    missing_compartments = defined_interaction_compartments - compartments_df_names
+    if len(missing_compartments) > 0:
+        invalid_references.append(
+            f"{len(missing_compartments)} compartments are defined in the interaction edgelist but not in the compartments_df: {missing_compartments}"
+        )
+
+    if len(invalid_references) > 0:
+        raise ValueError(f"Invalid references: {invalid_references}")
+
     return None
 
 
@@ -1639,7 +1873,7 @@ def _perform_sbml_dfs_table_validation(
         )
 
     # check index
-    expected_index_name = table_schema["pk"]
+    expected_index_name = table_schema[SCHEMA_DEFS.PK]
     if table_data.index.name != expected_index_name:
         raise ValueError(
             f"the index name for {table_name} was not the pk: {expected_index_name}"
@@ -1657,7 +1891,7 @@ def _perform_sbml_dfs_table_validation(
         )
 
     # check variables
-    expected_vars = set(table_schema["vars"])
+    expected_vars = set(table_schema[SCHEMA_DEFS.VARS])
     table_vars = set(list(table_data.columns))
 
     extra_vars = table_vars.difference(expected_vars)
@@ -1844,6 +2078,72 @@ def _summarize_ontology_occurrence(
         fill_value=0,
         aggfunc="count",  # Count occurrences
     )
+
+
+def _validate_edgelist_consistency(
+    interaction_edgelist: pd.DataFrame,
+    species_df: pd.DataFrame,
+    compartments_df: pd.DataFrame,
+    raise_on_missing: bool = True,
+) -> None:
+    """
+    Check for missing entity references, optionally raising or warning.
+
+    This function is used to validate the consistency of the interaction edgelist, species_df, and compartments_df.
+
+    Parameters
+    ----------
+    interaction_edgelist : pd.DataFrame
+        The interaction edgelist to validate
+    species_df : pd.DataFrame
+        The species dataframe to validate
+    compartments_df : pd.DataFrame
+        The compartments dataframe to validate
+    raise_on_missing : bool, optional
+        Whether to raise an error if missing entities are found
+
+    Returns
+    -------
+    None
+    """
+    # Get referenced names
+    upstream_species = set(
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME]
+    )
+    downstream_species = set(
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME]
+    )
+    edgelist_species = upstream_species | downstream_species
+
+    upstream_compartments = set(
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT]
+    )
+    downstream_compartments = set(
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT]
+    )
+    edgelist_compartments = upstream_compartments | downstream_compartments
+
+    # Get available names
+    available_species = set(species_df[SBML_DFS.S_NAME])
+    available_compartments = set(compartments_df[SBML_DFS.C_NAME])
+
+    # Find missing
+    missing_species = edgelist_species - available_species
+    missing_compartments = edgelist_compartments - available_compartments
+
+    # Handle missing compartments - always raise
+    if missing_compartments:
+        raise ValueError(f"Missing compartments: {missing_compartments}")
+
+    # Handle missing species
+    if missing_species:
+        message = f"{len(missing_species)} species in edgelist but not in species_df: {missing_species}"
+        if raise_on_missing:
+            raise ValueError(f'Invalid references: ["{message}"]')
+        else:
+            logger.warning(message)
+
+    return None
 
 
 def _summarize_source_cooccurrence(df: pd.DataFrame) -> pd.DataFrame:

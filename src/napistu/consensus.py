@@ -25,6 +25,7 @@ from napistu.constants import (
 )
 from napistu.identifiers import Identifiers
 from napistu.ingestion import sbml
+from napistu.ingestion.constants import NO_RXN_PATHWAY_IDS_DEFAULTS
 from napistu.matching.mount import resolve_matches
 from napistu.sbml_dfs_core import SBML_dfs
 
@@ -39,6 +40,7 @@ def construct_consensus_model(
     model_source: Optional[source.Source] = None,
     dogmatic: bool = True,
     check_mergeability: bool = True,
+    no_rxn_pathway_ids: Optional[list[str]] = None,
 ) -> SBML_dfs:
     """
     Construct a Consensus Model by merging shared entities across pathway models.
@@ -58,6 +60,9 @@ def construct_consensus_model(
         If True, preserve genes, transcripts, and proteins as separate species. If False, merge them when possible.
     check_mergeability : bool, default=True
         whether to check for issues which will prevent merging across models
+    no_rxn_pathway_ids : list, optional
+        The pathway ids for models which should not have reactions. If None, use the defaults. This can be used to
+        include pathways which are just metadata like "Dogma".
 
     Returns
     -------
@@ -80,14 +85,20 @@ def construct_consensus_model(
 
     # Step 1: Create consensus entities for all primary tables
     consensus_entities, lookup_tables = _create_consensus_entities(
-        sbml_dfs_dict, pw_index, defining_biological_qualifiers
+        sbml_dfs_dict, pw_index, defining_biological_qualifiers, no_rxn_pathway_ids
     )
 
     # Step 2: Create the consensus SBML_dfs object
-    sbml_dfs = SBML_dfs(consensus_entities, model_source)  # type: ignore
+    sbml_dfs = SBML_dfs(consensus_entities, model_source, validate=False)  # type: ignore
 
     # Step 3: Add entity data from component models
     sbml_dfs = _add_entity_data(sbml_dfs, sbml_dfs_dict, lookup_tables)
+
+    # cleanup by removing unused entities (this will generally be due to some data sources missing
+    # entities which should be implied by other tables - like in the "dogma" data source there
+    # are genes but not reactions.)
+    sbml_dfs.remove_unused()
+    sbml_dfs.validate()
 
     return sbml_dfs
 
@@ -136,7 +147,7 @@ def construct_meta_entities_fk(
     agg_tbl = _unnest_SBML_df(sbml_dfs_dict, table=table)
 
     # since all sbml_dfs have the same schema pull out one schema for reference
-    table_schema = sbml_dfs_dict[list(sbml_dfs_dict.keys())[0]].schema[table]
+    table_schema = SBML_DFS_SCHEMA.SCHEMA[table]
 
     # update foreign keys using provided lookup tables
     agg_tbl = _update_foreign_keys(agg_tbl, table_schema, fk_lookup_tables)
@@ -862,8 +873,8 @@ def _create_consensus_sources(
     logger.info("Aggregating old sources")
     indexed_old_sources = (
         agg_tbl.reset_index(drop=True)
-        .rename(columns={"new_id": table_schema["pk"]})
-        .groupby(table_schema["pk"])[table_schema["source"]]
+        .rename(columns={"new_id": table_schema[SCHEMA_DEFS.PK]})
+        .groupby(table_schema[SCHEMA_DEFS.PK])[table_schema[SCHEMA_DEFS.SOURCE]]
     )
 
     # combine old sources into a single source.Source object per index value
@@ -875,7 +886,7 @@ def _create_consensus_sources(
     assert isinstance(aligned_sources, pd.DataFrame)
 
     logger.info("Returning new source table")
-    new_sources = aligned_sources.apply(source.merge_sources, axis=1).rename(table_schema["source"])  # type: ignore
+    new_sources = aligned_sources.apply(source.merge_sources, axis=1).rename(table_schema[SCHEMA_DEFS.SOURCE])  # type: ignore
     assert isinstance(new_sources, pd.Series)
 
     return new_sources
@@ -885,6 +896,7 @@ def _create_consensus_entities(
     sbml_dfs_dict: dict[str, SBML_dfs],
     pw_index: indices.PWIndex,
     defining_biological_qualifiers: list[str],
+    no_rxn_pathway_ids: Optional[list[str]] = None,
 ) -> tuple[dict, dict]:
     """
     Create consensus entities for all primary tables in the model.
@@ -900,6 +912,9 @@ def _create_consensus_entities(
         An index of all tables being aggregated
     defining_biological_qualifiers: list[str]
         Biological qualifier terms that define distinct entities
+    no_rxn_pathway_ids: Optional[list[str]] = None,
+        The pathway ids for models which should not have reactions. If None, use the defaults. This can be used to
+        include pathways which are just metadata like "Dogma".
 
     Returns:
     ----------
@@ -907,6 +922,9 @@ def _create_consensus_entities(
         - dict of consensus entities tables
         - dict of lookup tables
     """
+
+    no_rxn_pathway_ids = _get_no_rxn_pathway_ids(pw_index, no_rxn_pathway_ids)
+
     # Step 1: Compartments
     logger.info("Defining compartments based on unique ids")
     comp_consensus_entities, comp_lookup_table = construct_meta_entities_identifiers(
@@ -936,6 +954,9 @@ def _create_consensus_entities(
         },
     )
 
+    # remove pathways which don't contribute reactions
+    _remove_no_rxn_pathways(no_rxn_pathway_ids, sbml_dfs_dict, compspec_lookup_table)
+
     # Step 4: Reactions
     logger.info(
         "Define reactions based on membership of identical compartmentalized species"
@@ -946,7 +967,7 @@ def _create_consensus_entities(
         table=SBML_DFS.REACTIONS,
         defined_by=SBML_DFS.REACTION_SPECIES,
         defined_lookup_tables={SBML_DFS.SC_ID: compspec_lookup_table},
-        defining_attrs=[SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY],
+        defining_attrs=[SBML_DFS.SC_ID, SBML_DFS.STOICHIOMETRY, SBML_DFS.SBO_TERM],
     )
 
     logger.info("Annotating reversibility based on merged reactions")
@@ -1227,6 +1248,43 @@ def _filter_identifiers_by_qualifier(
     return valid_identifiers[
         meta_identifiers[IDENTIFIERS.BQB].isin(defining_biological_qualifiers)
     ]
+
+
+def _get_no_rxn_pathway_ids(pw_index, no_rxn_pathway_ids=None):
+    """
+    Get the pathway ids for models which should not have reactions.
+
+    Parameters
+    ----------
+    pw_index : pd.DataFrame
+        The pathway index.
+    no_rxn_pathway_ids : list, optional
+        The pathway ids for models which should not have reactions. If None, use the defaults.
+
+    Returns
+    -------
+    no_rxn_pathway_ids : list
+        The pathway ids for models which should not have reactions.
+    """
+
+    if no_rxn_pathway_ids is None:
+        no_rxn_pathway_ids = [
+            x
+            for x in NO_RXN_PATHWAY_IDS_DEFAULTS
+            if x in pw_index.index[SOURCE_SPEC.PATHWAY_ID].tolist()
+        ]
+
+    invalid_rxn_pathway_ids = [
+        x
+        for x in no_rxn_pathway_ids
+        if x not in pw_index.index[SOURCE_SPEC.PATHWAY_ID].tolist()
+    ]
+    if len(invalid_rxn_pathway_ids) > 0:
+        raise ValueError(
+            f'The requested "no_rxn_pathway_ids" were not found in the pw_index: {invalid_rxn_pathway_ids}. Either set this to None to use defaults or set it to a list of valid pathway ids.'
+        )
+
+    return no_rxn_pathway_ids
 
 
 def _handle_entries_without_identifiers(
@@ -1985,7 +2043,63 @@ def _reduce_to_consensus_ids(
     logger.debug(f"Validating consensus table for {table_name}")
     _validate_consensus_table(new_id_table, sbml_df)
 
+    # Step 8: Validate that all primary keys in new_id_table are represented in lookup_table
+    new_id_pks = set(new_id_table.index)
+    lookup_new_ids = set(lookup_table.values)
+
+    if new_id_pks != lookup_new_ids:
+
+        missing_pks = new_id_pks - lookup_new_ids
+        extra_pks = lookup_new_ids - new_id_pks
+
+        raise ValueError(
+            "The keys from the new_id_table and values from lookup_table do not match:"
+            f"- There are {len(missing_pks)} keys from new_id_table are missing from lookup_table 'new_id' values"
+            f"- There are {len(extra_pks)} keys from lookup_table which are missing from new_id_table"
+        )
+
     return new_id_table, lookup_table
+
+
+def _remove_no_rxn_pathways(
+    no_rxn_pathway_ids, sbml_dfs_dict, compspec_lookup_table
+) -> None:
+    """
+    Remove pathways which don't contribute reactions from the pw_index.
+
+    Parameters
+    ----------
+    no_rxn_pathway_ids : list
+        The pathway ids for models which should not have reactions. (i.e., models which are just species metadata like "Dogma")
+    sbml_dfs_dict : dict
+        The dictionary of SBML_dfs.
+    compspec_lookup_table : pd.DataFrame
+        The lookup table for compartmentalized species.
+
+    Returns
+    -------
+    None
+        Modifies objects in place.
+
+    """
+
+    if len(no_rxn_pathway_ids) == 0:
+        return None
+    else:
+        logger.info(
+            f"Removing {len(no_rxn_pathway_ids)} pathways which don't contribute reactions: {no_rxn_pathway_ids}"
+        )
+
+    # Remove from dictionary (will raise KeyError if missing)
+    for pathway_id in no_rxn_pathway_ids:
+        del sbml_dfs_dict[pathway_id]
+
+    # Remove from DataFrame (will raise KeyError if missing)
+    compspec_lookup_table.drop(
+        no_rxn_pathway_ids, level=SOURCE_SPEC.MODEL, inplace=True
+    )
+
+    return None
 
 
 def _report_consensus_merges(
@@ -2171,20 +2285,54 @@ def _update_foreign_keys(
 ) -> pd.DataFrame:
     """Update one or more foreign keys based on old-to-new foreign key lookup table(s)."""
 
-    for fk in table_schema["fk"]:
-        updated_fks = (
-            agg_tbl[fk]
+    working_agg_tbl = agg_tbl.copy()
+
+    for fk in table_schema[SCHEMA_DEFS.FK]:
+
+        # Merge agg_tbl with lookup table for validation and FK updates
+        full_merge = (
+            working_agg_tbl[fk]
             .reset_index()
             .merge(
-                fk_lookup_tables[fk], left_on=[SOURCE_SPEC.MODEL, fk], right_index=True
+                fk_lookup_tables[fk],
+                left_on=[SOURCE_SPEC.MODEL, fk],
+                right_index=True,
+                how="outer",
+                indicator=True,
             )
-            .drop(fk, axis=1)
-            .rename(columns={"new_id": fk})
-            .set_index(["model", table_schema["pk"]])
         )
-        agg_tbl = agg_tbl.drop(columns=fk).join(updated_fks)
 
-    return agg_tbl
+        # Find missing keys (present in agg_tbl but not in lookup table)
+        missing_keys = full_merge[full_merge["_merge"] == "left_only"]
+        if len(missing_keys) > 0:
+            missing_pairs = missing_keys[[SOURCE_SPEC.MODEL, fk]].values.tolist()
+            raise ValueError(
+                f"{len(missing_keys)} keys from agg_tbl are missing from the {fk} lookup table: {missing_pairs[:5]}..."
+            )
+
+        # Find extra keys (present in lookup table but not used in agg_tbl)
+        extra_keys = full_merge[full_merge["_merge"] == "right_only"]
+        if len(extra_keys) > 0:
+            extra_pairs = extra_keys[[SOURCE_SPEC.MODEL, fk]].values.tolist()
+            raise ValueError(
+                f"{len(extra_keys)} keys are present in the {fk} lookup table but not used in agg_tbl: {extra_pairs[:5]}..."
+            )
+
+        # Reuse the merge result for updated FKs (only successful matches, excluding right_only)
+        updated_fks = (
+            full_merge[full_merge["_merge"] == "both"]
+            .drop([fk, "_merge"], axis=1)
+            .rename(columns={"new_id": fk})
+            .set_index([SOURCE_SPEC.MODEL, table_schema[SCHEMA_DEFS.PK]])
+        )
+        working_agg_tbl = working_agg_tbl.drop(columns=fk).join(updated_fks)
+
+    if working_agg_tbl.shape[0] != agg_tbl.shape[0]:
+        raise ValueError(
+            "The output agg table had a different number of rows than the input agg table"
+        )
+
+    return working_agg_tbl
 
 
 def _unnest_SBML_df(sbml_dfs_dict: dict[str, SBML_dfs], table: str) -> pd.DataFrame:

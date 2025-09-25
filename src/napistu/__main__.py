@@ -144,8 +144,8 @@ def ingest_string_db(organismal_species: str, target_uri: str):
 
 
 @ingestion.command(name="string_aliases")
-@target_uri_output
 @organismal_species_argument
+@target_uri_output
 @verbosity_option
 def ingest_string_aliases(organismal_species: str, target_uri: str):
     string.download_string_aliases(target_uri, organismal_species)
@@ -467,6 +467,7 @@ def create_consensus(
         dogmatic=dogmatic,
         check_mergeability=check_mergeability,
     )
+
     consensus_model.to_pickle(output_model_uri)
 
 
@@ -562,8 +563,8 @@ def name_compartmentalized_species(sbml_dfs_uri: str, output_model_uri: str):
 def merge_model_compartments(sbml_dfs_uri: str, output_model_uri: str):
     """Take a compartmentalized mechanistic model and merge all of the compartments."""
     sbml_dfs = SBML_dfs.from_pickle(sbml_dfs_uri)
-    uncompartmentalized_sbml_dfs = uncompartmentalize_sbml_dfs(sbml_dfs)
-    uncompartmentalized_sbml_dfs.to_pickle(output_model_uri)
+    uncompartmentalize_sbml_dfs(sbml_dfs, inplace=True)
+    sbml_dfs.to_pickle(output_model_uri)
 
 
 @refine.command(name="drop_cofactors")
@@ -993,9 +994,9 @@ def import_sbml_dfs_from_sbml(input_uri, output_model_uri):
     # We could also just copy the file, but I think validating
     # the filetype is a good idea to prevent downstream errors.
     sbml_file = SBML(input_uri)
-    logger.info("Convert file to sbml_dfs")
+    logger.info("Converting file to sbml_dfs")
     sbml_dfs = SBML_dfs(sbml_file)
-    logger.info("Save file to %s", output_model_uri)
+    logger.info("Saving file to %s", output_model_uri)
     sbml_dfs.to_pickle(output_model_uri)
 
 
@@ -1018,7 +1019,7 @@ def helpers():
 @verbosity_option
 def copy_uri(input_uri, output_uri, is_file=True):
     """Copy a uri representing a file or folder from one location to another"""
-    logger.info("Copy uri from %s to %s", input_uri, output_uri)
+    logger.info("Copying uri from %s to %s", input_uri, output_uri)
     utils.copy_uri(input_uri, output_uri, is_file=is_file)
 
 
@@ -1119,8 +1120,8 @@ def stats():
 @click.argument("output_uri", type=str)
 def calculate_sbml_dfs_stats(sbml_dfs_uri, output_uri):
     """Calculate statistics for a sbml_dfs object"""
-    model = SBML_dfs.from_pickle(sbml_dfs_uri)
-    stats = model.get_sbml_dfs_summary()
+    sbml_dfs = SBML_dfs.from_pickle(sbml_dfs_uri)
+    stats = sbml_dfs.get_summary()
     utils.save_json(output_uri, stats)
 
 

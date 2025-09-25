@@ -307,6 +307,92 @@ def create_entity_attrs_from_data_tables(
     return entity_attrs
 
 
+def format_napistu_graph_summary(data):
+    """Format NapistuGraph summary data into a clean summary table for Jupyter display"""
+
+    # Extract summary statistics
+    total_vertices = data["n_vertices"]
+    vertex_node_types = data["vertex_node_type_dict"]
+    vertex_species_types = data["vertex_species_type_dict"]
+    total_edges = data["n_edges"]
+    sbo_name_counts = data["sbo_name_counts_dict"]
+    vertex_attributes = data["vertex_attributes"]
+    edge_attributes = data["edge_attributes"]
+
+    # Build the summary data
+    summary_data = [["Vertices", f"{total_vertices:,}"]]
+
+    # Add vertex breakdown by node type, sorted by count (descending)
+    for node_type, count in sorted(
+        vertex_node_types.items(), key=lambda x: x[1], reverse=True
+    ):
+        pct = count / total_vertices * 100
+        summary_data.append(
+            [
+                f"- {node_type.replace('_', ' ').title()}",
+                f"{count:,} ({pct:.1f}%)",
+            ]
+        )
+
+    # Add spacing and species type section
+    summary_data.extend(
+        [
+            ["", ""],  # Empty row for spacing
+            ["Species Types", ""],
+        ]
+    )
+
+    # Calculate total species vertices (assuming "Species" is a node type)
+    total_species_vertices = vertex_node_types.get("Species", 0)
+
+    # Add species type breakdown sorted by count (descending)
+    for species_type, count in sorted(
+        vertex_species_types.items(), key=lambda x: x[1], reverse=True
+    ):
+        # Calculate percentage of species vertices (not total vertices)
+        if total_species_vertices > 0:
+            pct = count / total_species_vertices * 100
+        else:
+            pct = 0.0
+        summary_data.append(
+            [
+                f"- {species_type.replace('_', ' ').title()}",
+                f"{count:,} ({pct:.1f}%)",
+            ]
+        )
+
+    # Add spacing and edges section
+    summary_data.extend(
+        [
+            ["", ""],  # Empty row for spacing
+            ["Edges", f"{total_edges:,}"],
+        ]
+    )
+
+    # Add SBO term breakdown sorted by count (descending)
+    for sbo_name, count in sorted(
+        sbo_name_counts.items(), key=lambda x: x[1], reverse=True
+    ):
+        sbo_pct = count / total_edges * 100
+        # Clean up SBO name for display (handle potential None values)
+        display_name = sbo_name if sbo_name else "Unknown"
+        summary_data.append([f"- {display_name}", f"{count:,} ({sbo_pct:.1f}%)"])
+
+    # Add attributes sections
+    summary_data.extend(
+        [
+            ["", ""],  # Empty row for spacing
+            ["Vertex Attributes", ", ".join(vertex_attributes)],
+            ["Edge Attributes", ", ".join(edge_attributes)],
+        ]
+    )
+
+    # Create DataFrame and return
+    df = pd.DataFrame(summary_data, columns=["Metric", "Value"])
+
+    return df
+
+
 def get_minimal_sources_edges(
     vertices: pd.DataFrame,
     sbml_dfs: sbml_dfs_core.SBML_dfs,

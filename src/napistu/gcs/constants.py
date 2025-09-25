@@ -65,7 +65,7 @@ GCS_ASSETS = SimpleNamespace(
             GCS_ASSETS_DEFS.PUBLIC_URL: "https://storage.googleapis.com/shackett-napistu-public/human_consensus.tar.gz",
             GCS_ASSETS_DEFS.VERSIONS: {
                 "20250901": "https://storage.googleapis.com/shackett-napistu-public/human_consensus_20250901.tar.gz",
-                "20250916": "https://storage.googleapis.com/shackett-napistu-public/human_consensus_20250916.tar.gz",
+                "20250923": "https://storage.googleapis.com/shackett-napistu-public/human_consensus_20250923.tar.gz",
             },
         },
         GCS_ASSETS_NAMES.HUMAN_CONSENSUS_W_DISTANCES: {

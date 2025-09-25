@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from napistu.ingestion import sbml
 from napistu.constants import (
     BQB,
+    BQB_DEFINING_ATTRS,
     BQB_DEFINING_ATTRS_LOOSE,
     BQB_PRIORITIES,
     CONSENSUS_CHECKS,
@@ -38,6 +39,7 @@ from napistu.constants import (
     NAPISTU_STANDARD_OUTPUTS,
     ONTOLOGY_PRIORITIES,
     SBML_DFS,
+    SBML_DFS_CLEANUP_ORDER,
     SBML_DFS_METADATA,
     SBML_DFS_METHOD_DEFS,
     SBML_DFS_SCHEMA,
@@ -87,6 +89,8 @@ class SBML_dfs:
         Return a deep copy of the SBML_dfs object.
     export_sbml_dfs(model_prefix, outdir, overwrite=False, dogmatic=True)
         Export the SBML_dfs model and its tables to files in a specified directory.
+    find_entity_references(entity_type, entity_ids, reference_type, reference_ids)
+        Find entities that reference specified entities through a given reference type.
     from_edgelist(interaction_edgelist, species_df, compartments_df, interaction_source=source.Source(init=True), interaction_edgelist_defaults=INTERACTION_EDGELIST_DEFAULTS, keep_species_data=False, keep_reactions_data=False)
         Create SBML_dfs from interaction edgelist.
     from_pickle(path)
@@ -103,8 +107,10 @@ class SBML_dfs:
         Get ontology occurrence summary for a specific entity type.
     get_ontology_x_source_cooccurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False, characteristic_only=False, dogmatic=True, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS)
         Get ontology × source co-occurrence matrix for a specific entity type.
-    get_sbml_dfs_summary()
-        Return a dictionary of diagnostic statistics summarizing the SBML_dfs structure.
+    get_sbo_term_occurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False)
+        Get SBO term occurrence summary for a specific entity type.
+    get_sbo_term_x_source_cooccurrence(entity_type, stratify_by_bqb=True, allow_col_multindex=False, characteristic_only=False, dogmatic=True, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS)
+        Get SBO term × source co-occurrence matrix for a specific entity type.
     get_source_cooccurrence(entity_type, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS)
         Get pathway co-occurrence matrix for a specific entity type.
     get_source_occurrence(entity_type, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS)
@@ -115,6 +121,8 @@ class SBML_dfs:
         Get the total counts of each source for a given entity type.
     get_species_features()
         Compute and return additional features for species, such as species type.
+    get_summary()
+        Return a dictionary of diagnostic statistics summarizing the SBML_dfs structure.
     get_table(entity_type, required_attributes=None)
         Retrieve a table for a given entity type, optionally validating required attributes.
     get_uri_urls(entity_type, entity_ids=None, required_ontology=None)
@@ -131,14 +139,14 @@ class SBML_dfs:
         Generate human-readable reaction formulas for specified reactions.
     reaction_summaries(r_ids=None)
         Return a summary DataFrame for specified reactions, including names and formulas.
-    remove_compartmentalized_species(sc_ids)
-        Remove specified compartmentalized species and associated reactions from the model.
-    remove_reactions(r_ids, remove_species=False)
-        Remove specified reactions and optionally remove unused species.
+    remove_entities(entity_type, entity_ids, remove_species=False)
+        Remove specified entities and optionally remove unused species.
     remove_reactions_data(label)
         Remove a reactions data table by label.
     remove_species_data(label)
         Remove a species data table by label.
+    remove_unused()
+        Find and remove unused entities from the model with cascading cleanup.
     search_by_ids(id_table, identifiers=None, ontologies=None, bqbs=None)
         Find entities and identifiers matching a set of query IDs.
     search_by_name(name, entity_type, partial_match=True)
@@ -149,6 +157,8 @@ class SBML_dfs:
         Display a formatted summary of the SBML_dfs model.
     species_status(s_id)
         Return all reactions a species participates in, with stoichiometry and formula information.
+    to_dict()
+        Return the 5 major SBML_dfs tables as a dictionary.
     to_pickle(path)
         Save the SBML_dfs to a pickle file.
     validate()
@@ -160,16 +170,13 @@ class SBML_dfs:
     -----------------------------------------------------------------
     _attempt_resolve(e)
     _edgelist_assemble_sbml_model(compartments, species, comp_species, reactions, reaction_species, species_data, reactions_data, keep_species_data, keep_reactions_data, extra_columns)
-    _find_underspecified_reactions_by_scids(sc_ids)
+    _find_invalid_entities_by_reference(entity_type, reference_type, reference_ids)
+    _find_underspecified_reactions_by_reference(reference_type, reference_ids)
     _get_entity_data(entity_type, label)
     _get_identifiers_table_for_ontology_occurrence(entity_type, characteristic_only=False, dogmatic=True)
-    _get_unused_cspecies()
-    _get_unused_species()
-    _remove_compartmentalized_species(sc_ids)
+    _get_non_interactor_reactions()
+    _remove_entities_direct(entity_type, entity_ids)
     _remove_entity_data(entity_type, label)
-    _remove_species(s_ids)
-    _remove_unused_cspecies()
-    _remove_unused_species()
     _validate_entity_data_access(entity_type, label)
     _validate_identifiers()
     _validate_pk_fk_correspondence()
@@ -426,6 +433,94 @@ class SBML_dfs:
 
         return None
 
+    def find_entity_references(
+        self, entity_type: str, entity_ids: list[str]
+    ) -> dict[str, set[str]]:
+        """Find all entities that directly depend on the set of requested entities.
+
+        Parameters
+        ----------
+        entity_type : str
+            The initial entity type to remove
+        entity_ids : list[str]
+            IDs of entities to remove
+
+        Returns
+        -------
+        dict[str, set[str]]
+            Dictionary mapping entity types to sets of IDs that directly depend on the requested entities
+        """
+
+        dependents = {
+            SBML_DFS.COMPARTMENTS: set(),
+            SBML_DFS.SPECIES: set(),
+            SBML_DFS.COMPARTMENTALIZED_SPECIES: set(),
+            SBML_DFS.REACTIONS: set(),
+            SBML_DFS.REACTION_SPECIES: set(),
+        }
+
+        if entity_type == "cofactors":
+            entity_type = SBML_DFS.REACTION_SPECIES
+            literal_cleanup = True
+        else:
+            literal_cleanup = False
+
+        # Start with the directly requested entities
+        dependents[entity_type] = set(entity_ids)
+        logger.debug(
+            f"Starting find_entity_references from {entity_type} with {len(entity_ids)} entities"
+        )
+
+        # Iterate through cleanup order to find cascading removals
+        cleanup_order = SBML_DFS_CLEANUP_ORDER[entity_type]
+        logger.debug(f"Cleanup order for {entity_type}: {cleanup_order}")
+
+        for updated_table, reference_table in cleanup_order:
+            # Get orphaned entities based on type
+            if (updated_table == SBML_DFS.REACTIONS) and not literal_cleanup:
+                # Special handling for reactions - check for underspecified reactions
+                invalid_reactions, invalid_reaction_species = (
+                    self._find_underspecified_reactions_by_reference(
+                        reference_table, dependents[reference_table]
+                    )
+                )
+
+                new_invalid_reactions = (
+                    invalid_reactions - dependents[SBML_DFS.REACTIONS]
+                )
+                new_invalid_reaction_species = (
+                    invalid_reaction_species - dependents[SBML_DFS.REACTION_SPECIES]
+                )
+                logger.debug(
+                    f"Registering {len(new_invalid_reactions)} new invalid reactions and {len(new_invalid_reaction_species)} new invalid reaction species"
+                )
+                logger.debug(f"Invalid reactions: {new_invalid_reactions}")
+                logger.debug(
+                    f"Invalid reaction species: {new_invalid_reaction_species}"
+                )
+                dependents[SBML_DFS.REACTIONS] = (
+                    dependents[SBML_DFS.REACTIONS] | new_invalid_reactions
+                )
+                dependents[SBML_DFS.REACTION_SPECIES] = (
+                    dependents[SBML_DFS.REACTION_SPECIES] | new_invalid_reaction_species
+                )
+            else:
+                # Standard orphaned entity removal - find all orphaned entities
+                invalid_entities = self._find_invalid_entities_by_reference(
+                    updated_table, reference_table, dependents[reference_table]
+                )
+
+                new_invalid_entities = invalid_entities - dependents[updated_table]
+                logger.debug(
+                    f"Registering {len(new_invalid_entities)} new invalid {updated_table}"
+                )
+                logger.debug(f"Invalid {updated_table}: {new_invalid_entities}")
+                dependents[updated_table] = (
+                    dependents[updated_table] | new_invalid_entities
+                )
+
+        return dependents
+
     @classmethod
     def from_edgelist(
         cls,
@@ -436,6 +531,7 @@ class SBML_dfs:
         interaction_edgelist_defaults: dict[str, Any] = INTERACTION_EDGELIST_DEFAULTS,
         keep_species_data: bool | str = False,
         keep_reactions_data: bool | str = False,
+        force_edgelist_consistency: bool = False,
     ) -> "SBML_dfs":
         """
         Create SBML_dfs from interaction edgelist.
@@ -476,6 +572,11 @@ class SBML_dfs:
         keep_reactions_data : bool or str, default False
             Whether to preserve extra reaction columns. If True, saves as 'source' label.
             If string, uses as custom label. If False, discards extra data.
+        force_edgelist_consistency : bool, default False
+            Whether to force the edgelist to be consistent with the species and compartments dataframes
+            This is useful for cases where there may be reasonable departures between the edgelist and
+            the species and compartments dataframes but the user wants to create an SBML_dfs model anyway
+
 
         Returns
         -------
@@ -502,6 +603,13 @@ class SBML_dfs:
             interaction_edgelist, interaction_edgelist_defaults
         )
 
+        if force_edgelist_consistency:
+            interaction_edgelist_with_defaults, species_df, compartments_df = (
+                sbml_dfs_utils.force_edgelist_consistency(
+                    interaction_edgelist_with_defaults, species_df, compartments_df
+                )
+            )
+
         # 1. Validate inputs
         sbml_dfs_utils._edgelist_validate_inputs(
             interaction_edgelist_with_defaults, species_df, compartments_df
@@ -522,6 +630,8 @@ class SBML_dfs:
         processed_species, species_data = sbml_dfs_utils._edgelist_process_species(
             species_df, interaction_source, extra_columns[SBML_DFS.SPECIES]
         )
+
+        # drop extra species and compartments and warn
 
         # 4. Create compartmentalized species
         comp_species = sbml_dfs_utils._edgelist_create_compartmentalized_species(
@@ -558,6 +668,7 @@ class SBML_dfs:
             model_source=model_source,
         )
 
+        sbml_dfs.validate()
         return sbml_dfs
 
     @classmethod
@@ -587,7 +698,14 @@ class SBML_dfs:
         """
         Get Characteristic Species IDs
 
-        List the systematic identifiers which are characteristic of molecular species, e.g., excluding subcomponents, and optionally, treating proteins, transcripts, and genes equiavlently.
+        List the systematic identifiers which are characteristic of molecular species, e.g.,
+        excluding subcomponents, and optionally, treating proteins, transcripts, and genes equiavlently.
+
+        Characteristic identifiers include:
+        - the defining IDs (BQB_IS) if dogmatic is True, and BQB_IS, BQB_IS_ENCODED_BY, BQB_ENCODES if dogmatic = False.
+        - small complexes (BQB_HAS_PART)
+
+        This function is useful for pulling out the species which are closely associated with a specific proteins, metabolites, etc.
 
         Parameters
         ----------
@@ -671,7 +789,9 @@ class SBML_dfs:
             )
         )
 
-    def get_identifiers(self, id_type) -> pd.DataFrame:
+    def get_identifiers(
+        self, id_type, filter_by_bqb=None, add_names=True
+    ) -> pd.DataFrame:
         """
         Get identifiers from a specified entity type.
 
@@ -679,16 +799,25 @@ class SBML_dfs:
         ----------
         id_type : str
             Type of entity to get identifiers for (e.g., 'species', 'reactions')
+        filter_by_bqb : None, list, or str, optional
+            Filter identifiers by biological qualifier (BQB) terms:
+            - None: No filtering, return all identifiers (default)
+            - list: List of specific BQB terms to include
+            - "defining": Use BQB_DEFINING_ATTRS (strict defining identifiers)
+            - "loose": Use BQB_DEFINING_ATTRS_LOOSE (includes encoded/encodes relationships)
+        add_names : bool, optional
+            Whether to add entity names and other metadata from the entity table, by default True
 
         Returns
         -------
         pd.DataFrame
-            Table of identifiers for the specified entity type
+            Table of identifiers for the specified entity type. If add_names=True, includes
+            entity metadata; if add_names=False, returns only the core identifier data.
 
         Raises
         ------
         ValueError
-            If id_type is invalid or identifiers are malformed
+            If id_type is invalid, identifiers are malformed, or filter_by_bqb is invalid
         """
 
         if id_type == SBML_DFS.REACTIONS:
@@ -712,19 +841,58 @@ class SBML_dfs:
                 )
         if not identifiers_dict:
             # Return empty DataFrame with expected columns if nothing found
-            return pd.DataFrame(columns=[schema[id_type][SCHEMA_DEFS.PK], "entry"])
+            base_columns = [schema[id_type][SCHEMA_DEFS.PK], "entry"]
+            if add_names:
+                # Add columns from selected_table (excluding the ID column)
+                name_columns = [
+                    col
+                    for col in selected_table.columns
+                    if col != schema[id_type][SCHEMA_DEFS.ID]
+                ]
+                return pd.DataFrame(columns=base_columns + name_columns)
+            else:
+                return pd.DataFrame(columns=base_columns)
 
         identifiers_tbl = pd.concat(identifiers_dict)
         identifiers_tbl.index.names = [schema[id_type][SCHEMA_DEFS.PK], "entry"]
         identifiers_tbl = identifiers_tbl.reset_index()
 
-        named_identifiers = identifiers_tbl.merge(
-            selected_table.drop(schema[id_type][SCHEMA_DEFS.ID], axis=1),
-            left_on=schema[id_type][SCHEMA_DEFS.PK],
-            right_index=True,
-        )
+        # Conditionally add names and metadata based on add_names parameter
+        if add_names:
+            result_identifiers = identifiers_tbl.merge(
+                selected_table.drop(schema[id_type][SCHEMA_DEFS.ID], axis=1),
+                left_on=schema[id_type][SCHEMA_DEFS.PK],
+                right_index=True,
+            )
+        else:
+            result_identifiers = identifiers_tbl
 
-        return named_identifiers
+        # Apply BQB filtering if specified
+        if filter_by_bqb is not None:
+            if isinstance(filter_by_bqb, str):
+                if filter_by_bqb == "defining":
+                    bqb_terms = BQB_DEFINING_ATTRS
+                elif filter_by_bqb == "loose":
+                    bqb_terms = BQB_DEFINING_ATTRS_LOOSE
+                else:
+                    raise ValueError(
+                        f"Invalid filter_by_bqb string: '{filter_by_bqb}'. "
+                        "Must be 'defining', 'loose', or a list of BQB terms."
+                    )
+            elif isinstance(filter_by_bqb, (list, tuple)):
+                bqb_terms = list(filter_by_bqb)
+            else:
+                raise ValueError(
+                    f"filter_by_bqb must be None, a list, or a string ('defining'/'loose'). "
+                    f"Got: {type(filter_by_bqb)}"
+                )
+
+            # Filter the identifiers by BQB terms
+            result_identifiers = result_identifiers[
+                result_identifiers[IDENTIFIERS.BQB].isin(bqb_terms)
+            ]
+
+        return result_identifiers
 
     def get_ontology_cooccurrence(
         self,
@@ -928,7 +1096,7 @@ class SBML_dfs:
 
         return cooccurrences
 
-    def get_sbml_dfs_summary(self) -> Mapping[str, Any]:
+    def get_summary(self) -> Mapping[str, Any]:
         """
         Get diagnostic statistics about the SBML_dfs.
 
@@ -937,31 +1105,34 @@ class SBML_dfs:
         Mapping[str, Any]
             Dictionary of diagnostic statistics including:
             - n_species_types: Number of species types
-            - dict_n_species_per_type: Number of species per type
-            - n_species: Number of species
-            - n_cspecies: Number of compartmentalized species
-            - n_reaction_species: Number of reaction species
-            - n_reactions: Number of reactions
-            - n_compartments: Number of compartments
+            - n_species_per_type: Number of species per type
+            - n_entity_types: Dictionary of entity counts by type
             - dict_n_species_per_compartment: Number of species per compartment
-            - stats_species_per_reaction: Statistics on reactands per reaction
-            - top10_species_per_reaction: Top 10 reactions by number of reactands
+            - stats_species_per_reactions: Statistics on reactands per reaction
+            - top10_species_per_reactions: Top 10 reactions by number of reactands
+            - sbo_name_counts: Count of reaction species by SBO term name
             - stats_degree: Statistics on species connectivity
             - top10_degree: Top 10 species by connectivity
-            - stats_identifiers_per_species: Statistics on identifiers per species
-            - top10_identifiers_per_species: Top 10 species by number of identifiers
+            - species_ontology_counts: Count of species by ontology identifiers
+            - data_summary: Summary of species and reaction data
         """
         stats: MutableMapping[str, Any] = {}
+
+        # species_summaries
         species_features = self.get_species_features()
         stats["n_species_types"] = species_features["species_type"].nunique()
-        stats["dict_n_species_per_type"] = (
+        stats["n_species_per_type"] = (
             species_features.groupby(by="species_type").size().to_dict()
         )
-        stats["n_species"] = self.species.shape[0]
-        stats["n_cspecies"] = self.compartmentalized_species.shape[0]
-        stats["n_reaction_species"] = self.reaction_species.shape[0]
-        stats["n_reactions"] = self.reactions.shape[0]
-        stats["n_compartments"] = self.compartments.shape[0]
+
+        # schema summaries
+        stats["n_entity_types"] = {
+            SBML_DFS.SPECIES: self.species.shape[0],
+            SBML_DFS.REACTIONS: self.reactions.shape[0],
+            SBML_DFS.COMPARTMENTS: self.compartments.shape[0],
+            SBML_DFS.COMPARTMENTALIZED_SPECIES: self.compartmentalized_species.shape[0],
+            SBML_DFS.REACTION_SPECIES: self.reaction_species.shape[0],
+        }
         stats["dict_n_species_per_compartment"] = (
             self.compartmentalized_species.groupby(SBML_DFS.C_ID)
             .size()
@@ -971,6 +1142,8 @@ class SBML_dfs:
             .reset_index(drop=False)
             .to_dict(orient="records")
         )
+
+        # reaction summaries
         per_reaction_stats = self.reaction_species.groupby(SBML_DFS.R_ID).size()
         stats["stats_species_per_reactions"] = per_reaction_stats.describe().to_dict()
         stats["top10_species_per_reactions"] = (
@@ -982,7 +1155,11 @@ class SBML_dfs:
             .reset_index(drop=False)
             .to_dict(orient="records")
         )
+        sbo_name_counts = self.reaction_species.value_counts(SBML_DFS.SBO_TERM)
+        sbo_name_counts.index = sbo_name_counts.index.map(MINI_SBO_TO_NAME)
+        stats["sbo_name_counts"] = sbo_name_counts.to_dict()
 
+        # cspecies summaries
         cspecies_features = self.get_cspecies_features()
         stats["stats_degree"] = (
             cspecies_features[SBML_DFS_METHOD_DEFS.SC_DEGREE].describe().to_dict()
@@ -1011,19 +1188,12 @@ class SBML_dfs:
         s_identifiers = sbml_dfs_utils.unnest_identifiers(
             self.species, SBML_DFS.S_IDENTIFIERS
         )
-        identifiers_stats = s_identifiers.groupby(SBML_DFS.S_ID).size()
-        stats["stats_identifiers_per_species"] = identifiers_stats.describe().to_dict()
-        stats["top10_identifiers_per_species"] = (
-            identifiers_stats.sort_values(ascending=False)
-            .head(10)
-            .rename("n_identifiers")
-            .to_frame()
-            .join(
-                species_features[[SBML_DFS.S_NAME, SBML_DFS_METHOD_DEFS.SPECIES_TYPE]]
-            )
-            .reset_index(drop=False)
-            .to_dict(orient="records")
-        )
+        stats["species_ontology_counts"] = s_identifiers.value_counts(
+            IDENTIFIERS.ONTOLOGY
+        ).to_dict()
+
+        # data summaries
+        stats["data_summary"] = self._get_data_summary()
 
         return stats
 
@@ -1870,53 +2040,62 @@ class SBML_dfs:
 
         return reaction_summareis_df
 
-    def remove_compartmentalized_species(self, sc_ids: Iterable[str]):
-        """
-        Remove compartmentalized species and associated reactions.
+    def remove_entities(
+        self,
+        entity_type: str,
+        entity_ids: Iterable[str],
+        remove_references: bool = True,
+    ):
+        """Public method to remove entities and optionally clean up orphaned references.
 
-        Starting with a set of compartmentalized species, determine which reactions
-        should be removed based on their removal. Then remove these reactions,
-        compartmentalized species, and species.
-
-        Parameters
-        ----------
-        sc_ids : Iterable[str]
-            IDs of compartmentalized species to remove
-        """
-
-        # find reactions which should be totally removed since they are losing critical species
-        removed_reactions = self._find_underspecified_reactions_by_scids(sc_ids)
-        self.remove_reactions(removed_reactions)
-
-        self._remove_compartmentalized_species(sc_ids)
-
-        # remove species (and their associated species data if all their cspecies have been lost)
-        self._remove_unused_species()
-
-    def remove_reactions(self, r_ids: Iterable[str], remove_species: bool = False):
-        """
-        Remove reactions from the model.
+        Special handling for "cofactors" where literal cleanup of reactions based on reaction_species is allowed
+        normally, removing substrates/products would remove the reaction.
 
         Parameters
         ----------
-        r_ids : Iterable[str]
-            IDs of reactions to remove
-        remove_species : bool, optional
-            Whether to remove species that are no longer part of any reactions,
-            by default False
+        entity_type : str
+            The entity type (e.g., 'reactions', 'compartmentalized_species', 'species', 'compartments', or "cofactors")
+        entity_ids : Iterable[str]
+            IDs of entities to remove
+        remove_references : bool, default True
+            Whether to remove orphaned references after entity removal
         """
-        # remove corresponding reactions_species
-        self.reaction_species = self.reaction_species.query("r_id not in @r_ids")
-        # remove reactions
-        self.reactions = self.reactions.drop(index=list(r_ids))
-        # remove reactions_data
-        if hasattr(self, "reactions_data"):
-            for k, data in self.reactions_data.items():
-                self.reactions_data[k] = data.drop(index=list(r_ids))
-        # remove species if requested
-        if remove_species:
-            self._remove_unused_cspecies()
-            self._remove_unused_species()
+
+        entity_ids = list(entity_ids)
+        if not entity_ids:
+            return
+
+        # Find all entities that need to be removed (including cascading references)
+        if remove_references:
+            to_be_removed_entities = self.find_entity_references(
+                entity_type, entity_ids
+            )
+        else:
+            logger.warning(
+                "Removing entities without removing references, because remove_references=False. This may result in a validation error."
+            )
+            # Only remove the directly requested entities
+            to_be_removed_entities = {entity_type: set(entity_ids)}
+
+        # now treat entity_type as actual table to remove if this was "cofactors"
+        if entity_type == "cofactors":
+            entity_type = SBML_DFS.REACTION_SPECIES
+
+        # iterate through to-be-removed and remove
+        logger.info(f"Removing the requested {len(entity_ids)} {entity_type} entities")
+        self._remove_entities_direct(entity_type, entity_ids)
+
+        # these would be entries of the requested table which are indirectly removed
+        # e.g., if we request to remove the substrate of a reaction, it removes the reaction and the products
+        # in turn which may result in removal of the cspecies if it isn't used elsewhere
+        to_be_removed_entities[entity_type] = to_be_removed_entities[entity_type] - set(
+            entity_ids
+        )
+        for k, v in to_be_removed_entities.items():
+            if not v:
+                continue
+            logger.info(f"Removing {len(v)} orphaned {k}")
+            self._remove_entities_direct(k, list(v))
 
     def remove_reactions_data(self, label: str):
         """
@@ -1929,6 +2108,27 @@ class SBML_dfs:
         Remove species data by label.
         """
         self._remove_entity_data(SBML_DFS.SPECIES, label)
+
+    def remove_unused(self) -> None:
+        """
+        Find and remove unused entities from the model.
+
+        This method identifies unused entities using find_unused_entities and
+        then cleans them up using the existing remove_entities method which
+        properly handles cleanup of species_data and reactions_data as needed.
+
+        Returns
+        -------
+        None
+            Modifies the SBML_dfs object in-place
+        """
+
+        unused_entities = sbml_dfs_utils.find_unused_entities(self)
+
+        for k, v in unused_entities.items():
+            self.remove_entities(k, v, remove_references=False)
+
+        return None
 
     def search_by_ids(
         self,
@@ -2054,7 +2254,7 @@ class SBML_dfs:
         """
         Display a formatted summary of the SBML_dfs model.
 
-        This method chains together get_sbml_dfs_summary(), format_model_summary(),
+        This method chains together get_summary(), format_sbml_dfs_summary(),
         and utils.show() to provide a convenient way to display network statistics.
 
         Returns
@@ -2066,9 +2266,9 @@ class SBML_dfs:
         --------
         >>> sbml_dfs.show_network_summary()
         """
-        summary_stats = self.get_sbml_dfs_summary()
-        summary_table = sbml_dfs_utils.format_model_summary(summary_stats)
-        utils.show(summary_table)
+        summary_stats = self.get_summary()
+        summary_table = sbml_dfs_utils.format_sbml_dfs_summary(summary_stats)
+        utils.show(summary_table, max_rows=50)
 
     def species_status(self, s_id: str) -> pd.DataFrame:
         """
@@ -2130,6 +2330,28 @@ class SBML_dfs:
 
         return status
 
+    def to_dict(self) -> dict[str, pd.DataFrame]:
+        """
+        Return the 5 major SBML_dfs tables as a dictionary.
+
+        Returns
+        -------
+        dict[str, pd.DataFrame]
+            Dictionary containing the core SBML_dfs tables:
+            - 'compartments': Compartments table
+            - 'species': Species table
+            - 'compartmentalized_species': Compartmentalized species table
+            - 'reactions': Reactions table
+            - 'reaction_species': Reaction species table
+        """
+        return {
+            SBML_DFS.COMPARTMENTS: self.compartments,
+            SBML_DFS.SPECIES: self.species,
+            SBML_DFS.COMPARTMENTALIZED_SPECIES: self.compartmentalized_species,
+            SBML_DFS.REACTIONS: self.reactions,
+            SBML_DFS.REACTION_SPECIES: self.reaction_species,
+        }
+
     def to_pickle(self, path: str) -> None:
         """
         Save the SBML_dfs to a pickle file.
@@ -2184,7 +2406,7 @@ class SBML_dfs:
         for table in required_tables:
             self._validate_table(table)
 
-        # check whether pks and fks agree
+        # check whether pks and fks agree (bidirectional)
         self._validate_pk_fk_correspondence()
 
         # check optional data tables:
@@ -2256,6 +2478,10 @@ class SBML_dfs:
             logger.warning(str_e)
             logger.warning("Attempting to resolve with infer_sbo_terms()")
             self.infer_sbo_terms()
+        elif re.search("Referential completeness violation", str_e):
+            logger.warning(str_e)
+            logger.warning("Attempting to resolve with remove_unused()")
+            self.remove_unused()
         else:
             logger.warning(
                 "An error occurred which could not be automatically resolved"
@@ -2336,35 +2562,74 @@ class SBML_dfs:
 
         return sbml_dfs
 
-    def _find_underspecified_reactions_by_scids(
-        self, sc_ids: Iterable[str]
+    def _find_underspecified_reactions_by_reference(
+        self, reference_type: str, reference_ids: set[str]
     ) -> set[str]:
-        """
-        Find Underspecified reactions
-
-        Identify reactions which should be removed if a set of molecular species are removed
-        from the system.
+        """Find reactions that would become underspecified after removing species.
 
         Parameters
         ----------
-        sc_ids : list[str]
-            A list of compartmentalized species ids (sc_ids) which will be removed.
+        reference_type : str
+            The type of foreign key reference to check
+        reference_ids : set[str]
+            Specific reference IDs that were removed
 
         Returns
         -------
-        underspecified_reactions : set[str]
-            A set of reactions which should be removed because they will not occur once
-            "sc_ids" are removed.
+        set[str]
+            Set of reaction IDs that were orphaned and removed
+        set[str]
+            Set of reaction-species IDs that were orphaned and removed
         """
+
         updated_reaction_species = self.reaction_species.copy()
-        updated_reaction_species["new"] = ~updated_reaction_species[
-            SBML_DFS.SC_ID
-        ].isin(sc_ids)
+
+        if reference_type == SBML_DFS.COMPARTMENTALIZED_SPECIES:
+            updated_reaction_species["new"] = ~updated_reaction_species[
+                SBML_DFS.SC_ID
+            ].isin(reference_ids)
+        elif reference_type == SBML_DFS.REACTION_SPECIES:
+            updated_reaction_species["new"] = ~updated_reaction_species.index.isin(
+                reference_ids
+            )
+        else:
+            raise ValueError(f"Invalid reference type: {reference_type}")
+
         updated_reaction_species = sbml_dfs_utils.add_sbo_role(updated_reaction_species)
         underspecified_reactions = sbml_dfs_utils.find_underspecified_reactions(
             updated_reaction_species
         )
-        return underspecified_reactions
+
+        # either directly removed or indirectly removed by the reactions
+        invalid_reaction_species_direct = set(
+            updated_reaction_species.index[~updated_reaction_species["new"]].tolist()
+        )
+        invalid_reaction_species_by_rxn = set(
+            updated_reaction_species.loc[
+                updated_reaction_species[SBML_DFS.R_ID].isin(underspecified_reactions)
+            ].index.tolist()
+        )
+        invalid_reaction_species = (
+            invalid_reaction_species_direct | invalid_reaction_species_by_rxn
+        )
+
+        return set(underspecified_reactions), invalid_reaction_species
+
+    def _get_data_summary(self):
+        """Summarize the data tables in the SBML_dfs object"""
+
+        data_types = {}
+        for entity in ENTITIES_W_DATA:
+            entity_data = getattr(self, ENTITIES_TO_ENTITY_DATA[entity])
+            data_types[entity] = {
+                k: {
+                    "entity_type": entity,
+                    "columns": v.columns.tolist(),
+                    "n_rows": v.shape[0],
+                }
+                for k, v in entity_data.items()
+            }
+        return data_types
 
     def _get_entity_data(self, entity_type: str, label: str) -> pd.DataFrame:
         """
@@ -2465,39 +2730,104 @@ class SBML_dfs:
 
         return valid_reactions_df
 
-    def _get_unused_cspecies(self) -> set[str]:
-        """Returns a set of compartmentalized species
-        that are not part of any reactions"""
-        sc_ids = set(self.compartmentalized_species.index) - set(
-            self.reaction_species[SBML_DFS.SC_ID]
-        )
-        return sc_ids  # type: ignore
-
-    def _get_unused_species(self) -> set[str]:
-        """Returns a list of species that are not part of any reactions"""
-        s_ids = set(self.species.index) - set(
-            self.compartmentalized_species[SBML_DFS.S_ID]
-        )
-        return s_ids  # type: ignore
-
-    def _remove_compartmentalized_species(self, sc_ids: Iterable[str]):
-        """Removes compartmentalized species from the model
-
-        This should not be directly used by the user, as it can lead to
-        invalid reactions when removing species without a logic to decide
-        if the reaction needs to be removed as well.
+    def _find_invalid_entities_by_reference(
+        self, entity_type: str, reference_type: str, reference_ids: set[str]
+    ) -> set[str]:
+        """Find and return orphaned entities based on broken foreign key references.
 
         Parameters
         ----------
-        sc_ids : Iterable[str]
-            The compartmentalized species to remove
+        entity_type : str
+            The entity type to check for orphans (the table with primary keys)
+        reference_type : str
+            The type of foreign key reference to check
+        reference_ids : set[str]
+            Specific reference IDs that were removed
+
+        Returns
+        -------
+        set[str]
+            Set of primary keys that are orphaned and should be removed
         """
-        # Remove compartmentalized species
-        self.compartmentalized_species = self.compartmentalized_species.drop(
-            index=list(sc_ids)
-        )
-        # remove corresponding reactions_species
-        self.reaction_species = self.reaction_species.query("sc_id not in @sc_ids")
+
+        # Get the entity table and its schema
+        entity_schema = SBML_DFS_SCHEMA.SCHEMA[entity_type]
+        entity_pk = entity_schema[SCHEMA_DEFS.PK]
+        reference_schema = SBML_DFS_SCHEMA.SCHEMA[reference_type]
+        reference_pk = reference_schema[SCHEMA_DEFS.PK]
+
+        # figure out whether the entity_type or reference type is primary or foreign key
+        if SCHEMA_DEFS.FK in entity_schema and (
+            reference_pk in entity_schema[SCHEMA_DEFS.FK]
+        ):
+            # this is the daughter table remove all reverences to the reference ids
+            entity_df = getattr(self, entity_type)
+            should_be_removed_ids = entity_df[
+                entity_df[reference_pk].isin(reference_ids)
+            ].index.tolist()
+        elif SCHEMA_DEFS.FK in reference_schema and (
+            entity_pk in reference_schema[SCHEMA_DEFS.FK]
+        ):
+            # this is the parent table, look at the reference table and see what entries
+            # would be totally removed once the reference ids are removed
+            # e.g., are any compartments removed becasue we removed all the relevant cspecies
+            reference_df = getattr(self, reference_type).copy()
+
+            # add the mask of to-be-removed reference ids
+            reference_df["to_be_removed"] = reference_df.index.isin(reference_ids)
+            is_orphaned = reference_df.groupby(entity_pk)["to_be_removed"].apply(
+                lambda x: x.all()
+            )
+            should_be_removed_ids = is_orphaned[is_orphaned].index.tolist()
+        else:
+            raise ValueError(
+                f"Entity type {entity_type} does not have a foreign key to {reference_type}"
+            )
+
+        return set(should_be_removed_ids)
+
+    def _remove_entities_direct(self, entity_type: str, entity_ids: list[str]):
+        """Directly remove entities without cascading cleanup.
+
+        Parameters
+        ----------
+        entity_type : str
+            The entity type to remove
+        entity_ids : list[str]
+            IDs of entities to remove
+        """
+        # Get the DataFrame for this entity type
+        entity_df = getattr(self, entity_type)
+
+        # Use set operations to find existing and missing IDs
+        entity_ids_set = set(entity_ids)
+        existing_ids_set = entity_ids_set & set(entity_df.index)
+        missing_ids_set = entity_ids_set - existing_ids_set
+
+        if existing_ids_set:
+            # Remove from main entity table
+            setattr(self, entity_type, entity_df.drop(index=list(existing_ids_set)))
+            logger.debug(f"Removed {len(existing_ids_set)} {entity_type}")
+
+            # Handle associated data tables using query for efficiency
+            if entity_type == SBML_DFS.REACTIONS and hasattr(
+                self, SBML_DFS.REACTIONS_DATA
+            ):
+                for k, data in self.reactions_data.items():
+                    self.reactions_data[k] = data.query(
+                        "index not in @existing_ids_set"
+                    )
+
+            if entity_type == SBML_DFS.SPECIES and hasattr(self, SBML_DFS.SPECIES_DATA):
+                for k, data in self.species_data.items():
+                    self.species_data[k] = data.query("index not in @existing_ids_set")
+
+        # Log if some entities weren't found (might indicate logic issues)
+        if missing_ids_set:
+            missing_list = sorted(list(missing_ids_set))
+            logger.warning(
+                f"Attempted to remove {len(missing_ids_set)} {entity_type} that don't exist: {missing_list[:5]}{'...' if len(missing_list) > 5 else ''}"
+            )
 
     def _remove_entity_data(self, entity_type: str, label: str) -> None:
         """
@@ -2517,41 +2847,6 @@ class SBML_dfs:
         """
         data_dict = self._validate_entity_data_access(entity_type, label)
         del data_dict[label]
-
-    def _remove_species(self, s_ids: Iterable[str]):
-        """Removes species from the model
-
-        This should not be directly used by the user, as it can lead to
-        invalid reactions when removing species without a logic to decide
-        if the reaction needs to be removed as well.
-
-        This removes the species and corresponding compartmentalized species and
-        reactions_species.
-
-        Parameters
-        ----------
-        s_ids : Iterable[str]
-            The species to remove
-        """
-        sc_ids = self.compartmentalized_species.query("s_id in @s_ids").index.tolist()
-        self._remove_compartmentalized_species(sc_ids)
-        # Remove species
-        self.species = self.species.drop(index=list(s_ids))
-        # remove data
-        for k, data in self.species_data.items():
-            self.species_data[k] = data.drop(index=list(s_ids))
-
-    def _remove_unused_cspecies(self):
-        """Removes compartmentalized species that are no
-        longer part of any reactions"""
-        sc_ids = self._get_unused_cspecies()
-        self._remove_compartmentalized_species(sc_ids)
-
-    def _remove_unused_species(self):
-        """Removes species that are no longer part of any
-        compartmentalized species"""
-        s_ids = self._get_unused_species()
-        self._remove_species(s_ids)
 
     def _validate_entity_data_access(
         self, entity_type: str, label: str
@@ -2627,8 +2922,13 @@ class SBML_dfs:
 
     def _validate_pk_fk_correspondence(self):
         """
-        Check whether primary keys and foreign keys agree for all tables in the schema.
-        Raises ValueError if any correspondence fails.
+        Check bidirectional primary key and foreign key correspondence for all tables in the schema.
+
+        Validates:
+        1. All foreign keys exist as primary keys (standard FK constraint)
+        2. All primary keys are referenced as foreign keys (referential completeness)
+
+        Raises ValueError if any FK constraint or referential completeness violations are found.
         """
 
         pk_df = pd.DataFrame(
@@ -2674,7 +2974,7 @@ class SBML_dfs:
                     f"missing {pk_fk_correspondences['key'][i]} values"
                 )
 
-            # all foreign keys need to match a primary key
+            # Check 1: All foreign keys need to match a primary key (standard FK constraint)
             extra_fks = fk_table_keys.difference(pk_table_keys)
             if len(extra_fks) != 0:
                 raise ValueError(
@@ -2684,6 +2984,18 @@ class SBML_dfs:
                     f"but missing from {pk_fk_correspondences['pk_table'][i]}."
                     " All foreign keys must have a matching primary key.\n\n"
                     f"Extra key are: {', '.join(extra_fks)}"
+                )
+
+            # Check 2: All primary keys should be referenced as foreign keys (referential completeness)
+            unused_pks = pk_table_keys.difference(fk_table_keys)
+            if len(unused_pks) != 0:
+                raise ValueError(
+                    f"Referential completeness violation: {len(unused_pks)} "
+                    f"{pk_fk_correspondences['key'][i]} values in "
+                    f"{pk_fk_correspondences['pk_table'][i]} are not referenced by "
+                    f"{pk_fk_correspondences['fk_table'][i]}. "
+                    f"All primary keys must be referenced as foreign keys.\n\n"
+                    f"Unused keys are: {sorted(list(unused_pks))[:10]}"
                 )
 
     def _validate_r_ids(self, r_ids: Optional[Union[str, list[str]]]) -> list[str]:

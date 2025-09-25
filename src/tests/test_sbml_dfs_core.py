@@ -9,8 +9,7 @@ import pandas as pd
 import pytest
 from fs.errors import ResourceNotFound
 
-from napistu import identifiers
-from napistu import identifiers as napistu_identifiers
+from napistu import sbml_dfs_utils
 from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS,
@@ -27,6 +26,7 @@ from napistu.constants import (
     VALID_SBO_TERM_NAMES,
     VALID_SBO_TERMS,
 )
+from napistu.identifiers import Identifiers
 from napistu.ingestion import sbml
 from napistu.ingestion.constants import (
     INTERACTION_EDGELIST_DEFAULTS,
@@ -40,7 +40,7 @@ from napistu.source import Source
 def test_data():
     """Create test data for SBML integration tests."""
 
-    blank_id = identifiers.Identifiers([])
+    blank_id = Identifiers([])
 
     # Test compartments
     compartments_df = pd.DataFrame(
@@ -200,20 +200,6 @@ def test_sbml_dfs_reactions_data_wrong_idx(sbml_dfs):
         sbml_dfs.add_reactions_data("test", data)
 
 
-def test_sbml_dfs_remove_species_check_species(sbml_dfs):
-    s_id = [sbml_dfs.species.index[0]]
-    sbml_dfs._remove_species(s_id)
-    assert s_id[0] not in sbml_dfs.species.index
-    sbml_dfs.validate()
-
-
-def test_sbml_dfs_remove_species_check_cspecies(sbml_dfs):
-    s_id = [sbml_dfs.compartmentalized_species[SBML_DFS.S_ID].iloc[0]]
-    sbml_dfs._remove_species(s_id)
-    assert s_id[0] not in sbml_dfs.compartmentalized_species.index
-    sbml_dfs.validate()
-
-
 @pytest.fixture
 def sbml_dfs_w_data(sbml_dfs):
     sbml_dfs.add_species_data(
@@ -227,63 +213,24 @@ def sbml_dfs_w_data(sbml_dfs):
     return sbml_dfs
 
 
-def test_sbml_dfs_remove_species_check_data(sbml_dfs_w_data):
+def test_removing_species_removes_data(sbml_dfs_w_data):
+    """Test that removing a species removes the species data"""
     data = list(sbml_dfs_w_data.species_data.values())[0]
     s_id = [data.index[0]]
-    sbml_dfs_w_data._remove_species(s_id)
+    sbml_dfs_w_data.remove_entities(SBML_DFS.SPECIES, s_id, remove_references=True)
     data_2 = list(sbml_dfs_w_data.species_data.values())[0]
     assert s_id[0] not in data_2.index
     sbml_dfs_w_data.validate()
 
 
-def test_sbml_dfs_remove_cspecies_check_cspecies(sbml_dfs):
-    s_id = [sbml_dfs.compartmentalized_species.index[0]]
-    sbml_dfs._remove_compartmentalized_species(s_id)
-    assert s_id[0] not in sbml_dfs.compartmentalized_species.index
-    sbml_dfs.validate()
-
-
-def test_sbml_dfs_remove_cspecies_check_reaction_species(sbml_dfs):
-    sc_id = [sbml_dfs.reaction_species[SBML_DFS.SC_ID].iloc[0]]
-    sbml_dfs._remove_compartmentalized_species(sc_id)
-    assert sc_id[0] not in sbml_dfs.reaction_species[SBML_DFS.SC_ID]
-    sbml_dfs.validate()
-
-
-def test_sbml_dfs_remove_reactions_check_reactions(sbml_dfs):
-    r_id = [sbml_dfs.reactions.index[0]]
-    sbml_dfs.remove_reactions(r_id)
-    assert r_id[0] not in sbml_dfs.reactions.index
-    sbml_dfs.validate()
-
-
-def test_sbml_dfs_remove_reactions_check_reaction_species(sbml_dfs):
-    r_id = [sbml_dfs.reaction_species[SBML_DFS.R_ID].iloc[0]]
-    sbml_dfs.remove_reactions(r_id)
-    assert r_id[0] not in sbml_dfs.reaction_species[SBML_DFS.R_ID]
-    sbml_dfs.validate()
-
-
-def test_sbml_dfs_remove_reactions_check_data(sbml_dfs_w_data):
+def test_removing_reaction_removes_data(sbml_dfs_w_data):
+    """Test that removing a reaction removes the reactions data"""
     data = list(sbml_dfs_w_data.reactions_data.values())[0]
     r_id = [data.index[0]]
-    sbml_dfs_w_data.remove_reactions(r_id)
+    sbml_dfs_w_data.remove_entities(SBML_DFS.REACTIONS, r_id, remove_references=True)
     data_2 = list(sbml_dfs_w_data.reactions_data.values())[0]
     assert r_id[0] not in data_2.index
     sbml_dfs_w_data.validate()
-
-
-def test_sbml_dfs_remove_reactions_check_species(sbml_dfs):
-    # find all r_ids for a species and check if
-    # removing all these reactions also removes the species
-    s_id = sbml_dfs.species.index[0]
-    dat = sbml_dfs.compartmentalized_species.query(f"{SBML_DFS.S_ID} == @s_id").merge(
-        sbml_dfs.reaction_species, left_index=True, right_on=SBML_DFS.SC_ID
-    )
-    r_ids = dat[SBML_DFS.R_ID].unique()
-    sbml_dfs.remove_reactions(r_ids, remove_species=True)
-    assert s_id not in sbml_dfs.species.index
-    sbml_dfs.validate()
 
 
 def test_read_sbml_with_invalid_ids(model_source_stub):
@@ -317,6 +264,78 @@ def test_get_table(sbml_dfs):
     # reaction species don't have ids
     with pytest.raises(ValueError):
         sbml_dfs.get_table(SBML_DFS.REACTION_SPECIES, {SCHEMA_DEFS.ID})
+
+
+def test_entity_removal_consistency(sbml_dfs):
+    """Test that entity removal produces consistent results regardless of starting point."""
+
+    # 1. Choose the first compartment in the sbml_dfs fixture
+    print(sbml_dfs.compartments)
+    c_id = "compartment_984"  # cytosol
+
+    # 2. Call find_entity_references to find all affected entities
+    baseline_removals = sbml_dfs.find_entity_references(SBML_DFS.COMPARTMENTS, [c_id])
+
+    # Store the baseline results for comparison
+    baseline_total = sum(len(entities) for entities in baseline_removals.values())
+    print(f"Baseline total entities to be removed: {baseline_total}")
+    print(
+        f"Baseline removals by type: {[(k, len(v)) for k, v in baseline_removals.items() if v]}"
+    )
+
+    # Collect affected entities for each table type
+    starting_points = {}
+    for table_type, affected_ids in baseline_removals.items():
+        if affected_ids:
+            starting_points[table_type] = list(affected_ids)
+
+    # First, compare find_entity_references results across all starting points
+    print("\n=== Comparing find_entity_references results ===")
+    reference_results = {}
+
+    for start_table, start_ids in starting_points.items():
+        if not start_ids:
+            continue
+
+        # Get fresh copy and find references
+        test_sbml_dfs = sbml_dfs.copy()
+        predicted_removals = test_sbml_dfs.find_entity_references(
+            start_table, start_ids
+        )
+
+        total_predicted = sum(len(entities) for entities in predicted_removals.values())
+        reference_results[start_table] = {
+            "predicted": predicted_removals,
+            "total": total_predicted,
+        }
+
+        print(f"{start_table}: {total_predicted} total entities predicted")
+        print(f"  Details: {[(k, len(v)) for k, v in predicted_removals.items() if v]}")
+
+    # Check if all find_entity_references results are identical
+    reference_totals = [result["total"] for result in reference_results.values()]
+    if len(set(reference_totals)) == 1:
+        print(
+            "✓ All find_entity_references results are identical - only testing actual removal once"
+        )
+
+        # Only test actual removal from the baseline starting point
+        test_sbml_dfs = sbml_dfs.copy()
+        test_sbml_dfs.remove_entities(
+            SBML_DFS.COMPARTMENTS, [c_id], remove_references=True
+        )
+        test_sbml_dfs.validate()
+        print("✓ Actual removal and validation successful")
+
+    else:
+        print("✗ find_entity_references results are inconsistent!")
+        for start_table, result in reference_results.items():
+            print(f"  {start_table}: {result['total']} entities")
+
+        # This indicates a bug in the find_entity_references logic
+        assert (
+            False
+        ), f"find_entity_references produces inconsistent results: {reference_totals}"
 
 
 def test_search_by_name(sbml_dfs_metabolism):
@@ -383,7 +402,7 @@ def test_get_identifiers_handles_missing_values(model_source_stub):
         {
             SBML_DFS.S_NAME: ["A", "B", "C", "D"],
             SBML_DFS.S_IDENTIFIERS: [
-                napistu_identifiers.Identifiers([]),
+                Identifiers([]),
                 None,
                 np.nan,
                 pd.NA,
@@ -625,8 +644,8 @@ def test_validate_table(minimal_valid_sbml_dfs):
         {
             SBML_DFS.S_NAME: ["ATP", "ADP"],
             SBML_DFS.S_IDENTIFIERS: [
-                identifiers.Identifiers([]),
-                identifiers.Identifiers([]),
+                Identifiers([]),
+                Identifiers([]),
             ],
             SBML_DFS.S_SOURCE: [Source.empty(), Source.empty()],
         },
@@ -1277,3 +1296,197 @@ def test_get_sbo_term_x_source_cooccurrence(sbml_dfs_metabolism):
     assert all(
         term in VALID_SBO_TERMS for term in row_terms
     ), f"All row terms should be valid SBO terms. Got: {row_terms}"
+
+
+def test_force_edgelist_consistency(model_source_stub):
+    """Test that force_edgelist_consistency filters out invalid species references."""
+
+    # Create species table with only some of the species that will be referenced
+    species_df = pd.DataFrame(
+        {
+            SBML_DFS.S_NAME: ["protein_A", "protein_B", "metabolite_X"],
+            SBML_DFS.S_IDENTIFIERS: [
+                Identifiers(
+                    [{"ontology": "uniprot", "identifier": "P12345", "bqb": "is"}]
+                ),
+                Identifiers(
+                    [{"ontology": "uniprot", "identifier": "P67890", "bqb": "is"}]
+                ),
+                Identifiers(
+                    [{"ontology": "chebi", "identifier": "CHEBI:123", "bqb": "is"}]
+                ),
+            ],
+        }
+    )
+
+    # Create compartments
+    compartments_df = sbml_dfs_utils.stub_compartments()
+
+    # Create interaction edgelist with INVALID species references
+    interaction_edgelist = pd.DataFrame(
+        {
+            "upstream_name": [
+                "protein_A",
+                "protein_B",
+                "missing_protein_C",
+                "protein_A",
+            ],
+            "downstream_name": [
+                "protein_B",
+                "missing_protein_D",
+                "metabolite_X",
+                "missing_protein_D",
+            ],
+            "upstream_compartment": ["cellular_component"] * 4,
+            "downstream_compartment": ["cellular_component"] * 4,
+            "upstream_sbo_term_name": ["stimulator"] * 4,
+            "downstream_sbo_term_name": ["modified"] * 4,
+            "upstream_stoichiometry": [0, 0, 0, 0],
+            "downstream_stoichiometry": [0, 0, 0, 0],
+            "r_isreversible": [False] * 4,
+            "r_name": ["rxn1", "rxn2", "rxn3", "rxn4"],
+            "r_Identifiers": [Identifiers([]) for _ in range(4)],
+        }
+    )
+
+    # Test WITHOUT force_edgelist_consistency - should fail validation
+    with pytest.raises(ValueError, match="Invalid references"):
+        sbml_dfs = SBML_dfs.from_edgelist(
+            interaction_edgelist=interaction_edgelist,
+            species_df=species_df,
+            compartments_df=compartments_df,
+            model_source=model_source_stub,
+            force_edgelist_consistency=False,
+        )
+
+    # Test WITH force_edgelist_consistency - should succeed with warnings
+    with patch("napistu.sbml_dfs_utils.logger") as mock_logger:
+
+        sbml_dfs = SBML_dfs.from_edgelist(
+            interaction_edgelist=interaction_edgelist,
+            species_df=species_df,
+            compartments_df=compartments_df,
+            model_source=model_source_stub,
+            force_edgelist_consistency=True,
+        )
+
+        # Should have logged warnings about missing species and filtering
+        assert mock_logger.warning.call_count > 0
+
+        # Check that warnings about missing species were logged
+        warning_messages = [call[0][0] for call in mock_logger.warning.call_args_list]
+        assert any(
+            "missing_protein_C" in msg and "missing_protein_D" in msg
+            for msg in warning_messages
+        )
+
+        # Check that filtering warning was logged
+        assert any(
+            "Filtered" in msg and "interactions" in msg for msg in warning_messages
+        )
+
+    # Verify the resulting SBML_dfs only contains valid interactions
+    assert sbml_dfs.reactions.shape[0] == 1  # Only rxn1 is valid should remain
+    assert (
+        sbml_dfs.species.shape[0] == 2
+    )  # metabolite X is droppeed since its only linked to missing species
+    assert sbml_dfs.reaction_species.shape[0] == 2  # 2 reaction species for 1 reaction
+
+
+def test_force_edgelist_consistency_with_valid_data(model_source_stub):
+    """Test that force_edgelist_consistency doesn't modify valid data."""
+
+    # Create completely valid data
+    species_df = pd.DataFrame(
+        {
+            SBML_DFS.S_NAME: ["protein_A", "protein_B"],
+            SBML_DFS.S_IDENTIFIERS: [
+                Identifiers(
+                    [{"ontology": "uniprot", "identifier": "P12345", "bqb": "is"}]
+                ),
+                Identifiers(
+                    [{"ontology": "uniprot", "identifier": "P67890", "bqb": "is"}]
+                ),
+            ],
+        }
+    )
+
+    compartments_df = sbml_dfs_utils.stub_compartments()
+
+    interaction_edgelist = pd.DataFrame(
+        {
+            "upstream_name": ["protein_A"],
+            "downstream_name": ["protein_B"],
+            "upstream_compartment": ["cellular_component"],
+            "downstream_compartment": ["cellular_component"],
+            "upstream_sbo_term_name": ["stimulator"],
+            "downstream_sbo_term_name": ["modified"],
+            "upstream_stoichiometry": [0],
+            "downstream_stoichiometry": [0],
+            "r_isreversible": [False],
+            "r_name": ["rxn1"],
+            "r_Identifiers": [Identifiers([])],
+        }
+    )
+
+    # Should work with or without force_edgelist_consistency
+    for force_consistency in [True, False]:
+        sbml_dfs = SBML_dfs.from_edgelist(
+            interaction_edgelist=interaction_edgelist,
+            species_df=species_df,
+            compartments_df=compartments_df,
+            model_source=model_source_stub,
+            force_edgelist_consistency=force_consistency,
+        )
+
+        assert sbml_dfs.reactions.shape[0] == 1
+        assert sbml_dfs.species.shape[0] == 2
+
+
+def test_force_edgelist_consistency_invalid_compartments(model_source_stub):
+    """Test that invalid compartments still raise errors even with force_edgelist_consistency=True."""
+
+    species_df = pd.DataFrame(
+        {
+            SBML_DFS.S_NAME: ["protein_A", "protein_B"],
+            SBML_DFS.S_IDENTIFIERS: [
+                Identifiers(
+                    [{"ontology": "uniprot", "identifier": "P12345", "bqb": "is"}]
+                ),
+                Identifiers(
+                    [{"ontology": "uniprot", "identifier": "P67890", "bqb": "is"}]
+                ),
+            ],
+        }
+    )
+
+    compartments_df = (
+        sbml_dfs_utils.stub_compartments()
+    )  # Only has "cellular_component"
+
+    # Create edgelist with invalid compartment reference
+    interaction_edgelist = pd.DataFrame(
+        {
+            "upstream_name": ["protein_A"],
+            "downstream_name": ["protein_B"],
+            "upstream_compartment": ["invalid_compartment"],  # Invalid!
+            "downstream_compartment": ["cellular_component"],
+            "upstream_sbo_term_name": ["stimulator"],
+            "downstream_sbo_term_name": ["modified"],
+            "upstream_stoichiometry": [0],
+            "downstream_stoichiometry": [0],
+            "r_isreversible": [False],
+            "r_name": ["rxn1"],
+            "r_Identifiers": [Identifiers([])],
+        }
+    )
+
+    # Should still raise error for invalid compartments even with force_edgelist_consistency=True
+    with pytest.raises(ValueError, match="Missing compartments"):
+        _ = SBML_dfs.from_edgelist(
+            interaction_edgelist=interaction_edgelist,
+            species_df=species_df,
+            compartments_df=compartments_df,
+            model_source=model_source_stub,
+            force_edgelist_consistency=True,
+        )

@@ -62,10 +62,15 @@ def drop_cofactors(
         styled_df = all_cofactors.value_counts().to_frame()
         utils.show(styled_df)
 
+    # remove reaction species and other impacted entities (e.g., remove water everywhere)
     sbml_dfs_working = sbml_dfs.copy()
-    sbml_dfs_working.reaction_species = sbml_dfs_working.reaction_species[
-        ~sbml_dfs_working.reaction_species.index.isin(all_cofactors.index.tolist())
-    ]
+    sbml_dfs_working.remove_entities(
+        # special behavior where literal cleanup of reactions based on reaction_species is allowed
+        # normally, removing substrates/products would remove the reaction
+        "cofactors",
+        all_cofactors.index.tolist(),
+        remove_references=True,
+    )
 
     return sbml_dfs_working
 

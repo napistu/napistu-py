@@ -56,6 +56,8 @@ DEFAULT_PRIORITIZED_PATHWAYS = [
     *MODEL_SOURCES.__dict__.values(),
 ]
 
+NO_RXN_PATHWAY_IDS_DEFAULTS = [DATA_SOURCES.DOGMA]
+
 # standardization - species
 LATIN_SPECIES_NAMES = SimpleNamespace(
     HOMO_SAPIENS="Homo sapiens",
