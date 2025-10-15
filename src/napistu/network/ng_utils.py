@@ -204,7 +204,7 @@ def compartmentalize_species_pairs(
 def create_entity_attrs_from_data_tables(
     entity_data_dict: dict[str, pd.DataFrame],
     table_names: Optional[list[str]] = None,
-    name_prefix: bool = True,
+    add_name_prefixes: bool = True,
 ) -> dict[str, dict[str, str]]:
     """
     Create entity_attrs configuration from data tables.
@@ -219,7 +219,7 @@ def create_entity_attrs_from_data_tables(
         Dictionary mapping table names to DataFrames (e.g., sbml_dfs.species_data)
     table_names : Optional[list[str]], default=None
         Specific table names to include. If None, includes all available tables.
-    name_prefix : bool, default=True
+    add_name_prefixes : bool, default=True
         Whether to prefix attribute names with table name (e.g., "table_name_column_name")
 
     Returns
@@ -252,7 +252,7 @@ def create_entity_attrs_from_data_tables(
     Create attrs without table name prefixes:
     >>> entity_attrs = create_entity_attrs_from_data_tables(
     ...     sbml_dfs.species_data,
-    ...     name_prefix=False
+    ...     add_name_prefixes=False
     ... )
     """
 
@@ -280,16 +280,16 @@ def create_entity_attrs_from_data_tables(
 
         for column_name in table_data.columns:
             # Create attribute name
-            if name_prefix:
+            if add_name_prefixes:
                 attr_name = f"{table_name}_{column_name}"
             else:
                 attr_name = column_name
 
-            # Handle potential naming conflicts when name_prefix=False
-            if not name_prefix and attr_name in entity_attrs:
+            # Handle potential naming conflicts when add_name_prefixes=False
+            if not add_name_prefixes and attr_name in entity_attrs:
                 logger.warning(
                     f"Attribute name conflict: '{attr_name}' exists in multiple tables. "
-                    f"Consider using name_prefix=True to avoid conflicts."
+                    f"Consider using add_name_prefixes=True to avoid conflicts."
                 )
                 # Auto-resolve by adding table prefix as fallback
                 attr_name = f"{table_name}_{column_name}"
@@ -342,8 +342,8 @@ def format_napistu_graph_summary(data):
         ]
     )
 
-    # Calculate total species vertices (assuming "Species" is a node type)
-    total_species_vertices = vertex_node_types.get("Species", 0)
+    # Calculate total species vertices
+    total_species_vertices = vertex_node_types.get(NAPISTU_GRAPH_NODE_TYPES.SPECIES, 0)
 
     # Add species type breakdown sorted by count (descending)
     for species_type, count in sorted(
@@ -482,6 +482,7 @@ def get_sbml_dfs_vertex_summaries(
     stratify_by_bqb=True,
     characteristic_only=False,
     dogmatic=False,
+    add_name_prefixes=False,
 ) -> pd.DataFrame:
     """
     Prepare species and reaction ontology and/or source occurrence summaries which are ready to be merged with NapistuGraph vertices.
@@ -500,6 +501,9 @@ def get_sbml_dfs_vertex_summaries(
         Whether to only get characteristic ontologies
     dogmatic : bool
         Whether to use dogmatic ontologies
+    add_name_prefixes : bool, default False
+        If True, add prefixes to column names: 'source_' for source data
+        and 'ontology_' for ontology data
     """
 
     if len(summary_types) == 0:
@@ -529,7 +533,12 @@ def get_sbml_dfs_vertex_summaries(
             source_dfs.append(df.rename_axis(NAPISTU_GRAPH_VERTICES.NAME))
 
         logger.debug("Concatenating source occurrences")
-        summaries.append(pd.concat(source_dfs).fillna(int(0)))
+        source_summary = pd.concat(source_dfs).fillna(int(0))
+
+        if add_name_prefixes:
+            source_summary.columns = ["source_" + col for col in source_summary.columns]
+
+        summaries.append(source_summary)
 
     if VERTEX_SBML_DFS_SUMMARIES.ONTOLOGIES in summary_types:
 
@@ -563,9 +572,16 @@ def get_sbml_dfs_vertex_summaries(
         )
 
         logger.debug("Concatenating reaction and species ontology occurrences")
-        summaries.append(
-            pd.concat([reaction_ontologies, species_ontologies]).fillna(int(0))
+        ontology_summary = pd.concat([reaction_ontologies, species_ontologies]).fillna(
+            int(0)
         )
+
+        if add_name_prefixes:
+            ontology_summary.columns = [
+                "ontology_" + col for col in ontology_summary.columns
+            ]
+
+        summaries.append(ontology_summary)
 
     logger.debug("Concatenating all summaries")
     out = pd.concat(summaries, axis=1).astype(int)

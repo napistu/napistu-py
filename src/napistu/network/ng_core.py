@@ -205,7 +205,7 @@ class NapistuGraph(ig.Graph):
         entity_type: str,
         target_entity: Optional[str] = None,
         table_names: Optional[list[str]] = None,
-        name_prefix: bool = True,
+        add_name_prefixes: bool = True,
         mode: str = ADDING_ENTITY_DATA_DEFS.FRESH,
         overwrite: bool = False,
         inplace: bool = True,
@@ -231,7 +231,7 @@ class NapistuGraph(ig.Graph):
             or species data on edges (if such use case exists).
         table_names : Optional[list[str]], default=None
             Specific table names to include. If None, includes all available tables.
-        name_prefix : bool, default=True
+        add_name_prefixes : bool, default=True
             Whether to prefix attribute names with table name (e.g., "table_name_column_name")
         mode : str, default="fresh"
             Either "fresh" (replace existing) or "extend" (add new attributes only)
@@ -312,7 +312,7 @@ class NapistuGraph(ig.Graph):
         entity_attrs = ng_utils.create_entity_attrs_from_data_tables(
             entity_data_dict=entity_data_dict,
             table_names=table_names,
-            name_prefix=name_prefix,
+            add_name_prefixes=add_name_prefixes,
         )
 
         if not entity_attrs:
@@ -557,6 +557,7 @@ class NapistuGraph(ig.Graph):
         stratify_by_bqb=True,
         characteristic_only=False,
         dogmatic=False,
+        add_name_prefixes=False,
         mode: str = ADDING_ENTITY_DATA_DEFS.FRESH,
         overwrite: bool = False,
         inplace: bool = True,
@@ -581,6 +582,9 @@ class NapistuGraph(ig.Graph):
             Whether to include only characteristic identifiers. Default is False.
         dogmatic : bool, optional
             Whether to use dogmatic mode. Default is False.
+        add_name_prefixes : bool, default False
+            If True, add prefixes to column names: 'source_' for source data
+            and 'ontology_' for ontology data
         mode : str
             Either "fresh" (replace existing) or "extend" (add new attributes only)
         overwrite : bool
@@ -609,6 +613,7 @@ class NapistuGraph(ig.Graph):
             stratify_by_bqb=stratify_by_bqb,
             characteristic_only=characteristic_only,
             dogmatic=dogmatic,
+            add_name_prefixes=add_name_prefixes,
         )
 
         logger.info("Creating graph attributes")
