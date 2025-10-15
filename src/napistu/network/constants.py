@@ -10,6 +10,7 @@ IGRAPH_DEFS = SimpleNamespace(
     VERTICES="vertices",
     EDGES="edges",
     NAME="name",
+    INDEX="index",
     SOURCE="source",
     TARGET="target",
 )
