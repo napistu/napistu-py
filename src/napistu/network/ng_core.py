@@ -892,6 +892,38 @@ class NapistuGraph(ig.Graph):
         """
         return super().get_edge_dataframe()
 
+    def get_edge_series(self, attribute_name: str) -> pd.Series:
+        """
+        Get a single edge attribute as a pandas Series.
+
+        Parameters
+        ----------
+        attribute_name : str
+            Name of the edge attribute to extract
+
+        Returns
+        -------
+        pd.Series
+            Series with MultiIndex (from, to) as index and attribute values as data
+
+        Raises
+        ------
+        KeyError
+            If the attribute does not exist on any edges
+        """
+        if attribute_name not in self.es.attributes():
+            raise KeyError(f"Edge attribute '{attribute_name}' not found")
+
+        edge_tuples = [
+            (e[NAPISTU_GRAPH_EDGES.FROM], e[NAPISTU_GRAPH_EDGES.TO]) for e in self.es
+        ]
+        attribute_values = [e[attribute_name] for e in self.es]
+
+        multi_index = pd.MultiIndex.from_tuples(
+            edge_tuples, names=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+        )
+        return pd.Series(attribute_values, index=multi_index, name=attribute_name)
+
     def get_metadata(self, key: Optional[str] = None) -> Any:
         """
         Get metadata from the graph.
@@ -940,7 +972,9 @@ class NapistuGraph(ig.Graph):
 
         # edge summaries
         stats["n_edges"] = len(self.es)
-        sbo_name_counts = pd.Series([e["sbo_term"] for e in self.es]).value_counts()
+        sbo_name_counts = self.get_edge_series(
+            NAPISTU_GRAPH_EDGES.SBO_TERM
+        ).value_counts()
         sbo_name_counts.index = sbo_name_counts.index.map(MINI_SBO_TO_NAME)
         stats["sbo_name_counts_dict"] = sbo_name_counts.to_dict()
         stats["edge_attributes"] = self.es.attributes()
@@ -958,6 +992,35 @@ class NapistuGraph(ig.Graph):
             A table with one row per vertex.
         """
         return super().get_vertex_dataframe()
+
+    def get_vertex_series(self, attribute_name: str) -> pd.Series:
+        """
+        Get a single vertex attribute as a pandas Series.
+
+        Parameters
+        ----------
+        attribute_name : str
+            Name of the vertex attribute to extract
+
+        Returns
+        -------
+        pd.Series
+            Series with vertex names as index and attribute values as data
+
+        Raises
+        ------
+        KeyError
+            If the attribute does not exist on any vertices
+        """
+        if attribute_name not in self.vs.attributes():
+            raise KeyError(f"Vertex attribute '{attribute_name}' not found")
+
+        vertex_names = [v[NAPISTU_GRAPH_VERTICES.NAME] for v in self.vs]
+        attribute_values = [v[attribute_name] for v in self.vs]
+
+        series = pd.Series(attribute_values, index=vertex_names, name=attribute_name)
+        series.index.name = NAPISTU_GRAPH_VERTICES.NAME
+        return series
 
     def set_graph_attrs(
         self,
