@@ -32,6 +32,8 @@ def test_graph():
     g.add_vertices(3, attributes={NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C"]})
     g.add_edges([(0, 1), (1, 2)])
     g.es[SBML_DFS.R_ID] = ["R1", "R2"]
+    g.es[NAPISTU_GRAPH_EDGES.FROM] = ["A", "B"]
+    g.es[NAPISTU_GRAPH_EDGES.TO] = ["B", "C"]
     return NapistuGraph.from_igraph(g)
 
 
@@ -1655,3 +1657,37 @@ def test_show_summary(napistu_graph):
     assert (
         actual_edge_attrs == expected_edge_attrs
     ), f"Expected {expected_edge_attrs}, got {actual_edge_attrs}"
+
+
+def test_get_vertex_series(test_graph):
+    """Test get_vertex_series method."""
+    # Test getting vertex names
+    vertex_names = test_graph.get_vertex_series(NAPISTU_GRAPH_VERTICES.NAME)
+    expected_names = pd.Series(
+        ["A", "B", "C"], index=["A", "B", "C"], name=NAPISTU_GRAPH_VERTICES.NAME
+    )
+    expected_names.index.name = NAPISTU_GRAPH_VERTICES.NAME
+    pd.testing.assert_series_equal(vertex_names, expected_names)
+
+    # Test getting non-existent attribute
+    with pytest.raises(KeyError, match="Vertex attribute 'nonexistent' not found"):
+        test_graph.get_vertex_series("nonexistent")
+
+
+def test_get_edge_series(test_graph):
+    """Test get_edge_series method."""
+    # Test getting edge R_ID attribute
+    edge_r_ids = test_graph.get_edge_series(NAPISTU_GRAPH_EDGES.R_ID)
+    expected_r_ids = pd.Series(
+        ["R1", "R2"],
+        index=pd.MultiIndex.from_tuples(
+            [("A", "B"), ("B", "C")],
+            names=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO],
+        ),
+        name=NAPISTU_GRAPH_EDGES.R_ID,
+    )
+    pd.testing.assert_series_equal(edge_r_ids, expected_r_ids)
+
+    # Test getting non-existent attribute
+    with pytest.raises(KeyError, match="Edge attribute 'nonexistent' not found"):
+        test_graph.get_edge_series("nonexistent")
