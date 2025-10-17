@@ -13,11 +13,13 @@ from napistu.network.constants import (
     DEFAULT_WT_TRANS,
     GRAPH_WIRING_APPROACHES,
     IGRAPH_DEFS,
+    NAPISTU_GRAPH,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
     NAPISTU_GRAPH_VERTICES,
     NAPISTU_METADATA_KEYS,
     NAPISTU_WEIGHTING_STRATEGIES,
+    WEIGHT_TRANSFORMATIONS,
     WEIGHTING_SPEC,
 )
 from napistu.network.ng_core import NapistuGraph
@@ -65,6 +67,165 @@ def mixed_node_types_graph():
     g.add_edges([(0, 2), (2, 1)])  # species_A -> reaction_1 -> species_B
     # species_C and reaction_2, reaction_3 are isolated
     return g
+
+
+def test_remove_vertex_attributes():
+    """Test removing vertex attributes from a graph."""
+    g = ig.Graph()
+    g.add_vertices(
+        3,
+        attributes={
+            NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C"],
+            "foo": ["protein", "metabolite", "protein"],
+            "bar": [1.0, 2.0, 3.0],
+        },
+    )
+    g.add_edges([(0, 1), (1, 2)])
+
+    napistu_graph = NapistuGraph.from_igraph(g)
+    napistu_graph.remove_attributes(NAPISTU_GRAPH.VERTICES, ["foo", "bar"])
+
+    assert "foo" not in napistu_graph.vs.attributes()
+    assert "bar" not in napistu_graph.vs.attributes()
+    assert NAPISTU_GRAPH_VERTICES.NAME in napistu_graph.vs.attributes()
+
+
+def test_remove_edge_attributes():
+    """Test removing edge attributes from a graph."""
+    g = ig.Graph()
+    g.add_vertices(3, attributes={NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C"]})
+    g.add_edges([(0, 1), (1, 2)])
+    g.es["foo"] = [1.0, 2.0]
+    g.es["bar"] = [0.8, 0.9]
+
+    napistu_graph = NapistuGraph.from_igraph(g)
+    napistu_graph.remove_attributes(NAPISTU_GRAPH.EDGES, ["foo", "bar"])
+
+    assert "foo" not in napistu_graph.es.attributes()
+    assert "bar" not in napistu_graph.es.attributes()
+
+
+@pytest.mark.parametrize(
+    "attribute_type,entity_type,data_method,transform_method",
+    [
+        (
+            NAPISTU_GRAPH.VERTICES,
+            SBML_DFS.SPECIES,
+            "add_vertex_data",
+            "transform_vertices",
+        ),
+        (NAPISTU_GRAPH.EDGES, SBML_DFS.REACTIONS, "add_edge_data", "transform_edges"),
+    ],
+)
+def test_remove_attributes_metadata_cleanup(
+    attribute_type, entity_type, data_method, transform_method
+):
+    """Test that removing attributes cleans up metadata for both vertices and edges."""
+    # Create graph
+    g = ig.Graph()
+    g.add_vertices(
+        3,
+        attributes={
+            NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C"],
+            SBML_DFS.S_ID: ["A", "B", "C"],  # Required for vertex data merging
+        },
+    )
+    g.add_edges([(0, 1), (1, 2)])
+    g.es[NAPISTU_GRAPH_EDGES.FROM] = ["A", "B"]  # Required for edge data merging
+    g.es[NAPISTU_GRAPH_EDGES.TO] = ["B", "C"]  # Required for edge data merging
+
+    napistu_graph = NapistuGraph.from_igraph(g)
+
+    # Create side-loaded data based on attribute type
+    if attribute_type == NAPISTU_GRAPH.VERTICES:
+        side_loaded_data = {
+            "test_table": pd.DataFrame(
+                {
+                    SBML_DFS.S_ID: ["A", "B", "C"],
+                    "foo": [1.0, 2.0, 3.0],
+                    "bar": [10, 20, 30],
+                }
+            ).set_index(SBML_DFS.S_ID)
+        }
+    else:  # edges
+        side_loaded_data = {
+            "test_table": pd.DataFrame(
+                {
+                    NAPISTU_GRAPH_EDGES.FROM: ["A", "B"],
+                    NAPISTU_GRAPH_EDGES.TO: ["B", "C"],
+                    "foo": [1.0, 2.0],
+                    "bar": [0.8, 0.9],
+                }
+            ).set_index([NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO])
+        }
+
+    # Set up graph attributes for transformation
+    graph_attrs = {
+        entity_type: {
+            "foo": {
+                WEIGHTING_SPEC.TABLE: "test_table",
+                WEIGHTING_SPEC.VARIABLE: "foo",
+                WEIGHTING_SPEC.TRANSFORMATION: WEIGHT_TRANSFORMATIONS.STRING,
+            },
+            "bar": {
+                WEIGHTING_SPEC.TABLE: "test_table",
+                WEIGHTING_SPEC.VARIABLE: "bar",
+                WEIGHTING_SPEC.TRANSFORMATION: WEIGHT_TRANSFORMATIONS.IDENTITY,
+            },
+        }
+    }
+    napistu_graph.set_graph_attrs(graph_attrs)
+
+    # Add data using the appropriate method
+    getattr(napistu_graph, data_method)(side_loaded_attributes=side_loaded_data)
+
+    # Apply transformations to create metadata trail
+    getattr(napistu_graph, transform_method)(keep_raw_attributes=True)
+
+    # Verify metadata exists
+    assert NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES in napistu_graph._metadata
+    assert entity_type in napistu_graph._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES]
+    assert (
+        "foo"
+        in napistu_graph._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][entity_type]
+    )
+    assert (
+        "bar"
+        in napistu_graph._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][entity_type]
+    )
+    assert NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED in napistu_graph._metadata
+    assert (
+        entity_type
+        in napistu_graph._metadata[NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED]
+    )
+
+    # Remove one attribute
+    napistu_graph.remove_attributes(attribute_type, ["foo"])
+
+    # Verify foo metadata was cleaned up
+    assert (
+        "foo"
+        not in napistu_graph._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][
+            entity_type
+        ]
+    )
+    assert (
+        "foo"
+        not in napistu_graph._metadata[NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED][
+            entity_type
+        ]
+    )
+    # But bar should still be there
+    assert (
+        "bar"
+        in napistu_graph._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][entity_type]
+    )
+    assert (
+        "bar"
+        in napistu_graph._metadata[NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED][
+            entity_type
+        ]
+    )
 
 
 def test_remove_isolated_vertices():
