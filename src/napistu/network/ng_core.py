@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import copy
 import logging
-from typing import Any, Mapping, MutableMapping, Optional, Union
+from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, Optional, Union
 
 import igraph as ig
 import pandas as pd
+
+if TYPE_CHECKING:
+    pass
 
 from napistu import utils
 from napistu.constants import (
@@ -22,6 +25,7 @@ from napistu.network.constants import (
     EDGE_DIRECTION_MAPPING,
     EDGE_REVERSAL_ATTRIBUTE_MAPPING,
     ENTITIES_TO_ATTRS,
+    IGRAPH_DEFS,
     NAPISTU_GRAPH,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
@@ -70,7 +74,7 @@ class NapistuGraph(ig.Graph):
         Add edge data from SBML_dfs to the graph.
     add_topology_weights(base_score=2, protein_multiplier=1, metabolite_multiplier=3, unknown_multiplier=10, scale_multiplier_by_meandegree=True, inplace=True)
         Add topology-based weights to graph edges.
-    add_sbml_dfs_summaries(sbml_dfs, summary_types=None, priority_pathways=None, stratify_by_bqb=True, characteristic_only=False, dogmatic=False, inplace=True)
+    add_sbml_dfs_summaries(sbml_dfs, summary_types=VALID_VERTEX_SBML_DFS_SUMMARIES, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS, stratify_by_bqb=True, characteristic_only=False, dogmatic=False, inplace=True)
         Add vertex summaries from SBML_dfs to the graph vertices.
     add_vertex_data(sbml_dfs, side_loaded_attributes, mode='fresh', overwrite=False, inplace=True)
         Add vertex data from SBML_dfs to the graph.
@@ -82,10 +86,16 @@ class NapistuGraph(ig.Graph):
         Load a NapistuGraph from a pickle file.
     get_edge_dataframe()
         Return graph edges as a pandas DataFrame.
+    get_edge_series(attribute_name)
+        Return a single edge attribute as a pandas Series.
     get_metadata(key=None)
         Get metadata from the graph.
     get_vertex_dataframe()
         Return graph vertices as a pandas DataFrame.
+    get_vertex_series(attribute_name)
+        Return a single vertex attribute as a pandas Series.
+    remove_attributes(attribute_type, attributes)
+        Remove specified attributes from vertices or edges.
     remove_isolated_vertices(node_types='reactions')
         Remove isolated vertices from the graph.
     reverse_edges()
@@ -552,12 +562,12 @@ class NapistuGraph(ig.Graph):
     def add_sbml_dfs_summaries(
         self,
         sbml_dfs: SBML_dfs,
-        summary_types=VALID_VERTEX_SBML_DFS_SUMMARIES,
-        priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS,
-        stratify_by_bqb=True,
-        characteristic_only=False,
-        dogmatic=False,
-        add_name_prefixes=False,
+        summary_types: list[str] = VALID_VERTEX_SBML_DFS_SUMMARIES,
+        priority_pathways: list[str] = DEFAULT_PRIORITIZED_PATHWAYS,
+        stratify_by_bqb: bool = True,
+        characteristic_only: bool = False,
+        dogmatic: bool = False,
+        add_name_prefixes: bool = False,
         mode: str = ADDING_ENTITY_DATA_DEFS.FRESH,
         overwrite: bool = False,
         inplace: bool = True,
@@ -991,7 +1001,9 @@ class NapistuGraph(ig.Graph):
         pandas.DataFrame
             A table with one row per vertex.
         """
-        return super().get_vertex_dataframe()
+        df = super().get_vertex_dataframe()
+        df.index = df.index.rename(IGRAPH_DEFS.INDEX)
+        return df
 
     def get_vertex_series(self, attribute_name: str) -> pd.Series:
         """
@@ -1094,6 +1106,74 @@ class NapistuGraph(ig.Graph):
         summary_stats = self.get_summary()
         summary_table = ng_utils.format_napistu_graph_summary(summary_stats)
         utils.show(summary_table)
+
+    def remove_attributes(self, attribute_type: str, attributes: list[str]) -> None:
+        """
+        Remove specified attributes from vertices or edges.
+
+        This method removes the specified attributes from either vertices or edges
+        and warns if any of the attributes to be removed are not associated with
+        any vertices/edges in the graph.
+
+        Parameters
+        ----------
+        attribute_type : str
+            Type of attributes to remove. Must be either NAPISTU_GRAPH.VERTICES or NAPISTU_GRAPH.EDGES.
+        attributes : list[str]
+            List of attribute names to remove from the specified attribute type.
+
+        Returns
+        -------
+        None
+            The graph is modified in-place.
+
+        Raises
+        ------
+        ValueError
+            If attribute_type is not NAPISTU_GRAPH.VERTICES or NAPISTU_GRAPH.EDGES.
+
+        Examples
+        --------
+        Remove vertex attributes:
+        >>> graph.remove_attributes(NAPISTU_GRAPH.VERTICES, ["species_type", "node_type"])
+
+        Remove edge attributes:
+        >>> graph.remove_attributes(NAPISTU_GRAPH.EDGES, ["weight", "stoichiometry"])
+
+        Notes
+        -----
+        This method will warn about attributes that don't exist in the graph
+        but will continue to remove the attributes that do exist.
+        """
+
+        # Get the appropriate attribute container
+        if attribute_type == NAPISTU_GRAPH.VERTICES:
+            attr_container = self.vs
+        elif attribute_type == NAPISTU_GRAPH.EDGES:
+            attr_container = self.es
+        else:
+            raise ValueError(
+                f"attribute_type must be one of: {NAPISTU_GRAPH.VERTICES}, {NAPISTU_GRAPH.EDGES}, got '{attribute_type}'"
+            )
+
+        missing_attrs = set(attributes) - set(attr_container.attributes())
+        if len(missing_attrs) > 0:
+            logger.warning(
+                f"The following {attribute_type} attributes are not associated with any {attribute_type} and will be skipped: {sorted(missing_attrs)}"
+            )
+
+        existing_attrs_to_remove = set(attributes) & set(attr_container.attributes())
+        # Remove existing attributes
+        if existing_attrs_to_remove:
+            for attr_name in existing_attrs_to_remove:
+                del attr_container[attr_name]
+
+            # Clean up metadata for removed attributes
+            self._cleanup_removed_attributes_metadata(
+                attribute_type, existing_attrs_to_remove
+            )
+
+        return None
 
     def remove_isolated_vertices(self, node_types: str = SBML_DFS.REACTIONS):
         """
@@ -1359,8 +1439,8 @@ class NapistuGraph(ig.Graph):
             Dictionary mapping transformation names to functions
         """
         self._transform_entity_attributes(
-            entity_type="reactions",
-            target_entity="edges",
+            entity_type=SBML_DFS.REACTIONS,
+            target_entity=NAPISTU_GRAPH.EDGES,
             keep_raw_attributes=keep_raw_attributes,
             custom_transformations=custom_transformations,
         )
@@ -1381,8 +1461,8 @@ class NapistuGraph(ig.Graph):
             Dictionary mapping transformation names to functions
         """
         self._transform_entity_attributes(
-            entity_type="species",
-            target_entity="vertices",
+            entity_type=SBML_DFS.SPECIES,
+            target_entity=NAPISTU_GRAPH.VERTICES,
             keep_raw_attributes=keep_raw_attributes,
             custom_transformations=custom_transformations,
         )
@@ -1518,6 +1598,50 @@ class NapistuGraph(ig.Graph):
                 edge[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = (
                     current_upstream * multiplier
                 )
+
+    def _cleanup_removed_attributes_metadata(
+        self, attribute_type: str, removed_attributes: set[str]
+    ) -> None:
+        """
+        Clean up metadata for removed attributes.
+
+        This method removes entries from the metadata that are no longer relevant
+        after attributes have been removed from the graph.
+
+        Parameters
+        ----------
+        attribute_type : str
+            Type of attributes that were removed (NAPISTU_GRAPH.VERTICES or NAPISTU_GRAPH.EDGES)
+        removed_attributes : set[str]
+            Set of attribute names that were removed
+        """
+        # Map attribute_type to entity_type for metadata
+        if attribute_type == NAPISTU_GRAPH.VERTICES:
+            entity_type = SBML_DFS.SPECIES
+        else:  # edges
+            entity_type = SBML_DFS.REACTIONS
+
+        # Clean up raw attributes metadata
+        if NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES in self._metadata:
+            raw_attrs = self._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES]
+            if entity_type in raw_attrs:
+                for attr_name in removed_attributes:
+                    raw_attrs[entity_type].pop(attr_name, None)
+                # Remove empty entity type if no raw attributes left
+                if not raw_attrs[entity_type]:
+                    del raw_attrs[entity_type]
+
+        # Clean up transformations applied metadata
+        if NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED in self._metadata:
+            transformations = self._metadata[
+                NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED
+            ]
+            if entity_type in transformations:
+                for attr_name in removed_attributes:
+                    transformations[entity_type].pop(attr_name, None)
+                # Remove empty entity type if no transformations left
+                if not transformations[entity_type]:
+                    del transformations[entity_type]
 
     def _compare_and_merge_attrs(
         self,

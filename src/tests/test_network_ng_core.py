@@ -13,14 +13,17 @@ from napistu.network.constants import (
     DEFAULT_WT_TRANS,
     GRAPH_WIRING_APPROACHES,
     IGRAPH_DEFS,
+    NAPISTU_GRAPH,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
     NAPISTU_GRAPH_VERTICES,
     NAPISTU_METADATA_KEYS,
     NAPISTU_WEIGHTING_STRATEGIES,
+    WEIGHT_TRANSFORMATIONS,
     WEIGHTING_SPEC,
 )
 from napistu.network.ng_core import NapistuGraph
+from napistu.ontologies.constants import SPECIES_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +68,165 @@ def mixed_node_types_graph():
     g.add_edges([(0, 2), (2, 1)])  # species_A -> reaction_1 -> species_B
     # species_C and reaction_2, reaction_3 are isolated
     return g
+
+
+def test_remove_vertex_attributes():
+    """Test removing vertex attributes from a graph."""
+    g = ig.Graph()
+    g.add_vertices(
+        3,
+        attributes={
+            NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C"],
+            "foo": ["protein", "metabolite", "protein"],
+            "bar": [1.0, 2.0, 3.0],
+        },
+    )
+    g.add_edges([(0, 1), (1, 2)])
+
+    napistu_graph = NapistuGraph.from_igraph(g)
+    napistu_graph.remove_attributes(NAPISTU_GRAPH.VERTICES, ["foo", "bar"])
+
+    assert "foo" not in napistu_graph.vs.attributes()
+    assert "bar" not in napistu_graph.vs.attributes()
+    assert NAPISTU_GRAPH_VERTICES.NAME in napistu_graph.vs.attributes()
+
+
+def test_remove_edge_attributes():
+    """Test removing edge attributes from a graph."""
+    g = ig.Graph()
+    g.add_vertices(3, attributes={NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C"]})
+    g.add_edges([(0, 1), (1, 2)])
+    g.es["foo"] = [1.0, 2.0]
+    g.es["bar"] = [0.8, 0.9]
+
+    napistu_graph = NapistuGraph.from_igraph(g)
+    napistu_graph.remove_attributes(NAPISTU_GRAPH.EDGES, ["foo", "bar"])
+
+    assert "foo" not in napistu_graph.es.attributes()
+    assert "bar" not in napistu_graph.es.attributes()
+
+
+@pytest.mark.parametrize(
+    "attribute_type,entity_type,data_method,transform_method",
+    [
+        (
+            NAPISTU_GRAPH.VERTICES,
+            SBML_DFS.SPECIES,
+            "add_vertex_data",
+            "transform_vertices",
+        ),
+        (NAPISTU_GRAPH.EDGES, SBML_DFS.REACTIONS, "add_edge_data", "transform_edges"),
+    ],
+)
+def test_remove_attributes_metadata_cleanup(
+    attribute_type, entity_type, data_method, transform_method
+):
+    """Test that removing attributes cleans up metadata for both vertices and edges."""
+    # Create graph
+    g = ig.Graph()
+    g.add_vertices(
+        3,
+        attributes={
+            NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C"],
+            SBML_DFS.S_ID: ["A", "B", "C"],  # Required for vertex data merging
+        },
+    )
+    g.add_edges([(0, 1), (1, 2)])
+    g.es[NAPISTU_GRAPH_EDGES.FROM] = ["A", "B"]  # Required for edge data merging
+    g.es[NAPISTU_GRAPH_EDGES.TO] = ["B", "C"]  # Required for edge data merging
+
+    napistu_graph = NapistuGraph.from_igraph(g)
+
+    # Create side-loaded data based on attribute type
+    if attribute_type == NAPISTU_GRAPH.VERTICES:
+        side_loaded_data = {
+            "test_table": pd.DataFrame(
+                {
+                    SBML_DFS.S_ID: ["A", "B", "C"],
+                    "foo": [1.0, 2.0, 3.0],
+                    "bar": [10, 20, 30],
+                }
+            ).set_index(SBML_DFS.S_ID)
+        }
+    else:  # edges
+        side_loaded_data = {
+            "test_table": pd.DataFrame(
+                {
+                    NAPISTU_GRAPH_EDGES.FROM: ["A", "B"],
+                    NAPISTU_GRAPH_EDGES.TO: ["B", "C"],
+                    "foo": [1.0, 2.0],
+                    "bar": [0.8, 0.9],
+                }
+            ).set_index([NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO])
+        }
+
+    # Set up graph attributes for transformation
+    graph_attrs = {
+        entity_type: {
+            "foo": {
+                WEIGHTING_SPEC.TABLE: "test_table",
+                WEIGHTING_SPEC.VARIABLE: "foo",
+                WEIGHTING_SPEC.TRANSFORMATION: WEIGHT_TRANSFORMATIONS.STRING,
+            },
+            "bar": {
+                WEIGHTING_SPEC.TABLE: "test_table",
+                WEIGHTING_SPEC.VARIABLE: "bar",
+                WEIGHTING_SPEC.TRANSFORMATION: WEIGHT_TRANSFORMATIONS.IDENTITY,
+            },
+        }
+    }
+    napistu_graph.set_graph_attrs(graph_attrs)
+
+    # Add data using the appropriate method
+    getattr(napistu_graph, data_method)(side_loaded_attributes=side_loaded_data)
+
+    # Apply transformations to create metadata trail
+    getattr(napistu_graph, transform_method)(keep_raw_attributes=True)
+
+    # Verify metadata exists
+    assert NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES in napistu_graph._metadata
+    assert entity_type in napistu_graph._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES]
+    assert (
+        "foo"
+        in napistu_graph._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][entity_type]
+    )
+    assert (
+        "bar"
+        in napistu_graph._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][entity_type]
+    )
+    assert NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED in napistu_graph._metadata
+    assert (
+        entity_type
+        in napistu_graph._metadata[NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED]
+    )
+
+    # Remove one attribute
+    napistu_graph.remove_attributes(attribute_type, ["foo"])
+
+    # Verify foo metadata was cleaned up
+    assert (
+        "foo"
+        not in napistu_graph._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][
+            entity_type
+        ]
+    )
+    assert (
+        "foo"
+        not in napistu_graph._metadata[NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED][
+            entity_type
+        ]
+    )
+    # But bar should still be there
+    assert (
+        "bar"
+        in napistu_graph._metadata[NAPISTU_METADATA_KEYS.RAW_ATTRIBUTES][entity_type]
+    )
+    assert (
+        "bar"
+        in napistu_graph._metadata[NAPISTU_METADATA_KEYS.TRANSFORMATIONS_APPLIED][
+            entity_type
+        ]
+    )
 
 
 def test_remove_isolated_vertices():
@@ -171,6 +333,100 @@ def test_to_pandas_dfs():
         .sort_values(["source", "target"])
         .equals(es.sort_values(["source", "target"]))
     )
+
+
+def test_vertex_dataframe_ordering_preservation():
+    """Test that get_vertex_dataframe preserves the original vertex ordering."""
+    # Create a graph with vertices in a specific order
+    g = NapistuGraph(directed=True)
+
+    # Add vertices with specific names in a particular order
+    vertex_names = ["C", "A", "B", "D"]
+    for name in vertex_names:
+        g.add_vertex(
+            name=name, node_type=SBML_DFS.SPECIES, species_type=SPECIES_TYPES.METABOLITE
+        )
+
+    # Add some edges
+    g.add_edge("A", "B")
+    g.add_edge("B", "C")
+    g.add_edge("C", "D")
+
+    # Get vertex dataframe
+    vertex_df = g.get_vertex_dataframe()
+
+    # Verify ordering is preserved (should match igraph's internal order)
+    assert len(vertex_df) == 4
+    assert list(vertex_df[NAPISTU_GRAPH_VERTICES.NAME]) == vertex_names
+
+    # The index should be named 'index' and contain sequential values
+    assert vertex_df.index.name == IGRAPH_DEFS.INDEX
+    assert list(vertex_df.index) == list(range(4))  # 0, 1, 2, 3
+
+    # Verify that the index matches the DataFrame row position
+    for i, row in vertex_df.iterrows():
+        assert i == row.name  # row.name is the index value
+
+
+def test_edge_dataframe_ordering_preservation():
+    """Test that get_edge_dataframe preserves the original edge ordering."""
+    # Create a graph with edges in a specific order
+    g = NapistuGraph(directed=True)
+
+    # Add vertices
+    g.add_vertex(name="A", node_type=SBML_DFS.SPECIES)
+    g.add_vertex(name="B", node_type=SBML_DFS.SPECIES)
+    g.add_vertex(name="C", node_type=SBML_DFS.SPECIES)
+    g.add_vertex(name="D", node_type=SBML_DFS.SPECIES)
+
+    # Add edges in a specific order
+    edge_pairs = [("A", "B"), ("B", "C"), ("C", "D"), ("A", "D")]
+    for source, target in edge_pairs:
+        g.add_edge(source, target, weight=1.0)
+
+    # Get edge dataframe
+    edge_df = g.get_edge_dataframe()
+
+    # Verify ordering is preserved
+    assert len(edge_df) == 4
+    assert list(edge_df[IGRAPH_DEFS.SOURCE]) == [0, 1, 2, 0]  # A=0, B=1, C=2, D=3
+    assert list(edge_df[IGRAPH_DEFS.TARGET]) == [1, 2, 3, 3]  # B=1, C=2, D=3, D=3
+
+    # Verify that edge attributes are in the same order
+    assert list(edge_df[NAPISTU_GRAPH_EDGES.WEIGHT]) == [1.0, 1.0, 1.0, 1.0]
+
+
+def test_to_pandas_dfs_ordering_consistency():
+    """Test that to_pandas_dfs maintains consistent ordering between vertices and edges."""
+    # Create a graph with known structure
+    g = NapistuGraph(directed=True)
+
+    # Add vertices in specific order
+    vertex_names = ["X", "Y", "Z"]
+    for name in vertex_names:
+        g.add_vertex(name=name, node_type=SBML_DFS.SPECIES, value=len(name))
+
+    # Add edges
+    g.add_edge("X", "Y", edge_type="interaction")
+    g.add_edge("Y", "Z", edge_type="regulation")
+
+    # Get both dataframes
+    vertex_df, edge_df = g.to_pandas_dfs()
+
+    # Verify vertex ordering
+    assert list(vertex_df[NAPISTU_GRAPH_VERTICES.NAME]) == vertex_names
+    assert list(vertex_df[IGRAPH_DEFS.INDEX]) == list(range(3))
+
+    # Verify edge ordering and that source/target indices are valid
+    assert len(edge_df) == 2
+    assert list(edge_df[IGRAPH_DEFS.SOURCE]) == [0, 1]  # X=0, Y=1
+    assert list(edge_df[IGRAPH_DEFS.TARGET]) == [1, 2]  # Y=1, Z=2
+    assert list(edge_df["edge_type"]) == ["interaction", "regulation"]
+
+    # Verify all edge indices are valid vertex indices
+    max_vertex_idx = vertex_df[IGRAPH_DEFS.INDEX].max()
+    assert edge_df[IGRAPH_DEFS.SOURCE].max() <= max_vertex_idx
+    assert edge_df[IGRAPH_DEFS.TARGET].max() <= max_vertex_idx
 
 
 def test_set_and_get_graph_attrs(test_graph):
