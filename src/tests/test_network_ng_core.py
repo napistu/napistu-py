@@ -23,6 +23,7 @@ from napistu.network.constants import (
     WEIGHTING_SPEC,
 )
 from napistu.network.ng_core import NapistuGraph
+from napistu.ontologies.constants import SPECIES_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -332,6 +333,97 @@ def test_to_pandas_dfs():
         .sort_values(["source", "target"])
         .equals(es.sort_values(["source", "target"]))
     )
+
+
+def test_vertex_dataframe_ordering_preservation():
+    """Test that get_vertex_dataframe preserves the original vertex ordering."""
+    # Create a graph with vertices in a specific order
+    g = NapistuGraph(directed=True)
+
+    # Add vertices with specific names in a particular order
+    vertex_names = ["C", "A", "B", "D"]
+    for name in vertex_names:
+        g.add_vertex(
+            name=name, node_type=SBML_DFS.SPECIES, species_type=SPECIES_TYPES.METABOLITE
+        )
+
+    # Add some edges
+    g.add_edge("A", "B")
+    g.add_edge("B", "C")
+    g.add_edge("C", "D")
+
+    # Get vertex dataframe
+    vertex_df = g.get_vertex_dataframe()
+
+    # Verify ordering is preserved (should match igraph's internal order)
+    assert len(vertex_df) == 4
+    assert list(vertex_df[NAPISTU_GRAPH_VERTICES.NAME]) == vertex_names
+    assert list(vertex_df[IGRAPH_DEFS.INDEX]) == list(range(4))  # 0, 1, 2, 3
+
+    # Verify that the index column matches the DataFrame row position
+    for i, row in vertex_df.iterrows():
+        assert row[IGRAPH_DEFS.INDEX] == i
+
+
+def test_edge_dataframe_ordering_preservation():
+    """Test that get_edge_dataframe preserves the original edge ordering."""
+    # Create a graph with edges in a specific order
+    g = NapistuGraph(directed=True)
+
+    # Add vertices
+    g.add_vertex(name="A", node_type=SBML_DFS.SPECIES)
+    g.add_vertex(name="B", node_type=SBML_DFS.SPECIES)
+    g.add_vertex(name="C", node_type=SBML_DFS.SPECIES)
+    g.add_vertex(name="D", node_type=SBML_DFS.SPECIES)
+
+    # Add edges in a specific order
+    edge_pairs = [("A", "B"), ("B", "C"), ("C", "D"), ("A", "D")]
+    for source, target in edge_pairs:
+        g.add_edge(source, target, weight=1.0)
+
+    # Get edge dataframe
+    edge_df = g.get_edge_dataframe()
+
+    # Verify ordering is preserved
+    assert len(edge_df) == 4
+    assert list(edge_df[IGRAPH_DEFS.SOURCE]) == [0, 1, 2, 0]  # A=0, B=1, C=2, D=3
+    assert list(edge_df[IGRAPH_DEFS.TARGET]) == [1, 2, 3, 3]  # B=1, C=2, D=3, D=3
+
+    # Verify that edge attributes are in the same order
+    assert list(edge_df[NAPISTU_GRAPH_EDGES.WEIGHT]) == [1.0, 1.0, 1.0, 1.0]
+
+
+def test_to_pandas_dfs_ordering_consistency():
+    """Test that to_pandas_dfs maintains consistent ordering between vertices and edges."""
+    # Create a graph with known structure
+    g = NapistuGraph(directed=True)
+
+    # Add vertices in specific order
+    vertex_names = ["X", "Y", "Z"]
+    for name in vertex_names:
+        g.add_vertex(name=name, node_type=SBML_DFS.SPECIES, value=len(name))
+
+    # Add edges
+    g.add_edge("X", "Y", edge_type="interaction")
+    g.add_edge("Y", "Z", edge_type="regulation")
+
+    # Get both dataframes
+    vertex_df, edge_df = g.to_pandas_dfs()
+
+    # Verify vertex ordering
+    assert list(vertex_df[NAPISTU_GRAPH_VERTICES.NAME]) == vertex_names
+    assert list(vertex_df[IGRAPH_DEFS.INDEX]) == list(range(3))
+
+    # Verify edge ordering and that source/target indices are valid
+    assert len(edge_df) == 2
+    assert list(edge_df[IGRAPH_DEFS.SOURCE]) == [0, 1]  # X=0, Y=1
+    assert list(edge_df[IGRAPH_DEFS.TARGET]) == [1, 2]  # Y=1, Z=2
+    assert list(edge_df[NAPISTU_GRAPH_EDGES.EDGE_TYPE]) == ["interaction", "regulation"]
+
+    # Verify all edge indices are valid vertex indices
+    max_vertex_idx = vertex_df[IGRAPH_DEFS.INDEX].max()
+    assert edge_df[IGRAPH_DEFS.SOURCE].max() <= max_vertex_idx
+    assert edge_df[IGRAPH_DEFS.TARGET].max() <= max_vertex_idx
 
 
 def test_set_and_get_graph_attrs(test_graph):

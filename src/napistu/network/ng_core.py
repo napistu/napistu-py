@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import copy
 import logging
-from typing import Any, Mapping, MutableMapping, Optional, Union
+from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, Optional, Union
 
 import igraph as ig
 import pandas as pd
+
+if TYPE_CHECKING:
+    pass
 
 from napistu import utils
 from napistu.constants import (
@@ -70,7 +73,7 @@ class NapistuGraph(ig.Graph):
         Add edge data from SBML_dfs to the graph.
     add_topology_weights(base_score=2, protein_multiplier=1, metabolite_multiplier=3, unknown_multiplier=10, scale_multiplier_by_meandegree=True, inplace=True)
         Add topology-based weights to graph edges.
-    add_sbml_dfs_summaries(sbml_dfs, summary_types=None, priority_pathways=None, stratify_by_bqb=True, characteristic_only=False, dogmatic=False, inplace=True)
+    add_sbml_dfs_summaries(sbml_dfs, summary_types=VALID_VERTEX_SBML_DFS_SUMMARIES, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS, stratify_by_bqb=True, characteristic_only=False, dogmatic=False, inplace=True)
         Add vertex summaries from SBML_dfs to the graph vertices.
     add_vertex_data(sbml_dfs, side_loaded_attributes, mode='fresh', overwrite=False, inplace=True)
         Add vertex data from SBML_dfs to the graph.
@@ -558,12 +561,12 @@ class NapistuGraph(ig.Graph):
     def add_sbml_dfs_summaries(
         self,
         sbml_dfs: SBML_dfs,
-        summary_types=VALID_VERTEX_SBML_DFS_SUMMARIES,
-        priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS,
-        stratify_by_bqb=True,
-        characteristic_only=False,
-        dogmatic=False,
-        add_name_prefixes=False,
+        summary_types: list[str] = VALID_VERTEX_SBML_DFS_SUMMARIES,
+        priority_pathways: list[str] = DEFAULT_PRIORITIZED_PATHWAYS,
+        stratify_by_bqb: bool = True,
+        characteristic_only: bool = False,
+        dogmatic: bool = False,
+        add_name_prefixes: bool = False,
         mode: str = ADDING_ENTITY_DATA_DEFS.FRESH,
         overwrite: bool = False,
         inplace: bool = True,
