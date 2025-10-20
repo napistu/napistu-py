@@ -358,11 +358,14 @@ def test_vertex_dataframe_ordering_preservation():
     # Verify ordering is preserved (should match igraph's internal order)
     assert len(vertex_df) == 4
     assert list(vertex_df[NAPISTU_GRAPH_VERTICES.NAME]) == vertex_names
-    assert list(vertex_df[IGRAPH_DEFS.INDEX]) == list(range(4))  # 0, 1, 2, 3
 
-    # Verify that the index column matches the DataFrame row position
+    # The index should be named 'index' and contain sequential values
+    assert vertex_df.index.name == IGRAPH_DEFS.INDEX
+    assert list(vertex_df.index) == list(range(4))  # 0, 1, 2, 3
+
+    # Verify that the index matches the DataFrame row position
     for i, row in vertex_df.iterrows():
-        assert row[IGRAPH_DEFS.INDEX] == i
+        assert i == row.name  # row.name is the index value
 
 
 def test_edge_dataframe_ordering_preservation():
@@ -418,7 +421,7 @@ def test_to_pandas_dfs_ordering_consistency():
     assert len(edge_df) == 2
     assert list(edge_df[IGRAPH_DEFS.SOURCE]) == [0, 1]  # X=0, Y=1
     assert list(edge_df[IGRAPH_DEFS.TARGET]) == [1, 2]  # Y=1, Z=2
-    assert list(edge_df[NAPISTU_GRAPH_EDGES.EDGE_TYPE]) == ["interaction", "regulation"]
+    assert list(edge_df["edge_type"]) == ["interaction", "regulation"]
 
     # Verify all edge indices are valid vertex indices
     max_vertex_idx = vertex_df[IGRAPH_DEFS.INDEX].max()

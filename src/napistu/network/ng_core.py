@@ -25,6 +25,7 @@ from napistu.network.constants import (
     EDGE_DIRECTION_MAPPING,
     EDGE_REVERSAL_ATTRIBUTE_MAPPING,
     ENTITIES_TO_ATTRS,
+    IGRAPH_DEFS,
     NAPISTU_GRAPH,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
@@ -1000,7 +1001,9 @@ class NapistuGraph(ig.Graph):
         pandas.DataFrame
             A table with one row per vertex.
         """
-        return super().get_vertex_dataframe()
+        df = super().get_vertex_dataframe()
+        df.index = df.index.rename(IGRAPH_DEFS.INDEX)
+        return df
 
     def get_vertex_series(self, attribute_name: str) -> pd.Series:
         """
