@@ -2014,22 +2014,23 @@ def _summarize_ontology_cooccurrence(
         Square matrix with pathways as both rows and columns
     """
 
-    entity_ontology_occurrences = _summarize_ontology_occurrence(
-        df, stratify_by_bqb, allow_col_multindex
+    # Get binarized occurrence matrix directly
+    entity_ontology_matrix = _summarize_ontology_occurrence(
+        df, stratify_by_bqb, allow_col_multindex, binarize=True
     )
 
-    # Convert to binary (1 if compound is in pathway, 0 otherwise)
-    entity_ontology_matrix = (entity_ontology_occurrences > 0).astype(int)
-
-    # Calculate co-occurrence matrix: pathways × pathways
-    # This gives us the number of compounds shared between each pair of pathways
+    # Calculate co-occurrence matrix: ontologies × ontologies
+    # This gives us the number of species shared between each pair of ontologies
     cooccurrences = entity_ontology_matrix.T @ entity_ontology_matrix
 
     return cooccurrences
 
 
 def _summarize_ontology_occurrence(
-    df: pd.DataFrame, stratify_by_bqb: bool = True, allow_col_multindex: bool = False
+    df: pd.DataFrame,
+    stratify_by_bqb: bool = True,
+    allow_col_multindex: bool = False,
+    binarize: bool = False,
 ) -> pd.DataFrame:
     """
     Summarize the types of identifiers associated with each entity.
@@ -2042,6 +2043,8 @@ def _summarize_ontology_occurrence(
         whether to stratify by bqb
     allow_col_multindex (bool)
         whether to allow the column multindex
+    binarize: bool
+        whether to convert the result to binary values (0 vs 1+)
 
     Returns
     -------
@@ -2071,13 +2074,19 @@ def _summarize_ontology_occurrence(
     else:
         pivot_cols = [IDENTIFIERS.ONTOLOGY]
 
-    return df.pivot_table(
+    result = df.pivot_table(
         index=pk,
         columns=pivot_cols,
         values=SOURCE_SPEC.ENTRY,  # Using 'entry' column as indicator
         fill_value=0,
         aggfunc="count",  # Count occurrences
     )
+
+    if binarize:
+        # Convert to binary (1 if entity has ontology, 0 otherwise)
+        result = (result > 0).astype(int)
+
+    return result
 
 
 def _validate_edgelist_consistency(
@@ -2161,10 +2170,8 @@ def _summarize_source_cooccurrence(df: pd.DataFrame) -> pd.DataFrame:
         Square matrix with pathways as both rows and columns
     """
 
-    entity_pathway_occurrences = _summarize_source_occurrence(df)
-
-    # Convert to binary (1 if compound is in pathway, 0 otherwise)
-    entity_source_matrix = (entity_pathway_occurrences > 0).astype(int)
+    # Get binarized occurrence matrix directly
+    entity_source_matrix = _summarize_source_occurrence(df, binarize=True)
 
     # Calculate co-occurrence matrix: pathways × pathways
     # This gives us the number of compounds shared between each pair of pathways
@@ -2173,7 +2180,9 @@ def _summarize_source_cooccurrence(df: pd.DataFrame) -> pd.DataFrame:
     return cooccurrences
 
 
-def _summarize_source_occurrence(df: pd.DataFrame) -> pd.DataFrame:
+def _summarize_source_occurrence(
+    df: pd.DataFrame, binarize: bool = False
+) -> pd.DataFrame:
     """
     Summarize the occurrence of entities in pathways.
 
@@ -2181,6 +2190,8 @@ def _summarize_source_occurrence(df: pd.DataFrame) -> pd.DataFrame:
     ----------
     df (pd.DataFrame)
         a table generated using `sbml_dfs.get_sources`
+    binarize: bool
+        whether to convert the result to binary values (0 vs 1+)
 
     Returns
     -------
@@ -2199,7 +2210,7 @@ def _summarize_source_occurrence(df: pd.DataFrame) -> pd.DataFrame:
         )
 
     # Create a binary matrix: compounds × pathways
-    entity_source_occurrences = df.reset_index().pivot_table(
+    result = df.reset_index().pivot_table(
         index=pk,
         columns=SOURCE_SPEC.PATHWAY_ID,
         values=SOURCE_SPEC.ENTRY,  # Using 'entry' column as indicator
@@ -2207,7 +2218,11 @@ def _summarize_source_occurrence(df: pd.DataFrame) -> pd.DataFrame:
         aggfunc="count",  # Count occurrences
     )
 
-    return entity_source_occurrences
+    if binarize:
+        # Convert to binary (1 if entity is in pathway, 0 otherwise)
+        result = (result > 0).astype(int)
+
+    return result
 
 
 def _validate_non_null_values(

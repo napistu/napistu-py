@@ -950,6 +950,7 @@ class SBML_dfs:
         characteristic_only: bool = False,
         dogmatic: bool = True,
         include_missing: bool = False,
+        binarize: bool = False,
     ) -> pd.DataFrame:
         """
         Get ontology occurrence summary for a specific entity type.
@@ -976,11 +977,14 @@ class SBML_dfs:
             Whether to use a strict or loose definition of characteristic identifiers. Only applicable if `characteristic_only` is True and `entity_type` is SBML_DFS.SPECIES.
         include_missing: bool, optional
             Whether to include missing entities in the result using add_missing_ids_column, by default False
+        binarize: bool, optional
+            Whether to convert the result to binary values (0 vs 1+), by default False
 
         Returns
         -------
         pd.DataFrame
-            Summary of ontology occurrence patterns with entities as rows and ontologies as columns
+            Summary of ontology occurrence patterns with entities as rows and ontologies as columns.
+            If binarize=True, values are 0 or 1.
 
         Raises
         ------
@@ -993,7 +997,7 @@ class SBML_dfs:
         )
 
         result = sbml_dfs_utils._summarize_ontology_occurrence(
-            identifiers_table, stratify_by_bqb, allow_col_multindex
+            identifiers_table, stratify_by_bqb, allow_col_multindex, binarize
         )
 
         if include_missing:
@@ -1353,6 +1357,7 @@ class SBML_dfs:
         entity_type: str,
         priority_pathways: Optional[list[str]] = DEFAULT_PRIORITIZED_PATHWAYS,
         include_missing: bool = False,
+        binarize: bool = False,
     ) -> pd.DataFrame:
         """
         Get pathway occurrence summary for a specific entity type.
@@ -1372,11 +1377,13 @@ class SBML_dfs:
             without filtering or warnings.
         include_missing: bool, optional
             Whether to include missing entities in the result using add_missing_ids_column, by default False
+        binarize: bool, optional
+            Whether to convert the result to binary values (0 vs 1+), by default False
 
         Returns
         -------
         pd.DataFrame
-            Summary of pathway occurrence patterns
+            Summary of pathway occurrence patterns. If binarize=True, values are 0 or 1.
 
         Raises
         ------
@@ -1394,7 +1401,7 @@ class SBML_dfs:
             source_table, priority_pathways
         )
 
-        result = sbml_dfs_utils._summarize_source_occurrence(filtered_sources)
+        result = sbml_dfs_utils._summarize_source_occurrence(filtered_sources, binarize)
 
         if include_missing:
             # Get the reference table (all entities of this type)

@@ -115,6 +115,11 @@ ENTITIES_TO_ATTRS = {
     SBML_DFS.SPECIES: NAPISTU_METADATA_KEYS.SPECIES_ATTRS,
 }
 
+NAPISTU_GRAPH_EDGE_ENDPOINT_ATTRIBUTES = SimpleNamespace(
+    ATTRIBUTE_NAME="attribute",
+    ENDPOINT="endpoint",
+)
+
 # translating an SBML_dfs -> NapistuGraph
 
 GRAPH_WIRING_APPROACHES = SimpleNamespace(
