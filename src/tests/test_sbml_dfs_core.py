@@ -896,6 +896,14 @@ def test_get_source_occurrence(sbml_dfs_metabolism):
     assert isinstance(occurrence_df, pd.DataFrame)
     assert occurrence_df.shape == (129, 4)  # Expected: 129 pathways, 4 columns
 
+    # Test binarize functionality with species
+    binarized_df = sbml_dfs_metabolism.get_source_occurrence(
+        SBML_DFS.SPECIES, binarize=True
+    )
+    assert binarized_df.shape == occurrence_df.shape
+    assert binarized_df.isin([0, 1]).all().all()
+    pd.testing.assert_frame_equal(binarized_df, (occurrence_df > 0).astype(int))
+
     # Test with reactions
     occurrence_df = sbml_dfs_metabolism.get_source_occurrence(SBML_DFS.REACTIONS)
     assert isinstance(occurrence_df, pd.DataFrame)
@@ -957,6 +965,14 @@ def test_get_ontology_occurrence(sbml_dfs_metabolism):
     occurrence_df = sbml_dfs_metabolism.get_ontology_occurrence(SBML_DFS.SPECIES)
     assert isinstance(occurrence_df, pd.DataFrame)
     assert occurrence_df.shape == (129, 7)  # Expected: 129 entities, 7 ontologies
+
+    # Test binarize functionality with species
+    binarized_df = sbml_dfs_metabolism.get_ontology_occurrence(
+        SBML_DFS.SPECIES, binarize=True
+    )
+    assert binarized_df.shape == occurrence_df.shape
+    assert binarized_df.isin([0, 1]).all().all()
+    pd.testing.assert_frame_equal(binarized_df, (occurrence_df > 0).astype(int))
 
     # Test with reactions
     occurrence_df = sbml_dfs_metabolism.get_ontology_occurrence(SBML_DFS.REACTIONS)

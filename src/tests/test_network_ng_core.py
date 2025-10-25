@@ -14,6 +14,7 @@ from napistu.network.constants import (
     GRAPH_WIRING_APPROACHES,
     IGRAPH_DEFS,
     NAPISTU_GRAPH,
+    NAPISTU_GRAPH_EDGE_ENDPOINT_ATTRIBUTES,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
     NAPISTU_GRAPH_VERTICES,
@@ -1947,3 +1948,72 @@ def test_get_edge_series(test_graph):
     # Test getting non-existent attribute
     with pytest.raises(KeyError, match="Edge attribute 'nonexistent' not found"):
         test_graph.get_edge_series("nonexistent")
+
+
+def test_get_edge_endpoint_attributes(napistu_graph):
+    """Test get_edge_endpoint_attributes with different attribute combinations."""
+
+    # Test case 1: Pull out species_type only
+    species_df = napistu_graph.get_edge_endpoint_attributes(
+        NAPISTU_GRAPH_VERTICES.SPECIES_TYPE
+    )
+
+    # Verify structure
+    assert isinstance(species_df, pd.DataFrame)
+    assert species_df.index.names == [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+    assert species_df.columns.names == [
+        NAPISTU_GRAPH_EDGE_ENDPOINT_ATTRIBUTES.ATTRIBUTE_NAME,
+        NAPISTU_GRAPH_EDGE_ENDPOINT_ATTRIBUTES.ENDPOINT,
+    ]
+
+    # Verify columns
+    expected_cols = [
+        (NAPISTU_GRAPH_VERTICES.SPECIES_TYPE, IGRAPH_DEFS.SOURCE),
+        (NAPISTU_GRAPH_VERTICES.SPECIES_TYPE, IGRAPH_DEFS.TARGET),
+    ]
+    assert list(species_df.columns) == expected_cols
+
+    # Verify we have data for all edges
+    assert len(species_df) == napistu_graph.ecount()
+
+    # Test case 2: Pull out both species_type and node_type
+    multi_attrs_df = napistu_graph.get_edge_endpoint_attributes(
+        [NAPISTU_GRAPH_VERTICES.SPECIES_TYPE, NAPISTU_GRAPH_VERTICES.NODE_TYPE]
+    )
+
+    # Verify structure
+    assert isinstance(multi_attrs_df, pd.DataFrame)
+    assert multi_attrs_df.index.names == [
+        NAPISTU_GRAPH_EDGES.FROM,
+        NAPISTU_GRAPH_EDGES.TO,
+    ]
+    assert multi_attrs_df.columns.names == [
+        NAPISTU_GRAPH_EDGE_ENDPOINT_ATTRIBUTES.ATTRIBUTE_NAME,
+        NAPISTU_GRAPH_EDGE_ENDPOINT_ATTRIBUTES.ENDPOINT,
+    ]
+
+    # Verify columns
+    expected_cols = [
+        (NAPISTU_GRAPH_VERTICES.SPECIES_TYPE, IGRAPH_DEFS.SOURCE),
+        (NAPISTU_GRAPH_VERTICES.SPECIES_TYPE, IGRAPH_DEFS.TARGET),
+        (NAPISTU_GRAPH_VERTICES.NODE_TYPE, IGRAPH_DEFS.SOURCE),
+        (NAPISTU_GRAPH_VERTICES.NODE_TYPE, IGRAPH_DEFS.TARGET),
+    ]
+    assert list(multi_attrs_df.columns) == expected_cols
+
+    # Verify we have data for all edges
+    assert len(multi_attrs_df) == napistu_graph.ecount()
+
+    # Test case 3: Try to pull out a missing attribute (should raise KeyError)
+    with pytest.raises(
+        KeyError, match="Vertex attribute 'missing_attribute' does not exist"
+    ):
+        napistu_graph.get_edge_endpoint_attributes("missing_attribute")
+
+    # Also test with list containing missing attribute
+    with pytest.raises(
+        KeyError, match="Vertex attribute 'missing_attribute' does not exist"
+    ):
+        napistu_graph.get_edge_endpoint_attributes(
+            [NAPISTU_GRAPH_VERTICES.SPECIES_TYPE, "missing_attribute"]
+        )

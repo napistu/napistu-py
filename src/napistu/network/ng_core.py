@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 import logging
-from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, Optional, Union
+from typing import TYPE_CHECKING, Any, List, Mapping, MutableMapping, Optional, Union
 
 import igraph as ig
 import pandas as pd
@@ -27,6 +27,7 @@ from napistu.network.constants import (
     ENTITIES_TO_ATTRS,
     IGRAPH_DEFS,
     NAPISTU_GRAPH,
+    NAPISTU_GRAPH_EDGE_ENDPOINT_ATTRIBUTES,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
     NAPISTU_GRAPH_VERTICES,
@@ -901,6 +902,106 @@ class NapistuGraph(ig.Graph):
             A table with one row per edge.
         """
         return super().get_edge_dataframe()
+
+    def get_edge_endpoint_attributes(
+        self, vertex_attribute_names: Union[str, List[str]]
+    ) -> pd.DataFrame:
+        """
+        Get source and target vertex attributes for all edges.
+
+        Creates a DataFrame with one row per edge containing the specified
+        vertex attribute values for both the source and target nodes.
+
+        Parameters
+        ----------
+        vertex_attribute_names : str or list of str
+            Name(s) of vertex attribute(s) to extract for source and target nodes
+            (e.g., 'species_type', ['species_type', 'node_type'])
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with row MultiIndex (from, to) and column MultiIndex
+            (attribute_name, endpoint) where endpoint is 'source' or 'target'
+
+        Raises
+        ------
+        KeyError
+            If any vertex attribute does not exist
+
+        Examples
+        --------
+        >>> # Get single attribute
+        >>> species_df = graph.get_edge_endpoint_attributes('species_type')
+        >>> species_df.head()
+                                    species_type
+                                        source    target
+        from         to
+        R00000000    SC00015559          reaction metabolite
+        R00000214    SC00001716          reaction metabolite
+
+        >>> # Get multiple attributes at once
+        >>> edge_attrs = graph.get_edge_endpoint_attributes(['species_type', 'node_type'])
+        >>> edge_attrs.head()
+                                    species_type           node_type
+                                        source    target    source    target
+        from         to
+        R00000000    SC00015559          reaction metabolite  reaction  species
+        R00000214    SC00001716          reaction metabolite  reaction  species
+
+        >>> # Access specific columns
+        >>> edge_attrs[('species_type', 'source')]
+        >>> edge_attrs['species_type']  # Both source and target for species_type
+        >>> edge_attrs.xs('source', level='endpoint', axis=1)  # All source attributes
+        """
+        # Normalize input to list
+        if isinstance(vertex_attribute_names, str):
+            vertex_attribute_names = [vertex_attribute_names]
+
+        # Validate all attributes exist
+        available_attrs = self.vs.attributes()
+        for attr_name in vertex_attribute_names:
+            if attr_name not in available_attrs:
+                raise KeyError(f"Vertex attribute '{attr_name}' does not exist")
+
+        # Get all edges as (source, target) pairs
+        edge_list = self.get_edgelist()
+
+        # Create row MultiIndex from edge names (from, to)
+        # edge_list contains (source_index, target_index) pairs
+        from_names = [self.vs[src][NAPISTU_GRAPH_VERTICES.NAME] for src, _ in edge_list]
+        to_names = [self.vs[tgt][NAPISTU_GRAPH_VERTICES.NAME] for _, tgt in edge_list]
+        row_index = pd.MultiIndex.from_arrays(
+            [from_names, to_names],
+            names=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO],
+        )
+
+        # Build data dictionary for DataFrame construction
+        data = {}
+        for attr_name in vertex_attribute_names:
+            # Get attribute values for all vertices
+            attr_values = self.vs[attr_name]
+
+            # Map to edge endpoints
+            source_attrs = [attr_values[src] for src, _ in edge_list]
+            target_attrs = [attr_values[tgt] for _, tgt in edge_list]
+
+            data[(attr_name, IGRAPH_DEFS.SOURCE)] = source_attrs
+            data[(attr_name, IGRAPH_DEFS.TARGET)] = target_attrs
+
+        # Create column MultiIndex
+        col_index = pd.MultiIndex.from_tuples(
+            data.keys(),
+            names=[
+                NAPISTU_GRAPH_EDGE_ENDPOINT_ATTRIBUTES.ATTRIBUTE_NAME,
+                NAPISTU_GRAPH_EDGE_ENDPOINT_ATTRIBUTES.ENDPOINT,
+            ],
+        )
+
+        # Build DataFrame
+        df = pd.DataFrame(data, index=row_index, columns=col_index)
+
+        return df
 
     def get_edge_series(self, attribute_name: str) -> pd.Series:
         """
