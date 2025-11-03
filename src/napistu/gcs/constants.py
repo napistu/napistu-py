@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from napistu.constants import NAPISTU_STANDARD_OUTPUTS
+from napistu.constants import (
+    NAPISTU_DEFS,
+    NAPISTU_STANDARD_OUTPUTS,
+)
 
 GCS_ASSETS_NAMES = SimpleNamespace(
     TEST_PATHWAY="test_pathway",
@@ -14,8 +17,8 @@ GCS_ASSETS_NAMES = SimpleNamespace(
 )
 
 GCS_SUBASSET_NAMES = SimpleNamespace(
-    SBML_DFS="sbml_dfs",
-    NAPISTU_GRAPH="napistu_graph",
+    SBML_DFS=NAPISTU_DEFS.SBML_DFS,
+    NAPISTU_GRAPH=NAPISTU_DEFS.NAPISTU_GRAPH,
     SPECIES_IDENTIFIERS="species_identifiers",
     REACTIONS_SOURCE_TOTAL_COUNTS="reactions_source_total_counts",
     PRECOMPUTED_DISTANCES="precomputed_distances",
@@ -37,8 +40,8 @@ GCS_ASSETS_DEFS = SimpleNamespace(
 )
 
 GCS_ASSETS = SimpleNamespace(
-    PROJECT="calico-public-data",
-    BUCKET="calico-cpr-public",
+    PROJECT="shackett",
+    BUCKET="shackett-napistu-public",
     ASSETS={
         GCS_ASSETS_NAMES.TEST_PATHWAY: {
             GCS_ASSETS_DEFS.FILE: "test_pathway.tar.gz",
