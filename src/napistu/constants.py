@@ -27,6 +27,14 @@ NAPISTU_CLI = SimpleNamespace(
     TARGET_URI="target_uri",
 )
 
+# core data structures and vocab
+NAPISTU_DEFS = SimpleNamespace(
+    SBML_DFS="sbml_dfs",
+    NAPISTU_GRAPH="napistu_graph",
+    IDENTIFIERS="identifiers",
+    SOURCE="source",
+)
+
 FILE_EXT_ZIP = "zip"
 FILE_EXT_GZ = "gz"
 # SBML_dfs

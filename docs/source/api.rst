@@ -8,9 +8,14 @@ Package Overview
    :recursive:
 
    napistu
-   napistu.network
-   napistu.ingestion
-   napistu.modify
-   napistu.rpy2
+   napistu.context
    napistu.gcs
-   
+   napistu.ingestion
+   napistu.matching
+   napistu.mcp
+   napistu.modify
+   napistu.network
+   napistu.ontologies
+   napistu.rpy2
+   napistu.scverse
+   napistu.statistics

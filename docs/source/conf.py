@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath("../.."))
 project = "Napistu Python library"
 copyright = "2025, Sean Hackett"
 author = "Sean Hackett"
-release = "0.2.1"
+release = "0.7.4"
 
 extensions = [
     "sphinx.ext.autodoc",
@@ -32,3 +32,17 @@ exclude_patterns = []
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
+
+autodoc_mock_imports = [
+    "ipykernel",
+    "chromadb",
+    "fastmcp",
+    "jupyter-client",
+    "mcp",
+    "nbformat",
+    "sentence-transformers",
+    "rpy2",
+    "rpy2-arrow",
+    "anndata",
+    "mudata",
+]

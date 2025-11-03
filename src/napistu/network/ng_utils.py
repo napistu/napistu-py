@@ -483,6 +483,7 @@ def get_sbml_dfs_vertex_summaries(
     characteristic_only=False,
     dogmatic=False,
     add_name_prefixes=False,
+    binarize=False,
 ) -> pd.DataFrame:
     """
     Prepare species and reaction ontology and/or source occurrence summaries which are ready to be merged with NapistuGraph vertices.
@@ -504,6 +505,8 @@ def get_sbml_dfs_vertex_summaries(
     add_name_prefixes : bool, default False
         If True, add prefixes to column names: 'source_' for source data
         and 'ontology_' for ontology data
+    binarize: bool, optional
+        Whether to convert the summary to binary values (0 vs 1+). Default is False.
     """
 
     if len(summary_types) == 0:
@@ -528,7 +531,9 @@ def get_sbml_dfs_vertex_summaries(
         source_dfs = list()
         for entity_table in entity_tables:
             logger.info(f"Getting source occurrence for {entity_table}")
-            df = sbml_dfs.get_source_occurrence(entity_table, priority_pathways)
+            df = sbml_dfs.get_source_occurrence(
+                entity_table, priority_pathways, binarize=binarize
+            )
             df.columns.name = None
             source_dfs.append(df.rename_axis(NAPISTU_GRAPH_VERTICES.NAME))
 
@@ -550,6 +555,7 @@ def get_sbml_dfs_vertex_summaries(
             characteristic_only=characteristic_only,
             dogmatic=dogmatic,
             include_missing=True,
+            binarize=binarize,
         )
         df.columns.name = None
         reaction_ontologies = df.rename_axis(NAPISTU_GRAPH_VERTICES.NAME)
@@ -562,6 +568,7 @@ def get_sbml_dfs_vertex_summaries(
             characteristic_only=characteristic_only,
             dogmatic=dogmatic,
             include_missing=True,
+            binarize=binarize,
         )
         df.columns.name = None
 

@@ -223,6 +223,26 @@ def test_get_sbml_dfs_vertex_summaries_dimensions(sbml_dfs_metabolism):
     assert not result.isnull().any().any()
 
 
+def test_get_sbml_dfs_vertex_summaries_binarize(sbml_dfs_metabolism):
+    """Test that get_sbml_dfs_vertex_summaries with binarize=True returns binary values."""
+    result_binary = ng_utils.get_sbml_dfs_vertex_summaries(
+        sbml_dfs_metabolism, binarize=True
+    )
+    result_non_binary = ng_utils.get_sbml_dfs_vertex_summaries(
+        sbml_dfs_metabolism, binarize=False
+    )
+
+    # Verify output is a DataFrame and same shape
+    assert isinstance(result_binary, pd.DataFrame)
+    assert result_binary.shape == result_non_binary.shape
+
+    # Verify binary results only contain 0 and 1
+    assert result_binary.isin([0, 1]).all().all()
+
+    # Verify binary result matches expected transformation of non-binary result
+    pd.testing.assert_frame_equal(result_binary, (result_non_binary > 0).astype(int))
+
+
 def test_separate_entity_attrs_by_source(sbml_dfs_w_data):
     """Test separation of entity attributes by data source (SBML vs side-loaded)."""
     from napistu.network.constants import SBML_DFS, WEIGHTING_SPEC

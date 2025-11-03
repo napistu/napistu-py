@@ -75,7 +75,7 @@ class NapistuGraph(ig.Graph):
         Add edge data from SBML_dfs to the graph.
     add_topology_weights(base_score=2, protein_multiplier=1, metabolite_multiplier=3, unknown_multiplier=10, scale_multiplier_by_meandegree=True, inplace=True)
         Add topology-based weights to graph edges.
-    add_sbml_dfs_summaries(sbml_dfs, summary_types=VALID_VERTEX_SBML_DFS_SUMMARIES, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS, stratify_by_bqb=True, characteristic_only=False, dogmatic=False, inplace=True)
+    add_sbml_dfs_summaries(sbml_dfs, summary_types=VALID_VERTEX_SBML_DFS_SUMMARIES, priority_pathways=DEFAULT_PRIORITIZED_PATHWAYS, stratify_by_bqb=True, characteristic_only=False, dogmatic=False, add_name_prefixes = False, binarize=True, inplace=True)
         Add vertex summaries from SBML_dfs to the graph vertices.
     add_vertex_data(sbml_dfs, side_loaded_attributes, mode='fresh', overwrite=False, inplace=True)
         Add vertex data from SBML_dfs to the graph.
@@ -569,6 +569,7 @@ class NapistuGraph(ig.Graph):
         characteristic_only: bool = False,
         dogmatic: bool = False,
         add_name_prefixes: bool = False,
+        binarize: bool = False,
         mode: str = ADDING_ENTITY_DATA_DEFS.FRESH,
         overwrite: bool = False,
         inplace: bool = True,
@@ -596,6 +597,8 @@ class NapistuGraph(ig.Graph):
         add_name_prefixes : bool, default False
             If True, add prefixes to column names: 'source_' for source data
             and 'ontology_' for ontology data
+        binarize: bool, optional
+            Whether to convert the summary to binary values (0 vs 1+). Default is False.
         mode : str
             Either "fresh" (replace existing) or "extend" (add new attributes only)
         overwrite : bool
@@ -625,6 +628,7 @@ class NapistuGraph(ig.Graph):
             characteristic_only=characteristic_only,
             dogmatic=dogmatic,
             add_name_prefixes=add_name_prefixes,
+            binarize=binarize,
         )
 
         logger.info("Creating graph attributes")
