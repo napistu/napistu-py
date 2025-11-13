@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 from fastmcp import FastMCP
 
-from napistu.mcp import codebase_utils
+from napistu.mcp import codebase_utils, inspect_utils
 from napistu.mcp import utils as mcp_utils
 from napistu.mcp.component_base import ComponentState, MCPComponent
 from napistu.mcp.constants import NAPISTU_PY_READTHEDOCS_API
@@ -315,6 +315,85 @@ class CodebaseComponent(MCPComponent):
                 "functions": list(self.state.codebase_cache["functions"].keys()),
             }
 
+        @mcp.tool()
+        async def get_method_source(
+            class_name: str, method_name: str, package_name: str = "napistu"
+        ) -> Dict[str, Any]:
+            """
+            Get actual source code for a specific method of a class.
+
+            Use this after inspect_class when you want to see the implementation
+            of a specific method. This provides the actual code, not just the signature.
+
+            **USE THIS WHEN:**
+            - You need to see how a specific method is implemented
+            - Understanding method logic and algorithm
+            - Debugging or learning from implementation
+            - ReadTheDocs documentation is insufficient
+
+            **DO NOT USE FOR:**
+            - Just getting method signatures (use get_class_documentation or inspect_class)
+            - Methods from other libraries
+            - Understanding what methods exist (use inspect_class for that)
+
+            Parameters
+            ----------
+            class_name : str
+                Class name (e.g., "SBML_dfs" or "sbml_dfs_core.SBML_dfs")
+            method_name : str
+                Name of the method (e.g., "get_reactions", "parse_model")
+            package_name : str, optional
+                Package to inspect (default: "napistu")
+
+            Returns
+            -------
+            Dict[str, Any]
+                Dictionary containing:
+                - success : bool
+                - method_name : str
+                - class_name : str
+                - source : str (actual method code)
+                - signature : str
+                - docstring : str
+                - line_number : int
+                - error : str (if failed)
+
+            Examples
+            --------
+            >>> get_method_source("SBML_dfs", "get_reactions")
+            >>> get_method_source("NapistuGraph", "find_paths", "napistu")
+            >>> get_method_source("network.NapistuGraph", "add_node")
+            """
+            try:
+                # Import the class
+                cls, error = inspect_utils.import_object(class_name, package_name)
+                if error:
+                    return {
+                        "success": False,
+                        "error": error,
+                        "suggestion": "Try using search_codebase first to find the correct class path",
+                    }
+
+                # Get method source using Pydantic model
+                info = inspect_utils.MethodSourceInfo.from_method(cls, method_name)
+
+                # Check if there was an error finding the method
+                if info.error:
+                    return {
+                        "success": False,
+                        "error": info.error,
+                        "suggestion": f"Use inspect_class('{class_name}') to see available methods",
+                    }
+
+                return {"success": True, **info.model_dump(exclude={"error"})}
+
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "suggestion": "Verify the class and method exist and are installed",
+                }
+
         @mcp.resource("napistu://codebase/modules/{module_name}")
         async def get_module_details(module_name: str) -> Dict[str, Any]:
             """
@@ -350,6 +429,169 @@ class CodebaseComponent(MCPComponent):
                 return {"error": f"Module {module_name} not found"}
 
             return self.state.codebase_cache["modules"][module_name]
+
+        @mcp.tool()
+        async def inspect_function(
+            function_name: str, package_name: str = "napistu"
+        ) -> Dict[str, Any]:
+            """
+            Get runtime inspection of an installed function with actual source code.
+
+            This complements get_function_documentation by providing:
+            - Actual function implementation (source code)
+            - Runtime signature with defaults
+            - Works for any installed package (napistu, napistu_torch, etc.)
+
+            **USE THIS WHEN:**
+            - You need to see the actual implementation of a function
+            - ReadTheDocs documentation is insufficient
+            - You want to understand how a function works internally
+            - Debugging or understanding implementation details
+
+            **DO NOT USE FOR:**
+            - Just getting the function signature (use get_function_documentation)
+            - Functions that don't exist in installed packages
+            - Built-in Python functions or standard library
+
+            Parameters
+            ----------
+            function_name : str
+                Function name (e.g., "create_network" or "network.create_network")
+            package_name : str, optional
+                Package to inspect (default: "napistu")
+
+            Returns
+            -------
+            Dict[str, Any]
+                Dictionary containing:
+                - success : bool
+                - source : str (actual function code)
+                - signature : str
+                - docstring : str
+                - file_path : str
+                - line_number : int
+                - error : str (if failed)
+
+            Examples
+            --------
+            >>> inspect_function("network.create_consensus")
+            >>> inspect_function("SBML_dfs.parse_model", "napistu")
+            >>> inspect_function("some_function", "napistu_torch")
+            """
+            try:
+                # Import the function
+                func, error = inspect_utils.import_object(function_name, package_name)
+                if error:
+                    return {
+                        "success": False,
+                        "error": error,
+                        "suggestion": "Try using search_codebase first to find the correct function path",
+                    }
+
+                # Get function info using Pydantic model
+                info = inspect_utils.FunctionInfo.from_function(func)
+
+                return {
+                    "success": True,
+                    "function_name": function_name,
+                    "package": package_name,
+                    **info.model_dump(),
+                }
+
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "suggestion": "Verify the function exists and is installed",
+                }
+
+        @mcp.tool()
+        async def inspect_class(
+            class_name: str, package_name: str = "napistu", include_init: bool = True
+        ) -> Dict[str, Any]:
+            """
+            Get runtime inspection of an installed class with actual source code.
+
+            This complements get_class_documentation by providing:
+            - Actual __init__ source code (not available in ReadTheDocs)
+            - Runtime type hints and defaults
+            - Works for any installed package (napistu, napistu_torch, etc.)
+
+            The key value is seeing the __init__ implementation which shows:
+            - Initialization logic and validation
+            - Default parameter values
+            - Required vs optional parameters
+            - Setup and configuration code
+
+            **USE THIS WHEN:**
+            - You need to see how to properly instantiate a class
+            - Understanding __init__ parameters and their defaults
+            - Seeing what happens during class initialization
+            - ReadTheDocs documentation is insufficient
+
+            **DO NOT USE FOR:**
+            - Just getting method signatures (use get_class_documentation)
+            - Classes from other libraries
+            - Understanding class methods (use get_method_source for that)
+
+            Parameters
+            ----------
+            class_name : str
+                Class name (e.g., "NapistuGraph" or "network.NapistuGraph")
+            package_name : str, optional
+                Package to inspect (default: "napistu")
+            include_init : bool, optional
+                Include __init__ source code (default: True)
+
+            Returns
+            -------
+            Dict[str, Any]
+                Dictionary containing:
+                - success : bool
+                - name : str
+                - module : str
+                - docstring : str
+                - file_path : str
+                - line_number : int
+                - init_signature : str
+                - init_source : str (actual __init__ code if include_init=True)
+                - methods : Dict[str, MethodInfo] (signatures only, no source)
+                - error : str (if failed)
+
+            Examples
+            --------
+            >>> inspect_class("SBML_dfs")
+            >>> inspect_class("network.NapistuGraph", "napistu")
+            >>> inspect_class("SomeClass", "napistu_torch")
+            """
+            try:
+                # Import the class
+                cls, error = inspect_utils.import_object(class_name, package_name)
+                if error:
+                    return {
+                        "success": False,
+                        "error": error,
+                        "suggestion": "Try using search_codebase first to find the correct class path",
+                    }
+
+                # Get class info using Pydantic model
+                info = inspect_utils.ClassInfo.from_class(
+                    cls, include_init=include_init
+                )
+
+                return {
+                    "success": True,
+                    "class_name": class_name,
+                    "package": package_name,
+                    **info.model_dump(),
+                }
+
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "suggestion": "Verify the class exists and is installed",
+                }
 
         # Register tools
         @mcp.tool()
