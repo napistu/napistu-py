@@ -2,10 +2,13 @@
 Utilities for scanning and analyzing the Napistu codebase.
 """
 
+import logging
 from typing import Any, Dict, Optional, Set
 
 from napistu.mcp import utils as mcp_utils
 from napistu.mcp.constants import READTHEDOCS_TOC_CSS_SELECTOR
+
+logger = logging.getLogger(__name__)
 
 # Import optional dependencies with error handling
 try:
@@ -141,6 +144,121 @@ def find_item_by_name(name: str, items_dict: dict) -> tuple[str, dict] | None:
     return None
 
 
+def _format_attribute(attr_dl) -> Dict[str, Any]:
+    """
+    Format a class attribute's signature and documentation into a dictionary.
+
+    Args:
+        attr_dl: The <dl> tag for the attribute, containing <dt> and <dd>.
+
+    Returns:
+        dict: A dictionary with keys 'name', 'signature', 'id', and 'doc'.
+    """
+    sig = attr_dl.find("dt")
+    doc = attr_dl.find("dd")
+    name = sig.find("span", class_="sig-name").get_text(strip=True) if sig else None
+    signature = sig.get_text(strip=True) if sig else None
+    return {
+        "name": mcp_utils._clean_signature_text(name),
+        "signature": mcp_utils._clean_signature_text(signature),
+        "id": sig.get("id") if sig else None,
+        "doc": doc.get_text(" ", strip=True) if doc else None,
+    }
+
+
+def _format_class(class_dl) -> Dict[str, Any]:
+    """
+    Format a class definition, including its methods and attributes, into a dictionary.
+
+    Args:
+        class_dl: The <dl> tag for the class, containing <dt> and <dd>.
+
+    Returns:
+        dict: A dictionary with keys 'name', 'signature', 'id', 'doc', 'methods', and 'attributes'.
+              'methods' and 'attributes' are themselves dicts keyed by name.
+    """
+    sig = class_dl.find("dt")
+    doc = class_dl.find("dd")
+    class_name = (
+        sig.find("span", class_="sig-name").get_text(strip=True) if sig else None
+    )
+    methods = {}
+    attributes = {}
+    if doc:
+        for meth_dl in doc.find_all("dl", class_="py method"):
+            meth = _format_function(meth_dl.find("dt"), meth_dl.find("dd"))
+            if meth["name"]:
+                methods[meth["name"]] = meth
+        for attr_dl in doc.find_all("dl", class_="py attribute"):
+            attr = _format_attribute(attr_dl)
+            if attr["name"]:
+                attributes[attr["name"]] = attr
+    return {
+        "name": mcp_utils._clean_signature_text(class_name),
+        "signature": mcp_utils._clean_signature_text(
+            sig.get_text(strip=True) if sig else None
+        ),
+        "id": sig.get("id") if sig else None,
+        "doc": doc.get_text(" ", strip=True) if doc else None,
+        "methods": methods,
+        "attributes": attributes,
+    }
+
+
+def _format_function(sig_dt, doc_dd) -> Dict[str, Any]:
+    """
+    Format a function or method signature and its documentation into a dictionary.
+
+    Args:
+        sig_dt: The <dt> tag containing the function/method signature.
+        doc_dd: The <dd> tag containing the function/method docstring.
+
+    Returns:
+        dict: A dictionary with keys 'name', 'signature', 'id', and 'doc'.
+    """
+    name = (
+        sig_dt.find("span", class_="sig-name").get_text(strip=True) if sig_dt else None
+    )
+    signature = sig_dt.get_text(strip=True) if sig_dt else None
+    return {
+        "name": mcp_utils._clean_signature_text(name),
+        "signature": mcp_utils._clean_signature_text(signature),
+        "id": sig_dt.get("id") if sig_dt else None,
+        "doc": doc_dd.get_text(" ", strip=True) if doc_dd else None,
+    }
+
+
+def _format_submodules(soup) -> dict:
+    """
+    Extract submodules from a ReadTheDocs module page soup object.
+    Looks for a 'Modules' rubric and parses the following table or list for submodule names, URLs, and descriptions.
+
+    Args:
+        soup (BeautifulSoup): Parsed HTML soup of the module page.
+
+    Returns:
+        dict: {submodule_name: {"url": str, "description": str}}
+    """
+    submodules = {}
+    for rubric in soup.find_all("p", class_="rubric"):
+        if rubric.get_text(strip=True).lower() == "modules":
+            sib = rubric.find_next_sibling()
+            if sib and sib.name in ("table", "ul"):
+                for a in sib.find_all("a", href=True):
+                    submod_name = a.get_text(strip=True)
+                    submod_url = a["href"]
+                    desc = ""
+                    td = a.find_parent("td")
+                    if td and td.find_next_sibling("td"):
+                        desc = td.find_next_sibling("td").get_text(strip=True)
+                    elif a.parent.name == "li":
+                        next_p = a.find_next_sibling("p")
+                        if next_p:
+                            desc = next_p.get_text(strip=True)
+                    submodules[submod_name] = {"url": submod_url, "description": desc}
+    return submodules
+
+
 def _parse_rtd_module_page(html: str, url: Optional[str] = None) -> dict:
     """
     Parse a ReadTheDocs module HTML page and extract functions, classes, methods, attributes, and submodules.
@@ -218,121 +336,6 @@ def _parse_module_tags(td_list: list, base_url: str = "") -> dict:
     return result
 
 
-def _format_function(sig_dt, doc_dd) -> Dict[str, Any]:
-    """
-    Format a function or method signature and its documentation into a dictionary.
-
-    Args:
-        sig_dt: The <dt> tag containing the function/method signature.
-        doc_dd: The <dd> tag containing the function/method docstring.
-
-    Returns:
-        dict: A dictionary with keys 'name', 'signature', 'id', and 'doc'.
-    """
-    name = (
-        sig_dt.find("span", class_="sig-name").get_text(strip=True) if sig_dt else None
-    )
-    signature = sig_dt.get_text(strip=True) if sig_dt else None
-    return {
-        "name": mcp_utils._clean_signature_text(name),
-        "signature": mcp_utils._clean_signature_text(signature),
-        "id": sig_dt.get("id") if sig_dt else None,
-        "doc": doc_dd.get_text(" ", strip=True) if doc_dd else None,
-    }
-
-
-def _format_attribute(attr_dl) -> Dict[str, Any]:
-    """
-    Format a class attribute's signature and documentation into a dictionary.
-
-    Args:
-        attr_dl: The <dl> tag for the attribute, containing <dt> and <dd>.
-
-    Returns:
-        dict: A dictionary with keys 'name', 'signature', 'id', and 'doc'.
-    """
-    sig = attr_dl.find("dt")
-    doc = attr_dl.find("dd")
-    name = sig.find("span", class_="sig-name").get_text(strip=True) if sig else None
-    signature = sig.get_text(strip=True) if sig else None
-    return {
-        "name": mcp_utils._clean_signature_text(name),
-        "signature": mcp_utils._clean_signature_text(signature),
-        "id": sig.get("id") if sig else None,
-        "doc": doc.get_text(" ", strip=True) if doc else None,
-    }
-
-
-def _format_class(class_dl) -> Dict[str, Any]:
-    """
-    Format a class definition, including its methods and attributes, into a dictionary.
-
-    Args:
-        class_dl: The <dl> tag for the class, containing <dt> and <dd>.
-
-    Returns:
-        dict: A dictionary with keys 'name', 'signature', 'id', 'doc', 'methods', and 'attributes'.
-              'methods' and 'attributes' are themselves dicts keyed by name.
-    """
-    sig = class_dl.find("dt")
-    doc = class_dl.find("dd")
-    class_name = (
-        sig.find("span", class_="sig-name").get_text(strip=True) if sig else None
-    )
-    methods = {}
-    attributes = {}
-    if doc:
-        for meth_dl in doc.find_all("dl", class_="py method"):
-            meth = _format_function(meth_dl.find("dt"), meth_dl.find("dd"))
-            if meth["name"]:
-                methods[meth["name"]] = meth
-        for attr_dl in doc.find_all("dl", class_="py attribute"):
-            attr = _format_attribute(attr_dl)
-            if attr["name"]:
-                attributes[attr["name"]] = attr
-    return {
-        "name": mcp_utils._clean_signature_text(class_name),
-        "signature": mcp_utils._clean_signature_text(
-            sig.get_text(strip=True) if sig else None
-        ),
-        "id": sig.get("id") if sig else None,
-        "doc": doc.get_text(" ", strip=True) if doc else None,
-        "methods": methods,
-        "attributes": attributes,
-    }
-
-
-def _format_submodules(soup) -> dict:
-    """
-    Extract submodules from a ReadTheDocs module page soup object.
-    Looks for a 'Modules' rubric and parses the following table or list for submodule names, URLs, and descriptions.
-
-    Args:
-        soup (BeautifulSoup): Parsed HTML soup of the module page.
-
-    Returns:
-        dict: {submodule_name: {"url": str, "description": str}}
-    """
-    submodules = {}
-    for rubric in soup.find_all("p", class_="rubric"):
-        if rubric.get_text(strip=True).lower() == "modules":
-            sib = rubric.find_next_sibling()
-            if sib and sib.name in ("table", "ul"):
-                for a in sib.find_all("a", href=True):
-                    submod_name = a.get_text(strip=True)
-                    submod_url = a["href"]
-                    desc = ""
-                    td = a.find_parent("td")
-                    if td and td.find_next_sibling("td"):
-                        desc = td.find_next_sibling("td").get_text(strip=True)
-                    elif a.parent.name == "li":
-                        next_p = a.find_next_sibling("p")
-                        if next_p:
-                            desc = next_p.get_text(strip=True)
-                    submodules[submod_name] = {"url": submod_url, "description": desc}
-    return submodules
-
-
 async def _parse_rtd_module_recursive(
     module_url: str,
     visited: Optional[Set[str]] = None,
@@ -365,3 +368,80 @@ async def _parse_rtd_module_recursive(
         await _parse_rtd_module_recursive(submod_url, visited, docs_dict)
 
     return docs_dict
+
+
+def _resolve_name_from_cache(name: str, items_dict: dict, package_name: str) -> str:
+    """
+    Resolve a name to its full import path using the scraped documentation cache.
+
+    If the name contains a path (has "."), returns it as-is. Otherwise, searches
+    the cache for a matching stripped_name and returns the path relative to package_name.
+
+    Parameters
+    ----------
+    name : str
+        Name to resolve (e.g., "SBML_dfs" or "sbml_dfs_core.SBML_dfs")
+    items_dict : dict
+        Dictionary of items from scraped documentation cache
+    package_name : str
+        Package name to use for relative path extraction
+
+    Returns
+    -------
+    str
+        Resolved name suitable for import_object (e.g., "sbml_dfs_core.SBML_dfs")
+        If not found in cache and cache is empty, returns original name.
+        If not found in cache but cache has items, returns original name (will be tried by import_object).
+
+    Examples
+    --------
+    >>> classes = {"napistu.sbml_dfs_core.SBML_dfs": {"stripped_name": "SBML_dfs", ...}}
+    >>> _resolve_name_from_cache("SBML_dfs", classes, "napistu")
+    'sbml_dfs_core.SBML_dfs'
+    >>> _resolve_name_from_cache("sbml_dfs_core.SBML_dfs", classes, "napistu")
+    'sbml_dfs_core.SBML_dfs'
+    """
+    # If name already contains a path, return as-is
+    if "." in name:
+        logger.info(
+            f"_resolve_name_from_cache: '{name}' already contains path, returning as-is"
+        )
+        return name
+
+    # Skip cache lookup if cache is empty
+    if not items_dict:
+        logger.info(
+            f"_resolve_name_from_cache: cache is empty for '{name}', returning original name"
+        )
+        return name
+
+    logger.info(
+        f"_resolve_name_from_cache: looking up short name '{name}' in cache (cache has {len(items_dict)} items)"
+    )
+
+    # Try to find in cache
+    result = find_item_by_name(name, items_dict)
+    if result:
+        full_name, _ = result
+        logger.info(
+            f"_resolve_name_from_cache: found '{name}' in cache as '{full_name}'"
+        )
+        # Extract the path relative to package_name
+        # e.g., "napistu.sbml_dfs_core.SBML_dfs" -> "sbml_dfs_core.SBML_dfs"
+        if full_name.startswith(package_name + "."):
+            resolved = full_name[len(package_name) + 1 :]
+            logger.info(f"_resolve_name_from_cache: resolved '{name}' -> '{resolved}'")
+            return resolved
+        else:
+            # If it's from a different package, use the full path
+            logger.info(
+                f"_resolve_name_from_cache: resolved '{name}' -> '{full_name}' (different package)"
+            )
+            return full_name
+
+    # Not found in cache, return original name
+    logger.info(
+        f"_resolve_name_from_cache: '{name}' not found in cache, returning original name"
+    )
+    # import_object will handle this by trying to prepend package_name
+    return name

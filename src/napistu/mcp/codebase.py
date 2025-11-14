@@ -535,8 +535,17 @@ class CodebaseComponent(MCPComponent):
             >>> inspect_class("torch.Tensor", "torch")
             """
             try:
+                # Resolve class name from cache if needed
+                resolved_class_name = codebase_utils._resolve_name_from_cache(
+                    class_name,
+                    self.state.codebase_cache[CODEBASE_DEFS.CLASSES],
+                    package_name,
+                )
+
                 # Import the class
-                cls, error = inspect_utils.import_object(class_name, package_name)
+                cls, error = inspect_utils.import_object(
+                    resolved_class_name, package_name
+                )
                 if error:
                     return {
                         "success": False,
@@ -680,8 +689,17 @@ class CodebaseComponent(MCPComponent):
             >>> inspect_function("igraph.Graph", "igraph")
             """
             try:
+                # Resolve function name from cache if needed
+                resolved_function_name = codebase_utils._resolve_name_from_cache(
+                    function_name,
+                    self.state.codebase_cache[CODEBASE_DEFS.FUNCTIONS],
+                    package_name,
+                )
+
                 # Import the function
-                func, error = inspect_utils.import_object(function_name, package_name)
+                func, error = inspect_utils.import_object(
+                    resolved_function_name, package_name
+                )
                 if error:
                     return {
                         "success": False,
@@ -756,8 +774,17 @@ class CodebaseComponent(MCPComponent):
             >>> inspect_method("network.NapistuGraph", "transform_edges")
             """
             try:
+                # Resolve class name from cache if needed
+                resolved_class_name = codebase_utils._resolve_name_from_cache(
+                    class_name,
+                    self.state.codebase_cache[CODEBASE_DEFS.CLASSES],
+                    package_name,
+                )
+
                 # Import the class
-                cls, error = inspect_utils.import_object(class_name, package_name)
+                cls, error = inspect_utils.import_object(
+                    resolved_class_name, package_name
+                )
                 if error:
                     return {
                         "success": False,
