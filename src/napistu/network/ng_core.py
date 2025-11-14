@@ -81,6 +81,8 @@ class NapistuGraph(ig.Graph):
         Add vertex data from SBML_dfs to the graph.
     copy()
         Create a deep copy of the NapistuGraph.
+    deduplicate_edges(verbose=False)
+        Deduplicate edges with the same FROM -> TO pair, keeping only the first occurrence.
     from_igraph(graph, **metadata)
         Create a NapistuGraph from an existing igraph.Graph.
     from_pickle(path)
@@ -1364,6 +1366,74 @@ class NapistuGraph(ig.Graph):
 
         # Remove the filtered isolated vertices
         self.delete_vertices(filtered_vertices)
+
+    def deduplicate_edges(self, verbose: bool = False) -> None:
+        """
+        Deduplicate edges with the same FROM -> TO pair, keeping only the first occurrence.
+
+        This identifies and removes duplicate edges between the same pair of vertices,
+        keeping only the first edge encountered. Modifies the graph in-place.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Whether to show example duplicate edges if duplicates are found. Default is False.
+
+        Returns
+        -------
+        None
+        """
+        # Get current edge dataframe
+        edges_df = self.get_edge_dataframe()
+
+        # Identify duplicate edges using vectorized operation (fast)
+        # duplicated(keep='first') marks all duplicates except the first occurrence as True
+        is_duplicate = edges_df.duplicated(
+            subset=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO], keep="first"
+        )
+
+        # Get edge indices of duplicate edges to remove (vectorized boolean indexing)
+        duplicate_edge_indices = edges_df[is_duplicate].index.tolist()
+
+        n_dropped = len(duplicate_edge_indices)
+        if n_dropped > 0:
+            logger.warning(
+                f"{n_dropped} edges were dropped "
+                "due to duplicated origin -> target relationships, use verbose for "
+                "more information"
+            )
+
+            if verbose:
+                # report duplicated edges
+                grouped_edges = edges_df.groupby(
+                    [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+                )
+                duplicated_groups = [
+                    grouped_edges.get_group(x)
+                    for x in grouped_edges.groups
+                    if grouped_edges.get_group(x).shape[0] > 1
+                ]
+                if duplicated_groups:
+                    import random
+
+                    example_duplicates = pd.concat(
+                        random.sample(duplicated_groups, min(5, len(duplicated_groups)))
+                    )
+                    utils.show(example_duplicates, headers="keys")
+
+            # Remove duplicate edges by their indices
+            # Sort in reverse order to avoid index shifting issues when deleting
+            duplicate_edge_indices.sort(reverse=True)
+            self.delete_edges(duplicate_edge_indices)
+
+            logger.info(
+                f"Deduplicated graph edges. {n_dropped} edges were removed, "
+                f"{self.ecount()} edges remain."
+            )
+        else:
+            logger.info("No duplicate edges found. Graph unchanged.")
+
+        return None
 
     def reverse_edges(self) -> None:
         """
