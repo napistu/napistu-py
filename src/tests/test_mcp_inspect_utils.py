@@ -5,6 +5,7 @@ from napistu.mcp.inspect_utils import (
     FunctionInfo,
     MethodSourceInfo,
     import_object,
+    list_installed_packages,
 )
 
 
@@ -86,3 +87,33 @@ def test_method_source_info_from_method():
     assert method_info_not_found.error is not None
     assert "not found" in method_info_not_found.error.lower()
     assert method_info_not_found.source is None
+
+
+def test_list_installed_packages():
+    """Test list_installed_packages returns packages and validates igraph and pandas."""
+    packages = list_installed_packages()
+
+    assert isinstance(packages, list)
+    assert len(packages) > 0
+
+    # Check that all packages have the expected structure
+    for pkg in packages:
+        assert "name" in pkg
+        assert "version" in pkg
+        assert isinstance(pkg["name"], str)
+        assert isinstance(pkg["version"], str)
+
+    # Validate that igraph and pandas are available
+    package_names = [pkg["name"].lower() for pkg in packages]
+
+    assert "igraph" in package_names, "igraph package should be installed"
+    assert "pandas" in package_names, "pandas package should be installed"
+
+    # Get the actual package info for verification
+    igraph_pkg = next((p for p in packages if p["name"].lower() == "igraph"), None)
+    pandas_pkg = next((p for p in packages if p["name"].lower() == "pandas"), None)
+
+    assert igraph_pkg is not None, "igraph package not found in installed packages"
+    assert pandas_pkg is not None, "pandas package not found in installed packages"
+    assert igraph_pkg["version"] is not None, "igraph should have a version"
+    assert pandas_pkg["version"] is not None, "pandas should have a version"

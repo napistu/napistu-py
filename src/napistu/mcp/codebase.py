@@ -571,9 +571,9 @@ class CodebaseComponent(MCPComponent):
 
             Examples
             --------
-            >>> get_cli_command_details("napistu ingestion reactome")
-            >>> get_cli_command_details("napistu consensus create")
-            >>> get_cli_command_details("napistu-torch train")
+            >>> inspect_cli_command("napistu ingestion reactome")
+            >>> inspect_cli_command("napistu consensus create")
+            >>> inspect_cli_command("napistu-torch train")
             """
             try:
                 if cli_name == "napistu":
@@ -581,7 +581,14 @@ class CodebaseComponent(MCPComponent):
                 elif cli_name == "napistu.mcp":
                     from napistu.mcp.__main__ import cli
                 elif cli_name == "napistu-torch":
-                    from napistu_torch.__main__ import cli
+                    try:
+                        from napistu_torch.__main__ import cli
+                    except ImportError:
+                        return {
+                            "success": False,
+                            "error": "napistu-torch is not installed",
+                            "suggestion": "Install napistu-torch using `pip install napistu-torch`",
+                        }
                 else:
                     return {"error": f"Unknown CLI: {cli_name}"}
 
@@ -726,9 +733,9 @@ class CodebaseComponent(MCPComponent):
 
             Examples
             --------
-            >>> get_method_source("SBML_dfs", "get_identifiers")
-            >>> get_method_source("NapistuGraph", "reverse_edges", "napistu")
-            >>> get_method_source("network.NapistuGraph", "transform_edges")
+            >>> inspect_method("SBML_dfs", "get_identifiers")
+            >>> inspect_method("NapistuGraph", "reverse_edges", "napistu")
+            >>> inspect_method("network.NapistuGraph", "transform_edges")
             """
             try:
                 # Import the class
@@ -792,19 +799,94 @@ class CodebaseComponent(MCPComponent):
 
                 structure = cli_utils.CLIStructure.from_cli_group(cli, cli_name)
 
+                # Convert Pydantic models to dicts for JSON serialization
+                commands_dict = {
+                    path: cmd_info.model_dump()
+                    for path, cmd_info in structure.commands.items()
+                }
+
                 return {
                     "success": True,
                     "cli_name": cli_name,
                     "total_commands": len(structure.commands),
-                    "commands": structure.commands,
+                    "commands": commands_dict,
                 }
 
             except Exception as e:
                 return {"success": False, "error": str(e)}
 
         @mcp.tool()
+        async def list_installed_packages() -> Dict[str, Any]:
+            """
+            List all installed Python packages available on the server.
+
+            **USE THIS WHEN:**
+            - Determining which packages are available for inspection
+            - Finding package names to use with inspect_class, inspect_function, or inspect_method
+            - Understanding what libraries are installed in the server environment
+            - Checking if a specific package is available before attempting inspection
+
+            **DO NOT USE FOR:**
+            - Getting package documentation (use inspect_class/inspect_function for that)
+            - Checking package versions for compatibility (this shows versions but isn't for validation)
+            - Installing packages (this is read-only)
+
+            Returns
+            -------
+            Dict[str, Any]
+                Dictionary containing:
+                - success : bool
+                    Whether the operation succeeded
+                - total_packages : int
+                    Total number of installed packages
+                - packages : List[Dict[str, str]]
+                    List of package dictionaries, each containing:
+                    - name : str
+                        Package name
+                    - version : str
+                        Installed version
+
+            Examples
+            --------
+            >>> list_installed_packages()
+            # Returns all installed packages like:
+            # {
+            #   "success": True,
+            #   "total_packages": 150,
+            #   "packages": [
+            #     {"name": "napistu", "version": "0.7.7"},
+            #     {"name": "numpy", "version": "1.26.0"},
+            #     ...
+            #   ]
+            # }
+
+            Notes
+            -----
+            This tool helps identify which packages are available for use with
+            inspect_class, inspect_function, and inspect_method. Use the package
+            names returned here as the package_name parameter in those tools.
+            """
+            try:
+                from napistu.mcp import inspect_utils
+
+                packages = inspect_utils.list_installed_packages()
+
+                return {
+                    "success": True,
+                    "total_packages": len(packages),
+                    "packages": packages,
+                }
+
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "suggestion": "Unable to list installed packages. Check Python environment.",
+                }
+
+        @mcp.tool()
         async def search_codebase(
-            query: str, search_type: str = "semantic"
+            query: str, search_type: str = "semantic", n_results: int = 5
         ) -> Dict[str, Any]:
             """
             Search Napistu codebase documentation with intelligent search strategy.
@@ -850,6 +932,9 @@ class CodebaseComponent(MCPComponent):
                 - "semantic" (default): AI-powered search using embeddings
                 - "exact": Traditional text matching search
                 Default is "semantic".
+            n_results : int, optional
+                Maximum number of results to return. Results are ranked by similarity score.
+                Default is 5.
 
             Returns
             -------
@@ -905,7 +990,7 @@ class CodebaseComponent(MCPComponent):
             if search_type == "semantic" and self.state.semantic_search:
                 # Use shared semantic search instance
                 results = self.state.semantic_search.search(
-                    query, "codebase", n_results=5
+                    query, "codebase", n_results=n_results
                 )
                 return {
                     "query": query,

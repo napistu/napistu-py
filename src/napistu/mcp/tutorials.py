@@ -346,7 +346,7 @@ class TutorialsComponent(MCPComponent):
 
         @mcp.tool()
         async def search_tutorials(
-            query: str, search_type: str = "semantic"
+            query: str, search_type: str = "semantic", n_results: int = 5
         ) -> Dict[str, Any]:
             """
             Search Napistu tutorials with intelligent search strategy.
@@ -388,6 +388,9 @@ class TutorialsComponent(MCPComponent):
                 - "semantic" (default): AI-powered search using embeddings
                 - "exact": Traditional text matching search
                 Default is "semantic".
+            n_results : int, optional
+                Maximum number of results to return. Results are ranked by similarity score.
+                Default is 5.
 
             Returns
             -------
@@ -437,7 +440,7 @@ class TutorialsComponent(MCPComponent):
             if search_type == "semantic" and self.state.semantic_search:
                 # Use shared semantic search instance
                 results = self.state.semantic_search.search(
-                    query, "tutorials", n_results=5
+                    query, "tutorials", n_results=n_results
                 )
                 return {
                     "query": query,

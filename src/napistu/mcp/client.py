@@ -13,6 +13,76 @@ from napistu.mcp.config import MCPClientConfig
 logger = logging.getLogger(__name__)
 
 
+async def call_server_tool(
+    tool_name: str, arguments: Dict[str, Any], config: MCPClientConfig
+) -> Optional[Dict[str, Any]]:
+    """
+    Call a tool on the MCP server.
+
+    Parameters
+    ----------
+    tool_name : str
+        Name of the tool to call (e.g., 'search_documentation', 'search_codebase')
+    arguments : Dict[str, Any]
+        Arguments to pass to the tool
+    config : MCPClientConfig
+        Client configuration object with validated settings.
+
+    Returns
+    -------
+    Optional[Dict[str, Any]]
+        Tool result as dictionary, or None if failed.
+
+    Examples
+    --------
+    Search for SBML_dfs usage in documentation:
+
+    >>> config = local_client_config()
+    >>> result = await call_server_tool(
+    ...     "search_documentation",
+    ...     {"query": "how do i use sbml_dfs"},
+    ...     config
+    ... )
+    >>> print(f"Found {len(result['results'])} results")
+
+    Search for an exact string in the codebase's class, method, and function definitions:
+
+    >>> result = await call_server_tool(
+    ...     "search_codebase",
+    ...     {"query": "process_napistu_graph", "search_type": "exact"},
+    ...     config
+    ... )
+
+    Search tutorials for network creation:
+
+    >>> result = await call_server_tool(
+    ...     "search_tutorials",
+    ...     {"query": "create consensus networks", "search_type": "semantic"},
+    ...     config
+    ... )
+    """
+    try:
+        logger.info(f"Calling tool {tool_name} on: {config.mcp_url}")
+
+        client = Client(config.mcp_url)
+
+        async with client:
+            # Call the tool
+            result = await client.call_tool(tool_name, arguments)
+
+            # Parse the result
+            parsed_result = _parse_tool_result(result)
+            if parsed_result is None:
+                logger.error(f"No result from tool: {tool_name}")
+                return None
+
+            return parsed_result
+
+    except Exception as e:
+        logger.error(f"Failed to call tool {tool_name}: {str(e)}")
+        return None
+
+
 async def check_server_health(config: MCPClientConfig) -> Optional[Dict[str, Any]]:
     """
     Health check using FastMCP client.
@@ -88,6 +158,35 @@ async def check_server_health(config: MCPClientConfig) -> Optional[Dict[str, Any
         return None
 
 
+async def list_server_resources(config: MCPClientConfig) -> Optional[list]:
+    """
+    List all available resources on the MCP server.
+
+    Parameters
+    ----------
+    config : MCPClientConfig
+        Client configuration object with validated settings.
+
+    Returns
+    -------
+    Optional[list]
+        List of available resources, or None if failed.
+    """
+    try:
+        logger.info(f"Listing resources from: {config.mcp_url}")
+
+        client = Client(config.mcp_url)
+
+        async with client:
+            resources = await client.list_resources()
+            logger.info(f"Found {len(resources)} resources")
+            return resources
+
+    except Exception as e:
+        logger.error(f"Failed to list resources: {str(e)}")
+        return None
+
+
 def print_health_status(health: Optional[Mapping[str, Any]]) -> None:
     """
     Pretty print health status information.
@@ -133,35 +232,6 @@ def print_health_status(health: Optional[Mapping[str, Any]]) -> None:
         print(f"Version: {health['version']}")
 
 
-async def list_server_resources(config: MCPClientConfig) -> Optional[list]:
-    """
-    List all available resources on the MCP server.
-
-    Parameters
-    ----------
-    config : MCPClientConfig
-        Client configuration object with validated settings.
-
-    Returns
-    -------
-    Optional[list]
-        List of available resources, or None if failed.
-    """
-    try:
-        logger.info(f"Listing resources from: {config.mcp_url}")
-
-        client = Client(config.mcp_url)
-
-        async with client:
-            resources = await client.list_resources()
-            logger.info(f"Found {len(resources)} resources")
-            return resources
-
-    except Exception as e:
-        logger.error(f"Failed to list resources: {str(e)}")
-        return None
-
-
 async def read_server_resource(
     resource_uri: str, config: MCPClientConfig
 ) -> Optional[str]:
@@ -199,85 +269,71 @@ async def read_server_resource(
         return None
 
 
-async def call_server_tool(
-    tool_name: str, arguments: Dict[str, Any], config: MCPClientConfig
+async def search_all(
+    query: str,
+    search_type: str = "semantic",
+    n_results: int = 10,
+    config: MCPClientConfig = None,
 ) -> Optional[Dict[str, Any]]:
     """
-    Call a tool on the MCP server.
+    Search across all Napistu components using unified search.
 
     Parameters
     ----------
-    tool_name : str
-        Name of the tool to call (e.g., 'search_documentation', 'search_codebase')
-    arguments : Dict[str, Any]
-        Arguments to pass to the tool
-    config : MCPClientConfig
-        Client configuration object with validated settings.
+    query : str
+        Search query or natural language question
+    search_type : str, optional
+        Search strategy: 'semantic' (default) or 'exact'
+    n_results : int, optional
+        Maximum number of results to return overall (not per component).
+        Results are ranked by similarity score across all components.
+        Default is 10.
+    config : MCPClientConfig, optional
+        Client configuration object with validated settings
 
     Returns
     -------
     Optional[Dict[str, Any]]
-        Tool result as dictionary, or None if failed.
+        Search results dictionary containing:
+        - query : str
+            Original search query
+        - search_type : str
+            Actual search type used
+        - results : List[Dict]
+            Search results with component labels
+        - tip : str
+            Helpful guidance for improving results
 
     Examples
     --------
-    Search for SBML_dfs usage in documentation:
+    Search across all components:
 
     >>> config = local_client_config()
-    >>> result = await call_server_tool(
-    ...     "search_documentation",
-    ...     {"query": "how do i use sbml_dfs"},
-    ...     config
-    ... )
+    >>> result = await search_all("how to create consensus networks", config=config)
     >>> print(f"Found {len(result['results'])} results")
-
-    Search for an exact string in the codebase's class, method, and function definitions:
-
-    >>> result = await call_server_tool(
-    ...     "search_codebase",
-    ...     {"query": "process_napistu_graph", "search_type": "exact"},
-    ...     config
-    ... )
-
-    Search tutorials for network creation:
-
-    >>> result = await call_server_tool(
-    ...     "search_tutorials",
-    ...     {"query": "create consensus networks", "search_type": "semantic"},
-    ...     config
-    ... )
+    >>> for r in result['results']:
+    ...     print(f"[{r['component']}] {r['source']}")
     """
-    try:
-        logger.info(f"Calling tool {tool_name} on: {config.mcp_url}")
+    # Validate search type
+    valid_search_types = {"semantic", "exact"}
+    if search_type not in valid_search_types:
+        raise ValueError(
+            f"Invalid search_type '{search_type}'. Must be one of: {', '.join(sorted(valid_search_types))}"
+        )
 
-        client = Client(config.mcp_url)
-
-        async with client:
-            # Call the tool
-            result = await client.call_tool(tool_name, arguments)
-
-            if result and len(result) > 0:
-                # Parse the result
-                if hasattr(result[0], "text"):
-                    try:
-                        return json.loads(result[0].text)
-                    except json.JSONDecodeError:
-                        return {"content": result[0].text}
-                else:
-                    return {"content": str(result[0])}
-            else:
-                logger.error(f"No result from tool: {tool_name}")
-                return None
-
-    except Exception as e:
-        logger.error(f"Failed to call tool {tool_name}: {str(e)}")
-        return None
+    # Call the unified search tool
+    return await call_server_tool(
+        "search_all",
+        {"query": query, "search_type": search_type, "n_results": n_results},
+        config,
+    )
 
 
 async def search_component(
     component: str,
     query: str,
     search_type: str = "semantic",
+    n_results: int = 5,
     config: MCPClientConfig = None,
 ) -> Optional[Dict[str, Any]]:
     """
@@ -291,6 +347,9 @@ async def search_component(
         Search query or natural language question
     search_type : str, optional
         Search strategy: 'semantic' (default) or 'exact'
+    n_results : int, optional
+        Maximum number of results to return. Results are ranked by similarity score.
+        Default is 5.
     config : MCPClientConfig, optional
         Client configuration object with validated settings
 
@@ -355,5 +414,79 @@ async def search_component(
 
     # Call the appropriate tool
     return await call_server_tool(
-        tool_name, {"query": query, "search_type": search_type}, config
+        tool_name,
+        {"query": query, "search_type": search_type, "n_results": n_results},
+        config,
     )
+
+
+# private utils
+
+
+def _parse_tool_result(result: Any) -> Optional[Dict[str, Any]]:
+    """
+    Parse a CallToolResult object from FastMCP into a dictionary.
+
+    Handles different result formats:
+    - FastMCP 2.12+ CallToolResult with content attribute
+    - Legacy list-based format
+    - Direct text attributes
+
+    Parameters
+    ----------
+    result : Any
+        The result object from client.call_tool()
+
+    Returns
+    -------
+    Optional[Dict[str, Any]]
+        Parsed result as dictionary, or None if result is empty/invalid
+    """
+    if not result:
+        return None
+
+    # Extract text from result based on format
+    text = None
+
+    # FastMCP 2.12+ format: CallToolResult with content attribute
+    if hasattr(result, "content"):
+        content = result.content
+        if isinstance(content, (list, tuple)) and len(content) > 0:
+            # Content is a list of content items
+            first_item = content[0]
+            if hasattr(first_item, "text"):
+                text = first_item.text
+            elif isinstance(first_item, str):
+                text = first_item
+            else:
+                text = str(first_item)
+        elif isinstance(content, str):
+            text = content
+        else:
+            text = str(content)
+
+    # Direct text attribute
+    elif hasattr(result, "text"):
+        text = result.text
+
+    # Legacy format: list/tuple
+    elif isinstance(result, (list, tuple)) and len(result) > 0:
+        if hasattr(result[0], "text"):
+            text = result[0].text
+        else:
+            text = str(result[0])
+
+    # Fallback: try to convert to string
+    else:
+        if hasattr(result, "__dict__"):
+            return result.__dict__
+        text = str(result)
+
+    # Parse JSON if possible, otherwise return as content dict
+    if text is not None:
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return {"content": text}
+
+    return None

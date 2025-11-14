@@ -12,6 +12,7 @@ from napistu.mcp.client import (
     list_server_resources,
     print_health_status,
     read_server_resource,
+    search_all,
     search_component,
 )
 from napistu.mcp.config import (
@@ -256,7 +257,8 @@ def compare():
 
 @cli.command()
 @click.argument(
-    "component", type=click.Choice(["documentation", "tutorials", "codebase"])
+    "component",
+    type=click.Choice(["documentation", "tutorials", "codebase", "all"]),
 )
 @click.argument("query")
 @click.option(
@@ -270,24 +272,59 @@ def compare():
     is_flag=True,
     help="Show similarity scores for semantic search results",
 )
+@click.option(
+    "--max-results",
+    type=int,
+    default=None,
+    help="Maximum number of results to return (default: 10 for 'all', 5 for individual components)",
+)
 @client_config_options
 @verbosity_option
 def search(
-    component, query, search_type, show_scores, production, local, host, port, https
+    component,
+    query,
+    search_type,
+    show_scores,
+    max_results,
+    production,
+    local,
+    host,
+    port,
+    https,
 ):
-    """Search Napistu documentation, tutorials, or codebase content."""
+    """Search Napistu documentation, tutorials, codebase, or all components."""
 
     async def run_search():
         try:
             config = validate_client_config_flags(local, production, host, port, https)
 
-            print(f"🔍 Searching {component.title()} for: '{query}'")
-            print("=" * 50)
-            print(f"Server URL: {config.base_url}")
-            print(f"Search Type: {search_type}")
-            print()
+            # Determine default n_results based on component
+            n_results = (
+                max_results
+                if max_results is not None
+                else (10 if component == "all" else 5)
+            )
 
-            result = await search_component(component, query, search_type, config)
+            if component == "all":
+                print(f"🔍 Searching all components for: '{query}'")
+                print("=" * 50)
+                print(f"Server URL: {config.base_url}")
+                print(f"Search Type: {search_type}")
+                print(f"Max Results: {n_results}")
+                print()
+
+                result = await search_all(query, search_type, n_results, config)
+            else:
+                print(f"🔍 Searching {component.title()} for: '{query}'")
+                print("=" * 50)
+                print(f"Server URL: {config.base_url}")
+                print(f"Search Type: {search_type}")
+                print(f"Max Results: {n_results}")
+                print()
+
+                result = await search_component(
+                    component, query, search_type, n_results, config
+                )
 
             if not result:
                 print("❌ Search failed - check server connection")
@@ -309,23 +346,48 @@ def search(
             # Format results based on search type
             if actual_search_type == "semantic" and isinstance(results, list):
                 # Semantic search results with scores
-                for i, r in enumerate(results, 1):
-                    source = r.get("source", "Unknown")
-                    content = (
-                        r.get("content", "")[:100] + "..."
-                        if len(r.get("content", "")) > 100
-                        else r.get("content", "")
-                    )
+                # Group by component for unified search
+                if component == "all":
+                    # Show component labels for unified search
+                    for i, r in enumerate(results, 1):
+                        comp = r.get("component", "unknown")
+                        source = r.get("source", "Unknown")
+                        content = (
+                            r.get("content", "")[:100] + "..."
+                            if len(r.get("content", "")) > 100
+                            else r.get("content", "")
+                        )
 
-                    if show_scores and "similarity_score" in r:
-                        score = r["similarity_score"]
-                        print(f"{i}. {source} (Score: {score:.3f})")
-                    else:
-                        print(f"{i}. {source}")
+                        if show_scores and "similarity_score" in r:
+                            score = r["similarity_score"]
+                            print(
+                                f"{i}. [{comp.upper()}] {source} (Score: {score:.3f})"
+                            )
+                        else:
+                            print(f"{i}. [{comp.upper()}] {source}")
 
-                    if content:
-                        print(f"   {content}")
-                    print()
+                        if content:
+                            print(f"   {content}")
+                        print()
+                else:
+                    # Component-specific search (no component label needed)
+                    for i, r in enumerate(results, 1):
+                        source = r.get("source", "Unknown")
+                        content = (
+                            r.get("content", "")[:100] + "..."
+                            if len(r.get("content", "")) > 100
+                            else r.get("content", "")
+                        )
+
+                        if show_scores and "similarity_score" in r:
+                            score = r["similarity_score"]
+                            print(f"{i}. {source} (Score: {score:.3f})")
+                        else:
+                            print(f"{i}. {source}")
+
+                        if content:
+                            print(f"   {content}")
+                        print()
 
             elif actual_search_type == "exact" and isinstance(results, dict):
                 # Exact search results organized by type

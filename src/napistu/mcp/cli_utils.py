@@ -1,6 +1,7 @@
 """Utilities for CLI inspection and documentation generation."""
 
 import inspect
+import json
 from typing import Any, Dict, List, Optional
 
 import click
@@ -54,26 +55,10 @@ class CLICommandInfo(BaseModel):
         arguments = []
         options = []
         for param in cmd.params:
-            # Handle default value - Click uses callables for default factories
-            # and sentinels for "no default". For Options, default can be None (no default)
-            # or a value. For Arguments, default is typically None.
+            # Get default value, handling callables, sentinels, and non-serializable values
             default_value = None
             if hasattr(param, "default"):
-                if callable(param.default):
-                    # It's a default factory, we can't easily get the value at inspection time
-                    default_value = None
-                elif param.default is not None:
-                    # Try to use the default value
-                    # Check if it's a sentinel by comparing to ParamType.empty if available
-                    try:
-                        sentinel = getattr(ParamType, "empty", None)
-                        if sentinel is not None and param.default == sentinel:
-                            default_value = None
-                        else:
-                            default_value = param.default
-                    except (AttributeError, TypeError, ValueError):
-                        # If comparison fails, assume it's a valid default value
-                        default_value = param.default
+                default_value = _serialize_default_value(param.default)
 
             param_info = {
                 "name": param.name,
@@ -160,3 +145,45 @@ class CLIStructure(BaseModel):
 
         walk_commands(group, prefix, is_root=True)
         return structure
+
+
+def _serialize_default_value(default: Any) -> Any:
+    """Convert a Click parameter default value to a JSON-serializable format.
+
+    Click uses various types for defaults:
+    - Callables (default factories) - cannot be evaluated at inspection time
+    - Sentinels (ParamType.empty) - indicates no default
+    - Values - may or may not be JSON-serializable
+
+    Parameters
+    ----------
+    default : Any
+        The default value from a Click parameter
+
+    Returns
+    -------
+    Any
+        JSON-serializable value, or None if default cannot be determined
+    """
+    if default is None:
+        return None
+
+    # Callables are default factories - can't evaluate at inspection time
+    if callable(default):
+        return None
+
+    # Check if it's a sentinel value (indicates no default)
+    try:
+        sentinel = getattr(ParamType, "empty", None)
+        if sentinel is not None and default == sentinel:
+            return None
+    except (AttributeError, TypeError, ValueError):
+        pass
+
+    # Try to serialize the value - if it fails, convert to string
+    try:
+        json.dumps(default)
+        return default
+    except (TypeError, ValueError):
+        # Not JSON-serializable, convert to string representation
+        return str(default)
