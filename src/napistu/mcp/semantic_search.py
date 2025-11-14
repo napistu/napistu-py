@@ -273,6 +273,13 @@ class SemanticSearch:
 
             logger.info(f"Indexed {len(all_documents)} items in {collection_name}")
 
+            # Also index into unified collection with component metadata
+            # Skip if this is already the unified collection to avoid recursion
+            if collection_name != "unified":
+                self._index_to_unified_collection(
+                    collection_name, all_documents, all_metadatas, all_ids
+                )
+
             # Log breakdown by content type and chunking for debugging
             type_counts = {}
             chunk_counts = {}
@@ -375,3 +382,104 @@ class SemanticSearch:
             )
 
         return formatted_results
+
+    def search_unified(self, query: str, n_results: int = 15) -> List[Dict[str, Any]]:
+        """
+        Search across all components using the unified collection.
+
+        Parameters
+        ----------
+        query : str
+            Natural language search query. Can be keywords, phrases, or questions.
+        n_results : int, optional
+            Maximum number of results to return. Default is 15.
+
+        Returns
+        -------
+        List[Dict[str, Any]]
+            List of search results ordered by similarity (highest first), each containing:
+            - 'content': The matched text content
+            - 'component': The component name (documentation, codebase, tutorials)
+            - 'metadata': Dictionary with type, name, source, chunking information, and component
+            - 'source': Human-readable source description
+            - 'similarity_score': Float between 0 and 1 (1 = perfect match, 0 = no similarity)
+
+        Examples
+        --------
+        Search across all components:
+
+        >>> results = search.search_unified("how to create consensus networks")
+        >>> for result in results:
+        ...     component = result['component']
+        ...     score = result['similarity_score']
+        ...     print(f"[{component}] Score: {score:.3f} - {result['source']}")
+
+        Notes
+        -----
+        This searches the unified collection which contains content from all
+        enabled components. Results include component labels to identify the
+        source of each match.
+        """
+        results = self.search(query, "unified", n_results)
+
+        # Add component field to each result for convenience
+        for result in results:
+            result["component"] = result["metadata"].get("component", "unknown")
+
+        return results
+
+    def _index_to_unified_collection(
+        self,
+        component_name: str,
+        documents: List[str],
+        metadatas: List[Dict[str, Any]],
+        ids: List[str],
+    ) -> None:
+        """
+        Index content into the unified collection with component metadata.
+
+        Parameters
+        ----------
+        component_name : str
+            Name of the component (e.g., "documentation", "codebase", "tutorials")
+        documents : List[str]
+            List of document texts to index
+        metadatas : List[Dict[str, Any]]
+            List of metadata dictionaries for each document
+        ids : List[str]
+            List of unique IDs for each document
+
+        Notes
+        -----
+        This method adds a "component" field to each metadata dictionary
+        and prefixes IDs with the component name to avoid collisions.
+        """
+        unified_collection = self.get_or_create_collection("unified")
+
+        # Add component metadata to each item
+        unified_metadatas = []
+        unified_ids = []
+        for i, metadata in enumerate(metadatas):
+            # Create new metadata with component field
+            unified_metadata = metadata.copy()
+            unified_metadata["component"] = component_name
+            unified_metadatas.append(unified_metadata)
+
+            # Prefix ID with component name to avoid collisions
+            unified_ids.append(f"{component_name}:{ids[i]}")
+
+        if documents:
+            # Clear existing entries for this component before re-indexing
+            try:
+                unified_collection.delete(where={"component": component_name})
+            except Exception:
+                # Collection might be empty or query might fail
+                pass
+
+            # Add to unified collection
+            unified_collection.add(
+                documents=documents, metadatas=unified_metadatas, ids=unified_ids
+            )
+            logger.debug(
+                f"Indexed {len(documents)} items from {component_name} into unified collection"
+            )
