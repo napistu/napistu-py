@@ -10,12 +10,90 @@ MCP_COMPONENTS = SimpleNamespace(
     TUTORIALS="tutorials",
 )
 
+# Searchable components (subset of MCP_COMPONENTS)
+SEARCH_COMPONENTS = {
+    MCP_COMPONENTS.CODEBASE,
+    MCP_COMPONENTS.DOCUMENTATION,
+    MCP_COMPONENTS.TUTORIALS,
+}
+
+# Search type constants
+SEARCH_TYPES = SimpleNamespace(
+    SEMANTIC="semantic",
+    EXACT="exact",
+)
+
+VALID_SEARCH_TYPES = SEARCH_TYPES.__dict__.values()
+
+# Search result field names
+SEARCH_RESULT_DEFS = SimpleNamespace(
+    QUERY="query",
+    SEARCH_TYPE="search_type",
+    RESULTS="results",
+    TIP="tip",
+    NAME="name",
+    SNIPPET="snippet",
+    TITLE="title",
+    URL="url",
+    CONTENT="content",
+    METADATA="metadata",
+    SOURCE="source",
+    SIMILARITY_SCORE="similarity_score",
+    ID="id",
+    DESCRIPTION="description",
+    SIGNATURE="signature",
+)
+
+# Codebase categories (used in both inspect and readthedocs approaches)
+CODEBASE_DEFS = SimpleNamespace(
+    MODULES="modules",
+    CLASSES="classes",
+    FUNCTIONS="functions",
+    METHODS="methods",
+)
+
+# Codebase inspection field names (specific to runtime inspection)
+CODEBASE_INSPECT_DEFS = SimpleNamespace(
+    DOC="doc",
+    DOCSTRING="docstring",
+    SOURCE="source",
+    FILE_PATH="file_path",
+    LINE_NUMBER="line_number",
+    MODULE="module",
+    INIT_SIGNATURE="init_signature",
+    INIT_SOURCE="init_source",
+    METHODS="methods",
+    METHOD_NAME="method_name",
+    CLASS_NAME="class_name",
+    ERROR="error",
+)
+
+# CLI command field name constants
+CLICK_COMMAND_DEFS = SimpleNamespace(
+    NAME="name",
+    TYPE="type",
+    REQUIRED="required",
+    DEFAULT="default",
+    HELP="help",
+    FLAGS="flags",
+)
+
 DOCUMENTATION = SimpleNamespace(
     README="readme",
     WIKI="wiki",
     ISSUES="issues",
     PRS="prs",
     PACKAGEDOWN="packagedown",
+)
+
+# Documentation summary category names
+DOCUMENTATION_SUMMARY_DEFS = SimpleNamespace(
+    README_FILES="readme_files",
+    ISSUES="issues",
+    PRS="prs",
+    WIKI_PAGES="wiki_pages",
+    PACKAGEDOWN_SECTIONS="packagedown_sections",
+    SEMANTIC_SEARCH="semantic_search",
 )
 
 EXECUTION = SimpleNamespace(
@@ -61,6 +139,83 @@ MCP_PROFILES = SimpleNamespace(
     FULL="full",  # all components
 )
 
+# Preset configuration names
+PRESET_NAMES = SimpleNamespace(
+    LOCAL="local",
+    PRODUCTION="production",
+)
+
+# Health check status constants
+HEALTH_CHECK_DEFS = SimpleNamespace(
+    STATUS="status",
+    ERROR="error",
+    INITIALIZING="initializing",
+    UNAVAILABLE="unavailable",
+    INACTIVE="inactive",
+    HEALTHY="healthy",
+    DEGRADED="degraded",
+    UNHEALTHY="unhealthy",
+    UNKNOWN="unknown",
+)
+
+# Semantic search metadata field names (for ChromaDB indexing)
+SEMANTIC_SEARCH_METADATA_DEFS = SimpleNamespace(
+    TYPE="type",
+    NAME="name",
+    SOURCE="source",
+    CHUNK="chunk",
+    IS_CHUNKED="is_chunked",
+    TOTAL_CHUNKS="total_chunks",
+    CLASS_NAME="class_name",
+)
+
+# Semantic search configuration constants
+SEMANTIC_SEARCH_DEFS = SimpleNamespace(
+    # Content length thresholds
+    MIN_CONTENT_LENGTH_SHORT=20,  # For issues/PRs and codebase items
+    MIN_CONTENT_LENGTH_LONG=50,  # For regular content
+    # Chunking defaults
+    CHUNK_THRESHOLD=1200,  # Content length threshold for chunking
+    MAX_CHUNK_SIZE=1000,  # Maximum size per chunk
+    # String patterns
+    CHUNK_PART_PREFIX=" (part ",
+    CHUNK_PART_SUFFIX=")",
+    METHOD_SOURCE_PREFIX="method: ",
+)
+
+# Health summary field names
+HEALTH_SUMMARIES = SimpleNamespace(
+    # Health check response fields
+    STATUS="status",
+    COMPONENTS="components",
+    TIMESTAMP="timestamp",
+    VERSION="version",
+    FAILED_COMPONENTS="failed_components",
+    LAST_CHECK="last_check",
+    MESSAGE="message",
+    COLLECTIONS="collections",
+    TOTAL_COLLECTIONS="total_collections",
+    # Codebase component
+    MODULES_COUNT="modules_count",
+    CLASSES_COUNT="classes_count",
+    FUNCTIONS_COUNT="functions_count",
+    TOTAL_ITEMS="total_items",
+    # Documentation component
+    README_COUNT="readme_count",
+    WIKI_PAGES="wiki_pages",
+    ISSUES_REPOS="issues_repos",
+    PRS_REPOS="prs_repos",
+    TOTAL_SECTIONS="total_sections",
+    # Tutorials component
+    TUTORIAL_COUNT="tutorial_count",
+    TUTORIAL_IDS="tutorial_ids",
+    # Execution component
+    SESSION_CONTEXT_ITEMS="session_context_items",
+    REGISTERED_OBJECTS="registered_objects",
+    CONTEXT_KEYS="context_keys",
+    OBJECT_NAMES="object_names",
+)
+
 READMES = {
     "napistu": "https://raw.githubusercontent.com/napistu/napistu/main/README.md",
     "napistu-py": "https://raw.githubusercontent.com/napistu/napistu-py/main/README.md",
@@ -101,6 +256,18 @@ REPOS_WITH_ISSUES = [
 
 GITHUB_ISSUES_INDEXED = "all"
 GITHUB_PRS_INDEXED = "all"
+# GitHub API field names
+GITHUB_DEFS = SimpleNamespace(
+    NUMBER="number",
+    TITLE="title",
+    STATE="state",
+    HTML_URL="html_url",
+    URL="url",
+    BODY="body",
+    IS_PR="is_pr",
+    PULL_REQUEST="pull_request",
+    MERGED_AT="merged_at",
+)
 
 REPOS_WITH_WIKI = [PACKAGE_DEFS.GITHUB_PROJECT_REPO]
 

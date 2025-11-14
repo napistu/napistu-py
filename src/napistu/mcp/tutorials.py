@@ -10,7 +10,13 @@ from fastmcp import FastMCP
 from napistu.mcp import tutorials_utils
 from napistu.mcp import utils as mcp_utils
 from napistu.mcp.component_base import ComponentState, MCPComponent
-from napistu.mcp.constants import TUTORIAL_URLS
+from napistu.mcp.constants import (
+    HEALTH_SUMMARIES,
+    MCP_COMPONENTS,
+    SEARCH_RESULT_DEFS,
+    SEARCH_TYPES,
+    TUTORIAL_URLS,
+)
 from napistu.mcp.semantic_search import SemanticSearch
 
 logger = logging.getLogger(__name__)
@@ -82,8 +88,8 @@ class TutorialsState(ComponentState):
         >>> print(f"Total tutorials: {details['tutorial_count']}")
         """
         return {
-            "tutorial_count": len(self.tutorials),
-            "tutorial_ids": list(self.tutorials.keys()),
+            HEALTH_SUMMARIES.TUTORIAL_COUNT: len(self.tutorials),
+            HEALTH_SUMMARIES.TUTORIAL_IDS: list(self.tutorials.keys()),
         }
 
 
@@ -213,10 +219,12 @@ class TutorialsComponent(MCPComponent):
             logger.info("Indexing tutorial content for semantic search...")
 
             # Prepare content for indexing in the format expected by SemanticSearch
-            content_dict = {"tutorials": self.state.tutorials}
+            content_dict = {MCP_COMPONENTS.TUTORIALS: self.state.tutorials}
 
             # Index content into the shared semantic search instance
-            self.state.semantic_search.index_content("tutorials", content_dict)
+            self.state.semantic_search.index_content(
+                MCP_COMPONENTS.TUTORIALS, content_dict
+            )
 
             logger.info("✅ Tutorial content indexed successfully")
             return True
@@ -346,7 +354,7 @@ class TutorialsComponent(MCPComponent):
 
         @mcp.tool()
         async def search_tutorials(
-            query: str, search_type: str = "semantic", n_results: int = 5
+            query: str, search_type: str = SEARCH_TYPES.SEMANTIC, n_results: int = 5
         ) -> Dict[str, Any]:
             """
             Search Napistu tutorials with intelligent search strategy.
@@ -437,16 +445,16 @@ class TutorialsComponent(MCPComponent):
             The function automatically handles semantic search failures by falling back
             to exact search, ensuring reliable results even if AI components are unavailable.
             """
-            if search_type == "semantic" and self.state.semantic_search:
+            if search_type == SEARCH_TYPES.SEMANTIC and self.state.semantic_search:
                 # Use shared semantic search instance
                 results = self.state.semantic_search.search(
-                    query, "tutorials", n_results=n_results
+                    query, MCP_COMPONENTS.TUTORIALS, n_results=n_results
                 )
                 return {
-                    "query": query,
-                    "search_type": "semantic",
-                    "results": results,
-                    "tip": "For Napistu-specific tutorials only. Try different phrasings if results aren't relevant, or use search_type='exact' for precise keyword matching",
+                    SEARCH_RESULT_DEFS.QUERY: query,
+                    SEARCH_RESULT_DEFS.SEARCH_TYPE: SEARCH_TYPES.SEMANTIC,
+                    SEARCH_RESULT_DEFS.RESULTS: results,
+                    SEARCH_RESULT_DEFS.TIP: "For Napistu-specific tutorials only. Try different phrasings if results aren't relevant, or use search_type='exact' for precise keyword matching",
                 }
             else:
                 # Fall back to exact search
@@ -456,16 +464,18 @@ class TutorialsComponent(MCPComponent):
                     if query.lower() in content.lower():
                         results.append(
                             {
-                                "id": tutorial_id,
-                                "snippet": mcp_utils.get_snippet(content, query),
+                                SEARCH_RESULT_DEFS.ID: tutorial_id,
+                                SEARCH_RESULT_DEFS.SNIPPET: mcp_utils.get_snippet(
+                                    content, query
+                                ),
                             }
                         )
 
                 return {
-                    "query": query,
-                    "search_type": "exact",
-                    "results": results,
-                    "tip": "Use search_type='semantic' for natural language queries about Napistu workflows",
+                    SEARCH_RESULT_DEFS.QUERY: query,
+                    SEARCH_RESULT_DEFS.SEARCH_TYPE: SEARCH_TYPES.EXACT,
+                    SEARCH_RESULT_DEFS.RESULTS: results,
+                    SEARCH_RESULT_DEFS.TIP: "Use search_type='semantic' for natural language queries about Napistu workflows",
                 }
 
 

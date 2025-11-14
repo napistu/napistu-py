@@ -3,7 +3,7 @@ from typing import Optional
 import click
 from pydantic import BaseModel, Field, computed_field, field_validator
 
-from napistu.mcp.constants import MCP_DEFAULTS, MCP_PRODUCTION_URL
+from napistu.mcp.constants import MCP_DEFAULTS, MCP_PRODUCTION_URL, PRESET_NAMES
 
 
 class MCPServerConfig(BaseModel):
@@ -108,7 +108,7 @@ def validate_server_config_flags(
     )
 
     if preset_used and manual_config_used:
-        preset_name = "local" if local else "production"
+        preset_name = PRESET_NAMES.LOCAL if local else PRESET_NAMES.PRODUCTION
         raise click.BadParameter(
             f"Cannot use --{preset_name} with manual host/port/server-name configuration. "
             f"Use either preset flags OR manual configuration, not both."
@@ -151,7 +151,7 @@ def validate_client_config_flags(
     )
 
     if preset_used and manual_config_used:
-        preset_name = "local" if local else "production"
+        preset_name = PRESET_NAMES.LOCAL if local else PRESET_NAMES.PRODUCTION
         raise click.BadParameter(
             f"Cannot use --{preset_name} with manual host/port/https configuration. "
             f"Use either preset flags OR manual configuration, not both."

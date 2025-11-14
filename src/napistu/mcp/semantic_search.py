@@ -9,6 +9,12 @@ import chromadb
 from chromadb.utils import embedding_functions
 
 from napistu.mcp import semantic_search_utils
+from napistu.mcp.constants import (
+    CODEBASE_DEFS,
+    DOCUMENTATION,
+    HEALTH_CHECK_DEFS,
+    MCP_COMPONENTS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -225,13 +231,17 @@ class SemanticSearch:
         all_ids = []
 
         for content_type, items in content_dict.items():
-            if content_type in ["issues", "prs"]:
+            if content_type in [DOCUMENTATION.ISSUES, DOCUMENTATION.PRS]:
                 # Handle issues and PRs - no chunking needed as they're typically short
                 documents, metadatas, ids = (
                     semantic_search_utils.process_issues_and_prs(content_type, items)
                 )
 
-            elif content_type in ["wiki", "readme", "tutorials"]:
+            elif content_type in [
+                DOCUMENTATION.WIKI,
+                DOCUMENTATION.README,
+                MCP_COMPONENTS.TUTORIALS,
+            ]:
                 # Handle content that may need chunking
                 documents, metadatas, ids = (
                     semantic_search_utils.process_chunkable_content(
@@ -239,7 +249,11 @@ class SemanticSearch:
                     )
                 )
 
-            elif content_type in ["classes", "functions", "methods"]:
+            elif content_type in [
+                CODEBASE_DEFS.CLASSES,
+                CODEBASE_DEFS.FUNCTIONS,
+                CODEBASE_DEFS.METHODS,
+            ]:
                 # Handle codebase content with specialized processing
                 documents, metadatas, ids = (
                     semantic_search_utils.process_codebase_content(content_type, items)
@@ -431,7 +445,9 @@ class SemanticSearch:
 
         # Add component field to each result for convenience
         for result in results:
-            result["component"] = result["metadata"].get("component", "unknown")
+            result["component"] = result["metadata"].get(
+                "component", HEALTH_CHECK_DEFS.UNKNOWN
+            )
 
         return results
 

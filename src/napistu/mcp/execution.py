@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from fastmcp import FastMCP
 
 from napistu.mcp.component_base import ComponentState, MCPComponent
+from napistu.mcp.constants import HEALTH_SUMMARIES
 from napistu.mcp.semantic_search import SemanticSearch
 
 logger = logging.getLogger(__name__)
@@ -34,11 +35,12 @@ class ExecutionState(ComponentState):
 
     def get_health_details(self) -> Dict[str, Any]:
         """Provide execution-specific health details."""
+
         return {
-            "session_context_items": len(self.session_context),
-            "registered_objects": len(self.session_objects),
-            "context_keys": list(self.session_context.keys()),
-            "object_names": list(self.session_objects.keys()),
+            HEALTH_SUMMARIES.SESSION_CONTEXT_ITEMS: len(self.session_context),
+            HEALTH_SUMMARIES.REGISTERED_OBJECTS: len(self.session_objects),
+            HEALTH_SUMMARIES.CONTEXT_KEYS: list(self.session_context.keys()),
+            HEALTH_SUMMARIES.OBJECT_NAMES: list(self.session_objects.keys()),
         }
 
     def register_object(self, name: str, obj: Any) -> None:
@@ -94,9 +96,12 @@ class ExecutionComponent(MCPComponent):
         """
         Register an object with the execution component.
 
-        Args:
-            name: Name to reference the object by
-            obj: The object to register
+        Parameters
+        ----------
+        name : str
+            Name to reference the object by
+        obj : Any
+            The object to register
         """
         self.state.register_object(name, obj)
 

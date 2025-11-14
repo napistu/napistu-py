@@ -10,6 +10,14 @@ import logging
 import re
 from typing import Any, Dict, List, Tuple
 
+from napistu.mcp.constants import (
+    CODEBASE_DEFS,
+    CODEBASE_INSPECT_DEFS,
+    GITHUB_DEFS,
+    SEMANTIC_SEARCH_DEFS,
+    SEMANTIC_SEARCH_METADATA_DEFS,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,24 +49,27 @@ def process_issues_and_prs(
     for repo_name, item_list in items.items():
         if isinstance(item_list, list):
             for item in item_list:
-                if isinstance(item, dict) and item.get("title"):
-                    title = item.get("title", "")
-                    body = item.get("body", "")
+                if isinstance(item, dict) and item.get(GITHUB_DEFS.TITLE):
+                    title = item.get(GITHUB_DEFS.TITLE, "")
+                    body = item.get(GITHUB_DEFS.BODY, "")
                     content = f"{title}\n\n{body}" if body else title
 
-                    if len(content.strip()) > 20:
+                    if (
+                        len(content.strip())
+                        > SEMANTIC_SEARCH_DEFS.MIN_CONTENT_LENGTH_SHORT
+                    ):
                         documents.append(content)
                         metadatas.append(
                             {
-                                "type": content_type,
-                                "name": f"{repo_name}#{item.get('number', '')}",
-                                "source": f"{content_type}: {repo_name}#{item.get('number', '')}",
-                                "chunk": 0,
-                                "is_chunked": False,
+                                SEMANTIC_SEARCH_METADATA_DEFS.TYPE: content_type,
+                                SEMANTIC_SEARCH_METADATA_DEFS.NAME: f"{repo_name}#{item.get(GITHUB_DEFS.NUMBER, '')}",
+                                SEMANTIC_SEARCH_METADATA_DEFS.SOURCE: f"{content_type}: {repo_name}#{item.get(GITHUB_DEFS.NUMBER, '')}",
+                                SEMANTIC_SEARCH_METADATA_DEFS.CHUNK: 0,
+                                SEMANTIC_SEARCH_METADATA_DEFS.IS_CHUNKED: False,
                             }
                         )
                         ids.append(
-                            f"{content_type}_{repo_name}_{item.get('number', '')}"
+                            f"{content_type}_{repo_name}_{item.get(GITHUB_DEFS.NUMBER, '')}"
                         )
 
     return documents, metadatas, ids
@@ -67,8 +78,8 @@ def process_issues_and_prs(
 def process_chunkable_content(
     content_type: str,
     items: Dict[str, Any],
-    chunk_threshold: int = 1200,
-    max_chunk_size: int = 1000,
+    chunk_threshold: int = SEMANTIC_SEARCH_DEFS.CHUNK_THRESHOLD,
+    max_chunk_size: int = SEMANTIC_SEARCH_DEFS.MAX_CHUNK_SIZE,
 ) -> Tuple[List[str], List[Dict], List[str]]:
     """
     Process content that may need chunking (wiki, README, etc.).
@@ -97,7 +108,10 @@ def process_chunkable_content(
     ids = []
 
     for name, content in items.items():
-        if content and len(str(content).strip()) > 50:
+        if (
+            content
+            and len(str(content).strip()) > SEMANTIC_SEARCH_DEFS.MIN_CONTENT_LENGTH_LONG
+        ):
             content_str = str(content)
 
             if len(content_str) > chunk_threshold:
@@ -108,12 +122,12 @@ def process_chunkable_content(
                     documents.append(chunk)
                     metadatas.append(
                         {
-                            "type": content_type,
-                            "name": name,
-                            "source": f"{content_type}: {name} (part {chunk_idx + 1})",
-                            "chunk": chunk_idx,
-                            "total_chunks": len(chunks),
-                            "is_chunked": True,
+                            SEMANTIC_SEARCH_METADATA_DEFS.TYPE: content_type,
+                            SEMANTIC_SEARCH_METADATA_DEFS.NAME: name,
+                            SEMANTIC_SEARCH_METADATA_DEFS.SOURCE: f"{content_type}: {name}{SEMANTIC_SEARCH_DEFS.CHUNK_PART_PREFIX}{chunk_idx + 1}{SEMANTIC_SEARCH_DEFS.CHUNK_PART_SUFFIX}",
+                            SEMANTIC_SEARCH_METADATA_DEFS.CHUNK: chunk_idx,
+                            SEMANTIC_SEARCH_METADATA_DEFS.TOTAL_CHUNKS: len(chunks),
+                            SEMANTIC_SEARCH_METADATA_DEFS.IS_CHUNKED: True,
                         }
                     )
                     ids.append(f"{content_type}_{name}_chunk_{chunk_idx}")
@@ -122,11 +136,11 @@ def process_chunkable_content(
                 documents.append(content_str)
                 metadatas.append(
                     {
-                        "type": content_type,
-                        "name": name,
-                        "source": f"{content_type}: {name}",
-                        "chunk": 0,
-                        "is_chunked": False,
+                        SEMANTIC_SEARCH_METADATA_DEFS.TYPE: content_type,
+                        SEMANTIC_SEARCH_METADATA_DEFS.NAME: name,
+                        SEMANTIC_SEARCH_METADATA_DEFS.SOURCE: f"{content_type}: {name}",
+                        SEMANTIC_SEARCH_METADATA_DEFS.CHUNK: 0,
+                        SEMANTIC_SEARCH_METADATA_DEFS.IS_CHUNKED: False,
                     }
                 )
                 ids.append(f"{content_type}_{name}")
@@ -160,15 +174,18 @@ def process_regular_content(
     ids = []
 
     for name, content in items.items():
-        if content and len(str(content).strip()) > 50:
+        if (
+            content
+            and len(str(content).strip()) > SEMANTIC_SEARCH_DEFS.MIN_CONTENT_LENGTH_LONG
+        ):
             documents.append(str(content))
             metadatas.append(
                 {
-                    "type": content_type,
-                    "name": name,
-                    "source": f"{content_type}: {name}",
-                    "chunk": 0,
-                    "is_chunked": False,
+                    SEMANTIC_SEARCH_METADATA_DEFS.TYPE: content_type,
+                    SEMANTIC_SEARCH_METADATA_DEFS.NAME: name,
+                    SEMANTIC_SEARCH_METADATA_DEFS.SOURCE: f"{content_type}: {name}",
+                    SEMANTIC_SEARCH_METADATA_DEFS.CHUNK: 0,
+                    SEMANTIC_SEARCH_METADATA_DEFS.IS_CHUNKED: False,
                 }
             )
             ids.append(f"{content_type}_{name}")
@@ -194,19 +211,19 @@ def process_codebase_content(
             continue
 
         # Process main class/function content
-        signature = info.get("signature", "")
-        doc = info.get("doc", "")
+        signature = info.get(CODEBASE_INSPECT_DEFS.SIGNATURE, "")
+        doc = info.get(CODEBASE_INSPECT_DEFS.DOC, "")
 
         if doc or signature:
             # Format content for embedding
-            if content_type == "functions":
+            if content_type == CODEBASE_DEFS.FUNCTIONS:
                 # Use full qualified name: napistu.module.function_name()
                 func_name = name.split(".")[-1]
                 if signature and func_name in signature:
                     content = signature.replace(func_name, name, 1)
                 else:
                     content = f"{name}()"
-            elif content_type == "classes":
+            elif content_type == CODEBASE_DEFS.CLASSES:
                 # Use full qualified name: class napistu.module.ClassName
                 content = f"class {name}"
             else:
@@ -215,25 +232,28 @@ def process_codebase_content(
             if doc:
                 content = f"{content}\n\n{doc}"
 
-            if len(content.strip()) > 20:
+            if len(content.strip()) > SEMANTIC_SEARCH_DEFS.MIN_CONTENT_LENGTH_SHORT:
                 documents.append(content)
                 metadatas.append(
                     {
-                        "type": content_type,
-                        "name": name,
-                        "source": f"{content_type}: {name}",
+                        SEMANTIC_SEARCH_METADATA_DEFS.TYPE: content_type,
+                        SEMANTIC_SEARCH_METADATA_DEFS.NAME: name,
+                        SEMANTIC_SEARCH_METADATA_DEFS.SOURCE: f"{content_type}: {name}",
                     }
                 )
                 ids.append(f"{content_type}_{name.replace('.', '_')}")
 
         # For classes, also process individual methods
-        if content_type == "classes" and "methods" in info:
+        if (
+            content_type == CODEBASE_DEFS.CLASSES
+            and CODEBASE_INSPECT_DEFS.METHODS in info
+        ):
             class_short_name = name.split(".")[-1]  # Just "SBML_dfs" not full path
 
-            for method_name, method_info in info["methods"].items():
+            for method_name, method_info in info[CODEBASE_INSPECT_DEFS.METHODS].items():
                 if isinstance(method_info, dict):
-                    method_sig = method_info.get("signature", "")
-                    method_doc = method_info.get("doc", "")
+                    method_sig = method_info.get(CODEBASE_INSPECT_DEFS.SIGNATURE, "")
+                    method_doc = method_info.get(CODEBASE_INSPECT_DEFS.DOC, "")
 
                     if method_doc or method_sig:
                         # Format as ClassName.method_name()
@@ -241,14 +261,17 @@ def process_codebase_content(
                         if method_doc:
                             method_content = f"{method_content}\n\n{method_doc}"
 
-                        if len(method_content.strip()) > 20:
+                        if (
+                            len(method_content.strip())
+                            > SEMANTIC_SEARCH_DEFS.MIN_CONTENT_LENGTH_SHORT
+                        ):
                             documents.append(method_content)
                             metadatas.append(
                                 {
-                                    "type": "methods",
-                                    "name": f"{name}.{method_name}",
-                                    "source": f"method: {class_short_name}.{method_name}",
-                                    "class_name": name,
+                                    SEMANTIC_SEARCH_METADATA_DEFS.TYPE: CODEBASE_DEFS.METHODS,
+                                    SEMANTIC_SEARCH_METADATA_DEFS.NAME: f"{name}.{method_name}",
+                                    SEMANTIC_SEARCH_METADATA_DEFS.SOURCE: f"{SEMANTIC_SEARCH_DEFS.METHOD_SOURCE_PREFIX}{class_short_name}.{method_name}",
+                                    SEMANTIC_SEARCH_METADATA_DEFS.CLASS_NAME: name,
                                 }
                             )
                             ids.append(f"method_{name.replace('.', '_')}_{method_name}")
@@ -260,7 +283,9 @@ def process_codebase_content(
 
 
 def _chunk_content_smart(
-    text: str, content_name: str, max_chunk_size: int = 1000
+    text: str,
+    content_name: str,
+    max_chunk_size: int = SEMANTIC_SEARCH_DEFS.MAX_CHUNK_SIZE,
 ) -> List[str]:
     """
     Smart chunking that works well for any structured content (wiki, README, etc.).
@@ -373,7 +398,7 @@ def _find_best_break_point(text: str, start: int, end: int) -> int:
 
 
 def _group_paragraphs_semantically(
-    paragraphs: List[str], max_chunk_size: int = 1000
+    paragraphs: List[str], max_chunk_size: int = SEMANTIC_SEARCH_DEFS.MAX_CHUNK_SIZE
 ) -> List[str]:
     """
     Group related paragraphs into semantically coherent chunks.
