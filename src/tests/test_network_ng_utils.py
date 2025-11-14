@@ -527,8 +527,8 @@ def test_format_napistu_graph_summary(napistu_graph):
         ["- Protein", "1 (4.3%)"],
         ["", ""],
         ["Edges", "32"],
-        ["- product", "13 (40.6%)"],
         ["- reactant", "13 (40.6%)"],
+        ["- product", "13 (40.6%)"],
         ["- catalyst", "6 (18.8%)"],
         ["", ""],
     ]
