@@ -73,7 +73,7 @@ logger, console = setup_logging()
 
 @click.group()
 def cli():
-    """The Calico Pathway Resources CLI"""
+    """The Napistu CLI"""
     pass
 
 

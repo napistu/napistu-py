@@ -13,6 +13,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "myst_parser",
     "sphinx.ext.autosummary",
+    "sphinx_click",
 ]
 
 autosummary_generate = True

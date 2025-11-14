@@ -276,7 +276,66 @@ class CodebaseComponent(MCPComponent):
         falling back to exact search if semantic search is not initialized.
         """
 
-        # Register resources
+        @mcp.tool()
+        async def get_cli_command_details(
+            command_path: str, cli_name: str = "napistu"
+        ) -> Dict[str, Any]:
+            """
+            Get detailed information about a specific CLI command.
+
+            **USE THIS WHEN:**
+            - Understanding how to use a specific CLI command
+            - Seeing all arguments and options for a command
+            - Getting help text and usage examples
+
+            Parameters
+            ----------
+            command_path : str
+                Full command path (e.g., "napistu ingestion reactome")
+            cli_name : str, optional
+                Which CLI to inspect ("napistu" or "napistu.mcp")
+
+            Returns
+            -------
+            Dict[str, Any]
+                Detailed command information with arguments, options, help text
+
+            Examples
+            --------
+            >>> get_cli_command_details("napistu ingestion reactome")
+            >>> get_cli_command_details("napistu consensus create")
+            >>> get_cli_command_details("napistu-torch train")
+            """
+            try:
+                if cli_name == "napistu":
+                    from napistu.__main__ import cli
+                elif cli_name == "napistu.mcp":
+                    from napistu.mcp.__main__ import cli
+                elif cli_name == "napistu-torch":
+                    from napistu_torch.__main__ import cli
+                else:
+                    return {"error": f"Unknown CLI: {cli_name}"}
+
+                from napistu.mcp import cli_utils
+
+                structure = cli_utils.CLIStructure.from_cli_group(cli, cli_name)
+
+                # Find the command
+                if command_path not in structure.commands:
+                    return {
+                        "success": False,
+                        "error": f"Command '{command_path}' not found",
+                        "available_commands": list(structure.commands.keys())[:10],
+                    }
+
+                return {
+                    "success": True,
+                    **structure.commands[command_path].model_dump(),
+                }
+
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
         @mcp.resource("napistu://codebase/summary")
         async def get_codebase_summary():
             """
@@ -360,9 +419,9 @@ class CodebaseComponent(MCPComponent):
 
             Examples
             --------
-            >>> get_method_source("SBML_dfs", "get_reactions")
-            >>> get_method_source("NapistuGraph", "find_paths", "napistu")
-            >>> get_method_source("network.NapistuGraph", "add_node")
+            >>> get_method_source("SBML_dfs", "get_identifiers")
+            >>> get_method_source("NapistuGraph", "reverse_edges", "napistu")
+            >>> get_method_source("network.NapistuGraph", "transform_edges")
             """
             try:
                 # Import the class
@@ -474,9 +533,10 @@ class CodebaseComponent(MCPComponent):
 
             Examples
             --------
-            >>> inspect_function("network.create_consensus")
+            >>> inspect_function("consensus.construct_consensus_model")
             >>> inspect_function("SBML_dfs.parse_model", "napistu")
-            >>> inspect_function("some_function", "napistu_torch")
+            >>> inspect_function("utils.tensor_utils.compute_cosine_distances_torch", "napistu_torch")
+            >>> inspect_function("igraph.Graph", "igraph")
             """
             try:
                 # Import the function
@@ -562,7 +622,8 @@ class CodebaseComponent(MCPComponent):
             --------
             >>> inspect_class("SBML_dfs")
             >>> inspect_class("network.NapistuGraph", "napistu")
-            >>> inspect_class("SomeClass", "napistu_torch")
+            >>> inspect_class("napistu_data.NapistuData", "napistu_torch")
+            >>> inspect_class("torch.Tensor", "torch")
             """
             try:
                 # Import the class
@@ -593,7 +654,48 @@ class CodebaseComponent(MCPComponent):
                     "suggestion": "Verify the class exists and is installed",
                 }
 
-        # Register tools
+        @mcp.tool()
+        async def list_cli_commands(cli_name: str = "napistu") -> Dict[str, Any]:
+            """
+            List all available CLI commands for Napistu.
+
+            **USE THIS WHEN:**
+            - User wants to know what command-line operations are available
+            - Looking for data ingestion, integration, or export commands
+            - Understanding the CLI structure and hierarchy
+
+            Parameters
+            ----------
+            cli_name : str, optional
+                Which CLI to inspect ("napistu" or "napistu.mcp")
+
+            Returns
+            -------
+            Dict[str, Any]
+                Dictionary containing all CLI commands with their paths, arguments, options
+            """
+            try:
+                if cli_name == "napistu":
+                    from napistu.__main__ import cli
+                elif cli_name == "napistu.mcp":
+                    from napistu.mcp.__main__ import cli
+                else:
+                    return {"error": f"Unknown CLI: {cli_name}"}
+
+                from napistu.mcp import cli_utils
+
+                structure = cli_utils.CLIStructure.from_cli_group(cli, cli_name)
+
+                return {
+                    "success": True,
+                    "cli_name": cli_name,
+                    "total_commands": len(structure.commands),
+                    "commands": structure.commands,
+                }
+
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
         @mcp.tool()
         async def search_codebase(
             query: str, search_type: str = "semantic"
