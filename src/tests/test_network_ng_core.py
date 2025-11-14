@@ -2017,3 +2017,90 @@ def test_get_edge_endpoint_attributes(napistu_graph):
         napistu_graph.get_edge_endpoint_attributes(
             [NAPISTU_GRAPH_VERTICES.SPECIES_TYPE, "missing_attribute"]
         )
+
+
+def test_deduplicate_edges():
+    """Test deduplicate_edges method with a minimal graph containing duplicate edges."""
+    # Create a minimal graph with duplicate edges (same FROM -> TO pairs)
+    g = ig.Graph(directed=True)
+    g.add_vertices(3, attributes={NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C"]})
+
+    # Add edges: A->B appears twice, B->C appears once
+    # First A->B edge
+    g.add_edge(0, 1)  # A -> B
+    g.es[0][NAPISTU_GRAPH_EDGES.FROM] = "A"
+    g.es[0][NAPISTU_GRAPH_EDGES.TO] = "B"
+    g.es[0][NAPISTU_GRAPH_EDGES.WEIGHT] = 1.0
+    g.es[0][SBML_DFS.R_ID] = "R1"
+
+    # Second A->B edge (duplicate)
+    g.add_edge(0, 1)  # A -> B (duplicate)
+    g.es[1][NAPISTU_GRAPH_EDGES.FROM] = "A"
+    g.es[1][NAPISTU_GRAPH_EDGES.TO] = "B"
+    g.es[1][NAPISTU_GRAPH_EDGES.WEIGHT] = 2.0  # Different weight
+    g.es[1][SBML_DFS.R_ID] = "R2"  # Different reaction ID
+
+    # B->C edge (no duplicate)
+    g.add_edge(1, 2)  # B -> C
+    g.es[2][NAPISTU_GRAPH_EDGES.FROM] = "B"
+    g.es[2][NAPISTU_GRAPH_EDGES.TO] = "C"
+    g.es[2][NAPISTU_GRAPH_EDGES.WEIGHT] = 3.0
+    g.es[2][SBML_DFS.R_ID] = "R3"
+
+    napistu_graph = NapistuGraph.from_igraph(g)
+
+    # Verify initial state: 3 edges (2 duplicates of A->B, 1 B->C)
+    assert napistu_graph.ecount() == 3
+    edges_df_before = napistu_graph.get_edge_dataframe()
+    assert len(edges_df_before) == 3
+
+    # Deduplicate edges
+    napistu_graph.deduplicate_edges()
+
+    # Verify final state: 2 edges (1 A->B, 1 B->C)
+    assert napistu_graph.ecount() == 2
+    edges_df_after = napistu_graph.get_edge_dataframe()
+    assert len(edges_df_after) == 2
+
+    # Verify that only one A->B edge remains (the first one)
+    a_to_b_edges = edges_df_after[
+        (edges_df_after[NAPISTU_GRAPH_EDGES.FROM] == "A")
+        & (edges_df_after[NAPISTU_GRAPH_EDGES.TO] == "B")
+    ]
+    assert len(a_to_b_edges) == 1
+    # The first edge should be kept (with weight 1.0 and R_ID "R1")
+    assert a_to_b_edges.iloc[0][NAPISTU_GRAPH_EDGES.WEIGHT] == 1.0
+    assert a_to_b_edges.iloc[0][SBML_DFS.R_ID] == "R1"
+
+    # Verify B->C edge is still present
+    b_to_c_edges = edges_df_after[
+        (edges_df_after[NAPISTU_GRAPH_EDGES.FROM] == "B")
+        & (edges_df_after[NAPISTU_GRAPH_EDGES.TO] == "C")
+    ]
+    assert len(b_to_c_edges) == 1
+    assert b_to_c_edges.iloc[0][NAPISTU_GRAPH_EDGES.WEIGHT] == 3.0
+
+    # Verify graph structure is preserved (vertices unchanged)
+    assert napistu_graph.vcount() == 3
+    vertex_names = [v[NAPISTU_GRAPH_VERTICES.NAME] for v in napistu_graph.vs]
+    assert set(vertex_names) == {"A", "B", "C"}
+
+
+def test_deduplicate_edges_no_duplicates():
+    """Test deduplicate_edges method when there are no duplicate edges."""
+    # Create a graph with no duplicate edges
+    g = ig.Graph(directed=True)
+    g.add_vertices(3, attributes={NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C"]})
+    g.add_edges([(0, 1), (1, 2)])  # A->B, B->C
+    g.es[NAPISTU_GRAPH_EDGES.FROM] = ["A", "B"]
+    g.es[NAPISTU_GRAPH_EDGES.TO] = ["B", "C"]
+
+    napistu_graph = NapistuGraph.from_igraph(g)
+    initial_edge_count = napistu_graph.ecount()
+
+    # Deduplicate edges (should not change anything)
+    napistu_graph.deduplicate_edges()
+
+    # Verify graph is unchanged
+    assert napistu_graph.ecount() == initial_edge_count
+    assert napistu_graph.vcount() == 3

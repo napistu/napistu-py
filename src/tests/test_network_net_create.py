@@ -6,6 +6,7 @@ from napistu.network import net_create, net_create_utils
 from napistu.network.constants import (
     DROP_REACTIONS_WHEN,
     GRAPH_WIRING_APPROACHES,
+    NAPISTU_GRAPH_EDGES,
 )
 
 
@@ -33,33 +34,22 @@ def test_bipartite_regression(sbml_dfs):
     bipartite_og_edges = bipartite_og.get_edge_dataframe()
     bipartite_edges = bipartite.get_edge_dataframe()
 
-    try:
-        pdt.assert_frame_equal(
-            bipartite_og_edges, bipartite_edges, check_like=True, check_dtype=False
-        )
-    except AssertionError as e:
-        # Print detailed differences
-        print("DataFrames are not equal!")
-        print(
-            "Shape original:",
-            bipartite_og_edges.shape,
-            "Shape new:",
-            bipartite_edges.shape,
-        )
-        print(
-            "Columns original:",
-            bipartite_og_edges.columns.tolist(),
-            "Columns new:",
-            bipartite_edges.columns.tolist(),
-        )
-        # Show head of both for quick inspection
-        print("Original head:\n", bipartite_og_edges.head())
-        print("New head:\n", bipartite_edges.head())
-        # Optionally, show where values differ
-        if bipartite_og_edges.shape == bipartite_edges.shape:
-            diff = bipartite_og_edges != bipartite_edges
-            print("Differences (first 5 rows):\n", diff.head())
-        raise e  # Re-raise to fail the test
+    # Sort both DataFrames by FROM and TO to ignore row order differences
+    # This allows comparison when only the order differs (e.g., due to deduplication)
+    sort_cols = [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+    bipartite_og_edges_sorted = bipartite_og_edges.sort_values(sort_cols).reset_index(
+        drop=True
+    )
+    bipartite_edges_sorted = bipartite_edges.sort_values(sort_cols).reset_index(
+        drop=True
+    )
+
+    pdt.assert_frame_equal(
+        bipartite_og_edges_sorted,
+        bipartite_edges_sorted,
+        check_like=True,
+        check_dtype=False,
+    )
 
 
 def test_reverse_network_edges(reaction_species_examples):

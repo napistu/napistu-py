@@ -481,7 +481,9 @@ def _format_cross_tier_edges(
             past_reaction,
         )
 
-        if ordered_tiers[i + 1] == reaction_tier:
+        # Only update past_reaction if we're not dropping the reaction
+        # If drop_reaction is True, we're skipping the reaction tier, so past_reaction stays False
+        if ordered_tiers[i + 1] == reaction_tier and not drop_reaction:
             past_reaction = True
 
         rxn_edges.append(formatted_tier_combo)

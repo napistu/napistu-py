@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import logging
-import random
 from typing import Optional
 
 import igraph as ig
@@ -38,6 +37,7 @@ def create_napistu_graph(
     directed: bool = True,
     wiring_approach: str = GRAPH_WIRING_APPROACHES.REGULATORY,
     drop_reactions_when: str = DROP_REACTIONS_WHEN.SAME_TIER,
+    deduplicate_edges: bool = True,
     verbose: bool = False,
 ) -> NapistuGraph:
     """
@@ -60,6 +60,9 @@ def create_napistu_graph(
             - 'same_tier': drop reactions when all participants are on the same tier of a wiring hierarchy
             - 'edgelist': drop reactions when the reaction species are only 2 (1 reactant + 1 product)
             - 'always': drop reactions regardless of tiers
+    deduplicate_edges : bool, optional
+        Whether to deduplicate edges with the same FROM -> TO pair, keeping only the first occurrence.
+        Default is True for backwards compatibility.
     verbose : bool, optional
         Extra reporting. Default is False.
 
@@ -194,43 +197,11 @@ def create_napistu_graph(
             **{NAPISTU_GRAPH_EDGES.DIRECTION: NAPISTU_GRAPH_EDGE_DIRECTIONS.UNDIRECTED}
         )
 
-    # de-duplicate edges
-    unique_edges = (
-        directed_network_edges.groupby(
-            [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
-        )
-        .first()
-        .reset_index()
-    )
-
-    if unique_edges.shape[0] != directed_network_edges.shape[0]:
-        logger.warning(
-            f"{directed_network_edges.shape[0] - unique_edges.shape[0]} edges were dropped "
-            "due to duplicated origin -> target relationiships, use verbose for "
-            "more information"
-        )
-
-        if verbose:
-            # report duplicated edges
-            grouped_edges = directed_network_edges.groupby(
-                [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
-            )
-            duplicated_edges = [
-                grouped_edges.get_group(x)
-                for x in grouped_edges.groups
-                if grouped_edges.get_group(x).shape[0] > 1
-            ]
-            example_duplicates = pd.concat(
-                random.sample(duplicated_edges, min(5, len(duplicated_edges)))
-            )
-
-            utils.show(example_duplicates, headers="keys")
-
     # convert nodes and edgelist into an igraph network
     logger.info("Formatting NapistuGraph output")
     napistu_ig_graph = ig.Graph.DictList(
         vertices=network_nodes_df.to_dict("records"),
-        edges=unique_edges.to_dict("records"),
+        edges=directed_network_edges.to_dict("records"),
         directed=directed,
         vertex_name_attr=NAPISTU_GRAPH_VERTICES.NAME,
         edge_foreign_keys=(NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO),
@@ -249,6 +220,10 @@ def create_napistu_graph(
     # remove singleton nodes (mostly reactions that are not part of any interaction)
     napistu_graph.remove_isolated_vertices()
 
+    # de-duplicate edges if requested
+    if deduplicate_edges:
+        napistu_graph.deduplicate_edges(verbose=verbose)
+
     return napistu_graph
 
 
@@ -259,6 +234,7 @@ def process_napistu_graph(
     weighting_strategy: str = NAPISTU_WEIGHTING_STRATEGIES.UNWEIGHTED,
     reaction_graph_attrs: Optional[dict] = None,
     custom_transformations: dict = None,
+    deduplicate_edges: bool = True,
     verbose: bool = False,
 ) -> NapistuGraph:
     """
@@ -283,6 +259,9 @@ def process_napistu_graph(
         Dictionary containing attributes to pull out of reaction_data and a weighting scheme for the graph.
     custom_transformations : dict, optional
         Dictionary of custom transformation functions to use for attribute transformation.
+    deduplicate_edges : bool, optional
+        Whether to deduplicate edges with the same FROM -> TO pair, keeping only the first occurrence.
+        Default is True for backwards compatibility.
     verbose : bool, optional
         Extra reporting. Default is False.
 
@@ -306,6 +285,7 @@ def process_napistu_graph(
         sbml_dfs,
         directed=directed,
         wiring_approach=wiring_approach,
+        deduplicate_edges=deduplicate_edges,
         verbose=verbose,
     )
 
