@@ -8,6 +8,7 @@ from typing import Any, Dict
 
 from fastmcp import FastMCP
 
+from napistu.mcp.constants import HEALTH_CHECK_DEFS
 from napistu.mcp.semantic_search import SemanticSearch
 
 logger = logging.getLogger(__name__)
@@ -60,13 +61,19 @@ class ComponentState(ABC):
             - additional component-specific details if healthy
         """
         if not self.initialized:
-            return {"status": "initializing"}
+            return {HEALTH_CHECK_DEFS.STATUS: HEALTH_CHECK_DEFS.INITIALIZING}
         elif self.initialization_error:
-            return {"status": "unavailable", "error": str(self.initialization_error)}
+            return {
+                HEALTH_CHECK_DEFS.STATUS: HEALTH_CHECK_DEFS.UNAVAILABLE,
+                HEALTH_CHECK_DEFS.ERROR: str(self.initialization_error),
+            }
         elif not self.is_healthy():
-            return {"status": "inactive"}
+            return {HEALTH_CHECK_DEFS.STATUS: HEALTH_CHECK_DEFS.INACTIVE}
         else:
-            return {"status": "healthy", **self.get_health_details()}
+            return {
+                HEALTH_CHECK_DEFS.STATUS: HEALTH_CHECK_DEFS.HEALTHY,
+                **self.get_health_details(),
+            }
 
     def get_health_details(self) -> Dict[str, Any]:
         """

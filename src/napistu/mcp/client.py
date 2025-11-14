@@ -9,6 +9,13 @@ from typing import Any, Dict, Mapping, Optional
 from fastmcp import Client
 
 from napistu.mcp.config import MCPClientConfig
+from napistu.mcp.constants import (
+    HEALTH_CHECK_DEFS,
+    HEALTH_SUMMARIES,
+    SEARCH_COMPONENTS,
+    SEARCH_TYPES,
+    VALID_SEARCH_TYPES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -215,15 +222,22 @@ def print_health_status(health: Optional[Mapping[str, Any]]) -> None:
         print("Check the logs above for detailed error information")
         return
 
-    status = health.get("status", "unknown")
+    status = health.get(HEALTH_CHECK_DEFS.STATUS, HEALTH_CHECK_DEFS.UNKNOWN)
     print(f"\nServer Status: {status}")
 
-    components = health.get("components", {})
+    components = health.get(HEALTH_SUMMARIES.COMPONENTS, {})
     if components:
         print("\nComponents:")
         for name, comp_status in components.items():
-            icon = "✅" if comp_status.get("status") == "healthy" else "❌"
-            print(f"  {icon} {name}: {comp_status.get('status', 'unknown')}")
+            icon = (
+                "✅"
+                if comp_status.get(HEALTH_CHECK_DEFS.STATUS)
+                == HEALTH_CHECK_DEFS.HEALTHY
+                else "❌"
+            )
+            print(
+                f"  {icon} {name}: {comp_status.get(HEALTH_CHECK_DEFS.STATUS, HEALTH_CHECK_DEFS.UNKNOWN)}"
+            )
 
     # Show additional info if available
     if "timestamp" in health:
@@ -271,7 +285,7 @@ async def read_server_resource(
 
 async def search_all(
     query: str,
-    search_type: str = "semantic",
+    search_type: str = SEARCH_TYPES.SEMANTIC,
     n_results: int = 10,
     config: MCPClientConfig = None,
 ) -> Optional[Dict[str, Any]]:
@@ -315,10 +329,9 @@ async def search_all(
     ...     print(f"[{r['component']}] {r['source']}")
     """
     # Validate search type
-    valid_search_types = {"semantic", "exact"}
-    if search_type not in valid_search_types:
+    if search_type not in VALID_SEARCH_TYPES:
         raise ValueError(
-            f"Invalid search_type '{search_type}'. Must be one of: {', '.join(sorted(valid_search_types))}"
+            f"Invalid search_type '{search_type}'. Must be one of: {', '.join(sorted(VALID_SEARCH_TYPES))}"
         )
 
     # Call the unified search tool
@@ -332,7 +345,7 @@ async def search_all(
 async def search_component(
     component: str,
     query: str,
-    search_type: str = "semantic",
+    search_type: str = SEARCH_TYPES.SEMANTIC,
     n_results: int = 5,
     config: MCPClientConfig = None,
 ) -> Optional[Dict[str, Any]]:
@@ -343,10 +356,13 @@ async def search_component(
     ----------
     component : str
         Component to search. Must be one of: 'documentation', 'tutorials', 'codebase'
+        Use MCP_COMPONENTS constants for valid values. Only searchable components
+        are in SEARCH_COMPONENTS set.
     query : str
         Search query or natural language question
     search_type : str, optional
         Search strategy: 'semantic' (default) or 'exact'
+        Use SEARCH_TYPES constants for valid values.
     n_results : int, optional
         Maximum number of results to return. Results are ranked by similarity score.
         Default is 5.
@@ -396,17 +412,15 @@ async def search_component(
     ...     print(f"{comp}: {len(result.get('results', []))} results")
     """
     # Validate component
-    valid_components = {"documentation", "tutorials", "codebase"}
-    if component not in valid_components:
+    if component not in SEARCH_COMPONENTS:
         raise ValueError(
-            f"Invalid component '{component}'. Must be one of: {', '.join(sorted(valid_components))}"
+            f"Invalid component '{component}'. Must be one of: {', '.join(sorted(SEARCH_COMPONENTS))}"
         )
 
     # Validate search type
-    valid_search_types = {"semantic", "exact"}
-    if search_type not in valid_search_types:
+    if search_type not in VALID_SEARCH_TYPES:
         raise ValueError(
-            f"Invalid search_type '{search_type}'. Must be one of: {', '.join(sorted(valid_search_types))}"
+            f"Invalid search_type '{search_type}'. Must be one of: {', '.join(sorted(VALID_SEARCH_TYPES))}"
         )
 
     # Map component to tool name

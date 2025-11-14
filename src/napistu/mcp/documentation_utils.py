@@ -9,6 +9,7 @@ import httpx
 from napistu.constants import PACKAGE_DEFS
 from napistu.mcp.constants import (
     DEFAULT_GITHUB_API,
+    GITHUB_DEFS,
     GITHUB_ISSUES_INDEXED,
     GITHUB_PRS_INDEXED,
 )
@@ -89,7 +90,7 @@ async def list_issues(
     filter_func = (
         (lambda item: True)
         if include_prs
-        else (lambda item: "pull_request" not in item)
+        else (lambda item: GITHUB_DEFS.PULL_REQUEST not in item)
     )
     return await _fetch_github_items(url, filter_func=filter_func)
 
@@ -174,16 +175,17 @@ def _format_github_issue(item):
     Format a GitHub issue or PR item into a standard dict.
     """
     return {
-        "number": item["number"],
-        "title": item["title"],
-        "state": item["state"],
-        "url": item["html_url"],
-        "body": (
-            (item["body"][:500] + "...")
-            if item.get("body") and len(item["body"]) > 500
-            else item.get("body")
+        GITHUB_DEFS.NUMBER: item[GITHUB_DEFS.NUMBER],
+        GITHUB_DEFS.TITLE: item[GITHUB_DEFS.TITLE],
+        GITHUB_DEFS.STATE: item[GITHUB_DEFS.STATE],
+        GITHUB_DEFS.URL: item[GITHUB_DEFS.HTML_URL],
+        GITHUB_DEFS.BODY: (
+            (item[GITHUB_DEFS.BODY][:500] + "...")
+            if item.get(GITHUB_DEFS.BODY) and len(item[GITHUB_DEFS.BODY]) > 500
+            else item.get(GITHUB_DEFS.BODY)
         ),
-        "is_pr": "pull_request" in item or "merged_at" in item,
+        GITHUB_DEFS.IS_PR: GITHUB_DEFS.PULL_REQUEST in item
+        or GITHUB_DEFS.MERGED_AT in item,
     }
 
 

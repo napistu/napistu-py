@@ -10,7 +10,7 @@ from mcp.server import FastMCP
 
 from napistu.mcp import codebase, documentation, execution, health, tutorials
 from napistu.mcp.config import MCPServerConfig
-from napistu.mcp.constants import MCP_DEFAULTS
+from napistu.mcp.constants import MCP_COMPONENTS, MCP_DEFAULTS, SEARCH_TYPES
 from napistu.mcp.profiles import ServerProfile, get_profile
 from napistu.mcp.semantic_search import SemanticSearch
 
@@ -178,10 +178,10 @@ def create_server(profile: ServerProfile, server_config: MCPServerConfig) -> Fas
 
     # Define component configurations
     component_configs = [
-        ("documentation", documentation, "enable_documentation"),
-        ("codebase", codebase, "enable_codebase"),
-        ("tutorials", tutorials, "enable_tutorials"),
-        ("execution", execution, "enable_execution"),
+        (MCP_COMPONENTS.DOCUMENTATION, documentation, "enable_documentation"),
+        (MCP_COMPONENTS.CODEBASE, codebase, "enable_codebase"),
+        (MCP_COMPONENTS.TUTORIALS, tutorials, "enable_tutorials"),
+        (MCP_COMPONENTS.EXECUTION, execution, "enable_execution"),
     ]
 
     # Register all components
@@ -307,7 +307,7 @@ def _register_component(
 
     logger.info(f"Registering {name} components")
 
-    if name == "execution":
+    if name == MCP_COMPONENTS.EXECUTION:
         # Special handling for execution component which needs session context
         component = module.create_component(
             session_context=kwargs.get("session_context"),
@@ -331,7 +331,7 @@ def _register_search_all_tool(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def search_all(
-        query: str, search_type: str = "semantic", n_results: int = 10
+        query: str, search_type: str = SEARCH_TYPES.SEMANTIC, n_results: int = 10
     ) -> Dict[str, Any]:
         """
         Search across all Napistu components (documentation, codebase, tutorials) with intelligent search strategy.
@@ -425,12 +425,12 @@ def _register_search_all_tool(mcp: FastMCP) -> None:
         """
         semantic_search = _get_semantic_search()
 
-        if search_type == "semantic" and semantic_search:
+        if search_type == SEARCH_TYPES.SEMANTIC and semantic_search:
             # Use unified semantic search - returns top K results overall, ranked by similarity
             results = semantic_search.search_unified(query, n_results=n_results)
             return {
                 "query": query,
-                "search_type": "semantic",
+                "search_type": SEARCH_TYPES.SEMANTIC,
                 "results": results,
                 "tip": "Try different phrasings if results aren't relevant, or use search_type='exact' for precise keyword matching",
             }
@@ -441,9 +441,9 @@ def _register_search_all_tool(mcp: FastMCP) -> None:
 
             # Try to get components and search them individually
             component_modules = [
-                ("documentation", documentation),
-                ("codebase", codebase),
-                ("tutorials", tutorials),
+                (MCP_COMPONENTS.DOCUMENTATION, documentation),
+                (MCP_COMPONENTS.CODEBASE, codebase),
+                (MCP_COMPONENTS.TUTORIALS, tutorials),
             ]
 
             for component_name, module in component_modules:
@@ -461,14 +461,14 @@ def _register_search_all_tool(mcp: FastMCP) -> None:
             if not all_results:
                 return {
                     "query": query,
-                    "search_type": "exact",
+                    "search_type": SEARCH_TYPES.EXACT,
                     "results": [],
                     "tip": "Exact search across components not fully implemented. Use search_type='semantic' for cross-component search, or use component-specific search tools (search_documentation, search_codebase, search_tutorials) for exact matching.",
                 }
 
             return {
                 "query": query,
-                "search_type": "exact",
+                "search_type": SEARCH_TYPES.EXACT,
                 "results": all_results,
                 "tip": "Use search_type='semantic' for natural language queries across all components",
             }

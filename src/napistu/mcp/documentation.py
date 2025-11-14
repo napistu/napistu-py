@@ -10,7 +10,18 @@ from fastmcp import FastMCP
 from napistu.mcp import documentation_utils
 from napistu.mcp import utils as mcp_utils
 from napistu.mcp.component_base import ComponentState, MCPComponent
-from napistu.mcp.constants import DOCUMENTATION, READMES, REPOS_WITH_ISSUES, WIKI_PAGES
+from napistu.mcp.constants import (
+    DOCUMENTATION,
+    DOCUMENTATION_SUMMARY_DEFS,
+    GITHUB_DEFS,
+    HEALTH_SUMMARIES,
+    MCP_COMPONENTS,
+    READMES,
+    REPOS_WITH_ISSUES,
+    SEARCH_RESULT_DEFS,
+    SEARCH_TYPES,
+    WIKI_PAGES,
+)
 from napistu.mcp.semantic_search import SemanticSearch
 
 logger = logging.getLogger(__name__)
@@ -99,11 +110,13 @@ class DocumentationState(ComponentState):
         >>> print(f"Total content items: {details['total_sections']}")
         """
         base_details = {
-            "readme_count": len(self.docs_cache[DOCUMENTATION.README]),
-            "wiki_pages": len(self.docs_cache[DOCUMENTATION.WIKI]),
-            "issues_repos": len(self.docs_cache[DOCUMENTATION.ISSUES]),
-            "prs_repos": len(self.docs_cache[DOCUMENTATION.PRS]),
-            "total_sections": sum(len(section) for section in self.docs_cache.values()),
+            HEALTH_SUMMARIES.README_COUNT: len(self.docs_cache[DOCUMENTATION.README]),
+            HEALTH_SUMMARIES.WIKI_PAGES: len(self.docs_cache[DOCUMENTATION.WIKI]),
+            HEALTH_SUMMARIES.ISSUES_REPOS: len(self.docs_cache[DOCUMENTATION.ISSUES]),
+            HEALTH_SUMMARIES.PRS_REPOS: len(self.docs_cache[DOCUMENTATION.PRS]),
+            HEALTH_SUMMARIES.TOTAL_SECTIONS: sum(
+                len(section) for section in self.docs_cache.values()
+            ),
         }
 
         return base_details
@@ -273,7 +286,7 @@ class DocumentationComponent(MCPComponent):
 
             # Index content using the shared instance stored in component state
             self.state.semantic_search.index_content(
-                "documentation", self.state.docs_cache
+                MCP_COMPONENTS.DOCUMENTATION, self.state.docs_cache
             )
 
             logger.info("✅ Documentation content indexed successfully")
@@ -342,13 +355,19 @@ class DocumentationComponent(MCPComponent):
             """
 
             summary = {
-                "readme_files": list(
+                DOCUMENTATION_SUMMARY_DEFS.README_FILES: list(
                     self.state.docs_cache[DOCUMENTATION.README].keys()
                 ),
-                "issues": list(self.state.docs_cache[DOCUMENTATION.ISSUES].keys()),
-                "prs": list(self.state.docs_cache[DOCUMENTATION.PRS].keys()),
-                "wiki_pages": list(self.state.docs_cache[DOCUMENTATION.WIKI].keys()),
-                "packagedown_sections": list(
+                DOCUMENTATION_SUMMARY_DEFS.ISSUES: list(
+                    self.state.docs_cache[DOCUMENTATION.ISSUES].keys()
+                ),
+                DOCUMENTATION_SUMMARY_DEFS.PRS: list(
+                    self.state.docs_cache[DOCUMENTATION.PRS].keys()
+                ),
+                DOCUMENTATION_SUMMARY_DEFS.WIKI_PAGES: list(
+                    self.state.docs_cache[DOCUMENTATION.WIKI].keys()
+                ),
+                DOCUMENTATION_SUMMARY_DEFS.PACKAGEDOWN_SECTIONS: list(
                     self.state.docs_cache[DOCUMENTATION.PACKAGEDOWN].keys()
                 ),
             }
@@ -384,7 +403,7 @@ class DocumentationComponent(MCPComponent):
                 (
                     i
                     for i in self.state.docs_cache[DOCUMENTATION.ISSUES].get(repo, [])
-                    if i["number"] == number
+                    if i[GITHUB_DEFS.NUMBER] == number
                 ),
                 None,
             )
@@ -401,7 +420,7 @@ class DocumentationComponent(MCPComponent):
                 (
                     pr
                     for pr in self.state.docs_cache[DOCUMENTATION.PRS].get(repo, [])
-                    if pr["number"] == number
+                    if pr[GITHUB_DEFS.NUMBER] == number
                 ),
                 None,
             )
@@ -413,7 +432,7 @@ class DocumentationComponent(MCPComponent):
         # Register tools
         @mcp.tool()
         async def search_documentation(
-            query: str, search_type: str = "semantic", n_results: int = 5
+            query: str, search_type: str = SEARCH_TYPES.SEMANTIC, n_results: int = 5
         ):
             """
             Search all Napistu project documentation with intelligent search strategy.
@@ -514,16 +533,16 @@ class DocumentationComponent(MCPComponent):
             The function automatically handles semantic search failures by falling back
             to exact search, ensuring reliable results even if AI components are unavailable.
             """
-            if search_type == "semantic" and self.state.semantic_search:
+            if search_type == SEARCH_TYPES.SEMANTIC and self.state.semantic_search:
                 # Use semantic search
                 results = self.state.semantic_search.search(
-                    query, "documentation", n_results=n_results
+                    query, MCP_COMPONENTS.DOCUMENTATION, n_results=n_results
                 )
                 return {
-                    "query": query,
-                    "search_type": "semantic",
-                    "results": results,
-                    "tip": "Try different phrasings if results aren't relevant, or use search_type='exact' for precise keyword matching",
+                    SEARCH_RESULT_DEFS.QUERY: query,
+                    SEARCH_RESULT_DEFS.SEARCH_TYPE: SEARCH_TYPES.SEMANTIC,
+                    SEARCH_RESULT_DEFS.RESULTS: results,
+                    SEARCH_RESULT_DEFS.TIP: "Try different phrasings if results aren't relevant, or use search_type='exact' for precise keyword matching",
                 }
             else:
                 # Fall back to exact search (existing logic)
@@ -541,8 +560,10 @@ class DocumentationComponent(MCPComponent):
                     if query.lower() in content.lower():
                         results[DOCUMENTATION.README].append(
                             {
-                                "name": readme_name,
-                                "snippet": mcp_utils.get_snippet(content, query),
+                                SEARCH_RESULT_DEFS.NAME: readme_name,
+                                SEARCH_RESULT_DEFS.SNIPPET: mcp_utils.get_snippet(
+                                    content, query
+                                ),
                             }
                         )
 
@@ -553,44 +574,52 @@ class DocumentationComponent(MCPComponent):
                     if query.lower() in content.lower():
                         results[DOCUMENTATION.WIKI].append(
                             {
-                                "name": page_name,
-                                "snippet": mcp_utils.get_snippet(content, query),
+                                SEARCH_RESULT_DEFS.NAME: page_name,
+                                SEARCH_RESULT_DEFS.SNIPPET: mcp_utils.get_snippet(
+                                    content, query
+                                ),
                             }
                         )
 
                 # Search issues
                 for repo, issues in self.state.docs_cache[DOCUMENTATION.ISSUES].items():
                     for issue in issues:
-                        issue_text = f"{issue.get('title', '')} {issue.get('body', '')}"
+                        issue_text = f"{issue.get(GITHUB_DEFS.TITLE, '')} {issue.get(GITHUB_DEFS.BODY, '')}"
                         if query.lower() in issue_text.lower():
                             results[DOCUMENTATION.ISSUES].append(
                                 {
-                                    "name": f"{repo}#{issue.get('number')}",
-                                    "title": issue.get("title"),
-                                    "url": issue.get("url"),
-                                    "snippet": mcp_utils.get_snippet(issue_text, query),
+                                    SEARCH_RESULT_DEFS.NAME: f"{repo}#{issue.get(GITHUB_DEFS.NUMBER)}",
+                                    SEARCH_RESULT_DEFS.TITLE: issue.get(
+                                        GITHUB_DEFS.TITLE
+                                    ),
+                                    SEARCH_RESULT_DEFS.URL: issue.get(GITHUB_DEFS.URL),
+                                    SEARCH_RESULT_DEFS.SNIPPET: mcp_utils.get_snippet(
+                                        issue_text, query
+                                    ),
                                 }
                             )
 
                 # Search PRs
                 for repo, prs in self.state.docs_cache[DOCUMENTATION.PRS].items():
                     for pr in prs:
-                        pr_text = f"{pr.get('title', '')} {pr.get('body', '')}"
+                        pr_text = f"{pr.get(GITHUB_DEFS.TITLE, '')} {pr.get(GITHUB_DEFS.BODY, '')}"
                         if query.lower() in pr_text.lower():
                             results[DOCUMENTATION.PRS].append(
                                 {
-                                    "name": f"{repo}#{pr.get('number')}",
-                                    "title": pr.get("title"),
-                                    "url": pr.get("url"),
-                                    "snippet": mcp_utils.get_snippet(pr_text, query),
+                                    SEARCH_RESULT_DEFS.NAME: f"{repo}#{pr.get(GITHUB_DEFS.NUMBER)}",
+                                    SEARCH_RESULT_DEFS.TITLE: pr.get(GITHUB_DEFS.TITLE),
+                                    SEARCH_RESULT_DEFS.URL: pr.get(GITHUB_DEFS.URL),
+                                    SEARCH_RESULT_DEFS.SNIPPET: mcp_utils.get_snippet(
+                                        pr_text, query
+                                    ),
                                 }
                             )
 
                 return {
-                    "query": query,
-                    "search_type": "exact",
-                    "results": results,
-                    "tip": "Use search_type='semantic' for natural language queries",
+                    SEARCH_RESULT_DEFS.QUERY: query,
+                    SEARCH_RESULT_DEFS.SEARCH_TYPE: SEARCH_TYPES.EXACT,
+                    SEARCH_RESULT_DEFS.RESULTS: results,
+                    SEARCH_RESULT_DEFS.TIP: "Use search_type='semantic' for natural language queries",
                 }
 
 

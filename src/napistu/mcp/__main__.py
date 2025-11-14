@@ -24,6 +24,14 @@ from napistu.mcp.config import (
     validate_client_config_flags,
     validate_server_config_flags,
 )
+from napistu.mcp.constants import (
+    HEALTH_CHECK_DEFS,
+    HEALTH_SUMMARIES,
+    MCP_COMPONENTS,
+    MCP_DEFAULTS,
+    MCP_PROFILES,
+    SEARCH_TYPES,
+)
 from napistu.mcp.server import start_mcp_server
 
 # Module-level logger and console - will be initialized when CLI is invoked
@@ -49,7 +57,9 @@ def server():
 
 @server.command(name="start")
 @click.option(
-    "--profile", type=click.Choice(["execution", "docs", "full"]), default="docs"
+    "--profile",
+    type=click.Choice([MCP_PROFILES.EXECUTION, MCP_PROFILES.DOCS, MCP_PROFILES.FULL]),
+    default=MCP_PROFILES.DOCS,
 )
 @server_config_options
 @verbosity_option
@@ -82,7 +92,7 @@ def start_local():
     click.echo(f"  Port: {config.port}")
     click.echo(f"  Server Name: {config.server_name}")
 
-    start_mcp_server("execution", config)
+    start_mcp_server(MCP_PROFILES.EXECUTION, config)
 
 
 @server.command(name="full")
@@ -91,14 +101,14 @@ def start_full():
     """Start a full MCP server with all components enabled (local debugging)."""
     config = local_server_config()
     # Override server name for full profile
-    config.server_name = "napistu-full"
+    config.server_name = MCP_DEFAULTS.FULL_SERVER_NAME
 
     click.echo("Starting full development server (all components)")
     click.echo(f"  Host: {config.host}")
     click.echo(f"  Port: {config.port}")
     click.echo(f"  Server Name: {config.server_name}")
 
-    start_mcp_server("full", config)
+    start_mcp_server(MCP_PROFILES.FULL, config)
 
 
 @cli.command()
@@ -224,8 +234,10 @@ def compare():
         # Compare results
         print("\n📊 Comparison Summary:")
         if local_health and production_health:
-            local_components = local_health.get("components", {})
-            production_components = production_health.get("components", {})
+            local_components = local_health.get(HEALTH_SUMMARIES.COMPONENTS, {})
+            production_components = production_health.get(
+                HEALTH_SUMMARIES.COMPONENTS, {}
+            )
 
             all_components = set(local_components.keys()) | set(
                 production_components.keys()
@@ -233,13 +245,13 @@ def compare():
 
             for component in sorted(all_components):
                 local_status = local_components.get(component, {}).get(
-                    "status", "missing"
+                    HEALTH_CHECK_DEFS.STATUS, "missing"
                 )
                 production_status = production_components.get(component, {}).get(
-                    "status", "missing"
+                    HEALTH_CHECK_DEFS.STATUS, "missing"
                 )
 
-                if local_status == production_status == "healthy":
+                if local_status == production_status == HEALTH_CHECK_DEFS.HEALTHY:
                     icon = "✅"
                 elif local_status != production_status:
                     icon = "⚠️ "
@@ -258,13 +270,20 @@ def compare():
 @cli.command()
 @click.argument(
     "component",
-    type=click.Choice(["documentation", "tutorials", "codebase", "all"]),
+    type=click.Choice(
+        [
+            MCP_COMPONENTS.DOCUMENTATION,
+            MCP_COMPONENTS.TUTORIALS,
+            MCP_COMPONENTS.CODEBASE,
+            "all",
+        ]
+    ),
 )
 @click.argument("query")
 @click.option(
     "--search-type",
-    type=click.Choice(["semantic", "exact"]),
-    default="semantic",
+    type=click.Choice([SEARCH_TYPES.SEMANTIC, SEARCH_TYPES.EXACT]),
+    default=SEARCH_TYPES.SEMANTIC,
     help="Search strategy to use (default: semantic)",
 )
 @click.option(
@@ -344,13 +363,15 @@ def search(
             print()
 
             # Format results based on search type
-            if actual_search_type == "semantic" and isinstance(results, list):
+            if actual_search_type == SEARCH_TYPES.SEMANTIC and isinstance(
+                results, list
+            ):
                 # Semantic search results with scores
                 # Group by component for unified search
                 if component == "all":
                     # Show component labels for unified search
                     for i, r in enumerate(results, 1):
-                        comp = r.get("component", "unknown")
+                        comp = r.get("component", HEALTH_CHECK_DEFS.UNKNOWN)
                         source = r.get("source", "Unknown")
                         content = (
                             r.get("content", "")[:100] + "..."
@@ -389,7 +410,7 @@ def search(
                             print(f"   {content}")
                         print()
 
-            elif actual_search_type == "exact" and isinstance(results, dict):
+            elif actual_search_type == SEARCH_TYPES.EXACT and isinstance(results, dict):
                 # Exact search results organized by type
                 total_found = 0
                 for result_type, items in results.items():

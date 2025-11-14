@@ -4,10 +4,12 @@ Health check endpoint for the MCP server when deployed to Cloud Run.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, TypeVar
 
 from fastmcp import FastMCP
+
+from napistu.mcp.constants import HEALTH_CHECK_DEFS, HEALTH_SUMMARIES, MCP_COMPONENTS
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +17,11 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 # Global cache for component health status
-_health_cache = {"status": "initializing", "components": {}, "last_check": None}
+_health_cache = {
+    HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.INITIALIZING,
+    HEALTH_SUMMARIES.COMPONENTS: {},
+    HEALTH_SUMMARIES.LAST_CHECK: None,
+}
 
 
 def register_components(mcp: FastMCP) -> None:
@@ -144,37 +150,39 @@ def register_components(mcp: FastMCP) -> None:
         global _health_cache
         try:
             health_status = {
-                "status": "healthy",
-                "timestamp": datetime.utcnow().isoformat(),
-                "version": _get_version(),
-                "components": await _check_components(),
+                HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.HEALTHY,
+                HEALTH_SUMMARIES.TIMESTAMP: _get_current_time(),
+                HEALTH_SUMMARIES.VERSION: _get_version(),
+                HEALTH_SUMMARIES.COMPONENTS: await _check_components(),
             }
 
             # Check if any components failed
             failed_components = [
                 name
-                for name, status in health_status["components"].items()
-                if status["status"] == "unavailable"
+                for name, status in health_status[HEALTH_SUMMARIES.COMPONENTS].items()
+                if status[HEALTH_SUMMARIES.STATUS] == HEALTH_CHECK_DEFS.UNAVAILABLE
             ]
 
             if failed_components:
-                health_status["status"] = "degraded"
-                health_status["failed_components"] = failed_components
+                health_status[HEALTH_SUMMARIES.STATUS] = HEALTH_CHECK_DEFS.DEGRADED
+                health_status[HEALTH_SUMMARIES.FAILED_COMPONENTS] = failed_components
 
             # Update the global cache with latest status
-            health_status["last_check"] = datetime.utcnow().isoformat()
+            health_status[HEALTH_SUMMARIES.LAST_CHECK] = _get_current_time()
             _health_cache.update(health_status)
-            logger.info(f"Updated health cache - Status: {health_status['status']}")
+            logger.info(
+                f"Updated health cache - Status: {health_status[HEALTH_SUMMARIES.STATUS]}"
+            )
 
             return health_status
 
         except Exception as e:
             logger.error(f"Health check failed: {e}")
             error_status = {
-                "status": "unhealthy",
-                "error": str(e),
-                "timestamp": datetime.utcnow().isoformat(),
-                "last_check": datetime.utcnow().isoformat(),
+                HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.UNHEALTHY,
+                HEALTH_CHECK_DEFS.ERROR: str(e),
+                HEALTH_SUMMARIES.TIMESTAMP: _get_current_time(),
+                HEALTH_SUMMARIES.LAST_CHECK: _get_current_time(),
             }
             # Update cache even on error
             _health_cache.update(error_status)
@@ -202,11 +210,11 @@ async def initialize_components() -> bool:
         # Update cache
         _health_cache.update(
             {
-                "status": "healthy",
-                "components": component_status,
-                "timestamp": datetime.utcnow().isoformat(),
-                "version": _get_version(),
-                "last_check": datetime.utcnow().isoformat(),
+                HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.HEALTHY,
+                HEALTH_SUMMARIES.COMPONENTS: component_status,
+                HEALTH_SUMMARIES.TIMESTAMP: _get_current_time(),
+                HEALTH_SUMMARIES.VERSION: _get_version(),
+                HEALTH_SUMMARIES.LAST_CHECK: _get_current_time(),
             }
         )
 
@@ -214,20 +222,22 @@ async def initialize_components() -> bool:
         failed_components = [
             name
             for name, status in component_status.items()
-            if status["status"] == "unavailable"
+            if status[HEALTH_SUMMARIES.STATUS] == HEALTH_CHECK_DEFS.UNAVAILABLE
         ]
 
         if failed_components:
-            _health_cache["status"] = "degraded"
-            _health_cache["failed_components"] = failed_components
+            _health_cache[HEALTH_SUMMARIES.STATUS] = HEALTH_CHECK_DEFS.DEGRADED
+            _health_cache[HEALTH_SUMMARIES.FAILED_COMPONENTS] = failed_components
 
-        logger.info(f"Health check initialization complete: {_health_cache['status']}")
+        logger.info(
+            f"Health check initialization complete: {_health_cache[HEALTH_SUMMARIES.STATUS]}"
+        )
         return True
 
     except Exception as e:
         logger.error(f"Health check initialization failed: {e}")
-        _health_cache["status"] = "unhealthy"
-        _health_cache["error"] = str(e)
+        _health_cache[HEALTH_SUMMARIES.STATUS] = HEALTH_CHECK_DEFS.UNHEALTHY
+        _health_cache[HEALTH_CHECK_DEFS.ERROR] = str(e)
         return False
 
 
@@ -264,22 +274,31 @@ def _check_component_health(component_name: str, module_path: str) -> Dict[str, 
                 if "not created" in str(e):
                     logger.warning(f"{component_name} not initialized yet")
                     return {
-                        "status": "initializing",
-                        "message": "Component not created",
+                        HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.INITIALIZING,
+                        HEALTH_SUMMARIES.MESSAGE: "Component not created",
                     }
                 else:
                     raise
         else:
             # Component doesn't follow the new pattern
             logger.warning(f"{component_name} doesn't use component class pattern")
-            return {"status": "unknown", "message": "Component using legacy pattern"}
+            return {
+                HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.UNKNOWN,
+                HEALTH_SUMMARIES.MESSAGE: "Component using legacy pattern",
+            }
 
     except ImportError as e:
         logger.error(f"Could not import {component_name}: {str(e)}")
-        return {"status": "unavailable", "error": f"Import failed: {str(e)}"}
+        return {
+            HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.UNAVAILABLE,
+            HEALTH_CHECK_DEFS.ERROR: f"Import failed: {str(e)}",
+        }
     except Exception as e:
         logger.error(f"{component_name} health check failed: {str(e)}")
-        return {"status": "unavailable", "error": str(e)}
+        return {
+            HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.UNAVAILABLE,
+            HEALTH_CHECK_DEFS.ERROR: str(e),
+        }
 
 
 async def _check_components() -> Dict[str, Dict[str, Any]]:
@@ -293,10 +312,10 @@ async def _check_components() -> Dict[str, Dict[str, Any]]:
     """
     # Define component configurations
     component_configs = {
-        "documentation": "napistu.mcp.documentation",
-        "codebase": "napistu.mcp.codebase",
-        "tutorials": "napistu.mcp.tutorials",
-        "execution": "napistu.mcp.execution",
+        MCP_COMPONENTS.DOCUMENTATION: "napistu.mcp.documentation",
+        MCP_COMPONENTS.CODEBASE: "napistu.mcp.codebase",
+        MCP_COMPONENTS.TUTORIALS: "napistu.mcp.tutorials",
+        MCP_COMPONENTS.EXECUTION: "napistu.mcp.execution",
     }
 
     logger.info("Starting component health checks...")
@@ -312,23 +331,6 @@ async def _check_components() -> Dict[str, Dict[str, Any]]:
 
     logger.info(f"Health check results: {results}")
     return results
-
-
-def _get_version() -> str:
-    """
-    Get the Napistu version.
-
-    Returns
-    -------
-    str
-        Version string of the Napistu package, or 'unknown' if not available.
-    """
-    try:
-        import napistu
-
-        return getattr(napistu, "__version__", "unknown")
-    except ImportError:
-        return "unknown"
 
 
 def _check_semantic_search_health() -> Dict[str, Any]:
@@ -355,16 +357,52 @@ def _check_semantic_search_health() -> Dict[str, Any]:
                 continue
         else:
             return {
-                "status": "unavailable",
-                "message": "No semantic search instance found",
+                HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.UNAVAILABLE,
+                HEALTH_SUMMARIES.MESSAGE: "No semantic search instance found",
             }
 
         collections = shared_instance.collections
         return {
-            "status": "healthy",
-            "collections": list(collections.keys()),
-            "total_collections": len(collections),
+            HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.HEALTHY,
+            HEALTH_SUMMARIES.COLLECTIONS: list(collections.keys()),
+            HEALTH_SUMMARIES.TOTAL_COLLECTIONS: len(collections),
         }
 
     except Exception as e:
-        return {"status": "unavailable", "error": str(e)}
+        return {
+            HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.UNAVAILABLE,
+            HEALTH_CHECK_DEFS.ERROR: str(e),
+        }
+
+
+def _get_current_time() -> str:
+    """
+    Get current UTC time as ISO format string.
+
+    Returns
+    -------
+    str
+        Current UTC time in ISO 8601 format (e.g., "2024-01-01T12:00:00.000000+00:00")
+
+    Notes
+    -----
+    Uses datetime.now(timezone.utc) instead of deprecated datetime.utcnow().
+    """
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _get_version() -> str:
+    """
+    Get the Napistu version.
+
+    Returns
+    -------
+    str
+        Version string of the Napistu package, or 'unknown' if not available.
+    """
+    try:
+        import napistu
+
+        return getattr(napistu, "__version__", "unknown")
+    except ImportError:
+        return "unknown"

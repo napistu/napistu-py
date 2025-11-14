@@ -8,6 +8,8 @@ import click
 from click.types import ParamType
 from pydantic import BaseModel, Field
 
+from napistu.mcp.constants import CLICK_COMMAND_DEFS
+
 
 class CLICommandInfo(BaseModel):
     """Information about a CLI command."""
@@ -61,19 +63,21 @@ class CLICommandInfo(BaseModel):
                 default_value = _serialize_default_value(param.default)
 
             param_info = {
-                "name": param.name,
-                "type": str(param.type),
-                "required": param.required,
-                "default": default_value,
-                "help": getattr(
-                    param, "help", None
+                CLICK_COMMAND_DEFS.NAME: str(getattr(param, CLICK_COMMAND_DEFS.NAME)),
+                CLICK_COMMAND_DEFS.TYPE: str(getattr(param, CLICK_COMMAND_DEFS.TYPE)),
+                CLICK_COMMAND_DEFS.REQUIRED: bool(
+                    getattr(param, CLICK_COMMAND_DEFS.REQUIRED)
+                ),
+                CLICK_COMMAND_DEFS.DEFAULT: default_value,
+                CLICK_COMMAND_DEFS.HELP: getattr(
+                    param, CLICK_COMMAND_DEFS.HELP, None
                 ),  # Arguments don't have help, only Options do
             }
 
             if isinstance(param, click.Argument):
                 arguments.append(param_info)
             elif isinstance(param, click.Option):
-                param_info["flags"] = param.opts
+                param_info[CLICK_COMMAND_DEFS.FLAGS] = param.opts
                 options.append(param_info)
 
         # Get subcommands if it's a group

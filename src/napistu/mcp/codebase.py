@@ -12,8 +12,14 @@ from napistu.mcp import codebase_utils, inspect_utils
 from napistu.mcp import utils as mcp_utils
 from napistu.mcp.component_base import ComponentState, MCPComponent
 from napistu.mcp.constants import (
+    CODEBASE_DEFS,
+    CODEBASE_INSPECT_DEFS,
+    HEALTH_SUMMARIES,
+    MCP_COMPONENTS,
     NAPISTU_PY_READTHEDOCS_API,
     NAPISTU_TORCH_READTHEDOCS_API,
+    SEARCH_RESULT_DEFS,
+    SEARCH_TYPES,
 )
 from napistu.mcp.semantic_search import SemanticSearch
 
@@ -50,9 +56,9 @@ class CodebaseState(ComponentState):
     def __init__(self):
         super().__init__()
         self.codebase_cache: Dict[str, Dict[str, Any]] = {
-            "modules": {},
-            "classes": {},
-            "functions": {},
+            CODEBASE_DEFS.MODULES: {},
+            CODEBASE_DEFS.CLASSES: {},
+            CODEBASE_DEFS.FUNCTIONS: {},
         }
         self.semantic_search = None
 
@@ -97,10 +103,16 @@ class CodebaseState(ComponentState):
         >>> print(f"Total codebase items: {details['total_items']}")
         """
         return {
-            "modules_count": len(self.codebase_cache["modules"]),
-            "classes_count": len(self.codebase_cache["classes"]),
-            "functions_count": len(self.codebase_cache["functions"]),
-            "total_items": sum(
+            HEALTH_SUMMARIES.MODULES_COUNT: len(
+                self.codebase_cache[CODEBASE_DEFS.MODULES]
+            ),
+            HEALTH_SUMMARIES.CLASSES_COUNT: len(
+                self.codebase_cache[CODEBASE_DEFS.CLASSES]
+            ),
+            HEALTH_SUMMARIES.FUNCTIONS_COUNT: len(
+                self.codebase_cache[CODEBASE_DEFS.FUNCTIONS]
+            ),
+            HEALTH_SUMMARIES.TOTAL_ITEMS: sum(
                 len(section) for section in self.codebase_cache.values()
             ),
         }
@@ -192,14 +204,14 @@ class CodebaseComponent(MCPComponent):
 
             # Merge modules from both packages
             modules = {**modules_py, **modules_torch}
-            self.state.codebase_cache["modules"] = modules
+            self.state.codebase_cache[CODEBASE_DEFS.MODULES] = modules
 
             # Extract functions and classes from the merged modules
             functions, classes = (
                 codebase_utils.extract_functions_and_classes_from_modules(modules)
             )
-            self.state.codebase_cache["functions"] = functions
-            self.state.codebase_cache["classes"] = classes
+            self.state.codebase_cache[CODEBASE_DEFS.FUNCTIONS] = functions
+            self.state.codebase_cache[CODEBASE_DEFS.CLASSES] = classes
 
             # Add stripped names for easier lookup
             codebase_utils.add_stripped_names(functions, classes)
@@ -256,7 +268,7 @@ class CodebaseComponent(MCPComponent):
 
             # Index codebase content using the shared semantic search instance
             self.state.semantic_search.index_content(
-                "codebase", self.state.codebase_cache
+                MCP_COMPONENTS.CODEBASE, self.state.codebase_cache
             )
 
             logger.info("✅ Codebase content indexed successfully")
@@ -319,9 +331,15 @@ class CodebaseComponent(MCPComponent):
             searching for specific function signatures or class definitions.
             """
             return {
-                "modules": list(self.state.codebase_cache["modules"].keys()),
-                "classes": list(self.state.codebase_cache["classes"].keys()),
-                "functions": list(self.state.codebase_cache["functions"].keys()),
+                CODEBASE_DEFS.MODULES: list(
+                    self.state.codebase_cache[CODEBASE_DEFS.MODULES].keys()
+                ),
+                CODEBASE_DEFS.CLASSES: list(
+                    self.state.codebase_cache[CODEBASE_DEFS.CLASSES].keys()
+                ),
+                CODEBASE_DEFS.FUNCTIONS: list(
+                    self.state.codebase_cache[CODEBASE_DEFS.FUNCTIONS].keys()
+                ),
             }
 
         @mcp.resource("napistu://codebase/modules/{module_name}")
@@ -355,10 +373,10 @@ class CodebaseComponent(MCPComponent):
             Exception
                 If the module is not found in the codebase documentation
             """
-            if module_name not in self.state.codebase_cache["modules"]:
+            if module_name not in self.state.codebase_cache[CODEBASE_DEFS.MODULES]:
                 return {"error": f"Module {module_name} not found"}
 
-            return self.state.codebase_cache["modules"][module_name]
+            return self.state.codebase_cache[CODEBASE_DEFS.MODULES][module_name]
 
         # tools
 
@@ -397,7 +415,7 @@ class CodebaseComponent(MCPComponent):
             >>> get_class_documentation("SBML_dfs")
             """
             result = codebase_utils.find_item_by_name(
-                class_name, self.state.codebase_cache["classes"]
+                class_name, self.state.codebase_cache[CODEBASE_DEFS.CLASSES]
             )
             if result is None:
                 return {
@@ -444,7 +462,7 @@ class CodebaseComponent(MCPComponent):
             >>> get_function_documentation("create_consensus")
             """
             result = codebase_utils.find_item_by_name(
-                function_name, self.state.codebase_cache["functions"]
+                function_name, self.state.codebase_cache[CODEBASE_DEFS.FUNCTIONS]
             )
             if result is None:
                 return {
@@ -886,7 +904,7 @@ class CodebaseComponent(MCPComponent):
 
         @mcp.tool()
         async def search_codebase(
-            query: str, search_type: str = "semantic", n_results: int = 5
+            query: str, search_type: str = SEARCH_TYPES.SEMANTIC, n_results: int = 5
         ) -> Dict[str, Any]:
             """
             Search Napistu codebase documentation with intelligent search strategy.
@@ -987,74 +1005,94 @@ class CodebaseComponent(MCPComponent):
             The function automatically handles semantic search failures by falling back
             to exact search, ensuring reliable results even if AI components are unavailable.
             """
-            if search_type == "semantic" and self.state.semantic_search:
+            if search_type == SEARCH_TYPES.SEMANTIC and self.state.semantic_search:
                 # Use shared semantic search instance
                 results = self.state.semantic_search.search(
-                    query, "codebase", n_results=n_results
+                    query, MCP_COMPONENTS.CODEBASE, n_results=n_results
                 )
                 return {
-                    "query": query,
-                    "search_type": "semantic",
-                    "results": results,
-                    "tip": "For Napistu API documentation only. Try different phrasings if results aren't relevant, or use search_type='exact' for precise keyword matching",
+                    SEARCH_RESULT_DEFS.QUERY: query,
+                    SEARCH_RESULT_DEFS.SEARCH_TYPE: SEARCH_TYPES.SEMANTIC,
+                    SEARCH_RESULT_DEFS.RESULTS: results,
+                    SEARCH_RESULT_DEFS.TIP: "For Napistu API documentation only. Try different phrasings if results aren't relevant, or use search_type='exact' for precise keyword matching",
                 }
             else:
                 # Fall back to exact search
                 results = {
-                    "modules": [],
-                    "classes": [],
-                    "functions": [],
+                    CODEBASE_DEFS.MODULES: [],
+                    CODEBASE_DEFS.CLASSES: [],
+                    CODEBASE_DEFS.FUNCTIONS: [],
                 }
 
                 # Search modules
-                for module_name, info in self.state.codebase_cache["modules"].items():
+                for module_name, info in self.state.codebase_cache[
+                    CODEBASE_DEFS.MODULES
+                ].items():
                     # Use docstring or description for snippet
-                    doc = info.get("doc") or info.get("description") or ""
+                    doc = (
+                        info.get(CODEBASE_INSPECT_DEFS.DOC)
+                        or info.get(SEARCH_RESULT_DEFS.DESCRIPTION)
+                        or ""
+                    )
                     module_text = json.dumps(info)
                     if query.lower() in module_text.lower():
                         snippet = mcp_utils.get_snippet(doc, query)
-                        results["modules"].append(
+                        results[CODEBASE_DEFS.MODULES].append(
                             {
-                                "name": module_name,
-                                "description": doc,
-                                "snippet": snippet,
+                                SEARCH_RESULT_DEFS.NAME: module_name,
+                                SEARCH_RESULT_DEFS.DESCRIPTION: doc,
+                                SEARCH_RESULT_DEFS.SNIPPET: snippet,
                             }
                         )
 
                 # Search classes
-                for class_name, info in self.state.codebase_cache["classes"].items():
-                    doc = info.get("doc") or info.get("description") or ""
+                for class_name, info in self.state.codebase_cache[
+                    CODEBASE_DEFS.CLASSES
+                ].items():
+                    doc = (
+                        info.get(CODEBASE_INSPECT_DEFS.DOC)
+                        or info.get(SEARCH_RESULT_DEFS.DESCRIPTION)
+                        or ""
+                    )
                     class_text = json.dumps(info)
                     if query.lower() in class_text.lower():
                         snippet = mcp_utils.get_snippet(doc, query)
-                        results["classes"].append(
+                        results[CODEBASE_DEFS.CLASSES].append(
                             {
-                                "name": class_name,
-                                "description": doc,
-                                "snippet": snippet,
+                                SEARCH_RESULT_DEFS.NAME: class_name,
+                                SEARCH_RESULT_DEFS.DESCRIPTION: doc,
+                                SEARCH_RESULT_DEFS.SNIPPET: snippet,
                             }
                         )
 
                 # Search functions
-                for func_name, info in self.state.codebase_cache["functions"].items():
-                    doc = info.get("doc") or info.get("description") or ""
+                for func_name, info in self.state.codebase_cache[
+                    CODEBASE_DEFS.FUNCTIONS
+                ].items():
+                    doc = (
+                        info.get(CODEBASE_INSPECT_DEFS.DOC)
+                        or info.get(SEARCH_RESULT_DEFS.DESCRIPTION)
+                        or ""
+                    )
                     func_text = json.dumps(info)
                     if query.lower() in func_text.lower():
                         snippet = mcp_utils.get_snippet(doc, query)
-                        results["functions"].append(
+                        results[CODEBASE_DEFS.FUNCTIONS].append(
                             {
-                                "name": func_name,
-                                "description": doc,
-                                "signature": info.get("signature", ""),
-                                "snippet": snippet,
+                                SEARCH_RESULT_DEFS.NAME: func_name,
+                                SEARCH_RESULT_DEFS.DESCRIPTION: doc,
+                                SEARCH_RESULT_DEFS.SIGNATURE: info.get(
+                                    SEARCH_RESULT_DEFS.SIGNATURE, ""
+                                ),
+                                SEARCH_RESULT_DEFS.SNIPPET: snippet,
                             }
                         )
 
                 return {
-                    "query": query,
-                    "search_type": "exact",
-                    "results": results,
-                    "tip": "Use search_type='semantic' for natural language queries about Napistu API",
+                    SEARCH_RESULT_DEFS.QUERY: query,
+                    SEARCH_RESULT_DEFS.SEARCH_TYPE: SEARCH_TYPES.EXACT,
+                    SEARCH_RESULT_DEFS.RESULTS: results,
+                    SEARCH_RESULT_DEFS.TIP: "Use search_type='semantic' for natural language queries about Napistu API",
                 }
 
 
