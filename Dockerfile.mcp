@@ -15,8 +15,11 @@ RUN apt-get update && apt-get install -y curl && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
 
-# install Napistu-Torch so its code can be inspected by the MCP server
-RUN uv pip install --system --no-cache "napistu-torch[pyg]"
+# Install Napistu-Torch so its code can be inspected by the MCP server
+# Install torch first, then PyG dependencies, then napistu-torch
+RUN uv pip install --system --no-cache torch==2.8.0 && \
+    uv pip install --system --no-cache torch-scatter torch-sparse -f https://data.pyg.org/whl/torch-2.8.0+cpu.html && \
+    uv pip install --system --no-cache "napistu-torch[pyg]"
 
 # MCP server specific environment variables
 ENV MCP_PROFILE=docs
