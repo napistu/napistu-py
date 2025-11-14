@@ -5,6 +5,7 @@ Tests to validate MCP tool and resource naming conventions.
 import re
 from typing import List, Tuple
 
+import pytest
 from fastmcp import FastMCP
 
 from napistu.mcp import (
@@ -22,7 +23,7 @@ VALID_RESOURCE_PATH = re.compile(
 VALID_TOOL_NAME = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*$")
 
 
-def collect_resources_and_tools(mcp: FastMCP) -> Tuple[List[str], List[str]]:
+async def collect_resources_and_tools(mcp: FastMCP) -> Tuple[List[str], List[str]]:
     """
     Collect all registered resource paths and tool names from an MCP server instance.
 
@@ -33,8 +34,8 @@ def collect_resources_and_tools(mcp: FastMCP) -> Tuple[List[str], List[str]]:
         Tuple of (resource_paths, tool_names)
     """
     # Get all registered resources and tools
-    resources = mcp._resource_manager.get_resources()
-    tool_names = mcp._tool_manager.get_tools()
+    resources = await mcp._resource_manager.get_resources()
+    tool_names = await mcp._tool_manager.get_tools()
 
     # Extract resource paths from the resource objects
     resource_paths = []
@@ -46,13 +47,14 @@ def collect_resources_and_tools(mcp: FastMCP) -> Tuple[List[str], List[str]]:
     return resource_paths, tool_names
 
 
-def test_documentation_naming():
+@pytest.mark.asyncio
+async def test_documentation_naming():
     """Test that documentation component uses valid names."""
     mcp = FastMCP("test")
     documentation_component = documentation.get_component()
     documentation_component.register(mcp)
 
-    resource_paths, tool_names = collect_resources_and_tools(mcp)
+    resource_paths, tool_names = await collect_resources_and_tools(mcp)
 
     # Check resource paths
     for path in resource_paths:
@@ -63,13 +65,14 @@ def test_documentation_naming():
         assert VALID_TOOL_NAME.match(name), f"Invalid tool name: {name}"
 
 
-def test_codebase_naming():
+@pytest.mark.asyncio
+async def test_codebase_naming():
     """Test that codebase component uses valid names."""
     mcp = FastMCP("test")
     codebase_component = codebase.get_component()
     codebase_component.register(mcp)
 
-    resource_paths, tool_names = collect_resources_and_tools(mcp)
+    resource_paths, tool_names = await collect_resources_and_tools(mcp)
 
     # Check resource paths
     for path in resource_paths:
@@ -80,13 +83,14 @@ def test_codebase_naming():
         assert VALID_TOOL_NAME.match(name), f"Invalid tool name: {name}"
 
 
-def test_tutorials_naming():
+@pytest.mark.asyncio
+async def test_tutorials_naming():
     """Test that tutorials component uses valid names."""
     mcp = FastMCP("test")
     tutorials_component = tutorials.get_component()
     tutorials_component.register(mcp)
 
-    resource_paths, tool_names = collect_resources_and_tools(mcp)
+    resource_paths, tool_names = await collect_resources_and_tools(mcp)
 
     # Check resource paths
     for path in resource_paths:
@@ -97,7 +101,8 @@ def test_tutorials_naming():
         assert VALID_TOOL_NAME.match(name), f"Invalid tool name: {name}"
 
 
-def test_execution_naming():
+@pytest.mark.asyncio
+async def test_execution_naming():
     """Test that execution component uses valid names."""
     mcp = FastMCP("test")
 
@@ -109,7 +114,7 @@ def test_execution_naming():
     )
     execution_component.register(mcp)
 
-    resource_paths, tool_names = collect_resources_and_tools(mcp)
+    resource_paths, tool_names = await collect_resources_and_tools(mcp)
 
     # Check resource paths
     for path in resource_paths:
@@ -120,12 +125,13 @@ def test_execution_naming():
         assert VALID_TOOL_NAME.match(name), f"Invalid tool name: {name}"
 
 
-def test_health_naming():
+@pytest.mark.asyncio
+async def test_health_naming():
     """Test that health component uses valid names."""
     mcp = FastMCP("test")
     health.register_components(mcp)
 
-    resource_paths, tool_names = collect_resources_and_tools(mcp)
+    resource_paths, tool_names = await collect_resources_and_tools(mcp)
 
     # Check resource paths
     for path in resource_paths:
@@ -136,7 +142,8 @@ def test_health_naming():
         assert VALID_TOOL_NAME.match(name), f"Invalid tool name: {name}"
 
 
-def test_all_components_naming():
+@pytest.mark.asyncio
+async def test_all_components_naming():
     """Test that all components together use valid names without conflicts."""
     mcp = FastMCP("test")
 
@@ -161,7 +168,7 @@ def test_all_components_naming():
     # Health component still uses legacy registration
     health.register_components(mcp)
 
-    resource_paths, tool_names = collect_resources_and_tools(mcp)
+    resource_paths, tool_names = await collect_resources_and_tools(mcp)
 
     # Check for duplicate resource paths
     path_counts = {}
@@ -178,7 +185,8 @@ def test_all_components_naming():
         assert name_counts[name] == 1, f"Duplicate tool name: {name}"
 
 
-def test_expected_resources_exist():
+@pytest.mark.asyncio
+async def test_expected_resources_exist():
     """Test that all expected resources are registered."""
     mcp = FastMCP("test")
 
@@ -203,7 +211,7 @@ def test_expected_resources_exist():
     # Health component still uses legacy registration
     health.register_components(mcp)
 
-    resource_paths, _ = collect_resources_and_tools(mcp)
+    resource_paths, _ = await collect_resources_and_tools(mcp)
 
     # Debug: Print all registered resources
     print("\nRegistered resources:")
@@ -226,7 +234,8 @@ def test_expected_resources_exist():
         assert resource in resource_paths, f"Missing expected resource: {resource}"
 
 
-def test_expected_tools_exist():
+@pytest.mark.asyncio
+async def test_expected_tools_exist():
     """Test that all expected tools are registered."""
     mcp = FastMCP("test")
 
@@ -251,7 +260,7 @@ def test_expected_tools_exist():
     # Health component still uses legacy registration
     health.register_components(mcp)
 
-    _, tool_names = collect_resources_and_tools(mcp)
+    _, tool_names = await collect_resources_and_tools(mcp)
 
     # Debug: Print all registered tools
     print("\nRegistered tools:")
