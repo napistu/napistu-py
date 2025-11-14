@@ -8,10 +8,13 @@ from typing import Any, Dict
 
 from fastmcp import FastMCP
 
-from napistu.mcp import codebase_utils
+from napistu.mcp import codebase_utils, inspect_utils
 from napistu.mcp import utils as mcp_utils
 from napistu.mcp.component_base import ComponentState, MCPComponent
-from napistu.mcp.constants import NAPISTU_PY_READTHEDOCS_API
+from napistu.mcp.constants import (
+    NAPISTU_PY_READTHEDOCS_API,
+    NAPISTU_TORCH_READTHEDOCS_API,
+)
 from napistu.mcp.semantic_search import SemanticSearch
 
 logger = logging.getLogger(__name__)
@@ -179,13 +182,19 @@ class CodebaseComponent(MCPComponent):
         try:
             logger.info("Loading codebase documentation from ReadTheDocs...")
 
-            # Load documentation from the ReadTheDocs API
-            modules = await codebase_utils.read_read_the_docs(
+            # Load documentation from both ReadTheDocs APIs
+            modules_py = await codebase_utils.read_read_the_docs(
                 NAPISTU_PY_READTHEDOCS_API
             )
+            modules_torch = await codebase_utils.read_read_the_docs(
+                NAPISTU_TORCH_READTHEDOCS_API
+            )
+
+            # Merge modules from both packages
+            modules = {**modules_py, **modules_torch}
             self.state.codebase_cache["modules"] = modules
 
-            # Extract functions and classes from the modules
+            # Extract functions and classes from the merged modules
             functions, classes = (
                 codebase_utils.extract_functions_and_classes_from_modules(modules)
             )
@@ -276,7 +285,7 @@ class CodebaseComponent(MCPComponent):
         falling back to exact search if semantic search is not initialized.
         """
 
-        # Register resources
+        # resources
         @mcp.resource("napistu://codebase/summary")
         async def get_codebase_summary():
             """
@@ -351,7 +360,448 @@ class CodebaseComponent(MCPComponent):
 
             return self.state.codebase_cache["modules"][module_name]
 
-        # Register tools
+        # tools
+
+        @mcp.tool()
+        async def get_class_documentation(class_name: str) -> Dict[str, Any]:
+            """
+            Get detailed API documentation for a specific Napistu class.
+
+            **USE THIS WHEN:**
+            - Reading complete documentation for a specific Napistu class
+            - Understanding class methods, attributes, and inheritance
+            - Getting detailed API reference for class usage
+
+            **DO NOT USE FOR:**
+            - Classes from other libraries (only covers Napistu classes)
+            - General object-oriented programming concepts
+            - Usage examples (use tutorials component for implementation guidance)
+
+            Parameters
+            ----------
+            class_name : str
+                Name of the Napistu class (can be short name like "NapistuGraph"
+                or full path like "napistu.network.ng_core.NapistuGraph")
+
+            Returns
+            -------
+            Dict[str, Any]
+                Complete class documentation including methods, attributes,
+                inheritance, and detailed description, or error message if not found
+
+            Examples
+            --------
+            >>> # These all work:
+            >>> get_class_documentation("NapistuGraph")
+            >>> get_class_documentation("napistu.network.ng_core.NapistuGraph")
+            >>> get_class_documentation("SBML_dfs")
+            """
+            result = codebase_utils.find_item_by_name(
+                class_name, self.state.codebase_cache["classes"]
+            )
+            if result is None:
+                return {
+                    "error": f"Class '{class_name}' not found. Try searching for similar names."
+                }
+
+            full_name, class_info = result
+            # Add the full name to the response for clarity
+            class_info["full_name"] = full_name
+            return class_info
+
+        @mcp.tool()
+        async def get_function_documentation(function_name: str) -> Dict[str, Any]:
+            """
+            Get detailed API documentation for a specific Napistu function.
+
+            **USE THIS WHEN:**
+            - Reading complete documentation for a specific Napistu function
+            - Understanding function signatures, parameters, and return types
+            - Getting detailed API reference for function implementation
+
+            **DO NOT USE FOR:**
+            - Functions from other libraries (only covers Napistu functions)
+            - General programming concepts or tutorials
+            - Usage examples (use tutorials component for implementation guidance)
+
+            Parameters
+            ----------
+            function_name : str
+                Name of the Napistu function (can be short name like "create_network"
+                or full path like "napistu.network.create_network")
+
+            Returns
+            -------
+            Dict[str, Any]
+                Complete function documentation including signature, parameters,
+                return type, and detailed description, or error message if not found
+
+            Examples
+            --------
+            >>> # These all work:
+            >>> get_function_documentation("create_network")
+            >>> get_function_documentation("napistu.network.create_network")
+            >>> get_function_documentation("create_consensus")
+            """
+            result = codebase_utils.find_item_by_name(
+                function_name, self.state.codebase_cache["functions"]
+            )
+            if result is None:
+                return {
+                    "error": f"Function '{function_name}' not found. Try searching for similar names."
+                }
+
+            full_name, func_info = result
+            # Add the full name to the response for clarity
+            func_info["full_name"] = full_name
+            return func_info
+
+        @mcp.tool()
+        async def inspect_class(
+            class_name: str, package_name: str = "napistu", include_init: bool = True
+        ) -> Dict[str, Any]:
+            """
+            Get runtime inspection of an installed class with actual source code.
+
+            This complements get_class_documentation by providing:
+            - Actual __init__ source code (not available in ReadTheDocs)
+            - Runtime type hints and defaults
+            - Works for any installed package (napistu, napistu_torch, etc.)
+
+            The key value is seeing the __init__ implementation which shows:
+            - Initialization logic and validation
+            - Default parameter values
+            - Required vs optional parameters
+            - Setup and configuration code
+
+            **USE THIS WHEN:**
+            - You need to see how to properly instantiate a class
+            - Understanding __init__ parameters and their defaults
+            - Seeing what happens during class initialization
+            - ReadTheDocs documentation is insufficient
+
+            **DO NOT USE FOR:**
+            - Just getting method signatures (use get_class_documentation)
+            - Classes from other libraries
+            - Understanding class methods (use get_method_source for that)
+
+            Parameters
+            ----------
+            class_name : str
+                Class name (e.g., "NapistuGraph" or "network.NapistuGraph")
+            package_name : str, optional
+                Package to inspect (default: "napistu")
+            include_init : bool, optional
+                Include __init__ source code (default: True)
+
+            Returns
+            -------
+            Dict[str, Any]
+                Dictionary containing:
+                - success : bool
+                - name : str
+                - module : str
+                - docstring : str
+                - file_path : str
+                - line_number : int
+                - init_signature : str
+                - init_source : str (actual __init__ code if include_init=True)
+                - methods : Dict[str, MethodInfo] (signatures only, no source)
+                - error : str (if failed)
+
+            Examples
+            --------
+            >>> inspect_class("SBML_dfs")
+            >>> inspect_class("network.NapistuGraph", "napistu")
+            >>> inspect_class("napistu_data.NapistuData", "napistu_torch")
+            >>> inspect_class("torch.Tensor", "torch")
+            """
+            try:
+                # Import the class
+                cls, error = inspect_utils.import_object(class_name, package_name)
+                if error:
+                    return {
+                        "success": False,
+                        "error": error,
+                        "suggestion": "Try using search_codebase first to find the correct class path",
+                    }
+
+                # Get class info using Pydantic model
+                info = inspect_utils.ClassInfo.from_class(
+                    cls, include_init=include_init
+                )
+
+                return {
+                    "success": True,
+                    "class_name": class_name,
+                    "package": package_name,
+                    **info.model_dump(),
+                }
+
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "suggestion": "Verify the class exists and is installed",
+                }
+
+        @mcp.tool()
+        async def inspect_cli_command(
+            command_path: str, cli_name: str = "napistu"
+        ) -> Dict[str, Any]:
+            """
+            Get detailed information about a specific CLI command.
+
+            **USE THIS WHEN:**
+            - Understanding how to use a specific CLI command
+            - Seeing all arguments and options for a command
+            - Getting help text and usage examples
+
+            Parameters
+            ----------
+            command_path : str
+                Full command path (e.g., "napistu ingestion reactome")
+            cli_name : str, optional
+                Which CLI to inspect ("napistu" or "napistu.mcp")
+
+            Returns
+            -------
+            Dict[str, Any]
+                Detailed command information with arguments, options, help text
+
+            Examples
+            --------
+            >>> get_cli_command_details("napistu ingestion reactome")
+            >>> get_cli_command_details("napistu consensus create")
+            >>> get_cli_command_details("napistu-torch train")
+            """
+            try:
+                if cli_name == "napistu":
+                    from napistu.__main__ import cli
+                elif cli_name == "napistu.mcp":
+                    from napistu.mcp.__main__ import cli
+                elif cli_name == "napistu-torch":
+                    from napistu_torch.__main__ import cli
+                else:
+                    return {"error": f"Unknown CLI: {cli_name}"}
+
+                from napistu.mcp import cli_utils
+
+                structure = cli_utils.CLIStructure.from_cli_group(cli, cli_name)
+
+                # Find the command
+                if command_path not in structure.commands:
+                    return {
+                        "success": False,
+                        "error": f"Command '{command_path}' not found",
+                        "available_commands": list(structure.commands.keys())[:10],
+                    }
+
+                return {
+                    "success": True,
+                    **structure.commands[command_path].model_dump(),
+                }
+
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        @mcp.tool()
+        async def inspect_function(
+            function_name: str, package_name: str = "napistu"
+        ) -> Dict[str, Any]:
+            """
+            Get runtime inspection of an installed function with actual source code.
+
+            This complements get_function_documentation by providing:
+            - Actual function implementation (source code)
+            - Runtime signature with defaults
+            - Works for any installed package (napistu, napistu_torch, etc.)
+
+            **USE THIS WHEN:**
+            - You need to see the actual implementation of a function
+            - ReadTheDocs documentation is insufficient
+            - You want to understand how a function works internally
+            - Debugging or understanding implementation details
+
+            **DO NOT USE FOR:**
+            - Just getting the function signature (use get_function_documentation)
+            - Functions that don't exist in installed packages
+            - Built-in Python functions or standard library
+
+            Parameters
+            ----------
+            function_name : str
+                Function name (e.g., "create_network" or "network.create_network")
+            package_name : str, optional
+                Package to inspect (default: "napistu")
+
+            Returns
+            -------
+            Dict[str, Any]
+                Dictionary containing:
+                - success : bool
+                - source : str (actual function code)
+                - signature : str
+                - docstring : str
+                - file_path : str
+                - line_number : int
+                - error : str (if failed)
+
+            Examples
+            --------
+            >>> inspect_function("consensus.construct_consensus_model")
+            >>> inspect_function("SBML_dfs.parse_model", "napistu")
+            >>> inspect_function("utils.tensor_utils.compute_cosine_distances_torch", "napistu_torch")
+            >>> inspect_function("igraph.Graph", "igraph")
+            """
+            try:
+                # Import the function
+                func, error = inspect_utils.import_object(function_name, package_name)
+                if error:
+                    return {
+                        "success": False,
+                        "error": error,
+                        "suggestion": "Try using search_codebase first to find the correct function path",
+                    }
+
+                # Get function info using Pydantic model
+                info = inspect_utils.FunctionInfo.from_function(func)
+
+                return {
+                    "success": True,
+                    "function_name": function_name,
+                    "package": package_name,
+                    **info.model_dump(),
+                }
+
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "suggestion": "Verify the function exists and is installed",
+                }
+
+        @mcp.tool()
+        async def inspect_method(
+            class_name: str, method_name: str, package_name: str = "napistu"
+        ) -> Dict[str, Any]:
+            """
+            Get actual source code for a specific method of a class.
+
+            Use this after inspect_class when you want to see the implementation
+            of a specific method. This provides the actual code, not just the signature.
+
+            **USE THIS WHEN:**
+            - You need to see how a specific method is implemented
+            - Understanding method logic and algorithm
+            - Debugging or learning from implementation
+            - ReadTheDocs documentation is insufficient
+
+            **DO NOT USE FOR:**
+            - Just getting method signatures (use get_class_documentation or inspect_class)
+            - Methods from other libraries
+            - Understanding what methods exist (use inspect_class for that)
+
+            Parameters
+            ----------
+            class_name : str
+                Class name (e.g., "SBML_dfs" or "sbml_dfs_core.SBML_dfs")
+            method_name : str
+                Name of the method (e.g., "get_reactions", "parse_model")
+            package_name : str, optional
+                Package to inspect (default: "napistu")
+
+            Returns
+            -------
+            Dict[str, Any]
+                Dictionary containing:
+                - success : bool
+                - method_name : str
+                - class_name : str
+                - source : str (actual method code)
+                - signature : str
+                - docstring : str
+                - line_number : int
+                - error : str (if failed)
+
+            Examples
+            --------
+            >>> get_method_source("SBML_dfs", "get_identifiers")
+            >>> get_method_source("NapistuGraph", "reverse_edges", "napistu")
+            >>> get_method_source("network.NapistuGraph", "transform_edges")
+            """
+            try:
+                # Import the class
+                cls, error = inspect_utils.import_object(class_name, package_name)
+                if error:
+                    return {
+                        "success": False,
+                        "error": error,
+                        "suggestion": "Try using search_codebase first to find the correct class path",
+                    }
+
+                # Get method source using Pydantic model
+                info = inspect_utils.MethodSourceInfo.from_method(cls, method_name)
+
+                # Check if there was an error finding the method
+                if info.error:
+                    return {
+                        "success": False,
+                        "error": info.error,
+                        "suggestion": f"Use inspect_class('{class_name}') to see available methods",
+                    }
+
+                return {"success": True, **info.model_dump(exclude={"error"})}
+
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "suggestion": "Verify the class and method exist and are installed",
+                }
+
+        @mcp.tool()
+        async def list_cli_commands(cli_name: str = "napistu") -> Dict[str, Any]:
+            """
+            List all available CLI commands for Napistu.
+
+            **USE THIS WHEN:**
+            - User wants to know what command-line operations are available
+            - Looking for data ingestion, integration, or export commands
+            - Understanding the CLI structure and hierarchy
+
+            Parameters
+            ----------
+            cli_name : str, optional
+                Which CLI to inspect ("napistu" or "napistu.mcp")
+
+            Returns
+            -------
+            Dict[str, Any]
+                Dictionary containing all CLI commands with their paths, arguments, options
+            """
+            try:
+                if cli_name == "napistu":
+                    from napistu.__main__ import cli
+                elif cli_name == "napistu.mcp":
+                    from napistu.mcp.__main__ import cli
+                else:
+                    return {"error": f"Unknown CLI: {cli_name}"}
+
+                from napistu.mcp import cli_utils
+
+                structure = cli_utils.CLIStructure.from_cli_group(cli, cli_name)
+
+                return {
+                    "success": True,
+                    "cli_name": cli_name,
+                    "total_commands": len(structure.commands),
+                    "commands": structure.commands,
+                }
+
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
         @mcp.tool()
         async def search_codebase(
             query: str, search_type: str = "semantic"
@@ -521,100 +971,6 @@ class CodebaseComponent(MCPComponent):
                     "results": results,
                     "tip": "Use search_type='semantic' for natural language queries about Napistu API",
                 }
-
-        @mcp.tool()
-        async def get_function_documentation(function_name: str) -> Dict[str, Any]:
-            """
-            Get detailed API documentation for a specific Napistu function.
-
-            **USE THIS WHEN:**
-            - Reading complete documentation for a specific Napistu function
-            - Understanding function signatures, parameters, and return types
-            - Getting detailed API reference for function implementation
-
-            **DO NOT USE FOR:**
-            - Functions from other libraries (only covers Napistu functions)
-            - General programming concepts or tutorials
-            - Usage examples (use tutorials component for implementation guidance)
-
-            Parameters
-            ----------
-            function_name : str
-                Name of the Napistu function (can be short name like "create_network"
-                or full path like "napistu.network.create_network")
-
-            Returns
-            -------
-            Dict[str, Any]
-                Complete function documentation including signature, parameters,
-                return type, and detailed description, or error message if not found
-
-            Examples
-            --------
-            >>> # These all work:
-            >>> get_function_documentation("create_network")
-            >>> get_function_documentation("napistu.network.create_network")
-            >>> get_function_documentation("create_consensus")
-            """
-            result = codebase_utils.find_item_by_name(
-                function_name, self.state.codebase_cache["functions"]
-            )
-            if result is None:
-                return {
-                    "error": f"Function '{function_name}' not found. Try searching for similar names."
-                }
-
-            full_name, func_info = result
-            # Add the full name to the response for clarity
-            func_info["full_name"] = full_name
-            return func_info
-
-        @mcp.tool()
-        async def get_class_documentation(class_name: str) -> Dict[str, Any]:
-            """
-            Get detailed API documentation for a specific Napistu class.
-
-            **USE THIS WHEN:**
-            - Reading complete documentation for a specific Napistu class
-            - Understanding class methods, attributes, and inheritance
-            - Getting detailed API reference for class usage
-
-            **DO NOT USE FOR:**
-            - Classes from other libraries (only covers Napistu classes)
-            - General object-oriented programming concepts
-            - Usage examples (use tutorials component for implementation guidance)
-
-            Parameters
-            ----------
-            class_name : str
-                Name of the Napistu class (can be short name like "NapistuGraph"
-                or full path like "napistu.network.ng_core.NapistuGraph")
-
-            Returns
-            -------
-            Dict[str, Any]
-                Complete class documentation including methods, attributes,
-                inheritance, and detailed description, or error message if not found
-
-            Examples
-            --------
-            >>> # These all work:
-            >>> get_class_documentation("NapistuGraph")
-            >>> get_class_documentation("napistu.network.ng_core.NapistuGraph")
-            >>> get_class_documentation("SBML_dfs")
-            """
-            result = codebase_utils.find_item_by_name(
-                class_name, self.state.codebase_cache["classes"]
-            )
-            if result is None:
-                return {
-                    "error": f"Class '{class_name}' not found. Try searching for similar names."
-                }
-
-            full_name, class_info = result
-            # Add the full name to the response for clarity
-            class_info["full_name"] = full_name
-            return class_info
 
 
 # Module-level component instance

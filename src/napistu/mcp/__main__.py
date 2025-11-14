@@ -25,14 +25,19 @@ from napistu.mcp.config import (
 )
 from napistu.mcp.server import start_mcp_server
 
-# Set up logging using shared configuration
-logger, console = setup_logging()
+# Module-level logger and console - will be initialized when CLI is invoked
+logger = None
+console = None
 
 
 @click.group()
 def cli():
     """The Napistu MCP (Model Context Protocol) Server CLI"""
-    pass
+    # Set up logging only when CLI is actually invoked, not at import time
+    # This prevents interfering with pytest's caplog fixture during tests
+    global logger, console
+    if logger is None:
+        logger, console = setup_logging()
 
 
 @click.group()

@@ -13,6 +13,7 @@ PACKAGE_DEFS = SimpleNamespace(
     GITHUB_PROJECT_REPO="napistu",
     GITHUB_NAPISTU_PY="napistu-py",
     GITHUB_NAPISTU_R="napistu-r",
+    GITHUB_NAPISTU_TORCH="napistu-torch",
     TUTORIALS_URL="https://github.com/napistu/napistu/wiki",
     # User-facing functionality should use a user-defined directory but
     # for convenience, we provide a default cache directory for dev-facing

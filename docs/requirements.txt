@@ -1,4 +1,5 @@
 sphinx
 sphinx-rtd-theme
 myst-parser
+sphinx-click
 -e .  # Install the package in editable mode
