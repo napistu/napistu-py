@@ -103,7 +103,11 @@ class SemanticSearch:
         >>> search = SemanticSearch()  # Uses default ./chroma_db
         >>> search = SemanticSearch("/custom/path/db", chunk_threshold=800)  # Custom settings
         """
-        self.client = chromadb.PersistentClient(path=persist_directory)
+        # Disable telemetry to avoid PostHog compatibility issues
+        self.client = chromadb.PersistentClient(
+            path=persist_directory,
+            settings=chromadb.Settings(anonymized_telemetry=False),
+        )
         self.embedding_function = (
             embedding_functions.SentenceTransformerEmbeddingFunction(
                 model_name="all-MiniLM-L6-v2"
@@ -241,8 +245,13 @@ class SemanticSearch:
                 DOCUMENTATION.WIKI,
                 DOCUMENTATION.README,
                 MCP_COMPONENTS.TUTORIALS,
+                CODEBASE_DEFS.MODULES,
             ]:
                 # Handle content that may need chunking
+                # For modules, convert dict structure to string format
+                if content_type == CODEBASE_DEFS.MODULES:
+                    items = semantic_search_utils._format_modules_for_chunking(items)
+
                 documents, metadatas, ids = (
                     semantic_search_utils.process_chunkable_content(
                         content_type, items, self.chunk_threshold, self.max_chunk_size

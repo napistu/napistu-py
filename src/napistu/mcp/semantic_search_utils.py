@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Tuple
 
 from napistu.mcp.constants import (
     CODEBASE_DEFS,
-    CODEBASE_INSPECT_DEFS,
+    CODEBASE_RTD_DEFS,
     GITHUB_DEFS,
     SEMANTIC_SEARCH_DEFS,
     SEMANTIC_SEARCH_METADATA_DEFS,
@@ -211,8 +211,9 @@ def process_codebase_content(
             continue
 
         # Process main class/function content
-        signature = info.get(CODEBASE_INSPECT_DEFS.SIGNATURE, "")
-        doc = info.get(CODEBASE_INSPECT_DEFS.DOC, "")
+        # ReadTheDocs data structure uses CODEBASE_RTD_DEFS field names
+        signature = info.get(CODEBASE_RTD_DEFS.SIGNATURE, "")
+        doc = info.get(CODEBASE_RTD_DEFS.DOC, "")
 
         if doc or signature:
             # Format content for embedding
@@ -244,16 +245,13 @@ def process_codebase_content(
                 ids.append(f"{content_type}_{name.replace('.', '_')}")
 
         # For classes, also process individual methods
-        if (
-            content_type == CODEBASE_DEFS.CLASSES
-            and CODEBASE_INSPECT_DEFS.METHODS in info
-        ):
+        if content_type == CODEBASE_DEFS.CLASSES and CODEBASE_RTD_DEFS.METHODS in info:
             class_short_name = name.split(".")[-1]  # Just "SBML_dfs" not full path
 
-            for method_name, method_info in info[CODEBASE_INSPECT_DEFS.METHODS].items():
+            for method_name, method_info in info[CODEBASE_RTD_DEFS.METHODS].items():
                 if isinstance(method_info, dict):
-                    method_sig = method_info.get(CODEBASE_INSPECT_DEFS.SIGNATURE, "")
-                    method_doc = method_info.get(CODEBASE_INSPECT_DEFS.DOC, "")
+                    method_sig = method_info.get(CODEBASE_RTD_DEFS.SIGNATURE, "")
+                    method_doc = method_info.get(CODEBASE_RTD_DEFS.DOC, "")
 
                     if method_doc or method_sig:
                         # Format as ClassName.method_name()
@@ -395,6 +393,29 @@ def _find_best_break_point(text: str, start: int, end: int) -> int:
 
     # Last resort: break at end
     return end
+
+
+def _format_modules_for_chunking(modules: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Convert module dictionaries to string format for chunking.
+
+    Extracts module docstrings from ReadTheDocs module dictionaries.
+
+    Parameters
+    ----------
+    modules : Dict[str, Any]
+        Dictionary mapping module names to module info dictionaries
+
+    Returns
+    -------
+    Dict[str, str]
+        Dictionary mapping module names to docstring content
+    """
+    return {
+        name: info.get(CODEBASE_RTD_DEFS.DOC, "")
+        for name, info in modules.items()
+        if isinstance(info, dict) and info.get(CODEBASE_RTD_DEFS.DOC)
+    }
 
 
 def _group_paragraphs_semantically(
