@@ -12,6 +12,7 @@ from napistu.constants import (
 from napistu.network import net_create_utils
 from napistu.network.constants import (
     DROP_REACTIONS_WHEN,
+    GRAPH_WIRING_APPROACHES,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
     VALID_GRAPH_WIRING_APPROACHES,
@@ -172,8 +173,91 @@ def test_edge_cases_and_validation(reaction_species_examples):
     assert edges_ai.empty
 
 
-def test_edgelist_should_have_one_edge():
-    """EDGELIST with 2 species should create exactly 1 edge, not 2"""
+def test_drop_reactions_when_always(reaction_species_examples):
+    """
+    Test format_tiered_reaction_species with regulatory_no_rxns hierarchy (no reaction tier).
+
+    Key difference from regulatory + drop_reactions_when=ALWAYS:
+    - regulatory_no_rxns: Hierarchy has NO reaction tier, so edges connect species directly.
+      The `past_reaction` flag stays False, so attributes (stoichiometry, sbo_term) are always
+      taken from the upstream tier.
+    - regulatory + ALWAYS: Hierarchy INCLUDES reaction tier but it's skipped. When hopping over
+      the reaction tier, `past_reaction` becomes True, so attributes switch to downstream tier
+      for edges after the reaction tier.
+
+    Tests:
+    1. Interactor reaction (1 tier) - should create edges between interactors
+    2. Modifier -> modified reaction - should create edges from modifier to modified
+    3. Multi-species with reactant, catalyst, and product - should create cross-tier edges
+    """
+    r_id = "test_rxn"
+    graph_hierarchy_no_rxns = net_create_utils.create_graph_hierarchy_df(
+        GRAPH_WIRING_APPROACHES.REGULATORY
+    )
+
+    # Test 1: Interactor reaction (both species on same tier)
+    edges_interactor = net_create_utils.format_tiered_reaction_species(
+        reaction_species_examples["valid_interactor"],
+        r_id,
+        graph_hierarchy_no_rxns,
+        drop_reactions_when=DROP_REACTIONS_WHEN.ALWAYS,
+    )
+    # Interactors should create edges between them
+    assert not edges_interactor.empty
+    assert len(edges_interactor) == 1  # 2 interactors = 1 edge
+    assert r_id not in edges_interactor[NAPISTU_GRAPH_EDGES.FROM].values
+    assert r_id not in edges_interactor[NAPISTU_GRAPH_EDGES.TO].values
+
+    # Test 2: Modifier -> modified reaction
+    modifier_modified = pd.DataFrame(
+        {
+            SBML_DFS.SBO_TERM: [
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.MODIFIER],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.MODIFIED],
+            ],
+            SBML_DFS.SC_ID: ["modifier", "modified"],
+            SBML_DFS.STOICHIOMETRY: [0, 0],
+        }
+    ).set_index(SBML_DFS.SBO_TERM)
+
+    edges_modifier = net_create_utils.format_tiered_reaction_species(
+        modifier_modified,
+        r_id,
+        graph_hierarchy_no_rxns,
+        drop_reactions_when=DROP_REACTIONS_WHEN.ALWAYS,
+    )
+    # Modifier should connect to modified (different tiers)
+    assert not edges_modifier.empty
+    assert r_id not in edges_modifier[NAPISTU_GRAPH_EDGES.FROM].values
+    assert r_id not in edges_modifier[NAPISTU_GRAPH_EDGES.TO].values
+    # Should have modifier -> modified edge
+    assert "modifier" in edges_modifier[NAPISTU_GRAPH_EDGES.FROM].values
+    assert "modified" in edges_modifier[NAPISTU_GRAPH_EDGES.TO].values
+
+    # Test 3: Multi-species with reactant, catalyst, and product
+    edges_multi = net_create_utils.format_tiered_reaction_species(
+        reaction_species_examples["all_entities"],
+        r_id,
+        graph_hierarchy_no_rxns,
+        drop_reactions_when=DROP_REACTIONS_WHEN.ALWAYS,
+    )
+
+    # Should create edges between different tiers
+    assert not edges_multi.empty
+    # Should have edges from stimulator -> catalyst -> reactant -> product
+    assert edges_multi.shape[0] == 3, f"Expected 3 edges, got {edges_multi.shape[0]}"
+    assert r_id not in edges_multi[NAPISTU_GRAPH_EDGES.FROM].values
+    assert r_id not in edges_multi[NAPISTU_GRAPH_EDGES.TO].values
+    # the final entry should use the reactant SBO and stoi not the product
+    assert (
+        edges_multi.iloc[-1][NAPISTU_GRAPH_EDGES.SBO_TERM]
+        == MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT]
+    )
+    assert edges_multi.iloc[-1][NAPISTU_GRAPH_EDGES.STOICHIOMETRY] == -1.0
+
+
+def test_drop_reaction_when_edgelist():
+    """EDGELIST with 2 species should create exactly 1 edge and not have reaction ID in FROM column"""
 
     r_id = "foo"
     reaction_df = pd.DataFrame(
@@ -192,31 +276,9 @@ def test_edgelist_should_have_one_edge():
         reaction_df, r_id, graph_hierarchy, DROP_REACTIONS_WHEN.EDGELIST
     )
 
-    # Should be 1 edge, actually gets 2
+    # Should be 1 edge, not 2
     assert len(edges) == 1, f"EDGELIST should create 1 edge, got {len(edges)}"
-
-
-def test_edgelist_should_not_have_reaction_as_source():
-    """EDGELIST should not have reaction ID in FROM column"""
-
-    r_id = "foo"
-    reaction_df = pd.DataFrame(
-        {
-            SBML_DFS.SBO_TERM: [
-                MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT],
-                MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
-            ],
-            SBML_DFS.SC_ID: ["sub", "prod"],
-            SBML_DFS.STOICHIOMETRY: [-1.0, 1.0],
-        }
-    ).set_index(SBML_DFS.SBO_TERM)
-
-    graph_hierarchy = net_create_utils.create_graph_hierarchy_df("regulatory")
-    edges = net_create_utils.format_tiered_reaction_species(
-        reaction_df, r_id, graph_hierarchy, DROP_REACTIONS_WHEN.EDGELIST
-    )
-
-    # Should not have 'foo' in FROM column, but it does
+    # Should not have reaction ID in FROM column
     assert (
         r_id not in edges["from"].values
     ), f"Reaction {r_id} should not appear in FROM column"
