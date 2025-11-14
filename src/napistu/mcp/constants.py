@@ -65,6 +65,7 @@ READMES = {
     "napistu": "https://raw.githubusercontent.com/napistu/napistu/main/README.md",
     "napistu-py": "https://raw.githubusercontent.com/napistu/napistu-py/main/README.md",
     "napistu-r": "https://raw.githubusercontent.com/napistu/napistu-r/main/README.md",
+    "napistu-torch": "https://raw.githubusercontent.com/napistu/napistu-torch/main/README.md",
     "napistu/tutorials": "https://raw.githubusercontent.com/napistu/napistu/main/tutorials/README.md",
 }
 
@@ -85,6 +86,8 @@ WIKI_PAGES = {
 
 NAPISTU_PY_READTHEDOCS = "https://napistu.readthedocs.io/en/latest"
 NAPISTU_PY_READTHEDOCS_API = NAPISTU_PY_READTHEDOCS + "/api.html"
+NAPISTU_TORCH_READTHEDOCS = "https://napistu-torch.readthedocs.io/en/latest"
+NAPISTU_TORCH_READTHEDOCS_API = NAPISTU_TORCH_READTHEDOCS + "/api.html"
 READTHEDOCS_TOC_CSS_SELECTOR = "td"
 
 DEFAULT_GITHUB_API = "https://api.github.com"
@@ -93,6 +96,7 @@ REPOS_WITH_ISSUES = [
     PACKAGE_DEFS.GITHUB_PROJECT_REPO,
     PACKAGE_DEFS.GITHUB_NAPISTU_PY,
     PACKAGE_DEFS.GITHUB_NAPISTU_R,
+    PACKAGE_DEFS.GITHUB_NAPISTU_TORCH,
 ]
 
 GITHUB_ISSUES_INDEXED = "all"

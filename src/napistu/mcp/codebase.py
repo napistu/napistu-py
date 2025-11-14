@@ -11,7 +11,10 @@ from fastmcp import FastMCP
 from napistu.mcp import codebase_utils, inspect_utils
 from napistu.mcp import utils as mcp_utils
 from napistu.mcp.component_base import ComponentState, MCPComponent
-from napistu.mcp.constants import NAPISTU_PY_READTHEDOCS_API
+from napistu.mcp.constants import (
+    NAPISTU_PY_READTHEDOCS_API,
+    NAPISTU_TORCH_READTHEDOCS_API,
+)
 from napistu.mcp.semantic_search import SemanticSearch
 
 logger = logging.getLogger(__name__)
@@ -179,13 +182,19 @@ class CodebaseComponent(MCPComponent):
         try:
             logger.info("Loading codebase documentation from ReadTheDocs...")
 
-            # Load documentation from the ReadTheDocs API
-            modules = await codebase_utils.read_read_the_docs(
+            # Load documentation from both ReadTheDocs APIs
+            modules_py = await codebase_utils.read_read_the_docs(
                 NAPISTU_PY_READTHEDOCS_API
             )
+            modules_torch = await codebase_utils.read_read_the_docs(
+                NAPISTU_TORCH_READTHEDOCS_API
+            )
+
+            # Merge modules from both packages
+            modules = {**modules_py, **modules_torch}
             self.state.codebase_cache["modules"] = modules
 
-            # Extract functions and classes from the modules
+            # Extract functions and classes from the merged modules
             functions, classes = (
                 codebase_utils.extract_functions_and_classes_from_modules(modules)
             )

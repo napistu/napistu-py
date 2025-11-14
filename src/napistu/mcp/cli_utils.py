@@ -1,5 +1,6 @@
 """Utilities for CLI inspection and documentation generation."""
 
+import inspect
 from typing import Any, Dict, List, Optional
 
 import click
@@ -18,6 +19,15 @@ class CLICommandInfo(BaseModel):
     arguments: List[Dict[str, Any]] = Field(default_factory=list)
     options: List[Dict[str, Any]] = Field(default_factory=list)
     subcommands: List[str] = Field(default_factory=list)
+    source: Optional[str] = Field(
+        None, description="Full source code of the command function"
+    )
+    file_path: Optional[str] = Field(
+        None, description="Path to file containing the command function"
+    )
+    line_number: Optional[int] = Field(
+        None, description="Starting line number of the command function"
+    )
 
     @classmethod
     def from_click_command(
@@ -86,6 +96,25 @@ class CLICommandInfo(BaseModel):
         if isinstance(cmd, click.Group):
             subcommands = list(cmd.commands.keys())
 
+        # Get function source code if callback exists
+        source = None
+        file_path = None
+        line_number = None
+
+        if hasattr(cmd, "callback") and cmd.callback is not None:
+            func = cmd.callback
+            try:
+                source = inspect.getsource(func)
+            except (OSError, TypeError):
+                source = None
+
+            try:
+                file_path = inspect.getfile(func)
+                line_number = inspect.getsourcelines(func)[1]
+            except (OSError, TypeError):
+                file_path = None
+                line_number = None
+
         return cls(
             name=cmd.name,
             path=full_path,
@@ -93,6 +122,9 @@ class CLICommandInfo(BaseModel):
             arguments=arguments,
             options=options,
             subcommands=subcommands,
+            source=source,
+            file_path=file_path,
+            line_number=line_number,
         )
 
 
