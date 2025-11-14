@@ -2,18 +2,15 @@
 Codebase exploration components for the Napistu MCP server.
 """
 
-import json
 import logging
 from typing import Any, Dict
 
 from fastmcp import FastMCP
 
 from napistu.mcp import codebase_utils, inspect_utils
-from napistu.mcp import utils as mcp_utils
 from napistu.mcp.component_base import ComponentState, MCPComponent
 from napistu.mcp.constants import (
     CODEBASE_DEFS,
-    CODEBASE_INSPECT_DEFS,
     HEALTH_SUMMARIES,
     MCP_COMPONENTS,
     NAPISTU_PY_READTHEDOCS_API,
@@ -931,7 +928,10 @@ class CodebaseComponent(MCPComponent):
 
         @mcp.tool()
         async def search_codebase(
-            query: str, search_type: str = SEARCH_TYPES.SEMANTIC, n_results: int = 5
+            query: str,
+            search_type: str = SEARCH_TYPES.SEMANTIC,
+            n_results: int = 5,
+            max_exact_results: int = 20,
         ) -> Dict[str, Any]:
             """
             Search Napistu codebase documentation with intelligent search strategy.
@@ -980,6 +980,9 @@ class CodebaseComponent(MCPComponent):
             n_results : int, optional
                 Maximum number of results to return. Results are ranked by similarity score.
                 Default is 5.
+            max_exact_results : int, optional
+                Only applicable when search_type is "exact". If more than max_exact_results are found,
+                an error will be returned rather than returning all results.
 
             Returns
             -------
@@ -1045,82 +1048,9 @@ class CodebaseComponent(MCPComponent):
                 }
             else:
                 # Fall back to exact search
-                results = {
-                    CODEBASE_DEFS.MODULES: [],
-                    CODEBASE_DEFS.CLASSES: [],
-                    CODEBASE_DEFS.FUNCTIONS: [],
-                }
-
-                # Search modules
-                for module_name, info in self.state.codebase_cache[
-                    CODEBASE_DEFS.MODULES
-                ].items():
-                    # Use docstring or description for snippet
-                    doc = (
-                        info.get(CODEBASE_INSPECT_DEFS.DOC)
-                        or info.get(SEARCH_RESULT_DEFS.DESCRIPTION)
-                        or ""
-                    )
-                    module_text = json.dumps(info)
-                    if query.lower() in module_text.lower():
-                        snippet = mcp_utils.get_snippet(doc, query)
-                        results[CODEBASE_DEFS.MODULES].append(
-                            {
-                                SEARCH_RESULT_DEFS.NAME: module_name,
-                                SEARCH_RESULT_DEFS.DESCRIPTION: doc,
-                                SEARCH_RESULT_DEFS.SNIPPET: snippet,
-                            }
-                        )
-
-                # Search classes
-                for class_name, info in self.state.codebase_cache[
-                    CODEBASE_DEFS.CLASSES
-                ].items():
-                    doc = (
-                        info.get(CODEBASE_INSPECT_DEFS.DOC)
-                        or info.get(SEARCH_RESULT_DEFS.DESCRIPTION)
-                        or ""
-                    )
-                    class_text = json.dumps(info)
-                    if query.lower() in class_text.lower():
-                        snippet = mcp_utils.get_snippet(doc, query)
-                        results[CODEBASE_DEFS.CLASSES].append(
-                            {
-                                SEARCH_RESULT_DEFS.NAME: class_name,
-                                SEARCH_RESULT_DEFS.DESCRIPTION: doc,
-                                SEARCH_RESULT_DEFS.SNIPPET: snippet,
-                            }
-                        )
-
-                # Search functions
-                for func_name, info in self.state.codebase_cache[
-                    CODEBASE_DEFS.FUNCTIONS
-                ].items():
-                    doc = (
-                        info.get(CODEBASE_INSPECT_DEFS.DOC)
-                        or info.get(SEARCH_RESULT_DEFS.DESCRIPTION)
-                        or ""
-                    )
-                    func_text = json.dumps(info)
-                    if query.lower() in func_text.lower():
-                        snippet = mcp_utils.get_snippet(doc, query)
-                        results[CODEBASE_DEFS.FUNCTIONS].append(
-                            {
-                                SEARCH_RESULT_DEFS.NAME: func_name,
-                                SEARCH_RESULT_DEFS.DESCRIPTION: doc,
-                                SEARCH_RESULT_DEFS.SIGNATURE: info.get(
-                                    SEARCH_RESULT_DEFS.SIGNATURE, ""
-                                ),
-                                SEARCH_RESULT_DEFS.SNIPPET: snippet,
-                            }
-                        )
-
-                return {
-                    SEARCH_RESULT_DEFS.QUERY: query,
-                    SEARCH_RESULT_DEFS.SEARCH_TYPE: SEARCH_TYPES.EXACT,
-                    SEARCH_RESULT_DEFS.RESULTS: results,
-                    SEARCH_RESULT_DEFS.TIP: "Use search_type='semantic' for natural language queries about Napistu API",
-                }
+                return codebase_utils._exact_search_codebase(
+                    query, self.state.codebase_cache, max_exact_results
+                )
 
 
 # Module-level component instance

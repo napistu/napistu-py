@@ -68,6 +68,16 @@ CODEBASE_INSPECT_DEFS = SimpleNamespace(
     ERROR="error",
 )
 
+# Codebase ReadTheDocs field names (specific to scraped ReadTheDocs HTML)
+CODEBASE_RTD_DEFS = SimpleNamespace(
+    DOC="doc",
+    SIGNATURE="signature",
+    NAME="name",
+    ID="id",
+    METHODS="methods",
+    ATTRIBUTES="attributes",
+)
+
 # CLI command field name constants
 CLICK_COMMAND_DEFS = SimpleNamespace(
     NAME="name",

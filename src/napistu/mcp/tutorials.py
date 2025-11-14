@@ -3,12 +3,11 @@ Tutorial components for the Napistu MCP server.
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from fastmcp import FastMCP
 
 from napistu.mcp import tutorials_utils
-from napistu.mcp import utils as mcp_utils
 from napistu.mcp.component_base import ComponentState, MCPComponent
 from napistu.mcp.constants import (
     HEALTH_SUMMARIES,
@@ -354,7 +353,10 @@ class TutorialsComponent(MCPComponent):
 
         @mcp.tool()
         async def search_tutorials(
-            query: str, search_type: str = SEARCH_TYPES.SEMANTIC, n_results: int = 5
+            query: str,
+            search_type: str = SEARCH_TYPES.SEMANTIC,
+            n_results: int = 5,
+            max_exact_results: int = 20,
         ) -> Dict[str, Any]:
             """
             Search Napistu tutorials with intelligent search strategy.
@@ -399,6 +401,9 @@ class TutorialsComponent(MCPComponent):
             n_results : int, optional
                 Maximum number of results to return. Results are ranked by similarity score.
                 Default is 5.
+            max_exact_results : int, optional
+                Only applicable when search_type is "exact". If more than max_exact_results are found,
+                an error will be returned rather than returning all results.
 
             Returns
             -------
@@ -458,25 +463,9 @@ class TutorialsComponent(MCPComponent):
                 }
             else:
                 # Fall back to exact search
-                results: List[Dict[str, Any]] = []
-
-                for tutorial_id, content in self.state.tutorials.items():
-                    if query.lower() in content.lower():
-                        results.append(
-                            {
-                                SEARCH_RESULT_DEFS.ID: tutorial_id,
-                                SEARCH_RESULT_DEFS.SNIPPET: mcp_utils.get_snippet(
-                                    content, query
-                                ),
-                            }
-                        )
-
-                return {
-                    SEARCH_RESULT_DEFS.QUERY: query,
-                    SEARCH_RESULT_DEFS.SEARCH_TYPE: SEARCH_TYPES.EXACT,
-                    SEARCH_RESULT_DEFS.RESULTS: results,
-                    SEARCH_RESULT_DEFS.TIP: "Use search_type='semantic' for natural language queries about Napistu workflows",
-                }
+                return tutorials_utils._exact_search_tutorials(
+                    query, self.state.tutorials, max_exact_results
+                )
 
 
 # Module-level component instance

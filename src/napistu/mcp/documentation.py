@@ -8,7 +8,6 @@ from typing import Any, Dict
 from fastmcp import FastMCP
 
 from napistu.mcp import documentation_utils
-from napistu.mcp import utils as mcp_utils
 from napistu.mcp.component_base import ComponentState, MCPComponent
 from napistu.mcp.constants import (
     DOCUMENTATION,
@@ -432,7 +431,10 @@ class DocumentationComponent(MCPComponent):
         # Register tools
         @mcp.tool()
         async def search_documentation(
-            query: str, search_type: str = SEARCH_TYPES.SEMANTIC, n_results: int = 5
+            query: str,
+            search_type: str = SEARCH_TYPES.SEMANTIC,
+            n_results: int = 5,
+            max_exact_results: int = 20,
         ):
             """
             Search all Napistu project documentation with intelligent search strategy.
@@ -481,6 +483,9 @@ class DocumentationComponent(MCPComponent):
             n_results : int, optional
                 Maximum number of results to return. Results are ranked by similarity score.
                 Default is 5.
+            max_exact_results : int, optional
+                Only applicable when search_type is "exact". If more than max_exact_results are found,
+                an error will be returned rather than returning all results.
 
             Returns
             -------
@@ -545,82 +550,10 @@ class DocumentationComponent(MCPComponent):
                     SEARCH_RESULT_DEFS.TIP: "Try different phrasings if results aren't relevant, or use search_type='exact' for precise keyword matching",
                 }
             else:
-                # Fall back to exact search (existing logic)
-                results = {
-                    DOCUMENTATION.README: [],
-                    DOCUMENTATION.WIKI: [],
-                    DOCUMENTATION.ISSUES: [],
-                    DOCUMENTATION.PRS: [],
-                }
-
-                # Search README files
-                for readme_name, content in self.state.docs_cache[
-                    DOCUMENTATION.README
-                ].items():
-                    if query.lower() in content.lower():
-                        results[DOCUMENTATION.README].append(
-                            {
-                                SEARCH_RESULT_DEFS.NAME: readme_name,
-                                SEARCH_RESULT_DEFS.SNIPPET: mcp_utils.get_snippet(
-                                    content, query
-                                ),
-                            }
-                        )
-
-                # Search wiki pages
-                for page_name, content in self.state.docs_cache[
-                    DOCUMENTATION.WIKI
-                ].items():
-                    if query.lower() in content.lower():
-                        results[DOCUMENTATION.WIKI].append(
-                            {
-                                SEARCH_RESULT_DEFS.NAME: page_name,
-                                SEARCH_RESULT_DEFS.SNIPPET: mcp_utils.get_snippet(
-                                    content, query
-                                ),
-                            }
-                        )
-
-                # Search issues
-                for repo, issues in self.state.docs_cache[DOCUMENTATION.ISSUES].items():
-                    for issue in issues:
-                        issue_text = f"{issue.get(GITHUB_DEFS.TITLE, '')} {issue.get(GITHUB_DEFS.BODY, '')}"
-                        if query.lower() in issue_text.lower():
-                            results[DOCUMENTATION.ISSUES].append(
-                                {
-                                    SEARCH_RESULT_DEFS.NAME: f"{repo}#{issue.get(GITHUB_DEFS.NUMBER)}",
-                                    SEARCH_RESULT_DEFS.TITLE: issue.get(
-                                        GITHUB_DEFS.TITLE
-                                    ),
-                                    SEARCH_RESULT_DEFS.URL: issue.get(GITHUB_DEFS.URL),
-                                    SEARCH_RESULT_DEFS.SNIPPET: mcp_utils.get_snippet(
-                                        issue_text, query
-                                    ),
-                                }
-                            )
-
-                # Search PRs
-                for repo, prs in self.state.docs_cache[DOCUMENTATION.PRS].items():
-                    for pr in prs:
-                        pr_text = f"{pr.get(GITHUB_DEFS.TITLE, '')} {pr.get(GITHUB_DEFS.BODY, '')}"
-                        if query.lower() in pr_text.lower():
-                            results[DOCUMENTATION.PRS].append(
-                                {
-                                    SEARCH_RESULT_DEFS.NAME: f"{repo}#{pr.get(GITHUB_DEFS.NUMBER)}",
-                                    SEARCH_RESULT_DEFS.TITLE: pr.get(GITHUB_DEFS.TITLE),
-                                    SEARCH_RESULT_DEFS.URL: pr.get(GITHUB_DEFS.URL),
-                                    SEARCH_RESULT_DEFS.SNIPPET: mcp_utils.get_snippet(
-                                        pr_text, query
-                                    ),
-                                }
-                            )
-
-                return {
-                    SEARCH_RESULT_DEFS.QUERY: query,
-                    SEARCH_RESULT_DEFS.SEARCH_TYPE: SEARCH_TYPES.EXACT,
-                    SEARCH_RESULT_DEFS.RESULTS: results,
-                    SEARCH_RESULT_DEFS.TIP: "Use search_type='semantic' for natural language queries",
-                }
+                # Fall back to exact search
+                return documentation_utils._exact_search_documentation(
+                    query, self.state.docs_cache, max_exact_results
+                )
 
 
 # Module-level component instance

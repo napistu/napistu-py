@@ -5,12 +5,18 @@ Utilities for loading and processing tutorials.
 import logging
 import os
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict, List
 
 import httpx
 
 from napistu.gcs.utils import _initialize_data_dir
-from napistu.mcp.constants import TUTORIAL_URLS, TUTORIALS_CACHE_DIR
+from napistu.mcp import utils as mcp_utils
+from napistu.mcp.constants import (
+    SEARCH_RESULT_DEFS,
+    SEARCH_TYPES,
+    TUTORIAL_URLS,
+    TUTORIALS_CACHE_DIR,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +207,79 @@ async def _ensure_notebook_cached(
             )
         await fetch_notebook_from_github(tutorial_id, url, cache_dir)
     return cache_path
+
+
+def _exact_search_tutorials(
+    query: str, tutorials_cache: Dict[str, str], max_exact_results: int = 20
+) -> Dict[str, Any]:
+    """
+    Perform exact text search across tutorial content.
+
+    Searches for the query string in tutorial content. Returns results with
+    tutorial IDs and snippets, or an error if too many matches are found.
+
+    Parameters
+    ----------
+    query : str
+        Search query string to match against tutorial content
+    tutorials_cache : Dict[str, str]
+        Dictionary mapping tutorial IDs to their markdown content
+    max_exact_results : int, optional
+        Maximum number of total results allowed before returning an error.
+        Default is 20.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Search results dictionary containing:
+        - query : str
+            Original search query
+        - search_type : str
+            Always "exact"
+        - results : List[Dict]
+            List of matching tutorials with id and snippet
+        - tip : str
+            Helpful guidance for improving search results
+        OR (if too many results):
+        - error : str
+            Error message indicating too many results
+        - suggestion : str
+            Suggestions for refining the search
+        - result_count : int
+            Number of matches found
+    """
+    results: List[Dict[str, Any]] = []
+
+    for tutorial_id, content in tutorials_cache.items():
+        if query.lower() in content.lower():
+            results.append(
+                {
+                    SEARCH_RESULT_DEFS.ID: tutorial_id,
+                    SEARCH_RESULT_DEFS.SNIPPET: mcp_utils.get_snippet(content, query),
+                }
+            )
+
+    # If too many results, return error suggesting semantic search or more precise query
+    if len(results) > max_exact_results:
+        return {
+            SEARCH_RESULT_DEFS.QUERY: query,
+            SEARCH_RESULT_DEFS.SEARCH_TYPE: SEARCH_TYPES.EXACT,
+            "error": f"Too many results found ({len(results)} matches). Exact search returned too many matches.",
+            "suggestion": (
+                f"Try one of the following:\n"
+                f"1. Use search_type='semantic' for better relevance ranking and fewer, more relevant results\n"
+                f"2. Use a more specific query (e.g., '{query} network' or '{query} consensus')\n"
+                f"3. Browse tutorials directly using get_tutorials_index() to see all available tutorials"
+            ),
+            "result_count": len(results),
+        }
+
+    return {
+        SEARCH_RESULT_DEFS.QUERY: query,
+        SEARCH_RESULT_DEFS.SEARCH_TYPE: SEARCH_TYPES.EXACT,
+        SEARCH_RESULT_DEFS.RESULTS: results,
+        SEARCH_RESULT_DEFS.TIP: "Use search_type='semantic' for natural language queries about Napistu workflows",
+    }
 
 
 def _get_cached_notebook_path(
