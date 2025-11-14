@@ -383,16 +383,21 @@ class SemanticSearch:
 
         return formatted_results
 
-    def search_unified(self, query: str, n_results: int = 15) -> List[Dict[str, Any]]:
+    def search_unified(self, query: str, n_results: int = 10) -> List[Dict[str, Any]]:
         """
         Search across all components using the unified collection.
+
+        Returns the top K results overall, ranked by similarity score across
+        all components. This ensures the most relevant results are returned
+        regardless of which component they come from.
 
         Parameters
         ----------
         query : str
             Natural language search query. Can be keywords, phrases, or questions.
         n_results : int, optional
-            Maximum number of results to return. Default is 15.
+            Maximum number of results to return overall (not per component).
+            Default is 10.
 
         Returns
         -------
@@ -417,8 +422,10 @@ class SemanticSearch:
         Notes
         -----
         This searches the unified collection which contains content from all
-        enabled components. Results include component labels to identify the
-        source of each match.
+        enabled components. Results are ranked by similarity score across all
+        components, so the top K most relevant results are returned regardless
+        of component. Results include component labels to identify the source
+        of each match.
         """
         results = self.search(query, "unified", n_results)
 

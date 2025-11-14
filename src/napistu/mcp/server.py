@@ -330,7 +330,9 @@ def _register_search_all_tool(mcp: FastMCP) -> None:
     """
 
     @mcp.tool()
-    async def search_all(query: str, search_type: str = "semantic") -> Dict[str, Any]:
+    async def search_all(
+        query: str, search_type: str = "semantic", n_results: int = 10
+    ) -> Dict[str, Any]:
         """
         Search across all Napistu components (documentation, codebase, tutorials) with intelligent search strategy.
 
@@ -367,6 +369,10 @@ def _register_search_all_tool(mcp: FastMCP) -> None:
             - "semantic" (default): AI-powered search using embeddings
             - "exact": Traditional text matching search
             Default is "semantic".
+        n_results : int, optional
+            Maximum number of results to return overall (not per component).
+            Results are ranked by similarity score across all components.
+            Default is 10.
 
         Returns
         -------
@@ -420,8 +426,8 @@ def _register_search_all_tool(mcp: FastMCP) -> None:
         semantic_search = _get_semantic_search()
 
         if search_type == "semantic" and semantic_search:
-            # Use unified semantic search
-            results = semantic_search.search_unified(query, n_results=15)
+            # Use unified semantic search - returns top K results overall, ranked by similarity
+            results = semantic_search.search_unified(query, n_results=n_results)
             return {
                 "query": query,
                 "search_type": "semantic",

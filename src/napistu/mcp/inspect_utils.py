@@ -7,7 +7,7 @@ source code, signatures, and metadata from functions, classes, and methods.
 
 import importlib
 import inspect
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -315,3 +315,55 @@ def import_object(
         error_msg += "Module or object not found."
 
     return None, error_msg
+
+
+def list_installed_packages() -> List[Dict[str, str]]:
+    """
+    List all installed Python packages with their versions.
+
+    Returns
+    -------
+    List[Dict[str, str]]
+        List of package dictionaries, each containing:
+        - name : str
+            Package name
+        - version : str
+            Installed version
+        Packages are sorted alphabetically by name.
+
+    Examples
+    --------
+    >>> packages = list_installed_packages()
+    >>> pandas_pkg = next((p for p in packages if p["name"] == "pandas"), None)
+    >>> if pandas_pkg:
+    ...     print(f"pandas version: {pandas_pkg['version']}")
+    """
+    try:
+        # Python 3.8+ - preferred method
+        from importlib.metadata import distributions
+
+        packages = []
+        for dist in distributions():
+            try:
+                name = dist.metadata["Name"]
+                version = dist.metadata["Version"]
+                if name:  # Skip packages without names
+                    packages.append({"name": name, "version": version})
+            except (KeyError, AttributeError):
+                # Skip packages with missing metadata
+                continue
+
+        # Sort by name for consistent output
+        packages.sort(key=lambda x: x["name"].lower())
+        return packages
+
+    except ImportError:
+        # Fallback to pkg_resources for older Python versions
+        import pkg_resources
+
+        packages = []
+        for dist in pkg_resources.working_set:
+            packages.append({"name": dist.project_name, "version": dist.version})
+
+        packages.sort(key=lambda x: x["name"].lower())
+        return packages

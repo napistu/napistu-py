@@ -412,7 +412,9 @@ class DocumentationComponent(MCPComponent):
 
         # Register tools
         @mcp.tool()
-        async def search_documentation(query: str, search_type: str = "semantic"):
+        async def search_documentation(
+            query: str, search_type: str = "semantic", n_results: int = 5
+        ):
             """
             Search all Napistu project documentation with intelligent search strategy.
 
@@ -457,6 +459,9 @@ class DocumentationComponent(MCPComponent):
                 - "semantic" (default): AI-powered search using embeddings
                 - "exact": Traditional text matching search
                 Default is "semantic".
+            n_results : int, optional
+                Maximum number of results to return. Results are ranked by similarity score.
+                Default is 5.
 
             Returns
             -------
@@ -512,7 +517,7 @@ class DocumentationComponent(MCPComponent):
             if search_type == "semantic" and self.state.semantic_search:
                 # Use semantic search
                 results = self.state.semantic_search.search(
-                    query, "documentation", n_results=5
+                    query, "documentation", n_results=n_results
                 )
                 return {
                     "query": query,
