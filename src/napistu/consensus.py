@@ -30,8 +30,6 @@ from napistu.matching.mount import resolve_matches
 from napistu.sbml_dfs_core import SBML_dfs
 
 logger = logging.getLogger(__name__)
-# set the level to show logger.info message
-logging.basicConfig(level=logging.DEBUG)
 
 
 def construct_consensus_model(
