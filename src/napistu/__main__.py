@@ -55,7 +55,7 @@ from napistu.modify.cofactors import drop_cofactors as drop_cofactors_func
 from napistu.modify.curation import curate_sbml_dfs
 from napistu.modify.gaps import add_transportation_reactions
 from napistu.modify.uncompartmentalize import uncompartmentalize_sbml_dfs
-from napistu.network.constants import NAPISTU_GRAPH_EDGES
+from napistu.network.constants import DROP_REACTIONS_WHEN, NAPISTU_GRAPH_EDGES
 from napistu.network.ig_utils import get_graph_summary
 from napistu.network.net_create import process_napistu_graph
 from napistu.network.ng_core import NapistuGraph
@@ -825,6 +825,26 @@ def exporter():
     default=False,
     help="Reverse edges so they flow from effects to causes?",
 )
+@click.option(
+    "--drop_reactions_when",
+    "-x",
+    type=click.Choice(
+        [
+            DROP_REACTIONS_WHEN.SAME_TIER,
+            DROP_REACTIONS_WHEN.EDGELIST,
+            DROP_REACTIONS_WHEN.ALWAYS,
+        ],
+        case_sensitive=False,
+    ),
+    default=DROP_REACTIONS_WHEN.SAME_TIER,
+    help="When to drop reactions as network vertices: 'same_tier' (default), 'edgelist', or 'always'",
+)
+@click.option(
+    "--deduplicate_edges",
+    is_flag=True,
+    default=False,
+    help="Deduplicate edges so 0-1 edges connect each vertex.",
+)
 def export_igraph(
     sbml_dfs_uri: str,
     output_uri: str,
@@ -834,6 +854,8 @@ def export_igraph(
     weighting_strategy: str,
     directed: bool,
     reverse: bool,
+    drop_reactions_when: str,
+    deduplicate_edges: bool,
 ):
     """Export the consensus model as an igraph object"""
     sbml_dfs = SBML_dfs.from_pickle(sbml_dfs_uri)
@@ -849,6 +871,8 @@ def export_igraph(
         wiring_approach=wiring_approach,
         weighting_strategy=weighting_strategy,
         reaction_graph_attrs=graph_attrs_spec,
+        drop_reactions_when=drop_reactions_when,
+        deduplicate_edges=deduplicate_edges,
         verbose=True,
     )
 

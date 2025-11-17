@@ -207,8 +207,6 @@ def create_napistu_graph(
         edge_foreign_keys=(NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO),
     )
 
-    # delete singleton nodes (most of these will be reaction nodes associated with pairwise interactions)
-
     # Always return NapistuGraph
     napistu_graph = NapistuGraph.from_igraph(
         napistu_ig_graph, wiring_approach=wiring_approach
@@ -235,6 +233,7 @@ def process_napistu_graph(
     reaction_graph_attrs: Optional[dict] = None,
     custom_transformations: dict = None,
     deduplicate_edges: bool = True,
+    drop_reactions_when: str = DROP_REACTIONS_WHEN.SAME_TIER,
     verbose: bool = False,
 ) -> NapistuGraph:
     """
@@ -262,6 +261,12 @@ def process_napistu_graph(
     deduplicate_edges : bool, optional
         Whether to deduplicate edges with the same FROM -> TO pair, keeping only the first occurrence.
         Default is True for backwards compatibility.
+    drop_reactions_when : str, optional
+        The condition under which to drop reactions as a network vertex. Valid values are:
+            - 'same_tier': drop reactions when all participants are on the same tier of a wiring hierarchy
+            - 'edgelist': drop reactions when the reaction species are only 2 (1 reactant + 1 product)
+            - 'always': drop reactions regardless of tiers
+        Default is 'same_tier'.
     verbose : bool, optional
         Extra reporting. Default is False.
 
@@ -285,6 +290,7 @@ def process_napistu_graph(
         sbml_dfs,
         directed=directed,
         wiring_approach=wiring_approach,
+        drop_reactions_when=drop_reactions_when,
         deduplicate_edges=deduplicate_edges,
         verbose=verbose,
     )
