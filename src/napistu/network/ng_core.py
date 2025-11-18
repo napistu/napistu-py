@@ -631,6 +631,7 @@ class NapistuGraph(ig.Graph):
             dogmatic=dogmatic,
             add_name_prefixes=add_name_prefixes,
             binarize=binarize,
+            has_reactions=graph.get_has_reactions(),
         )
 
         logger.info("Creating graph attributes")
@@ -1040,6 +1041,18 @@ class NapistuGraph(ig.Graph):
             edge_tuples, names=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
         )
         return pd.Series(attribute_values, index=multi_index, name=attribute_name)
+
+    def get_has_reactions(self) -> bool:
+        """
+        Check if the graph contains reaction vertices.
+
+        Returns
+        -------
+        bool
+            True if the graph contains reaction vertices, False otherwise.
+        """
+        node_types = self.vs[NAPISTU_GRAPH_VERTICES.NODE_TYPE]
+        return NAPISTU_GRAPH_NODE_TYPES.REACTION in node_types
 
     def get_metadata(self, key: Optional[str] = None) -> Any:
         """

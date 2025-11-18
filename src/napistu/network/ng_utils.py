@@ -484,6 +484,7 @@ def get_sbml_dfs_vertex_summaries(
     dogmatic=False,
     add_name_prefixes=False,
     binarize=False,
+    has_reactions=True,
 ) -> pd.DataFrame:
     """
     Prepare species and reaction ontology and/or source occurrence summaries which are ready to be merged with NapistuGraph vertices.
@@ -507,6 +508,9 @@ def get_sbml_dfs_vertex_summaries(
         and 'ontology_' for ontology data
     binarize: bool, optional
         Whether to convert the summary to binary values (0 vs 1+). Default is False.
+    has_reactions : bool, default True
+        Whether the graph has reaction vertices. If False, reaction-specific summaries
+        will be skipped.
     """
 
     if len(summary_types) == 0:
@@ -524,8 +528,15 @@ def get_sbml_dfs_vertex_summaries(
 
     if VERTEX_SBML_DFS_SUMMARIES.SOURCES in summary_types:
 
+        # Only include reaction sources if graph has reaction vertices
+        node_types_to_summarize = (
+            VALID_NAPISTU_GRAPH_NODE_TYPES
+            if has_reactions
+            else [NAPISTU_GRAPH_NODE_TYPES.SPECIES]
+        )
+
         entity_tables = {
-            NODE_TYPES_TO_ENTITY_TABLES[x] for x in VALID_NAPISTU_GRAPH_NODE_TYPES
+            NODE_TYPES_TO_ENTITY_TABLES[x] for x in node_types_to_summarize
         }
 
         source_dfs = list()
@@ -547,18 +558,26 @@ def get_sbml_dfs_vertex_summaries(
 
     if VERTEX_SBML_DFS_SUMMARIES.ONTOLOGIES in summary_types:
 
-        # get reaction ontologies directly (since these are vertex names)
-        logger.info(f"Getting ontology occurrence for {SBML_DFS.REACTIONS}")
-        df = sbml_dfs.get_ontology_occurrence(
-            SBML_DFS.REACTIONS,
-            stratify_by_bqb=stratify_by_bqb,
-            characteristic_only=characteristic_only,
-            dogmatic=dogmatic,
-            include_missing=True,
-            binarize=binarize,
-        )
-        df.columns.name = None
-        reaction_ontologies = df.rename_axis(NAPISTU_GRAPH_VERTICES.NAME)
+        ontology_dfs = []
+
+        # get reaction ontologies directly (since these are vertex names) - only if graph has reactions
+        if has_reactions:
+            logger.info(f"Getting ontology occurrence for {SBML_DFS.REACTIONS}")
+            df = sbml_dfs.get_ontology_occurrence(
+                SBML_DFS.REACTIONS,
+                stratify_by_bqb=stratify_by_bqb,
+                characteristic_only=characteristic_only,
+                dogmatic=dogmatic,
+                include_missing=True,
+                binarize=binarize,
+            )
+            df.columns.name = None
+            reaction_ontologies = df.rename_axis(NAPISTU_GRAPH_VERTICES.NAME)
+            ontology_dfs.append(reaction_ontologies)
+        else:
+            logger.debug(
+                "Skipping reaction ontology summaries - graph has no reaction vertices"
+            )
 
         # get species ontologies then map them to compartmentalized species (since the cspecies are the vertex names)
         logger.info(f"Getting ontology occurrence for {SBML_DFS.SPECIES}")
@@ -577,11 +596,10 @@ def get_sbml_dfs_vertex_summaries(
             .merge(df, left_on=SBML_DFS.S_ID, right_index=True)
             .drop(columns=[SBML_DFS.S_ID])
         )
+        ontology_dfs.append(species_ontologies)
 
-        logger.debug("Concatenating reaction and species ontology occurrences")
-        ontology_summary = pd.concat([reaction_ontologies, species_ontologies]).fillna(
-            int(0)
-        )
+        logger.debug("Concatenating ontology occurrences")
+        ontology_summary = pd.concat(ontology_dfs).fillna(int(0))
 
         if add_name_prefixes:
             ontology_summary.columns = [
