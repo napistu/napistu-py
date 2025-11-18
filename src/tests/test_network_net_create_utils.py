@@ -239,7 +239,7 @@ def test_drop_reactions_when_always(reaction_species_examples):
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.MODIFIER],
                 MINI_SBO_FROM_NAME[SBOTERM_NAMES.MODIFIED],
             ],
-            SBML_DFS.SC_ID: ["modifier", "modified"],
+            SBML_DFS.SC_ID: [SBOTERM_NAMES.MODIFIER, SBOTERM_NAMES.MODIFIED],
             SBML_DFS.STOICHIOMETRY: [0, 0],
         }
     ).set_index(SBML_DFS.SBO_TERM)
@@ -307,7 +307,7 @@ def test_drop_reaction_when_edgelist():
     assert len(edges) == 1, f"EDGELIST should create 1 edge, got {len(edges)}"
     # Should not have reaction ID in FROM column
     assert (
-        r_id not in edges["from"].values
+        r_id not in edges[NAPISTU_GRAPH_EDGES.FROM].values
     ), f"Reaction {r_id} should not appear in FROM column"
 
 
@@ -466,7 +466,7 @@ def test_wire_reaction_species_mixed_interactions(reaction_species_examples):
     # Test with regulatory wiring approach
     edges_regulatory = net_create_utils.wire_reaction_species(
         all_reaction_species,
-        wiring_approach="regulatory",
+        wiring_approach=GRAPH_WIRING_APPROACHES.REGULATORY,
         drop_reactions_when=DROP_REACTIONS_WHEN.SAME_TIER,
     )
 
