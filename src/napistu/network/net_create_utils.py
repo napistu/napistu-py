@@ -429,7 +429,7 @@ def _log_pathological_same_tier(distinct_metadata: pd.DataFrame, r_id: str) -> N
     stoichiometries = distinct_metadata["stoichiometry"].unique().tolist()
     if len(stoichiometries) > 1:
         msg.append(f"Stoichiometries: {stoichiometries}")
-    logger.warning(msg[0] + "; ".join(msg[1:]))
+    logger.debug(msg[0] + "; ".join(msg[1:]))
 
 
 def _format_cross_tier_edges(
@@ -457,7 +457,7 @@ def _format_cross_tier_edges(
 
     ordered_tiers = entities_ordered_by_tier.index.get_level_values("tier").unique()
     reaction_tier = entities_ordered_by_tier.query(
-        "sbo_name == 'reaction'"
+        f"{NAPISTU_GRAPH_EDGES.SBO_NAME} == '{NAPISTU_GRAPH_NODE_TYPES.REACTION}'"
     ).index.tolist()[0]
     drop_reaction = _should_drop_reaction(entities_ordered_by_tier, drop_reactions_when)
 
@@ -470,10 +470,27 @@ def _format_cross_tier_edges(
                 continue
 
         next_tier = ordered_tiers[i + 1]
-        if ordered_tiers[i + 1] == reaction_tier:
+        if ordered_tiers[i + 1] == reaction_tier and drop_reaction:
             # hop over the reaction tier
-            if drop_reaction:
+            # Check if there's a tier after the reaction tier
+            if i + 2 < len(ordered_tiers):
                 next_tier = ordered_tiers[i + 2]
+            else:
+                # Pathological case: reaction tier is the last tier and we're dropping it
+                # Get SBO terms for warning message
+                sbo_terms = (
+                    entities_ordered_by_tier.query(
+                        f"{NAPISTU_GRAPH_EDGES.SBO_NAME} != '{NAPISTU_GRAPH_NODE_TYPES.REACTION}'"
+                    )[NAPISTU_GRAPH_EDGES.SBO_NAME]
+                    .unique()
+                    .tolist()
+                )
+                logger.debug(
+                    f"Skipping edge creation for reaction {r_id}: reaction tier is the last tier "
+                    f"and reactions are being dropped. Observed SBO terms: {sbo_terms}"
+                )
+                # Skip this iteration since there's no tier after the reaction tier
+                continue
 
         formatted_tier_combo = _format_tier_combo(
             entities_ordered_by_tier.loc[[ordered_tiers[i]]],
