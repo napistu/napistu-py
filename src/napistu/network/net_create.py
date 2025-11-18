@@ -360,8 +360,8 @@ def _create_napistu_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.Data
         columns={
             NAPISTU_GRAPH_NODE_TYPES.SPECIES: NAPISTU_GRAPH_EDGES.FROM,
             NAPISTU_GRAPH_NODE_TYPES.REACTION: NAPISTU_GRAPH_EDGES.TO,
-            SBML_DFS.STOICHIOMETRY: NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY,
-            SBML_DFS.SBO_TERM: NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM,
+            SBML_DFS.STOICHIOMETRY: NAPISTU_GRAPH_EDGES.STOICHIOMETRY_UPSTREAM,
+            SBML_DFS.SBO_TERM: NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM,
         }
     )
 
@@ -370,8 +370,8 @@ def _create_napistu_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.Data
         columns={
             NAPISTU_GRAPH_NODE_TYPES.REACTION: NAPISTU_GRAPH_EDGES.FROM,
             NAPISTU_GRAPH_NODE_TYPES.SPECIES: NAPISTU_GRAPH_EDGES.TO,
-            SBML_DFS.STOICHIOMETRY: NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY,
-            SBML_DFS.SBO_TERM: NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM,
+            SBML_DFS.STOICHIOMETRY: NAPISTU_GRAPH_EDGES.STOICHIOMETRY_DOWNSTREAM,
+            SBML_DFS.SBO_TERM: NAPISTU_GRAPH_EDGES.SBO_TERM_DOWNSTREAM,
         }
     )
 
@@ -380,10 +380,10 @@ def _create_napistu_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.Data
 
     # Replace NaN with None (from pd.concat) to match tiered approach behavior
     for col in [
-        NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY,
-        NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY,
-        NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM,
-        NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM,
+        NAPISTU_GRAPH_EDGES.SBO_TERM_DOWNSTREAM,
+        NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM,
+        NAPISTU_GRAPH_EDGES.STOICHIOMETRY_DOWNSTREAM,
+        NAPISTU_GRAPH_EDGES.STOICHIOMETRY_UPSTREAM,
     ]:
         if col in network_edges.columns:
             network_edges[col] = network_edges[col].where(
@@ -518,11 +518,11 @@ def _augment_network_edges(
         If required attributes are missing from network_edges.
     """
 
-    missing_required_network_edges_attrs = (
-        NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS.difference(
-            set(network_edges.columns.tolist())
-        )
-    )
+    missing_required_network_edges_attrs = [
+        attr
+        for attr in NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS
+        if attr not in network_edges.columns
+    ]
     if len(missing_required_network_edges_attrs) > 0:
         raise ValueError(
             f"{len(missing_required_network_edges_attrs)} required attributes were missing "
@@ -615,7 +615,7 @@ def _reverse_network_edges(augmented_network_edges: pd.DataFrame) -> pd.DataFram
     # Filter: ignore edges which start in a regulator or catalyst; even for a reversible reaction it
     # doesn't make sense for a regulator to be impacted by a target
     filter_mask = ~reversible_reaction_edges[
-        NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM
+        NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM
     ].isin(
         [
             MINI_SBO_FROM_NAME[x]
@@ -629,15 +629,18 @@ def _reverse_network_edges(augmented_network_edges: pd.DataFrame) -> pd.DataFram
     r_reaction_edges = _apply_edge_reversal_mapping(r_reaction_edges)
 
     # Handle special cases (negate stoichiometries)
-    r_reaction_edges = _handle_special_reversal_cases(r_reaction_edges)
+    # Note: ignore_direction=True because direction attribute is added later
+    r_reaction_edges = _handle_special_reversal_cases(
+        r_reaction_edges, ignore_direction=True
+    )
 
     # Transform SBO terms: swap reactant <-> product (specific to network creation)
     reactant_term = MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT]
     product_term = MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT]
 
-    if NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM in r_reaction_edges.columns:
-        r_reaction_edges[NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM] = r_reaction_edges[
-            NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM
+    if NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM in r_reaction_edges.columns:
+        r_reaction_edges[NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM] = r_reaction_edges[
+            NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM
         ].replace(
             {
                 reactant_term: product_term,
@@ -645,9 +648,9 @@ def _reverse_network_edges(augmented_network_edges: pd.DataFrame) -> pd.DataFram
             }
         )
 
-    if NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM in r_reaction_edges.columns:
-        r_reaction_edges[NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM] = r_reaction_edges[
-            NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM
+    if NAPISTU_GRAPH_EDGES.SBO_TERM_DOWNSTREAM in r_reaction_edges.columns:
+        r_reaction_edges[NAPISTU_GRAPH_EDGES.SBO_TERM_DOWNSTREAM] = r_reaction_edges[
+            NAPISTU_GRAPH_EDGES.SBO_TERM_DOWNSTREAM
         ].replace(
             {
                 reactant_term: product_term,

@@ -26,7 +26,7 @@ def test_validate_graph_attributes(sbml_dfs):
     assert (
         ig_utils.validate_edge_attributes(
             napistu_graph,
-            [NAPISTU_GRAPH_EDGES.WEIGHT, NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT],
+            [NAPISTU_GRAPH_EDGES.WEIGHT, NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM],
         )
         is None
     )

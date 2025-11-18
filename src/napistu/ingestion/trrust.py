@@ -33,6 +33,7 @@ from napistu.ingestion.constants import (
     TTRUST_URL_RAW_DATA_HUMAN,
 )
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
+from napistu.network.constants import NAPISTU_GRAPH_EDGES
 from napistu.ontologies.constants import GENODEXITO_DEFS
 from napistu.ontologies.genodexito import Genodexito
 from napistu.sbml_dfs_core import SBML_dfs
@@ -196,8 +197,8 @@ def convert_trrust_to_sbml_dfs(
 
     gene_gene_identifier_edgelist = edge_summaries_df.rename(
         {
-            "from": INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-            "to": INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+            NAPISTU_GRAPH_EDGES.FROM: INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+            NAPISTU_GRAPH_EDGES.TO: INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
         },
         axis=1,
     ).assign(
@@ -207,15 +208,15 @@ def convert_trrust_to_sbml_dfs(
     gene_gene_identifier_edgelist[SBML_DFS.R_NAME] = [
         f"{x} {y} of {z}"
         for x, y, z in zip(
-            gene_gene_identifier_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME],
+            gene_gene_identifier_edgelist[INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM],
             gene_gene_identifier_edgelist["sign"],
-            gene_gene_identifier_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME],
+            gene_gene_identifier_edgelist[INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM],
         )
     ]
 
     # convert relationships to SBO terms
     interaction_edgelist = gene_gene_identifier_edgelist.rename(
-        {"sign": INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME}, axis=1
+        {"sign": INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM}, axis=1
     )
 
     # format pubmed identifiers of interactions
@@ -229,12 +230,12 @@ def convert_trrust_to_sbml_dfs(
     # reduce to essential variables
     interaction_edgelist = interaction_edgelist[
         [
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT,
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM,
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM,
             SBML_DFS.R_NAME,
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM,
             SBML_DFS.R_IDENTIFIERS,
             SBML_DFS.R_ISREVERSIBLE,
         ]

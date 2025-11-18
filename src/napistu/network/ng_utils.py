@@ -1270,7 +1270,7 @@ def _validate_assets_graph_dist(
                 NAPISTU_GRAPH_EDGES.FROM,
                 NAPISTU_GRAPH_EDGES.TO,
                 NAPISTU_GRAPH_EDGES.WEIGHT,
-                NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+                NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM,
             ]
         ],
         left_on=[DISTANCES.SC_ID_ORIGIN, DISTANCES.SC_ID_DEST],

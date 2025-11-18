@@ -543,16 +543,16 @@ class SBML_dfs:
         ----------
         interaction_edgelist : pd.DataFrame
             Table containing molecular interactions with columns:
-            - upstream_name : str, matches "s_name" from species_df
-            - downstream_name : str, matches "s_name" from species_df
+            - name_upstream : str, matches "s_name" from species_df
+            - name_downstream : str, matches "s_name" from species_df
             - r_name : str, name for the interaction
             - r_Identifiers : identifiers.Identifiers, supporting identifiers
-            - upstream_compartment : str, matches "c_name" from compartments_df
-            - downstream_compartment : str, matches "c_name" from compartments_df
-            - upstream_sbo_term_name : str, SBO term defining interaction type
-            - downstream_sbo_term_name : str, SBO term defining interaction type
-            - upstream_stoichiometry : float, stoichiometry of upstream species
-            - downstream_stoichiometry : float, stoichiometry of downstream species
+            - compartment_upstream : str, matches "c_name" from compartments_df
+            - compartment_downstream : str, matches "c_name" from compartments_df
+            - sbo_term_name_upstream : str, SBO term defining interaction type
+            - sbo_term_name_downstream : str, SBO term defining interaction type
+            - stoichiometry_upstream : float, stoichiometry of upstream species
+            - stoichiometry_downstream : float, stoichiometry of downstream species
             - r_isreversible : bool, whether reaction is reversible
         species_df : pd.DataFrame
             Table defining molecular species with columns:

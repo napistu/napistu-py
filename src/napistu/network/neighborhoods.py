@@ -430,7 +430,7 @@ def create_neighborhood_dict_entry(
         # Fill missing/NaN SBO terms with "bystander" (e.g., when upstream is a reaction)
         # Bystander doesn't affect polarity calculation
         edges[NET_POLARITY.LINK_POLARITY] = (
-            edges[NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM]
+            edges[NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM]
             .map(MINI_SBO_TO_NAME, na_action="ignore")
             .map(MINI_SBO_NAME_TO_POLARITY, na_action="ignore")
             .fillna(NET_POLARITY.BYSTANDER)
@@ -1244,7 +1244,7 @@ def _find_neighbors_paths(
         neighborhood_paths = neighborhood_graph.get_shortest_paths(
             v=sc_id,
             to=ancestors_list,
-            weights=NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+            weights=NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM,
             mode="in",
             output="epath",
         )
@@ -1253,7 +1253,7 @@ def _find_neighbors_paths(
         neighborhood_paths,
         edges,
         vertices=ancestors_list,
-        weight_var=NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+        weight_var=NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM,
     )
     upstream_path_attrs = upstream_path_attrs.assign(
         node_orientation=NEIGHBORHOOD_NETWORK_TYPES.UPSTREAM
@@ -1447,7 +1447,7 @@ def _precompute_neighbors(
                     NAPISTU_EDGELIST.SC_ID_DEST
                 ].isin(compartmentalized_species)
             ]
-            # sort by path_upstream_weight so we can retain the lowest weight neighbors
+            # sort by path_weight_upstream so we can retain the lowest weight neighbors
             # we allow for upstream weights to differ from downstream weights
             # when creating a network in process_napistu_graph.
             #
@@ -1458,7 +1458,7 @@ def _precompute_neighbors(
             # the logic is flipped if we are looking for ancestors where
             # we penalize based on the number of parents of a node when
             # we use it (i.e., the default upstream_weight).
-            .sort_values(DISTANCES.PATH_UPSTREAM_WEIGHT)
+            .sort_values(DISTANCES.PATH_WEIGHT_UPSTREAM)
             .groupby(NAPISTU_EDGELIST.SC_ID_DEST)
             .head(top_n)
         )

@@ -208,8 +208,8 @@ def convert_string_to_sbml_dfs(
     interaction_edgelist = _build_interactor_edgelist(uq_string_edgelist)
 
     interaction_edgelist_defaults = {
-        INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.INTERACTOR,
-        INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.INTERACTOR,
+        INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM: SBOTERM_NAMES.INTERACTOR,
+        INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM: SBOTERM_NAMES.INTERACTOR,
         SBML_DFS.R_ISREVERSIBLE: True,
     }
 
@@ -349,8 +349,8 @@ def _build_interactor_edgelist(
 
     dat = edgelist.rename(
         columns={
-            upstream_col_name: INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-            downstream_col_name: INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+            upstream_col_name: INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+            downstream_col_name: INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
         }
     ).assign(
         **{
@@ -367,8 +367,8 @@ def _build_interactor_edgelist(
                         d,
                         d.rename(
                             columns={
-                                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
-                                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
+                                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM: INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
+                                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM: INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
                             }
                         ),
                     ]
@@ -378,8 +378,8 @@ def _build_interactor_edgelist(
 
     interaction_edgelist = dat
     interaction_edgelist[SBML_DFS.R_NAME] = _build_string_reaction_name(
-        dat[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME],
-        dat[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME],
+        dat[INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM],
+        dat[INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM],
     )
 
     return interaction_edgelist

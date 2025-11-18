@@ -789,7 +789,7 @@ def exporter():
     pass
 
 
-@exporter.command(name="export_igraph")
+@exporter.command(name="export_napistu_graph")
 @sbml_dfs_input
 @click.argument("output_uri", type=str)
 @click.option(
@@ -845,7 +845,7 @@ def exporter():
     default=False,
     help="Deduplicate edges so 0-1 edges connect each vertex.",
 )
-def export_igraph(
+def export_napistu_graph(
     sbml_dfs_uri: str,
     output_uri: str,
     graph_attrs_spec_uri: str | None,
@@ -927,7 +927,7 @@ def export_igraph(
     "--weight_vars",
     "-w",
     type=str,
-    default=[NAPISTU_GRAPH_EDGES.WEIGHT, NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT],
+    default=[NAPISTU_GRAPH_EDGES.WEIGHT, NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM],
     help="One or more variables defining edge weights to use when calculating weighted shortest paths.",
 )
 def export_precomputed_distances(

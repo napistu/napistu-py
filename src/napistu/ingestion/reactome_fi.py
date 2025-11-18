@@ -223,8 +223,8 @@ def create_interaction_edgelist(interactions: pd.DataFrame) -> pd.DataFrame:
             [
                 REACTOME_FI.GENE1,
                 REACTOME_FI.GENE2,
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME,
+                INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM,
                 REACTOME_FI.SCORE,
             ]
         ]
@@ -238,17 +238,17 @@ def create_interaction_edgelist(interactions: pd.DataFrame) -> pd.DataFrame:
         formatted_interactions.reset_index()
         .rename(
             columns={
-                REACTOME_FI.GENE1: INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                REACTOME_FI.GENE2: INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                REACTOME_FI.GENE1: INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                REACTOME_FI.GENE2: INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
             }
         )
         .assign(r_Identifiers=identifiers.Identifiers([]))
     )
     fi_edgelist[SBML_DFS.R_NAME] = fi_edgelist.apply(
         lambda row: sbml_dfs_utils._name_interaction(
-            row[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME],
-            row[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME],
-            row[INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME],
+            row[INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM],
+            row[INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM],
+            row[INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM],
         ),
         axis=1,
     )
@@ -316,7 +316,7 @@ def _parse_reactome_fi_annotations(interactions: pd.DataFrame) -> pd.DataFrame:
                 {
                     REACTOME_FI.ANNOTATION: annot,
                     REACTOME_FI.DIRECTION_RAW: direction,
-                    INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: forward_match,
+                    INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM: forward_match,
                     REACTOME_FI.DIRECTION: REACTOME_FI.FORWARD,
                 }
             )
@@ -326,7 +326,7 @@ def _parse_reactome_fi_annotations(interactions: pd.DataFrame) -> pd.DataFrame:
                 {
                     REACTOME_FI.ANNOTATION: annot,
                     REACTOME_FI.DIRECTION_RAW: direction,
-                    INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: reverse_match,
+                    INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM: reverse_match,
                     REACTOME_FI.DIRECTION: REACTOME_FI.REVERSE,
                 }
             )
@@ -334,18 +334,18 @@ def _parse_reactome_fi_annotations(interactions: pd.DataFrame) -> pd.DataFrame:
     formatted_annotations = pd.DataFrame(annotations)
 
     # set downstream sbo term and reversibility based sbo term (interactors are unidrected and symmetrical)
-    formatted_annotations[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME] = [
+    formatted_annotations[INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM] = [
         (
             SBOTERM_NAMES.INTERACTOR
             if x == SBOTERM_NAMES.INTERACTOR
             else SBOTERM_NAMES.MODIFIED
         )
-        for x in formatted_annotations[INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME]
+        for x in formatted_annotations[INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM]
     ]
 
     formatted_annotations[SBML_DFS.R_ISREVERSIBLE] = [
         True if x == SBOTERM_NAMES.INTERACTOR else False
-        for x in formatted_annotations[INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME]
+        for x in formatted_annotations[INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM]
     ]
 
     return formatted_annotations

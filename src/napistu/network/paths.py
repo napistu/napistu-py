@@ -105,11 +105,11 @@ def find_shortest_reaction_paths(
             NAPISTU_GRAPH_EDGES.WEIGHT: napistu_graph.es.get_attribute_values(
                 weight_var
             ),
-            NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM: napistu_graph.es.get_attribute_values(
-                NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM
+            NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM: napistu_graph.es.get_attribute_values(
+                NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM
             ),
-            NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM: napistu_graph.es.get_attribute_values(
-                NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM
+            NAPISTU_GRAPH_EDGES.SBO_TERM_DOWNSTREAM: napistu_graph.es.get_attribute_values(
+                NAPISTU_GRAPH_EDGES.SBO_TERM_DOWNSTREAM
             ),
             NAPISTU_GRAPH_EDGES.DIRECTION: napistu_graph.es.get_attribute_values(
                 NAPISTU_GRAPH_EDGES.DIRECTION
@@ -156,7 +156,7 @@ def find_shortest_reaction_paths(
             # Fill missing/NaN SBO terms with "bystander" (e.g., when upstream is a reaction)
             # Bystander doesn't affect polarity calculation
             path_edges[NET_POLARITY.LINK_POLARITY] = (
-                path_edges[NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM]
+                path_edges[NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM]
                 .map(MINI_SBO_TO_NAME, na_action="ignore")
                 .map(MINI_SBO_NAME_TO_POLARITY, na_action="ignore")
                 .fillna(NET_POLARITY.BYSTANDER)

@@ -1091,9 +1091,9 @@ class NapistuGraph(ig.Graph):
         stats["n_edges"] = len(self.es)
 
         # Concatenate and count both upstream and downstream SBO terms, then map to names
-        upstream_sbo_terms = self.get_edge_series(NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM)
+        upstream_sbo_terms = self.get_edge_series(NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM)
         downstream_sbo_terms = self.get_edge_series(
-            NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM
+            NAPISTU_GRAPH_EDGES.SBO_TERM_DOWNSTREAM
         )
 
         # Concatenate both series, filter out None/NaN and empty strings, count, then map to names
@@ -1548,7 +1548,7 @@ class NapistuGraph(ig.Graph):
             # count parents and children and create weights based on them
             self.es[NAPISTU_GRAPH_EDGES.WEIGHT] = self.es["topo_weights"]
             if self.is_directed():
-                self.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = self.es[
+                self.es[NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM] = self.es[
                     "upstream_topo_weights"
                 ]
 
@@ -1563,7 +1563,7 @@ class NapistuGraph(ig.Graph):
             # set weights as a constant
             self.es[NAPISTU_GRAPH_EDGES.WEIGHT] = 1
             if self.is_directed():
-                self.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = 1
+                self.es[NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM] = 1
 
         elif weighting_strategy == NAPISTU_WEIGHTING_STRATEGIES.MIXED:
             self._add_graph_weights_mixed(weight_by)
@@ -1723,7 +1723,7 @@ class NapistuGraph(ig.Graph):
 
         self.es[NAPISTU_GRAPH_EDGES.WEIGHT] = edges_df[NAPISTU_GRAPH_EDGES.WEIGHT]
         if self.is_directed():
-            self.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = edges_df[
+            self.es[NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM] = edges_df[
                 NAPISTU_GRAPH_EDGES.WEIGHT
             ]
 
@@ -1776,9 +1776,9 @@ class NapistuGraph(ig.Graph):
                 edge[NAPISTU_GRAPH_EDGES.WEIGHT] = current_weight * multiplier
 
             # Modify 'upstream_weight' attribute if it exists (for directed graphs)
-            if NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT in edge.attributes():
-                current_upstream = edge[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT]
-                edge[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = (
+            if NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM in edge.attributes():
+                current_upstream = edge[NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM]
+                edge[NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM] = (
                     current_upstream * multiplier
                 )
 
@@ -2456,7 +2456,9 @@ def _apply_edge_reversal_mapping(edges_df: pd.DataFrame) -> pd.DataFrame:
     return edges_df.rename(columns=valid_mapping)
 
 
-def _handle_special_reversal_cases(edges_df: pd.DataFrame) -> pd.DataFrame:
+def _handle_special_reversal_cases(
+    edges_df: pd.DataFrame, ignore_direction: bool = False
+) -> pd.DataFrame:
     """
     Handle special cases that need more than simple attribute swapping.
 
@@ -2468,6 +2470,9 @@ def _handle_special_reversal_cases(edges_df: pd.DataFrame) -> pd.DataFrame:
     ----------
     edges_df : pd.DataFrame
         Edge dataframe after basic attribute swapping (upstream/downstream already swapped)
+    ignore_direction : bool, default=False
+        If True, skip the direction attribute check and mapping. Useful when the direction
+        attribute doesn't exist yet (e.g., during initial network creation).
 
     Returns
     -------
@@ -2476,42 +2481,43 @@ def _handle_special_reversal_cases(edges_df: pd.DataFrame) -> pd.DataFrame:
 
     Warnings
     --------
-    Logs warnings when expected attributes are missing
+    Logs warnings when expected attributes are missing (unless ignore_direction=True)
     """
     result_df = edges_df.copy()
 
     # Handle stoichiometry sign flip for upstream and downstream
     # Note: upstream/downstream attributes are already swapped by _apply_edge_reversal_mapping
     # so we just need to negate them here
-    if NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY in result_df.columns:
-        result_df[NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY] = result_df[
-            NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY
+    if NAPISTU_GRAPH_EDGES.STOICHIOMETRY_UPSTREAM in result_df.columns:
+        result_df[NAPISTU_GRAPH_EDGES.STOICHIOMETRY_UPSTREAM] = result_df[
+            NAPISTU_GRAPH_EDGES.STOICHIOMETRY_UPSTREAM
         ].apply(lambda x: -1 * x if x is not None and x != 0 else (0 if x == 0 else x))
     else:
         logger.warning(
-            f"Missing expected '{NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY}' attribute during edge reversal. "
+            f"Missing expected '{NAPISTU_GRAPH_EDGES.STOICHIOMETRY_UPSTREAM}' attribute during edge reversal. "
             "Stoichiometry signs will not be flipped."
         )
 
-    if NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY in result_df.columns:
-        result_df[NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY] = result_df[
-            NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY
+    if NAPISTU_GRAPH_EDGES.STOICHIOMETRY_DOWNSTREAM in result_df.columns:
+        result_df[NAPISTU_GRAPH_EDGES.STOICHIOMETRY_DOWNSTREAM] = result_df[
+            NAPISTU_GRAPH_EDGES.STOICHIOMETRY_DOWNSTREAM
         ].apply(lambda x: -1 * x if x is not None and x != 0 else (0 if x == 0 else x))
     else:
         logger.warning(
-            f"Missing expected '{NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY}' attribute during edge reversal. "
+            f"Missing expected '{NAPISTU_GRAPH_EDGES.STOICHIOMETRY_DOWNSTREAM}' attribute during edge reversal. "
             "Stoichiometry signs will not be flipped."
         )
 
     # Handle direction enum mapping
-    if NAPISTU_GRAPH_EDGES.DIRECTION in result_df.columns:
-        result_df[NAPISTU_GRAPH_EDGES.DIRECTION] = result_df[
-            NAPISTU_GRAPH_EDGES.DIRECTION
-        ].map(EDGE_DIRECTION_MAPPING)
-    else:
-        logger.warning(
-            f"Missing expected '{NAPISTU_GRAPH_EDGES.DIRECTION}' attribute during edge reversal. "
-            "Direction metadata will not be updated."
-        )
+    if not ignore_direction:
+        if NAPISTU_GRAPH_EDGES.DIRECTION in result_df.columns:
+            result_df[NAPISTU_GRAPH_EDGES.DIRECTION] = result_df[
+                NAPISTU_GRAPH_EDGES.DIRECTION
+            ].map(EDGE_DIRECTION_MAPPING)
+        else:
+            logger.warning(
+                f"Missing expected '{NAPISTU_GRAPH_EDGES.DIRECTION}' attribute during edge reversal. "
+                "Direction metadata will not be updated."
+            )
 
     return result_df

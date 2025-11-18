@@ -15,6 +15,7 @@ from napistu.network.constants import (
     DROP_REACTIONS_WHEN,
     GRAPH_WIRING_HIERARCHIES,
     NAPISTU_GRAPH_EDGES,
+    NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS,
     NAPISTU_GRAPH_NODE_TYPES,
     VALID_DROP_REACTIONS_WHEN,
     VALID_GRAPH_WIRING_APPROACHES,
@@ -401,27 +402,17 @@ def _format_same_tier_edges(rxn_species: pd.DataFrame, r_id: str) -> pd.DataFram
             {
                 "sc_id_left": NAPISTU_GRAPH_EDGES.FROM,
                 "sc_id_right": NAPISTU_GRAPH_EDGES.TO,
-                "stoichiometry_left": NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY,
-                "stoichiometry_right": NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY,
-                "sbo_term_left": NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM,
-                "sbo_term_right": NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM,
+                "stoichiometry_left": NAPISTU_GRAPH_EDGES.STOICHIOMETRY_UPSTREAM,
+                "stoichiometry_right": NAPISTU_GRAPH_EDGES.STOICHIOMETRY_DOWNSTREAM,
+                "sbo_term_left": NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM,
+                "sbo_term_right": NAPISTU_GRAPH_EDGES.SBO_TERM_DOWNSTREAM,
             },
             axis=1,
         )
         .assign(r_id=r_id)
     )
 
-    OUT_ATTRS = [
-        NAPISTU_GRAPH_EDGES.FROM,
-        NAPISTU_GRAPH_EDGES.TO,
-        NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY,
-        NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY,
-        NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM,
-        NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM,
-        SBML_DFS.R_ID,
-    ]
-
-    return crossed_species[OUT_ATTRS]
+    return crossed_species[NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS]
 
 
 def _log_pathological_same_tier(distinct_metadata: pd.DataFrame, r_id: str) -> None:
@@ -510,19 +501,14 @@ def _format_cross_tier_edges(
 
         rxn_edges.append(formatted_tier_combo)
 
+    # Concatenate edges and select columns matching wiring vars (excluding R_ID which is added below)
+    wiring_cols = [
+        col
+        for col in NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS
+        if col != NAPISTU_GRAPH_EDGES.R_ID
+    ]
     rxn_edges_df = (
-        pd.concat(rxn_edges)[
-            [
-                NAPISTU_GRAPH_EDGES.FROM,
-                NAPISTU_GRAPH_EDGES.TO,
-                NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY,
-                NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY,
-                NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM,
-                NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM,
-            ]
-        ]
-        .reset_index(drop=True)
-        .assign(r_id=r_id)
+        pd.concat(rxn_edges)[wiring_cols].reset_index(drop=True).assign(r_id=r_id)
     )
 
     return rxn_edges_df
@@ -625,8 +611,8 @@ def _format_tier_combo(
     Returns
     -------
     pd.DataFrame
-        DataFrame of edges, each with columns: 'from', 'to', 'upstream_stoichiometry',
-        'downstream_stoichiometry', 'upstream_sbo_term', 'downstream_sbo_term', and 'r_id'.
+        DataFrame of edges, each with columns: 'from', 'to', 'stoichiometry_upstream',
+        'stoichiometry_downstream', 'sbo_term_upstream', 'sbo_term_downstream', and 'r_id'.
         The number of edges is the product of the number of entities in the upstream tier
         and the number in the downstream tier. Attributes will be missing (None/NaN) if the
         corresponding tier is a reaction.
@@ -645,8 +631,8 @@ def _format_tier_combo(
         {
             k: v
             for k, v in {
-                SBML_DFS.STOICHIOMETRY: NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY,
-                SBML_DFS.SBO_TERM: NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM,
+                SBML_DFS.STOICHIOMETRY: NAPISTU_GRAPH_EDGES.STOICHIOMETRY_UPSTREAM,
+                SBML_DFS.SBO_TERM: NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM,
             }.items()
             if k in upstream_tier.columns
         }
@@ -663,8 +649,8 @@ def _format_tier_combo(
         {
             k: v
             for k, v in {
-                SBML_DFS.STOICHIOMETRY: NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY,
-                SBML_DFS.SBO_TERM: NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM,
+                SBML_DFS.STOICHIOMETRY: NAPISTU_GRAPH_EDGES.STOICHIOMETRY_DOWNSTREAM,
+                SBML_DFS.SBO_TERM: NAPISTU_GRAPH_EDGES.SBO_TERM_DOWNSTREAM,
             }.items()
             if k in downstream_tier.columns
         }
@@ -679,16 +665,14 @@ def _format_tier_combo(
     formatted_tier_combo = upstream_data.merge(downstream_data, on="_joiner").drop(
         columns=["_joiner"]
     )
+    # Reindex to match wiring vars order (excluding R_ID which isn't in tier combo output)
+    wiring_cols = [
+        col
+        for col in NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS
+        if col != NAPISTU_GRAPH_EDGES.R_ID
+    ]
     formatted_tier_combo = formatted_tier_combo.reindex(
-        columns=[
-            NAPISTU_GRAPH_EDGES.FROM,
-            NAPISTU_GRAPH_EDGES.TO,
-            NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY,
-            NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY,
-            NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM,
-            NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM,
-        ],
-        fill_value=None,
+        columns=wiring_cols, fill_value=None
     )
 
     return formatted_tier_combo
@@ -755,14 +739,18 @@ def _interactor_duos_to_wide(interactor_duos: pd.DataFrame):
     # Flatten column names and rename
     wide_df.columns = [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
 
-    # Reset index to make r_id a column
+    # Reset index to make r_id a column and add SBO terms and stoichiometries
     interactor_sbo_term = MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
-    return wide_df.reset_index().assign(
-        upstream_sbo_term=interactor_sbo_term,
-        downstream_sbo_term=interactor_sbo_term,
-        upstream_stoichiometry=0,
-        downstream_stoichiometry=0,
+    result = wide_df.reset_index().assign(
+        **{
+            NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM: interactor_sbo_term,
+            NAPISTU_GRAPH_EDGES.SBO_TERM_DOWNSTREAM: interactor_sbo_term,
+            NAPISTU_GRAPH_EDGES.STOICHIOMETRY_UPSTREAM: 0,
+            NAPISTU_GRAPH_EDGES.STOICHIOMETRY_DOWNSTREAM: 0,
+        }
     )
+    # Reorder columns to match NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS
+    return result[NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS]
 
 
 def _validate_interactor_duos(interactor_duos: pd.DataFrame):
