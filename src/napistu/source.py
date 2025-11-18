@@ -670,16 +670,12 @@ def _collapse_source_df(source_df: Union[pd.DataFrame, pd.Series]) -> pd.Series:
                 ),
                 SOURCE_SPEC.MODEL: utils.safe_join_set(source_df[SOURCE_SPEC.MODEL]),
                 SOURCE_SPEC.DATA_SOURCE: (
-                    utils.safe_join_set(
-                        source_df[SOURCE_SPEC.DATA_SOURCE], unique_only=True
-                    )
+                    utils.safe_join_set(source_df[SOURCE_SPEC.DATA_SOURCE])
                     if SOURCE_SPEC.DATA_SOURCE in source_df.columns
                     else None
                 ),
                 SOURCE_SPEC.ORGANISMAL_SPECIES: (
-                    utils.safe_join_set(
-                        source_df[SOURCE_SPEC.ORGANISMAL_SPECIES], unique_only=True
-                    )
+                    utils.safe_join_set(source_df[SOURCE_SPEC.ORGANISMAL_SPECIES])
                     if SOURCE_SPEC.ORGANISMAL_SPECIES in source_df.columns
                     else None
                 ),
