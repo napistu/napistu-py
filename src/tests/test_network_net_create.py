@@ -6,6 +6,7 @@ from napistu.network import net_create, net_create_utils
 from napistu.network.constants import (
     DROP_REACTIONS_WHEN,
     GRAPH_WIRING_APPROACHES,
+    NAPISTU_GRAPH_EDGE_DIRECTIONS,
     NAPISTU_GRAPH_EDGES,
 )
 
@@ -53,7 +54,7 @@ def test_bipartite_regression(sbml_dfs):
 
 
 def test_reverse_network_edges(reaction_species_examples):
-
+    """Test _reverse_network_edges function."""
     graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df(
         GRAPH_WIRING_APPROACHES.REGULATORY
     )
@@ -65,10 +66,41 @@ def test_reverse_network_edges(reaction_species_examples):
         drop_reactions_when=DROP_REACTIONS_WHEN.SAME_TIER,
     )
 
-    augmented_network_edges = rxn_edges.assign(r_isreversible=True)
-    augmented_network_edges["sc_parents"] = range(0, augmented_network_edges.shape[0])
-    augmented_network_edges["sc_children"] = range(
-        augmented_network_edges.shape[0], 0, -1
+    # Create test edges with all required attributes
+    augmented_network_edges = rxn_edges.assign(
+        r_isreversible=True,
+        sc_parents=range(0, rxn_edges.shape[0]),
+        sc_children=range(rxn_edges.shape[0], 0, -1),
+        weight=[1.0, 2.0, 3.0, 4.0][: rxn_edges.shape[0]],
+        upstream_weight=[0.5, 1.5, 2.5, 3.5][: rxn_edges.shape[0]],
     )
 
-    assert net_create._reverse_network_edges(augmented_network_edges).shape[0] == 2
+    reversed_edges = net_create._reverse_network_edges(augmented_network_edges)
+
+    # Basic checks
+    assert reversed_edges.shape[0] == 2  # Should filter out regulator/catalyst edges
+    assert NAPISTU_GRAPH_EDGES.DIRECTION in reversed_edges.columns
+    assert all(
+        reversed_edges[NAPISTU_GRAPH_EDGES.DIRECTION]
+        == NAPISTU_GRAPH_EDGE_DIRECTIONS.REVERSE
+    )
+
+    # Verify that edges are actually reversed by checking FROM/TO pairs are swapped
+    original_from_to_pairs = set(
+        zip(
+            augmented_network_edges[NAPISTU_GRAPH_EDGES.FROM],
+            augmented_network_edges[NAPISTU_GRAPH_EDGES.TO],
+        )
+    )
+    reversed_from_to_pairs = set(
+        zip(
+            reversed_edges[NAPISTU_GRAPH_EDGES.FROM],
+            reversed_edges[NAPISTU_GRAPH_EDGES.TO],
+        )
+    )
+    # Each reversed edge should have swapped FROM/TO
+    assert len(reversed_from_to_pairs) > 0
+    assert any(
+        (orig_to, orig_from) in reversed_from_to_pairs
+        for orig_from, orig_to in original_from_to_pairs
+    )

@@ -195,22 +195,22 @@ class NapistuGraph(ig.Graph):
     @property
     def is_reversed(self) -> bool:
         """Check if the graph has been reversed."""
-        return self._metadata["is_reversed"]
+        return self._metadata[NAPISTU_METADATA_KEYS.IS_REVERSED]
 
     @property
     def wiring_approach(self) -> Optional[str]:
         """Get the graph type (bipartite, regulatory, etc.)."""
-        return self._metadata["wiring_approach"]
+        return self._metadata[NAPISTU_METADATA_KEYS.WIRING_APPROACH]
 
     @property
     def weighting_strategy(self) -> Optional[str]:
         """Get the weighting strategy used."""
-        return self._metadata["weighting_strategy"]
+        return self._metadata[NAPISTU_METADATA_KEYS.WEIGHTING_STRATEGY]
 
     @property
     def weight_by(self) -> Optional[list[str]]:
         """Get the weight_by attributes used."""
-        return self._metadata["weight_by"]
+        return self._metadata[NAPISTU_METADATA_KEYS.WEIGHT_BY]
 
     def add_all_entity_data(
         self,
