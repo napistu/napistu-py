@@ -23,7 +23,9 @@ def test_format_interactors(reaction_species_examples):
 
     r_id = "foo"
     # interactions are formatted
-    graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df("regulatory")
+    graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df(
+        GRAPH_WIRING_APPROACHES.REGULATORY
+    )
 
     assert (
         net_create_utils.format_tiered_reaction_species(
@@ -55,7 +57,9 @@ def test_format_interactors(reaction_species_examples):
     )
 
     assert rxn_edges.shape[0] == 3
-    assert rxn_edges.iloc[0][["from", "to"]].tolist() == ["stim", "sub"]
+    assert rxn_edges.iloc[0][
+        [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+    ].tolist() == ["stim", "sub"]
 
     # add catalyst + stimulator
     rxn_edges = net_create_utils.format_tiered_reaction_species(
@@ -66,8 +70,12 @@ def test_format_interactors(reaction_species_examples):
     )
 
     assert rxn_edges.shape[0] == 4
-    assert rxn_edges.iloc[0][["from", "to"]].tolist() == ["stim", "cat"]
-    assert rxn_edges.iloc[1][["from", "to"]].tolist() == ["cat", "sub"]
+    assert rxn_edges.iloc[0][
+        [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+    ].tolist() == ["stim", "cat"]
+    assert rxn_edges.iloc[1][
+        [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+    ].tolist() == ["cat", "sub"]
 
     # no substrate
     rxn_edges = net_create_utils.format_tiered_reaction_species(
@@ -79,13 +87,21 @@ def test_format_interactors(reaction_species_examples):
 
     assert rxn_edges.shape[0] == 5
     # stimulator -> reactant
-    assert rxn_edges.iloc[0][["from", "to"]].tolist() == ["stim1", "cat"]
-    assert rxn_edges.iloc[1][["from", "to"]].tolist() == ["stim2", "cat"]
-    assert rxn_edges.iloc[2][["from", "to"]].tolist() == ["inh", "cat"]
+    assert rxn_edges.iloc[0][
+        [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+    ].tolist() == ["stim1", "cat"]
+    assert rxn_edges.iloc[1][
+        [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+    ].tolist() == ["stim2", "cat"]
+    assert rxn_edges.iloc[2][
+        [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+    ].tolist() == ["inh", "cat"]
 
     # use the surrogate model tiered layout also
 
-    graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df("surrogate")
+    graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df(
+        GRAPH_WIRING_APPROACHES.SURROGATE
+    )
 
     rxn_edges = net_create_utils.format_tiered_reaction_species(
         reaction_species_examples["all_entities"],
@@ -95,15 +111,21 @@ def test_format_interactors(reaction_species_examples):
     )
 
     assert rxn_edges.shape[0] == 4
-    assert rxn_edges.iloc[0][["from", "to"]].tolist() == ["stim", "sub"]
-    assert rxn_edges.iloc[1][["from", "to"]].tolist() == ["sub", "cat"]
+    assert rxn_edges.iloc[0][
+        [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+    ].tolist() == ["stim", "sub"]
+    assert rxn_edges.iloc[1][
+        [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
+    ].tolist() == ["sub", "cat"]
 
 
 def test_drop_reactions_when_parameters(reaction_species_examples):
     """Test different drop_reactions_when parameter values and edge cases."""
 
     r_id = "foo"
-    graph_hierarchy = net_create_utils.create_graph_hierarchy_df("regulatory")
+    graph_hierarchy = net_create_utils.create_graph_hierarchy_df(
+        GRAPH_WIRING_APPROACHES.REGULATORY
+    )
 
     # Test ALWAYS - should drop reaction regardless of tiers
     edges_always = net_create_utils.format_tiered_reaction_species(
@@ -151,7 +173,9 @@ def test_edge_cases_and_validation(reaction_species_examples):
     """Test edge cases, empty inputs, and validation errors."""
 
     r_id = "foo"
-    graph_hierarchy = net_create_utils.create_graph_hierarchy_df("regulatory")
+    graph_hierarchy = net_create_utils.create_graph_hierarchy_df(
+        GRAPH_WIRING_APPROACHES.REGULATORY
+    )
 
     # Test single species
     edges_single = net_create_utils.format_tiered_reaction_species(
@@ -231,8 +255,8 @@ def test_drop_reactions_when_always(reaction_species_examples):
     assert r_id not in edges_modifier[NAPISTU_GRAPH_EDGES.FROM].values
     assert r_id not in edges_modifier[NAPISTU_GRAPH_EDGES.TO].values
     # Should have modifier -> modified edge
-    assert "modifier" in edges_modifier[NAPISTU_GRAPH_EDGES.FROM].values
-    assert "modified" in edges_modifier[NAPISTU_GRAPH_EDGES.TO].values
+    assert SBOTERM_NAMES.MODIFIER in edges_modifier[NAPISTU_GRAPH_EDGES.FROM].values
+    assert SBOTERM_NAMES.MODIFIED in edges_modifier[NAPISTU_GRAPH_EDGES.TO].values
 
     # Test 3: Multi-species with reactant, catalyst, and product
     edges_multi = net_create_utils.format_tiered_reaction_species(
@@ -272,7 +296,9 @@ def test_drop_reaction_when_edgelist():
         }
     ).set_index(SBML_DFS.SBO_TERM)
 
-    graph_hierarchy = net_create_utils.create_graph_hierarchy_df("regulatory")
+    graph_hierarchy = net_create_utils.create_graph_hierarchy_df(
+        GRAPH_WIRING_APPROACHES.REGULATORY
+    )
     edges = net_create_utils.format_tiered_reaction_species(
         reaction_df, r_id, graph_hierarchy, DROP_REACTIONS_WHEN.EDGELIST
     )
@@ -289,7 +315,9 @@ def test_should_drop_reaction(reaction_species_examples):
 
     r_id = "foo"
 
-    graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df("regulatory")
+    graph_hierarchy_df = net_create_utils.create_graph_hierarchy_df(
+        GRAPH_WIRING_APPROACHES.REGULATORY
+    )
 
     rxn_species = reaction_species_examples["sub_and_prod"]
     net_create_utils._validate_sbo_indexed_rsc_stoi(rxn_species)
@@ -484,7 +512,7 @@ def test_wire_reaction_species_mixed_interactions(reaction_species_examples):
     # Test with different drop_reactions_when condition
     edges_always_drop = net_create_utils.wire_reaction_species(
         all_reaction_species,
-        wiring_approach="regulatory",
+        wiring_approach=GRAPH_WIRING_APPROACHES.REGULATORY,
         drop_reactions_when=DROP_REACTIONS_WHEN.ALWAYS,
     )
 
@@ -508,7 +536,7 @@ def test_wire_reaction_species_mixed_interactions(reaction_species_examples):
     # Test with EDGELIST drop condition
     edges_edgelist = net_create_utils.wire_reaction_species(
         all_reaction_species,
-        wiring_approach="regulatory",
+        wiring_approach=GRAPH_WIRING_APPROACHES.REGULATORY,
         drop_reactions_when=DROP_REACTIONS_WHEN.EDGELIST,
     )
 
@@ -537,7 +565,7 @@ def test_wire_reaction_species_mixed_interactions(reaction_species_examples):
     only_interactors = interactor_species
     edges_only_interactors = net_create_utils.wire_reaction_species(
         only_interactors,
-        wiring_approach="regulatory",
+        wiring_approach=GRAPH_WIRING_APPROACHES.REGULATORY,
         drop_reactions_when=DROP_REACTIONS_WHEN.SAME_TIER,
     )
 
@@ -550,7 +578,7 @@ def test_wire_reaction_species_mixed_interactions(reaction_species_examples):
     only_reactions = pd.concat([non_interactor_species, complex_reaction])
     edges_only_reactions = net_create_utils.wire_reaction_species(
         only_reactions,
-        wiring_approach="regulatory",
+        wiring_approach=GRAPH_WIRING_APPROACHES.REGULATORY,
         drop_reactions_when=DROP_REACTIONS_WHEN.SAME_TIER,
     )
 
@@ -571,7 +599,7 @@ def test_wire_reaction_species_validation_errors():
             SBML_DFS.R_ID: ["R1"],
             SBML_DFS.SC_ID: ["A"],
             SBML_DFS.STOICHIOMETRY: [0],
-            SBML_DFS.SBO_TERM: ["SBO:0000336"],  # interactor
+            SBML_DFS.SBO_TERM: [MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]],
         }
     )
 
@@ -597,6 +625,6 @@ def test_wire_reaction_species_validation_errors():
     ):
         net_create_utils.wire_reaction_species(
             invalid_sbo_species,
-            wiring_approach="regulatory",
+            wiring_approach=GRAPH_WIRING_APPROACHES.REGULATORY,
             drop_reactions_when=DROP_REACTIONS_WHEN.SAME_TIER,
         )
