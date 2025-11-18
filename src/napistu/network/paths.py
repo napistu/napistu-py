@@ -105,8 +105,11 @@ def find_shortest_reaction_paths(
             NAPISTU_GRAPH_EDGES.WEIGHT: napistu_graph.es.get_attribute_values(
                 weight_var
             ),
-            NAPISTU_GRAPH_EDGES.SBO_TERM: napistu_graph.es.get_attribute_values(
-                NAPISTU_GRAPH_EDGES.SBO_TERM
+            NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM: napistu_graph.es.get_attribute_values(
+                NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM
+            ),
+            NAPISTU_GRAPH_EDGES.SBO_TERM_DOWNSTREAM: napistu_graph.es.get_attribute_values(
+                NAPISTU_GRAPH_EDGES.SBO_TERM_DOWNSTREAM
             ),
             NAPISTU_GRAPH_EDGES.DIRECTION: napistu_graph.es.get_attribute_values(
                 NAPISTU_GRAPH_EDGES.DIRECTION
@@ -149,10 +152,14 @@ def find_shortest_reaction_paths(
                 right_on=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO],
             )
 
+            # Use upstream SBO term to determine link polarity (direction of edge)
+            # Fill missing/NaN SBO terms with "bystander" (e.g., when upstream is a reaction)
+            # Bystander doesn't affect polarity calculation
             path_edges[NET_POLARITY.LINK_POLARITY] = (
-                path_edges[SBML_DFS.SBO_TERM]
-                .map(MINI_SBO_TO_NAME)
-                .map(MINI_SBO_NAME_TO_POLARITY)
+                path_edges[NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM]
+                .map(MINI_SBO_TO_NAME, na_action="ignore")
+                .map(MINI_SBO_NAME_TO_POLARITY, na_action="ignore")
+                .fillna(NET_POLARITY.BYSTANDER)
             )
             # is the edge predicted to be activating, inhibiting or ambiguous?
             path_edges[NET_POLARITY.NET_POLARITY] = _calculate_net_polarity(
@@ -492,6 +499,15 @@ def _calculate_net_polarity(link_polarity_series: pd.Series) -> str:
     ambig_prefix = ""
 
     for polarity in link_polarity_series:
+        # Skip bystander - it doesn't affect polarity calculation
+        if polarity == NET_POLARITY.BYSTANDER:
+            # Bystander doesn't change polarity, just continue with current state
+            if current_polarity == 1:
+                running_polarity.append(ambig_prefix + NET_POLARITY.ACTIVATION)
+            else:
+                running_polarity.append(ambig_prefix + NET_POLARITY.INHIBITION)
+            continue
+
         if polarity == NET_POLARITY.AMBIGUOUS:
             # once a polarity becomes ambiguous it is stuck
             ambig_prefix = "ambiguous "

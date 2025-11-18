@@ -229,7 +229,7 @@ def test_precomputed_distances_neighborhoods(
             left_on=["focal_sc_id", NAPISTU_GRAPH_VERTICES.NAME],
             right_on=[DISTANCES.SC_ID_DEST, DISTANCES.SC_ID_ORIGIN],
         )
-        .query("abs(path_weight_x - path_upstream_weight) > 1e-13")
+        .query("abs(path_weight_x - path_weight_upstream) > 1e-13")
     )
 
     assert downstream_disagreement_w_precompute.shape[0] == 0
@@ -265,7 +265,7 @@ def test_precomputed_distances_serialization():
             6: "SC00000001",
         },
         DISTANCES.PATH_LENGTH: {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
-        DISTANCES.PATH_UPSTREAM_WEIGHT: {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
+        DISTANCES.PATH_WEIGHT_UPSTREAM: {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
         DISTANCES.PATH_WEIGHT: {1: 1.0, 3: 4.0, 4: 6.0, 5: 6.0, 6: 1.0},
     }
 
@@ -336,12 +336,12 @@ def test_find_unique_weight_vars():
 
     # Test Case 1: All weight variables are different
     g.es[NAPISTU_GRAPH_EDGES.WEIGHT] = [1.0, 2.0, 3.0, 4.0]
-    g.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = [1.1, 2.1, 3.1, 4.1]
+    g.es[NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM] = [1.1, 2.1, 3.1, 4.1]
     g.es["custom_weight"] = [1.5, 2.5, 3.5, 4.5]
 
     weight_vars = [
         NAPISTU_GRAPH_EDGES.WEIGHT,
-        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+        NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM,
         "custom_weight",
     ]
     unique_map, representatives = precompute._find_unique_weight_vars(g, weight_vars)
@@ -349,25 +349,25 @@ def test_find_unique_weight_vars():
     assert len(representatives) == 3
     assert unique_map == {
         NAPISTU_GRAPH_EDGES.WEIGHT: NAPISTU_GRAPH_EDGES.WEIGHT,
-        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT: NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+        NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM: NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM,
         "custom_weight": "custom_weight",
     }
 
     # Test Case 2: weight and upstream_weight are identical
-    g.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = [1.0, 2.0, 3.0, 4.0]  # Same as weight
+    g.es[NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM] = [1.0, 2.0, 3.0, 4.0]  # Same as weight
 
     unique_map, representatives = precompute._find_unique_weight_vars(
-        g, [NAPISTU_GRAPH_EDGES.WEIGHT, NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT]
+        g, [NAPISTU_GRAPH_EDGES.WEIGHT, NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM]
     )
 
     assert len(representatives) == 1
     assert (
-        unique_map[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] == NAPISTU_GRAPH_EDGES.WEIGHT
+        unique_map[NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM] == NAPISTU_GRAPH_EDGES.WEIGHT
     )  # upstream_weight should map to weight
     assert NAPISTU_GRAPH_EDGES.WEIGHT in representatives
     assert set(representatives[NAPISTU_GRAPH_EDGES.WEIGHT]) == {
         NAPISTU_GRAPH_EDGES.WEIGHT,
-        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+        NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM,
     }
 
     # Test Case 3: All three weights are identical
@@ -377,7 +377,7 @@ def test_find_unique_weight_vars():
         g,
         [
             NAPISTU_GRAPH_EDGES.WEIGHT,
-            NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+            NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM,
             "custom_weight",
         ],
     )
@@ -386,7 +386,7 @@ def test_find_unique_weight_vars():
     assert NAPISTU_GRAPH_EDGES.WEIGHT in representatives
     assert set(representatives[NAPISTU_GRAPH_EDGES.WEIGHT]) == {
         NAPISTU_GRAPH_EDGES.WEIGHT,
-        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+        NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM,
         "custom_weight",
     }
 
@@ -446,7 +446,7 @@ def test_filter_precomputed_distances_masking_logic():
             DISTANCES.SC_ID_DEST: ["X", "Y", "Z", "W", "V"],
             DISTANCES.PATH_LENGTH: [1, 2, 3, 4, 5],
             DISTANCES.PATH_WEIGHT: [1.0, 2.0, 3.0, 4.0, 5.0],
-            DISTANCES.PATH_UPSTREAM_WEIGHT: [1.1, 2.1, 3.1, 4.1, 5.1],
+            DISTANCES.PATH_WEIGHT_UPSTREAM: [1.1, 2.1, 3.1, 4.1, 5.1],
         }
     )
 
@@ -454,7 +454,7 @@ def test_filter_precomputed_distances_masking_logic():
     filtered = precompute._filter_precomputed_distances(
         sample_data,
         max_score_q=0.6,
-        path_weight_vars=[DISTANCES.PATH_WEIGHT, DISTANCES.PATH_UPSTREAM_WEIGHT],
+        path_weight_vars=[DISTANCES.PATH_WEIGHT, DISTANCES.PATH_WEIGHT_UPSTREAM],
     )
 
     assert filtered.shape[0] <= sample_data.shape[0]
@@ -464,6 +464,6 @@ def test_filter_precomputed_distances_masking_logic():
     filtered_all = precompute._filter_precomputed_distances(
         sample_data,
         max_score_q=1.0,
-        path_weight_vars=[DISTANCES.PATH_WEIGHT, DISTANCES.PATH_UPSTREAM_WEIGHT],
+        path_weight_vars=[DISTANCES.PATH_WEIGHT, DISTANCES.PATH_WEIGHT_UPSTREAM],
     )
     assert filtered_all.shape[0] == sample_data.shape[0]

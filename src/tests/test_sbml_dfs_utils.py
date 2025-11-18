@@ -21,6 +21,7 @@ from napistu.constants import (
 )
 from napistu.identifiers import Identifiers
 from napistu.ingestion.constants import (
+    COMPARTMENTS,
     COMPARTMENTS_GO_TERMS,
     GENERIC_COMPARTMENT,
     INTERACTION_EDGELIST_DEFAULTS,
@@ -345,25 +346,28 @@ def test_add_edgelist_defaults():
     # Test 1: No defaults needed - all optional columns present
     complete_edgelist = pd.DataFrame(
         {
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: ["A", "B"],
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: ["B", "C"],
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM: ["A", "B"],
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM: ["B", "C"],
             SBML_DFS.R_NAME: ["A->B", "B->C"],
             SBML_DFS.R_IDENTIFIERS: [[], []],
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT: ["cytoplasm", "cytoplasm"],
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT: [
-                "cytoplasm",
-                "cytoplasm",
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM: [
+                COMPARTMENTS.CYTOPLASM,
+                COMPARTMENTS.CYTOPLASM,
             ],
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: [
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM: [
+                COMPARTMENTS.CYTOPLASM,
+                COMPARTMENTS.CYTOPLASM,
+            ],
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM: [
                 SBOTERM_NAMES.CATALYST,
                 SBOTERM_NAMES.CATALYST,
             ],
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: [
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM: [
                 SBOTERM_NAMES.PRODUCT,
                 SBOTERM_NAMES.PRODUCT,
             ],
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY: [1, 1],
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY: [1, 1],
+            INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_UPSTREAM: [1, 1],
+            INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_DOWNSTREAM: [1, 1],
             SBML_DFS.R_ISREVERSIBLE: [False, False],
         }
     )
@@ -376,8 +380,8 @@ def test_add_edgelist_defaults():
     # Test 2: Missing optional columns - should add defaults
     incomplete_edgelist = pd.DataFrame(
         {
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: ["A", "B"],
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: ["B", "C"],
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM: ["A", "B"],
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM: ["B", "C"],
             SBML_DFS.R_NAME: ["A->B", "B->C"],
             SBML_DFS.R_IDENTIFIERS: [[], []],
         }
@@ -395,12 +399,18 @@ def test_add_edgelist_defaults():
     # Test 3: Some columns present but with NaN values - should replace NaN with defaults
     edgelist_with_nan = pd.DataFrame(
         {
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: ["A", "B"],
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: ["B", "C"],
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM: ["A", "B"],
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM: ["B", "C"],
             SBML_DFS.R_NAME: ["A->B", "B->C"],
             SBML_DFS.R_IDENTIFIERS: [[], []],
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT: ["cytoplasm", None],
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT: [None, "cytoplasm"],
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM: [
+                COMPARTMENTS.CYTOPLASM,
+                None,
+            ],
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM: [
+                None,
+                COMPARTMENTS.CYTOPLASM,
+            ],
             SBML_DFS.R_ISREVERSIBLE: [False, None],
         }
     )
@@ -409,13 +419,13 @@ def test_add_edgelist_defaults():
 
     # Check that NaN values were replaced with defaults
     assert (
-        result[INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT].iloc[1]
-        == INTERACTION_EDGELIST_DEFAULTS[INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT]
+        result[INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM].iloc[1]
+        == INTERACTION_EDGELIST_DEFAULTS[INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM]
     )
     assert (
-        result[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT].iloc[0]
+        result[INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM].iloc[0]
         == INTERACTION_EDGELIST_DEFAULTS[
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM
         ]
     )
     assert (
@@ -425,19 +435,19 @@ def test_add_edgelist_defaults():
 
     # Test 4: Custom defaults dictionary
     custom_defaults = {
-        INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT: "nucleus",
-        INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT: "nucleus",
-        INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.CATALYST,
-        INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.PRODUCT,
-        INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY: 1,
-        INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY: 1,
+        INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM: COMPARTMENTS.NUCLEUS,
+        INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM: COMPARTMENTS.NUCLEUS,
+        INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM: SBOTERM_NAMES.CATALYST,
+        INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM: SBOTERM_NAMES.PRODUCT,
+        INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_UPSTREAM: 1,
+        INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_DOWNSTREAM: 1,
         SBML_DFS.R_ISREVERSIBLE: True,
     }
 
     minimal_edgelist = pd.DataFrame(
         {
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: ["A"],
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: ["B"],
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM: ["A"],
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM: ["B"],
             SBML_DFS.R_NAME: ["A->B"],
             SBML_DFS.R_IDENTIFIERS: [[]],
         }
@@ -446,13 +456,19 @@ def test_add_edgelist_defaults():
     result = sbml_dfs_utils._add_edgelist_defaults(minimal_edgelist, custom_defaults)
 
     # Check that custom defaults were applied
-    assert result[INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT].iloc[0] == "nucleus"
-    assert result[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT].iloc[0] == "nucleus"
+    assert (
+        result[INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM].iloc[0]
+        == COMPARTMENTS.NUCLEUS
+    )
+    assert (
+        result[INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM].iloc[0]
+        == COMPARTMENTS.NUCLEUS
+    )
     assert result[SBML_DFS.R_ISREVERSIBLE].iloc[0]
 
     # Test 5: Missing defaults for required optional columns should raise ValueError
     incomplete_defaults = {
-        INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT: "cytoplasm"
+        INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM: COMPARTMENTS.CYTOPLASM,
         # Missing other required defaults
     }
 
@@ -464,15 +480,15 @@ def test_add_edgelist_defaults():
 
     # Check that the missing defaults were filled from INTERACTION_EDGELIST_DEFAULTS
     assert (
-        result[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT].iloc[0]
+        result[INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM].iloc[0]
         == INTERACTION_EDGELIST_DEFAULTS[
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM
         ]
     )
     assert (
-        result[INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME].iloc[0]
+        result[INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM].iloc[0]
         == INTERACTION_EDGELIST_DEFAULTS[
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM
         ]
     )
 

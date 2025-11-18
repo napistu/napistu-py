@@ -15,6 +15,7 @@ from napistu.network.constants import (
     DROP_REACTIONS_WHEN,
     GRAPH_WIRING_HIERARCHIES,
     NAPISTU_GRAPH_EDGES,
+    NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS,
     NAPISTU_GRAPH_NODE_TYPES,
     VALID_DROP_REACTIONS_WHEN,
     VALID_GRAPH_WIRING_APPROACHES,
@@ -276,13 +277,17 @@ def create_graph_hierarchy_df(wiring_approach: str) -> pd.DataFrame:
     # format as a DF
     graph_hierarchy_df = pd.concat(
         [
-            pd.DataFrame({"sbo_name": sbo_names_hierarchy[i]}).assign(tier=i)
+            pd.DataFrame({NAPISTU_GRAPH_EDGES.SBO_NAME: sbo_names_hierarchy[i]}).assign(
+                tier=i
+            )
             for i in range(0, len(sbo_names_hierarchy))
         ]
     ).reset_index(drop=True)
-    graph_hierarchy_df[SBML_DFS.SBO_TERM] = graph_hierarchy_df["sbo_name"].apply(
+    graph_hierarchy_df[SBML_DFS.SBO_TERM] = graph_hierarchy_df[
+        NAPISTU_GRAPH_EDGES.SBO_NAME
+    ].apply(
         lambda x: (
-            MINI_SBO_FROM_NAME[x] if x != NAPISTU_GRAPH_NODE_TYPES.REACTION else ""
+            MINI_SBO_FROM_NAME[x] if x != NAPISTU_GRAPH_NODE_TYPES.REACTION else None
         )
     )
 
@@ -338,7 +343,9 @@ def _should_drop_reaction(
 
     elif drop_reactions_when == DROP_REACTIONS_WHEN.SAME_TIER:
         n_reactant_tiers = len(
-            entities_ordered_by_tier.query("sbo_name != 'reaction'")
+            entities_ordered_by_tier.query(
+                f"{NAPISTU_GRAPH_EDGES.SBO_NAME} != '{NAPISTU_GRAPH_NODE_TYPES.REACTION}'"
+            )
             .index.unique()
             .tolist()
         )
@@ -395,23 +402,17 @@ def _format_same_tier_edges(rxn_species: pd.DataFrame, r_id: str) -> pd.DataFram
             {
                 "sc_id_left": NAPISTU_GRAPH_EDGES.FROM,
                 "sc_id_right": NAPISTU_GRAPH_EDGES.TO,
-                "stoichiometry_right": NAPISTU_GRAPH_EDGES.STOICHIOMETRY,
-                "sbo_term_left": NAPISTU_GRAPH_EDGES.SBO_TERM,
+                "stoichiometry_left": NAPISTU_GRAPH_EDGES.STOICHIOMETRY_UPSTREAM,
+                "stoichiometry_right": NAPISTU_GRAPH_EDGES.STOICHIOMETRY_DOWNSTREAM,
+                "sbo_term_left": NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM,
+                "sbo_term_right": NAPISTU_GRAPH_EDGES.SBO_TERM_DOWNSTREAM,
             },
             axis=1,
         )
         .assign(r_id=r_id)
     )
 
-    OUT_ATTRS = [
-        NAPISTU_GRAPH_EDGES.FROM,
-        NAPISTU_GRAPH_EDGES.TO,
-        NAPISTU_GRAPH_EDGES.STOICHIOMETRY,
-        NAPISTU_GRAPH_EDGES.SBO_TERM,
-        SBML_DFS.R_ID,
-    ]
-
-    return crossed_species[OUT_ATTRS]
+    return crossed_species[NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS]
 
 
 def _log_pathological_same_tier(distinct_metadata: pd.DataFrame, r_id: str) -> None:
@@ -423,10 +424,12 @@ def _log_pathological_same_tier(distinct_metadata: pd.DataFrame, r_id: str) -> N
             f"Ignoring reaction {r_id}; its members have distinct annotations but they exist on the same level of a wiring hierarchy so their relationships cannot be determined."
         ]
     )
-    sbo_terms = distinct_metadata["sbo_term"].map(MINI_SBO_TO_NAME).unique().tolist()
+    sbo_terms = (
+        distinct_metadata[SBML_DFS.SBO_TERM].map(MINI_SBO_TO_NAME).unique().tolist()
+    )
     if len(sbo_terms) > 1:
         msg.append(f"SBO terms: {sbo_terms}")
-    stoichiometries = distinct_metadata["stoichiometry"].unique().tolist()
+    stoichiometries = distinct_metadata[SBML_DFS.STOICHIOMETRY].unique().tolist()
     if len(stoichiometries) > 1:
         msg.append(f"Stoichiometries: {stoichiometries}")
     logger.debug(msg[0] + "; ".join(msg[1:]))
@@ -462,7 +465,6 @@ def _format_cross_tier_edges(
     drop_reaction = _should_drop_reaction(entities_ordered_by_tier, drop_reactions_when)
 
     rxn_edges = list()
-    past_reaction = False
     for i in range(0, len(ordered_tiers) - 1):
 
         if ordered_tiers[i] == reaction_tier:
@@ -495,27 +497,18 @@ def _format_cross_tier_edges(
         formatted_tier_combo = _format_tier_combo(
             entities_ordered_by_tier.loc[[ordered_tiers[i]]],
             entities_ordered_by_tier.loc[[next_tier]],
-            past_reaction,
         )
-
-        # Only update past_reaction if we're not dropping the reaction
-        # If drop_reaction is True, we're skipping the reaction tier, so past_reaction stays False
-        if ordered_tiers[i + 1] == reaction_tier and not drop_reaction:
-            past_reaction = True
 
         rxn_edges.append(formatted_tier_combo)
 
+    # Concatenate edges and select columns matching wiring vars (excluding R_ID which is added below)
+    wiring_cols = [
+        col
+        for col in NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS
+        if col != NAPISTU_GRAPH_EDGES.R_ID
+    ]
     rxn_edges_df = (
-        pd.concat(rxn_edges)[
-            [
-                NAPISTU_GRAPH_EDGES.FROM,
-                NAPISTU_GRAPH_EDGES.TO,
-                NAPISTU_GRAPH_EDGES.STOICHIOMETRY,
-                NAPISTU_GRAPH_EDGES.SBO_TERM,
-            ]
-        ]
-        .reset_index(drop=True)
-        .assign(r_id=r_id)
+        pd.concat(rxn_edges)[wiring_cols].reset_index(drop=True).assign(r_id=r_id)
     )
 
     return rxn_edges_df
@@ -596,7 +589,7 @@ def _reaction_species_to_tiers(
 
 
 def _format_tier_combo(
-    upstream_tier: pd.DataFrame, downstream_tier: pd.DataFrame, past_reaction: bool
+    upstream_tier: pd.DataFrame, downstream_tier: pd.DataFrame
 ) -> pd.DataFrame:
     """
     Create all edges between two tiers of a tiered reaction graph.
@@ -604,9 +597,9 @@ def _format_tier_combo(
     This function generates a set of edges by performing an all-vs-all combination between entities
     in the upstream and downstream tiers. Tiers represent an ordering along the molecular entities
     in a reaction, plus a tier for the reaction itself. Attributes such as stoichiometry and sbo_term
-    are assigned from the tier furthest from the reaction tier, ensuring that each molecular tier
-    applies its attributes to a single set of edges, while the "reaction" tier does not contribute
-    these attributes. Reaction entities have neither a stoichiometry nor sbo_term annotation.
+    are assigned from both the upstream and downstream tiers, providing complete information about
+    both endpoints of each edge. Reaction entities have neither a stoichiometry nor sbo_term annotation,
+    so these attributes will be missing (None/NaN) when a tier is a reaction.
 
     Parameters
     ----------
@@ -614,45 +607,72 @@ def _format_tier_combo(
         DataFrame containing upstream entities in a reaction (e.g., regulators or substrates).
     downstream_tier : pd.DataFrame
         DataFrame containing downstream entities in a reaction (e.g., products or targets).
-    past_reaction : bool
-        If True, attributes (stoichiometry, sbo_term) are taken from downstream_tier;
-        if False, from upstream_tier. This controls the direction of attribute assignment
-        depending on whether the reaction tier has already been passed in the tier ordering.
 
     Returns
     -------
     pd.DataFrame
-        DataFrame of edges, each with columns: 'from', 'to', 'stoichiometry', 'sbo_term', and 'r_id'.
+        DataFrame of edges, each with columns: 'from', 'to', 'stoichiometry_upstream',
+        'stoichiometry_downstream', 'sbo_term_upstream', 'sbo_term_downstream', and 'r_id'.
         The number of edges is the product of the number of entities in the upstream tier
-        and the number in the downstream tier.
+        and the number in the downstream tier. Attributes will be missing (None/NaN) if the
+        corresponding tier is a reaction.
 
     Notes
     -----
     - This function is used to build the edge list for tiered graphs, where each tier represents
     a functional group (e.g., substrates, products, modifiers, reaction).
-    - The direction and attributes of edges depend on the position relative to the reaction tier.
+    - Both upstream and downstream attributes are included when available from the respective tiers.
     - Reaction entities themselves do not contribute stoichiometry or sbo_term attributes.
     """
 
-    upstream_fields = ["entity_id", SBML_DFS.STOICHIOMETRY, SBML_DFS.SBO_TERM]
-    downstream_fields = ["entity_id"]
-
-    if past_reaction:
-        # swap fields
-        upstream_fields, downstream_fields = downstream_fields, upstream_fields
-
-    formatted_tier_combo = (
-        upstream_tier[upstream_fields]
-        .rename({"entity_id": NAPISTU_GRAPH_EDGES.FROM}, axis=1)
+    # Prepare upstream data with conditional renaming
+    upstream_fields = {"entity_id": NAPISTU_GRAPH_EDGES.FROM}
+    upstream_fields.update(
+        {
+            k: v
+            for k, v in {
+                SBML_DFS.STOICHIOMETRY: NAPISTU_GRAPH_EDGES.STOICHIOMETRY_UPSTREAM,
+                SBML_DFS.SBO_TERM: NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM,
+            }.items()
+            if k in upstream_tier.columns
+        }
+    )
+    upstream_data = (
+        upstream_tier[list(upstream_fields.keys())]
+        .rename(columns=upstream_fields)
         .assign(_joiner=1)
-    ).merge(
-        (
-            downstream_tier[downstream_fields]
-            .rename({"entity_id": NAPISTU_GRAPH_EDGES.TO}, axis=1)
-            .assign(_joiner=1)
-        ),
-        left_on="_joiner",
-        right_on="_joiner",
+    )
+
+    # Prepare downstream data with conditional renaming
+    downstream_fields = {"entity_id": NAPISTU_GRAPH_EDGES.TO}
+    downstream_fields.update(
+        {
+            k: v
+            for k, v in {
+                SBML_DFS.STOICHIOMETRY: NAPISTU_GRAPH_EDGES.STOICHIOMETRY_DOWNSTREAM,
+                SBML_DFS.SBO_TERM: NAPISTU_GRAPH_EDGES.SBO_TERM_DOWNSTREAM,
+            }.items()
+            if k in downstream_tier.columns
+        }
+    )
+    downstream_data = (
+        downstream_tier[list(downstream_fields.keys())]
+        .rename(columns=downstream_fields)
+        .assign(_joiner=1)
+    )
+
+    # Merge and ensure all required columns exist
+    formatted_tier_combo = upstream_data.merge(downstream_data, on="_joiner").drop(
+        columns=["_joiner"]
+    )
+    # Reindex to match wiring vars order (excluding R_ID which isn't in tier combo output)
+    wiring_cols = [
+        col
+        for col in NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS
+        if col != NAPISTU_GRAPH_EDGES.R_ID
+    ]
+    formatted_tier_combo = formatted_tier_combo.reindex(
+        columns=wiring_cols, fill_value=None
     )
 
     return formatted_tier_combo
@@ -717,12 +737,20 @@ def _interactor_duos_to_wide(interactor_duos: pd.DataFrame):
     )
 
     # Flatten column names and rename
-    wide_df.columns = ["from", "to"]
+    wide_df.columns = [NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO]
 
-    # Reset index to make r_id a column
-    return wide_df.reset_index().assign(
-        sbo_term=MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR], stoichiometry=0
+    # Reset index to make r_id a column and add SBO terms and stoichiometries
+    interactor_sbo_term = MINI_SBO_FROM_NAME[SBOTERM_NAMES.INTERACTOR]
+    result = wide_df.reset_index().assign(
+        **{
+            NAPISTU_GRAPH_EDGES.SBO_TERM_UPSTREAM: interactor_sbo_term,
+            NAPISTU_GRAPH_EDGES.SBO_TERM_DOWNSTREAM: interactor_sbo_term,
+            NAPISTU_GRAPH_EDGES.STOICHIOMETRY_UPSTREAM: 0,
+            NAPISTU_GRAPH_EDGES.STOICHIOMETRY_DOWNSTREAM: 0,
+        }
     )
+    # Reorder columns to match NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS
+    return result[NAPISTU_GRAPH_EDGES_FROM_WIRING_VARS]
 
 
 def _validate_interactor_duos(interactor_duos: pd.DataFrame):

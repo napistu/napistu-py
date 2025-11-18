@@ -198,9 +198,9 @@ def format_omnipath_as_sbml_dfs(
 
     interaction_edgelist[SBML_DFS.R_NAME] = interaction_edgelist.apply(
         lambda row: sbml_dfs_utils._name_interaction(
-            row[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME],
-            row[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME],
-            row[INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME],
+            row[INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM],
+            row[INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM],
+            row[INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM],
         ),
         axis=1,
     )
@@ -723,8 +723,8 @@ def _prepare_omnipath_ids_complexes(
                         row[OMNIPATH_INTERACTIONS.INTERACTOR_ID]
                     ]
                     * len(members),
-                    INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY: upstream_stoi,
-                    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY: [
+                    INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_UPSTREAM: upstream_stoi,
+                    INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_DOWNSTREAM: [
                         downstream_stoi
                     ]
                     * len(members),
@@ -831,8 +831,8 @@ def _load_omnipath_attribute_mapper() -> pd.DataFrame:
         {True: REACTOME_FI.FORWARD, False: REACTOME_FI.REVERSE}
     )
 
-    df[INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME] = None
-    df[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME] = None
+    df[INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM] = None
+    df[INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM] = None
     df[SBML_DFS.R_ISREVERSIBLE] = None
     df["is_valid"] = True
 
@@ -849,44 +849,44 @@ def _load_omnipath_attribute_mapper() -> pd.DataFrame:
 
         # interactors
         if (not stimulation) and (not inhibition) and (not direction):
-            df.loc[i, INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME] = (
+            df.loc[i, INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM] = (
                 SBOTERM_NAMES.INTERACTOR
             )
-            df.loc[i, INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME] = (
+            df.loc[i, INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM] = (
                 SBOTERM_NAMES.INTERACTOR
             )
             df.loc[i, SBML_DFS.R_ISREVERSIBLE] = True
             continue
 
         if (not stimulation) and (not inhibition):
-            df.loc[i, INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME] = (
+            df.loc[i, INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM] = (
                 SBOTERM_NAMES.MODIFIER
             )
-            df.loc[i, INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME] = (
+            df.loc[i, INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM] = (
                 SBOTERM_NAMES.MODIFIED
             )
 
         if inhibition and (not stimulation):
-            df.loc[i, INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME] = (
+            df.loc[i, INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM] = (
                 SBOTERM_NAMES.INHIBITOR
             )
-            df.loc[i, INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME] = (
+            df.loc[i, INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM] = (
                 SBOTERM_NAMES.MODIFIED
             )
 
         if stimulation and (not inhibition):
-            df.loc[i, INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME] = (
+            df.loc[i, INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM] = (
                 SBOTERM_NAMES.STIMULATOR
             )
-            df.loc[i, INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME] = (
+            df.loc[i, INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM] = (
                 SBOTERM_NAMES.MODIFIED
             )
 
         if stimulation and inhibition:
-            df.loc[i, INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME] = (
+            df.loc[i, INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM] = (
                 SBOTERM_NAMES.MODIFIER
             )
-            df.loc[i, INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME] = (
+            df.loc[i, INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM] = (
                 SBOTERM_NAMES.MODIFIED
             )
 
@@ -900,8 +900,8 @@ def _load_omnipath_attribute_mapper() -> pd.DataFrame:
             df.query(f"{REACTOME_FI.DIRECTION} == '{REACTOME_FI.FORWARD}'"),
             df.query(f"{REACTOME_FI.DIRECTION} == '{REACTOME_FI.REVERSE}'").rename(
                 {
-                    INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME,
-                    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
+                    INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM: INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM,
+                    INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM: INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM,
                 },
                 axis=1,
             ),
@@ -1130,18 +1130,18 @@ def _format_edgelist_interactions(
         )
         .assign(
             **{
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY: 0,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY: 0,
+                INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_UPSTREAM: 0,
+                INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_DOWNSTREAM: 0,
             }
         )[
             [
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME,
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
+                INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM,
                 SBML_DFS.R_ISREVERSIBLE,
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY,
+                INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_DOWNSTREAM,
                 SBML_DFS.R_IDENTIFIERS,
                 OMNIPATH_INTERACTIONS.IS_DIRECTED,
                 OMNIPATH_INTERACTIONS.IS_STIMULATION,
@@ -1183,19 +1183,19 @@ def _format_complex_interactions(
     ).assign(
         **{
             SBML_DFS.R_ISREVERSIBLE: False,
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.REACTANT,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.PRODUCT,
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM: SBOTERM_NAMES.REACTANT,
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM: SBOTERM_NAMES.PRODUCT,
             SBML_DFS.R_IDENTIFIERS: Identifiers([]),
         }
     )[
         [
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME,
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM,
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM,
             SBML_DFS.R_ISREVERSIBLE,
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY,
+            INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_UPSTREAM,
+            INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_DOWNSTREAM,
             SBML_DFS.R_IDENTIFIERS,
         ]
     ]
@@ -1228,7 +1228,7 @@ def _name_interactions(
             ].rename(
                 columns={
                     OMNIPATH_INTERACTIONS.INTERACTOR_ID: OMNIPATH_INTERACTIONS.SOURCE,
-                    SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
+                    SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
                 }
             )
         ),
@@ -1241,7 +1241,7 @@ def _name_interactions(
             ].rename(
                 columns={
                     OMNIPATH_INTERACTIONS.INTERACTOR_ID: OMNIPATH_INTERACTIONS.TARGET,
-                    SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                    SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
                 }
             )
         ),

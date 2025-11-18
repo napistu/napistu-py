@@ -29,6 +29,7 @@ from napistu.constants import (
 from napistu.identifiers import Identifiers
 from napistu.ingestion import sbml
 from napistu.ingestion.constants import (
+    COMPARTMENTS,
     INTERACTION_EDGELIST_DEFAULTS,
     INTERACTION_EDGELIST_DEFS,
 )
@@ -45,8 +46,8 @@ def test_data():
     # Test compartments
     compartments_df = pd.DataFrame(
         [
-            {SBML_DFS.C_NAME: "nucleus", SBML_DFS.C_IDENTIFIERS: blank_id},
-            {SBML_DFS.C_NAME: "cytoplasm", SBML_DFS.C_IDENTIFIERS: blank_id},
+            {SBML_DFS.C_NAME: COMPARTMENTS.NUCLEUS, SBML_DFS.C_IDENTIFIERS: blank_id},
+            {SBML_DFS.C_NAME: COMPARTMENTS.CYTOPLASM, SBML_DFS.C_IDENTIFIERS: blank_id},
         ]
     )
 
@@ -75,22 +76,22 @@ def test_data():
     interaction_edgelist = pd.DataFrame(
         [
             {
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: "TP53",
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: "CDKN1A",
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT: "nucleus",
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT: "nucleus",
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM: "TP53",
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM: "CDKN1A",
+                INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM: COMPARTMENTS.NUCLEUS,
+                INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM: COMPARTMENTS.NUCLEUS,
                 SBML_DFS.R_NAME: "TP53_activates_CDKN1A",
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.STIMULATOR,
+                INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM: SBOTERM_NAMES.STIMULATOR,
                 SBML_DFS.R_IDENTIFIERS: blank_id,
                 "confidence": 0.95,
             },
             {
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: "MDM2",
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: "TP53",
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT: "cytoplasm",
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT: "nucleus",
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM: "MDM2",
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM: "TP53",
+                INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM: COMPARTMENTS.CYTOPLASM,
+                INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM: COMPARTMENTS.NUCLEUS,
                 SBML_DFS.R_NAME: "MDM2_inhibits_TP53",
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.INHIBITOR,
+                INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM: SBOTERM_NAMES.INHIBITOR,
                 SBML_DFS.R_IDENTIFIERS: blank_id,
                 "confidence": 0.87,
             },
@@ -592,12 +593,12 @@ def test_sbml_custom_defaults(test_data, model_source_stub):
     interaction_edgelist, species_df, compartments_df = test_data
 
     custom_defaults = INTERACTION_EDGELIST_DEFAULTS.copy()
-    custom_defaults[INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY] = -2
-    custom_defaults[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY] = 3
-    custom_defaults[INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME] = (
+    custom_defaults[INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_UPSTREAM] = -2
+    custom_defaults[INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_DOWNSTREAM] = 3
+    custom_defaults[INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM] = (
         SBOTERM_NAMES.REACTANT
     )
-    custom_defaults[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME] = (
+    custom_defaults[INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM] = (
         SBOTERM_NAMES.PRODUCT
     )
 
@@ -1341,27 +1342,35 @@ def test_force_edgelist_consistency(model_source_stub):
     # Create interaction edgelist with INVALID species references
     interaction_edgelist = pd.DataFrame(
         {
-            "upstream_name": [
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM: [
                 "protein_A",
                 "protein_B",
                 "missing_protein_C",
                 "protein_A",
             ],
-            "downstream_name": [
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM: [
                 "protein_B",
                 "missing_protein_D",
                 "metabolite_X",
                 "missing_protein_D",
             ],
-            "upstream_compartment": ["cellular_component"] * 4,
-            "downstream_compartment": ["cellular_component"] * 4,
-            "upstream_sbo_term_name": ["stimulator"] * 4,
-            "downstream_sbo_term_name": ["modified"] * 4,
-            "upstream_stoichiometry": [0, 0, 0, 0],
-            "downstream_stoichiometry": [0, 0, 0, 0],
-            "r_isreversible": [False] * 4,
-            "r_name": ["rxn1", "rxn2", "rxn3", "rxn4"],
-            "r_Identifiers": [Identifiers([]) for _ in range(4)],
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM: [
+                COMPARTMENTS.CELLULAR_COMPONENT
+            ]
+            * 4,
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM: [
+                COMPARTMENTS.CELLULAR_COMPONENT
+            ]
+            * 4,
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM: [SBOTERM_NAMES.STIMULATOR]
+            * 4,
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM: [SBOTERM_NAMES.MODIFIED]
+            * 4,
+            INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_UPSTREAM: [0, 0, 0, 0],
+            INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_DOWNSTREAM: [0, 0, 0, 0],
+            SBML_DFS.R_ISREVERSIBLE: [False] * 4,
+            SBML_DFS.R_NAME: ["rxn1", "rxn2", "rxn3", "rxn4"],
+            SBML_DFS.R_IDENTIFIERS: [Identifiers([]) for _ in range(4)],
         }
     )
 
@@ -1431,17 +1440,17 @@ def test_force_edgelist_consistency_with_valid_data(model_source_stub):
 
     interaction_edgelist = pd.DataFrame(
         {
-            "upstream_name": ["protein_A"],
-            "downstream_name": ["protein_B"],
-            "upstream_compartment": ["cellular_component"],
-            "downstream_compartment": ["cellular_component"],
-            "upstream_sbo_term_name": ["stimulator"],
-            "downstream_sbo_term_name": ["modified"],
-            "upstream_stoichiometry": [0],
-            "downstream_stoichiometry": [0],
-            "r_isreversible": [False],
-            "r_name": ["rxn1"],
-            "r_Identifiers": [Identifiers([])],
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM: ["protein_A"],
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM: ["protein_B"],
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM: ["cellular_component"],
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM: ["cellular_component"],
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM: ["stimulator"],
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM: ["modified"],
+            INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_UPSTREAM: [0],
+            INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_DOWNSTREAM: [0],
+            SBML_DFS.R_ISREVERSIBLE: [False],
+            SBML_DFS.R_NAME: ["rxn1"],
+            SBML_DFS.R_IDENTIFIERS: [Identifiers([])],
         }
     )
 
@@ -1483,17 +1492,19 @@ def test_force_edgelist_consistency_invalid_compartments(model_source_stub):
     # Create edgelist with invalid compartment reference
     interaction_edgelist = pd.DataFrame(
         {
-            "upstream_name": ["protein_A"],
-            "downstream_name": ["protein_B"],
-            "upstream_compartment": ["invalid_compartment"],  # Invalid!
-            "downstream_compartment": ["cellular_component"],
-            "upstream_sbo_term_name": ["stimulator"],
-            "downstream_sbo_term_name": ["modified"],
-            "upstream_stoichiometry": [0],
-            "downstream_stoichiometry": [0],
-            "r_isreversible": [False],
-            "r_name": ["rxn1"],
-            "r_Identifiers": [Identifiers([])],
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM: ["protein_A"],
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM: ["protein_B"],
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM: [
+                "invalid_compartment"
+            ],  # Invalid!
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM: ["cellular_component"],
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM: ["stimulator"],
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM: ["modified"],
+            INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_UPSTREAM: [0],
+            INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_DOWNSTREAM: [0],
+            SBML_DFS.R_ISREVERSIBLE: [False],
+            SBML_DFS.R_NAME: ["rxn1"],
+            SBML_DFS.R_IDENTIFIERS: [Identifiers([])],
         }
     )
 

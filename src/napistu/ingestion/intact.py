@@ -166,8 +166,8 @@ def intact_to_sbml_dfs(
 
     # drop species that are not in the edgelist
     defined_interactors = set(
-        basic_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME]
-    ) | set(basic_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME])
+        basic_edgelist[INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM]
+    ) | set(basic_edgelist[INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM])
     used_species_mask = species_df[SBML_DFS.S_NAME].isin(defined_interactors)
 
     if len(species_df[~used_species_mask]) > 0:
@@ -219,16 +219,16 @@ def intact_to_sbml_dfs(
     interactions_edgelist = (
         edgelist_w_study_metadata[
             [
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
                 PSI_MI_DEFS.INTERACTION_NAME,
             ]
         ]
         .rename(columns={PSI_MI_DEFS.INTERACTION_NAME: SBML_DFS.R_NAME})
         .groupby(
             [
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
             ]
         )
         .first()
@@ -236,16 +236,16 @@ def intact_to_sbml_dfs(
         .merge(
             interaction_scores,
             on=[
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
             ],
             how="left",
         )
         .merge(
             interaction_edgelist_df_ids_and_counts,
             on=[
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
             ],
             how="left",
         )
@@ -257,8 +257,8 @@ def intact_to_sbml_dfs(
         compartments_df=sbml_dfs_utils.stub_compartments(),
         model_source=model_source,
         interaction_edgelist_defaults={
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.INTERACTOR,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: SBOTERM_NAMES.INTERACTOR,
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM: SBOTERM_NAMES.INTERACTOR,
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM: SBOTERM_NAMES.INTERACTOR,
             SBML_DFS.R_ISREVERSIBLE: True,
         },
         keep_reactions_data=DATA_SOURCES.INTACT,
@@ -355,8 +355,8 @@ def _calculate_all_scores_vectorized(
     # Get all unique interactions
     interactions = counts_df[
         [
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
         ]
     ].drop_duplicates()
 
@@ -386,24 +386,24 @@ def _calculate_all_scores_vectorized(
         interactions.merge(
             pub_scores,
             on=[
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
             ],
             how="left",
         )
         .merge(
             method_scores,
             on=[
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
             ],
             how="left",
         )
         .merge(
             type_scores,
             on=[
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
             ],
             how="left",
         )
@@ -452,8 +452,8 @@ def _calculate_category_scores_vectorized(
         # Return empty dataframe with expected structure
         return pd.DataFrame(
             columns=[
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
                 f"{attribute_type}_score",
             ]
         )
@@ -465,8 +465,8 @@ def _calculate_category_scores_vectorized(
     a_values = (
         filtered_df.groupby(
             [
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
             ]
         )["score_x_count"]
         .sum()
@@ -478,8 +478,8 @@ def _calculate_category_scores_vectorized(
     max_by_score_group = (
         filtered_df.groupby(
             [
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
                 INTACT_SCORES.RAW_SCORE,
             ]
         )["count"]
@@ -487,8 +487,8 @@ def _calculate_category_scores_vectorized(
         .reset_index()
         .groupby(
             [
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
             ]
         )["count"]
         .sum()
@@ -500,8 +500,8 @@ def _calculate_category_scores_vectorized(
     merged = a_values.merge(
         max_by_score_group,
         on=[
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
         ],
     )
     merged["b"] = merged["a"] + merged["max_sum"]
@@ -513,8 +513,8 @@ def _calculate_category_scores_vectorized(
 
     return merged[
         [
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
             f"{attribute_type}_score",
         ]
     ]
@@ -541,8 +541,8 @@ def _count_studies_with_scored_attributes(
     scored_attribute_counts = (
         standardized_interaction_attrs[
             [
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
                 PSI_MI_DEFS.STUDY_ID,
                 INTACT_SCORES.ATTRIBUTE_TYPE,
                 INTACT_SCORES.SCORED_TERM,
@@ -553,8 +553,8 @@ def _count_studies_with_scored_attributes(
         # Count studies for each interaction-attribute_type-scored_term combination
         .groupby(
             [
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
                 INTACT_SCORES.ATTRIBUTE_TYPE,
                 INTACT_SCORES.SCORED_TERM,
                 INTACT_SCORES.RAW_SCORE,  # Include score in groupby to preserve it
@@ -649,25 +649,25 @@ def _create_basic_edgelist(
     all_prey = (
         valid_reaction_species.query(
             "experimental_role == @INTACT_EXPERIMENTAL_ROLES.PREY"
-        ).rename(columns={SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME})
+        ).rename(columns={SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM})
     )[
         [
             PSI_MI_DEFS.STUDY_ID,
             PSI_MI_DEFS.INTERACTION_NAME,
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
         ]
     ]
 
     all_bait = (
         valid_reaction_species.query(
             "experimental_role == @INTACT_EXPERIMENTAL_ROLES.BAIT"
-        ).rename(columns={SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME})
+        ).rename(columns={SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM})
     )[
         [
             PSI_MI_DEFS.STUDY_ID,
             PSI_MI_DEFS.INTERACTION_NAME,
             PSI_MI_DEFS.INTERACTION_TYPE,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
         ]
     ]
 
@@ -676,8 +676,8 @@ def _create_basic_edgelist(
     )
     edgelist_df = edgelist_df[
         [
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
             PSI_MI_DEFS.INTERACTION_NAME,
             PSI_MI_DEFS.STUDY_ID,
             PSI_MI_DEFS.INTERACTION_TYPE,
@@ -687,15 +687,15 @@ def _create_basic_edgelist(
     # flip upstream and downstream names if needed so
     # upstream name alphanumerically comes before downstream name
 
-    from_orig = edgelist_df[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME].copy()
-    to_orig = edgelist_df[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME].copy()
+    from_orig = edgelist_df[INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM].copy()
+    to_orig = edgelist_df[INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM].copy()
 
     # Create mask and assign
     needs_flip = from_orig > to_orig
-    edgelist_df[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME] = np.where(
+    edgelist_df[INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM] = np.where(
         needs_flip, to_orig, from_orig
     )
-    edgelist_df[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME] = np.where(
+    edgelist_df[INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM] = np.where(
         needs_flip, from_orig, to_orig
     )
 
@@ -864,8 +864,8 @@ def _define_edgelist_df_ids_and_counts(
 
     track_citations = edgelist_w_study_metadata[
         [
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
             PSI_MI_DEFS.STUDY_ID,
             IDENTIFIERS.ONTOLOGY,
             IDENTIFIERS.IDENTIFIER,
@@ -874,8 +874,8 @@ def _define_edgelist_df_ids_and_counts(
 
     edgelist_groups = track_citations.groupby(
         [
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
         ]
     )
 
@@ -896,8 +896,8 @@ def _define_edgelist_df_ids_and_counts(
     )
     wide_attribute_counts = tmp_scored_attribute_counts.pivot_table(
         index=[
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
         ],
         columns="composite_attribute",
         values="count",
@@ -1253,8 +1253,8 @@ def _standardize_interaction_attrs(
     tall_interaction_attrs = pd.melt(
         edgelist_w_study_metadata,
         id_vars=[
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
             PSI_MI_DEFS.INTERACTION_NAME,
             PSI_MI_DEFS.STUDY_ID,
         ],

@@ -12,7 +12,7 @@ GCS_ASSETS_NAMES = SimpleNamespace(
     TEST_PATHWAY="test_pathway",
     HUMAN_CONSENSUS="human_consensus",
     HUMAN_CONSENSUS_W_DISTANCES="human_consensus_w_distances",
-    NO_RXN_HUMAN_CONSENSUS="no_rxn_human_consensus",
+    HUMAN_CONSENSUS_NO_RXNS="human_consensus_no_rxns",
     REACTOME_MEMBERS="reactome_members",
     REACTOME_XREFS="reactome_xrefs",
 )
@@ -86,14 +86,14 @@ GCS_ASSETS = SimpleNamespace(
                 "20250901": f"https://storage.googleapis.com/shackett-napistu-public/{GCS_ASSETS_NAMES.HUMAN_CONSENSUS_W_DISTANCES}_20250901.tar.gz"
             },
         },
-        GCS_ASSETS_NAMES.NO_RXN_HUMAN_CONSENSUS: {
-            GCS_ASSETS_DEFS.FILE: f"{GCS_ASSETS_NAMES.NO_RXN_HUMAN_CONSENSUS}.tar.gz",
+        GCS_ASSETS_NAMES.HUMAN_CONSENSUS_NO_RXNS: {
+            GCS_ASSETS_DEFS.FILE: f"{GCS_ASSETS_NAMES.HUMAN_CONSENSUS_NO_RXNS}.tar.gz",
             GCS_ASSETS_DEFS.SUBASSETS: {
                 GCS_SUBASSET_NAMES.SBML_DFS: GCS_FILETYPES.SBML_DFS,
                 GCS_SUBASSET_NAMES.NAPISTU_GRAPH: GCS_FILETYPES.NAPISTU_GRAPH,
                 GCS_SUBASSET_NAMES.SPECIES_IDENTIFIERS: GCS_FILETYPES.SPECIES_IDENTIFIERS,
             },
-            GCS_ASSETS_DEFS.PUBLIC_URL: f"https://storage.googleapis.com/shackett-napistu-public/{GCS_ASSETS_NAMES.NO_RXN_HUMAN_CONSENSUS}.tar.gz",
+            GCS_ASSETS_DEFS.PUBLIC_URL: f"https://storage.googleapis.com/shackett-napistu-public/{GCS_ASSETS_NAMES.HUMAN_CONSENSUS_NO_RXNS}.tar.gz",
             GCS_ASSETS_DEFS.VERSIONS: None,
         },
         GCS_ASSETS_NAMES.REACTOME_MEMBERS: {

@@ -97,9 +97,9 @@ def convert_idea_kinetics_to_sbml_dfs(
     # add some more fields are reformat
     interaction_edgelist = distinct_edges.rename(
         {
-            IDEA_YEAST.SOURCE: INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-            IDEA_YEAST.TARGET: INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
-            "role": INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
+            IDEA_YEAST.SOURCE: INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+            IDEA_YEAST.TARGET: INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
+            "role": INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM,
         },
         axis=1,
     ).assign(
@@ -111,10 +111,10 @@ def convert_idea_kinetics_to_sbml_dfs(
     interaction_edgelist["r_name"] = [
         f"{u} {d} {r} of {t}"
         for u, d, r, t in zip(
-            interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME],
+            interaction_edgelist[INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM],
             interaction_edgelist["directness"],
-            interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME],
-            interaction_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME],
+            interaction_edgelist[INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM],
+            interaction_edgelist[INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM],
         )
     ]
 

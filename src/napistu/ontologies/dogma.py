@@ -12,7 +12,11 @@ from napistu.constants import (
     ONTOLOGIES,
     SBML_DFS,
 )
-from napistu.ingestion.constants import DATA_SOURCE_DESCRIPTIONS, DATA_SOURCES
+from napistu.ingestion.constants import (
+    DATA_SOURCE_DESCRIPTIONS,
+    DATA_SOURCES,
+    INTERACTION_EDGELIST_DEFS,
+)
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.ontologies.constants import (
     GENE_ONTOLOGIES,  # noqa: F401
@@ -81,12 +85,16 @@ def create_dogmatic_sbml_dfs(
     # interactions table. This is required to create the sbml_dfs but we'll drop the info later
     interaction_edgelist = species_df.rename(
         columns={
-            "s_name": "upstream_name",
+            SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
             SBML_DFS.S_IDENTIFIERS: SBML_DFS.R_IDENTIFIERS,
         }
     )
-    interaction_edgelist["downstream_name"] = interaction_edgelist["upstream_name"]
-    interaction_edgelist["r_name"] = interaction_edgelist["upstream_name"]
+    interaction_edgelist[INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM] = (
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM]
+    )
+    interaction_edgelist[SBML_DFS.R_NAME] = interaction_edgelist[
+        INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM
+    ]
 
     dogmatic_sbml_dfs = sbml_dfs_core.SBML_dfs.from_edgelist(
         interaction_edgelist=interaction_edgelist,

@@ -30,16 +30,16 @@ def test_miscore_calculation():
     counts_df = pd.DataFrame(
         [
             {
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: "protein_A",
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: "protein_B",
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM: "protein_A",
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM: "protein_B",
                 INTACT_SCORES.ATTRIBUTE_TYPE: PSI_MI_DEFS.INTERACTION_TYPE,
                 INTACT_SCORES.SCORED_TERM: PSI_MI_SCORED_TERMS.DIRECT_INTERACTION,
                 INTACT_SCORES.RAW_SCORE: 1.0,
                 "count": 2,
             },
             {
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: "protein_A",
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: "protein_B",
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM: "protein_A",
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM: "protein_B",
                 INTACT_SCORES.ATTRIBUTE_TYPE: PSI_MI_DEFS.INTERACTION_METHOD,
                 INTACT_SCORES.SCORED_TERM: PSI_MI_SCORED_TERMS.BIOCHEMICAL,
                 INTACT_SCORES.RAW_SCORE: 1.0,
@@ -54,8 +54,8 @@ def test_miscore_calculation():
         index=pd.MultiIndex.from_tuples(
             [("protein_A", "protein_B")],
             names=[
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
             ],
         ),
         name=INTACT_SCORES.N_PUBLICATIONS,
@@ -108,16 +108,16 @@ def test_miscore_calculation():
     counts_df_2 = pd.DataFrame(
         [
             {
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: "protein_C",
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: "protein_D",
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM: "protein_C",
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM: "protein_D",
                 INTACT_SCORES.ATTRIBUTE_TYPE: PSI_MI_DEFS.INTERACTION_TYPE,
                 INTACT_SCORES.SCORED_TERM: PSI_MI_SCORED_TERMS.ASSOCIATION,
                 INTACT_SCORES.RAW_SCORE: 0.33,
                 "count": 1,
             },
             {
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME: "protein_C",
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME: "protein_D",
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM: "protein_C",
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM: "protein_D",
                 INTACT_SCORES.ATTRIBUTE_TYPE: PSI_MI_DEFS.INTERACTION_METHOD,
                 INTACT_SCORES.SCORED_TERM: PSI_MI_SCORED_TERMS.GENETIC_INTERFERENCE,
                 INTACT_SCORES.RAW_SCORE: 0.10,
@@ -131,8 +131,8 @@ def test_miscore_calculation():
         index=pd.MultiIndex.from_tuples(
             [("protein_C", "protein_D")],
             names=[
-                INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+                INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
             ],
         ),
         name=INTACT_SCORES.N_PUBLICATIONS,

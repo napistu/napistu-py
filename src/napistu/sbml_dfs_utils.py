@@ -669,9 +669,9 @@ def force_edgelist_consistency(
 
     # Filter to valid species
     available_species = set(species_df[SBML_DFS.S_NAME])
-    valid_mask = interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME].isin(
+    valid_mask = interaction_edgelist[INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM].isin(
         available_species
-    ) & interaction_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME].isin(
+    ) & interaction_edgelist[INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM].isin(
         available_species
     )
 
@@ -683,8 +683,8 @@ def force_edgelist_consistency(
 
     # Filter species to used ones
     used_species = set(
-        filtered_interactions[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME]
-    ) | set(filtered_interactions[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME])
+        filtered_interactions[INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM]
+    ) | set(filtered_interactions[INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM])
     filtered_species = species_df[species_df[SBML_DFS.S_NAME].isin(used_species)]
 
     if filtered_species.shape[0] != species_df.shape[0]:
@@ -1242,17 +1242,27 @@ def _edgelist_create_compartmentalized_species(
     # Get all distinct upstream and downstream compartmentalized species
     comp_species = pd.concat(
         [
-            interaction_edgelist[["upstream_name", "upstream_compartment"]].rename(
+            interaction_edgelist[
+                [
+                    INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                    INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM,
+                ]
+            ].rename(
                 {
-                    "upstream_name": SBML_DFS.S_NAME,
-                    "upstream_compartment": SBML_DFS.C_NAME,
+                    INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM: SBML_DFS.S_NAME,
+                    INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM: SBML_DFS.C_NAME,
                 },
                 axis=1,
             ),
-            interaction_edgelist[["downstream_name", "downstream_compartment"]].rename(
+            interaction_edgelist[
+                [
+                    INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
+                    INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM,
+                ]
+            ].rename(
                 {
-                    "downstream_name": SBML_DFS.S_NAME,
-                    "downstream_compartment": SBML_DFS.C_NAME,
+                    INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM: SBML_DFS.S_NAME,
+                    INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM: SBML_DFS.C_NAME,
                 },
                 axis=1,
             ),
@@ -1329,8 +1339,8 @@ def _edgelist_create_reactions_and_species(
         comp_species_w_names[[SBML_DFS.SC_ID, SBML_DFS.S_NAME, SBML_DFS.C_NAME]].rename(
             {
                 SBML_DFS.SC_ID: "sc_id_up",
-                SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-                SBML_DFS.C_NAME: INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT,
+                SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
+                SBML_DFS.C_NAME: INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM,
             },
             axis=1,
         ),
@@ -1339,8 +1349,8 @@ def _edgelist_create_reactions_and_species(
         comp_species_w_names[[SBML_DFS.SC_ID, SBML_DFS.S_NAME, SBML_DFS.C_NAME]].rename(
             {
                 SBML_DFS.SC_ID: "sc_id_down",
-                SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
-                SBML_DFS.C_NAME: INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT,
+                SBML_DFS.S_NAME: INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
+                SBML_DFS.C_NAME: INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM,
             },
             axis=1,
         ),
@@ -1350,8 +1360,8 @@ def _edgelist_create_reactions_and_species(
     expected_interaction_w_cspecies_columns = (
         set(INTERACTION_EDGELIST_EXPECTED_VARS)
         - {
-            INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME,
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME,
+            INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
+            INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
         }
         | {"sc_id_up", "sc_id_down"}
         | set(extra_reactions_columns)
@@ -1401,14 +1411,14 @@ def _edgelist_create_reactions_and_species(
                 [
                     SBML_DFS.R_ID,
                     "sc_id_up",
-                    INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY,
-                    INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME,
+                    INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM,
+                    INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_UPSTREAM,
                 ]
             ].rename(
                 {
                     "sc_id_up": SBML_DFS.SC_ID,
-                    INTERACTION_EDGELIST_DEFS.UPSTREAM_STOICHIOMETRY: SBML_DFS.STOICHIOMETRY,
-                    INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME: SBML_DFS.SBO_TERM,
+                    INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM: SBML_DFS.SBO_TERM,
+                    INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_UPSTREAM: SBML_DFS.STOICHIOMETRY,
                 },
                 axis=1,
             ),
@@ -1417,14 +1427,14 @@ def _edgelist_create_reactions_and_species(
                 [
                     SBML_DFS.R_ID,
                     "sc_id_down",
-                    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY,
-                    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME,
+                    INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM,
+                    INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_DOWNSTREAM,
                 ]
             ].rename(
                 {
                     "sc_id_down": SBML_DFS.SC_ID,
-                    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_STOICHIOMETRY: SBML_DFS.STOICHIOMETRY,
-                    INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME: SBML_DFS.SBO_TERM,
+                    INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM: SBML_DFS.SBO_TERM,
+                    INTERACTION_EDGELIST_DEFS.STOICHIOMETRY_DOWNSTREAM: SBML_DFS.STOICHIOMETRY,
                 },
                 axis=1,
             ),
@@ -1613,11 +1623,11 @@ def _edgelist_validate_inputs(
 
     # sbo term names should be in controlled vocabulary (excluding NaN values which will be filled by defaults)
     upstream_sbo_terms = set(
-        interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_SBO_TERM_NAME].dropna()
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM].dropna()
     )
     downstream_sbo_terms = set(
         interaction_edgelist[
-            INTERACTION_EDGELIST_DEFS.DOWNSTREAM_SBO_TERM_NAME
+            INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_DOWNSTREAM
         ].dropna()
     )
     sbo_term_names = upstream_sbo_terms | downstream_sbo_terms
@@ -1638,11 +1648,11 @@ def _edgelist_validate_inputs(
 
     # check for extra or missing species and compartments
     defined_interactors = set(
-        interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME]
-    ) | set(interaction_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME])
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM]
+    ) | set(interaction_edgelist[INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM])
     defined_interaction_compartments = set(
-        interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT]
-    ) | set(interaction_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT])
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM]
+    ) | set(interaction_edgelist[INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM])
     species_df_names = set(species_df[SBML_DFS.S_NAME])
     compartments_df_names = set(compartments_df[SBML_DFS.C_NAME])
 
@@ -2117,18 +2127,18 @@ def _validate_edgelist_consistency(
     """
     # Get referenced names
     upstream_species = set(
-        interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_NAME]
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM]
     )
     downstream_species = set(
-        interaction_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_NAME]
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM]
     )
     edgelist_species = upstream_species | downstream_species
 
     upstream_compartments = set(
-        interaction_edgelist[INTERACTION_EDGELIST_DEFS.UPSTREAM_COMPARTMENT]
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM]
     )
     downstream_compartments = set(
-        interaction_edgelist[INTERACTION_EDGELIST_DEFS.DOWNSTREAM_COMPARTMENT]
+        interaction_edgelist[INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM]
     )
     edgelist_compartments = upstream_compartments | downstream_compartments
 

@@ -30,7 +30,7 @@ def precompute_distances(
     partition_size: int = int(1000),
     weight_vars: list[str] = [
         NAPISTU_GRAPH_EDGES.WEIGHT,
-        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+        NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM,
     ],
 ) -> pd.DataFrame:
     """
@@ -186,7 +186,7 @@ def _calculate_distances_subset(
     one_partition: pd.DataFrame,
     weight_vars: list[str] = [
         NAPISTU_GRAPH_EDGES.WEIGHT,
-        NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT,
+        NAPISTU_GRAPH_EDGES.WEIGHT_UPSTREAM,
     ],
     max_steps: Optional[int] = None,
 ) -> pd.DataFrame:
@@ -356,7 +356,7 @@ def _filter_precomputed_distances(
     max_score_q: float = 1,
     path_weight_vars: list[str] = [
         DISTANCES.PATH_WEIGHT,
-        DISTANCES.PATH_UPSTREAM_WEIGHT,
+        DISTANCES.PATH_WEIGHT_UPSTREAM,
     ],
 ) -> pd.DataFrame:
     """Filter precomputed distances by maximum steps and/or to low scores by quantile."""
