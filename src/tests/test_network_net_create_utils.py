@@ -168,6 +168,35 @@ def test_drop_reactions_when_parameters(reaction_species_examples):
             "INVALID_OPTION",
         )
 
+    # Test IndexError when reaction tier is the last tier and drop_reactions_when=ALWAYS
+    # This reproduces the bug where accessing ordered_tiers[i+2] fails when reaction tier is last
+    # Create a reaction with species only on early tiers, so reaction tier becomes the last tier
+    reaction_with_reaction_tier_last = pd.DataFrame(
+        {
+            SBML_DFS.SBO_TERM: [
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.STIMULATOR],
+                MINI_SBO_FROM_NAME[SBOTERM_NAMES.CATALYST],
+            ],
+            SBML_DFS.SC_ID: ["stim", "cat"],
+            SBML_DFS.STOICHIOMETRY: [0, 0],
+        }
+    ).set_index(SBML_DFS.SBO_TERM)
+
+    # This currently raises IndexError when drop_reactions_when=ALWAYS because:
+    # - ordered_tiers will be [stimulator_tier, catalyst_tier, reaction_tier] (3 tiers)
+    # - Loop runs for i=0 and i=1
+    # - When i=1, ordered_tiers[i+1] = reaction_tier, and code tries to access ordered_tiers[i+2] which doesn't exist
+    # After fixing the bug, this should succeed and return edges without the reaction ID
+    edges_reaction_tier_last = net_create_utils.format_tiered_reaction_species(
+        reaction_with_reaction_tier_last,
+        r_id,
+        graph_hierarchy,
+        drop_reactions_when=DROP_REACTIONS_WHEN.ALWAYS,
+    )
+    # After fix: should succeed and return edges without reaction ID
+    assert r_id not in edges_reaction_tier_last[NAPISTU_GRAPH_EDGES.FROM].values
+    assert r_id not in edges_reaction_tier_last[NAPISTU_GRAPH_EDGES.TO].values
+
 
 def test_edge_cases_and_validation(reaction_species_examples):
     """Test edge cases, empty inputs, and validation errors."""

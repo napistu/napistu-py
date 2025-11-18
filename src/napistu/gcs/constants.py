@@ -12,6 +12,7 @@ GCS_ASSETS_NAMES = SimpleNamespace(
     TEST_PATHWAY="test_pathway",
     HUMAN_CONSENSUS="human_consensus",
     HUMAN_CONSENSUS_W_DISTANCES="human_consensus_w_distances",
+    NO_RXN_HUMAN_CONSENSUS="no_rxn_human_consensus",
     REACTOME_MEMBERS="reactome_members",
     REACTOME_XREFS="reactome_xrefs",
 )
@@ -44,7 +45,7 @@ GCS_ASSETS = SimpleNamespace(
     BUCKET="shackett-napistu-public",
     ASSETS={
         GCS_ASSETS_NAMES.TEST_PATHWAY: {
-            GCS_ASSETS_DEFS.FILE: "test_pathway.tar.gz",
+            GCS_ASSETS_DEFS.FILE: f"{GCS_ASSETS_NAMES.TEST_PATHWAY}.tar.gz",
             GCS_ASSETS_DEFS.SUBASSETS: {
                 GCS_SUBASSET_NAMES.SBML_DFS: GCS_FILETYPES.SBML_DFS,
                 GCS_SUBASSET_NAMES.NAPISTU_GRAPH: GCS_FILETYPES.NAPISTU_GRAPH,
@@ -52,27 +53,27 @@ GCS_ASSETS = SimpleNamespace(
                 GCS_SUBASSET_NAMES.PRECOMPUTED_DISTANCES: GCS_FILETYPES.PRECOMPUTED_DISTANCES,
                 GCS_SUBASSET_NAMES.REACTIONS_SOURCE_TOTAL_COUNTS: GCS_FILETYPES.REACTIONS_SOURCE_TOTAL_COUNTS,
             },
-            GCS_ASSETS_DEFS.PUBLIC_URL: "https://storage.googleapis.com/shackett-napistu-public/test_pathway.tar.gz",
+            GCS_ASSETS_DEFS.PUBLIC_URL: f"https://storage.googleapis.com/shackett-napistu-public/{GCS_ASSETS_NAMES.TEST_PATHWAY}.tar.gz",
             GCS_ASSETS_DEFS.VERSIONS: {
-                "20250901": "https://storage.googleapis.com/shackett-napistu-public/test_pathway_20250901.tar.gz"
+                "20250901": f"https://storage.googleapis.com/shackett-napistu-public/{GCS_ASSETS_NAMES.TEST_PATHWAY}_20250901.tar.gz"
             },
         },
         GCS_ASSETS_NAMES.HUMAN_CONSENSUS: {
-            GCS_ASSETS_DEFS.FILE: "human_consensus.tar.gz",
+            GCS_ASSETS_DEFS.FILE: f"{GCS_ASSETS_NAMES.HUMAN_CONSENSUS}.tar.gz",
             GCS_ASSETS_DEFS.SUBASSETS: {
                 GCS_SUBASSET_NAMES.SBML_DFS: GCS_FILETYPES.SBML_DFS,
                 GCS_SUBASSET_NAMES.NAPISTU_GRAPH: GCS_FILETYPES.NAPISTU_GRAPH,
                 GCS_SUBASSET_NAMES.SPECIES_IDENTIFIERS: GCS_FILETYPES.SPECIES_IDENTIFIERS,
                 GCS_SUBASSET_NAMES.REACTIONS_SOURCE_TOTAL_COUNTS: GCS_FILETYPES.REACTIONS_SOURCE_TOTAL_COUNTS,
             },
-            GCS_ASSETS_DEFS.PUBLIC_URL: "https://storage.googleapis.com/shackett-napistu-public/human_consensus.tar.gz",
+            GCS_ASSETS_DEFS.PUBLIC_URL: f"https://storage.googleapis.com/shackett-napistu-public/{GCS_ASSETS_NAMES.HUMAN_CONSENSUS}.tar.gz",
             GCS_ASSETS_DEFS.VERSIONS: {
-                "20250901": "https://storage.googleapis.com/shackett-napistu-public/human_consensus_20250901.tar.gz",
-                "20250923": "https://storage.googleapis.com/shackett-napistu-public/human_consensus_20250923.tar.gz",
+                "20250901": f"https://storage.googleapis.com/shackett-napistu-public/{GCS_ASSETS_NAMES.HUMAN_CONSENSUS}_20250901.tar.gz",
+                "20250923": f"https://storage.googleapis.com/shackett-napistu-public/{GCS_ASSETS_NAMES.HUMAN_CONSENSUS}_20250923.tar.gz",
             },
         },
         GCS_ASSETS_NAMES.HUMAN_CONSENSUS_W_DISTANCES: {
-            GCS_ASSETS_DEFS.FILE: "human_consensus_w_distances.tar.gz",
+            GCS_ASSETS_DEFS.FILE: f"{GCS_ASSETS_NAMES.HUMAN_CONSENSUS_W_DISTANCES}.tar.gz",
             GCS_ASSETS_DEFS.SUBASSETS: {
                 GCS_SUBASSET_NAMES.SBML_DFS: GCS_FILETYPES.SBML_DFS,
                 GCS_SUBASSET_NAMES.NAPISTU_GRAPH: GCS_FILETYPES.NAPISTU_GRAPH,
@@ -80,10 +81,20 @@ GCS_ASSETS = SimpleNamespace(
                 GCS_SUBASSET_NAMES.PRECOMPUTED_DISTANCES: GCS_FILETYPES.PRECOMPUTED_DISTANCES,
                 GCS_SUBASSET_NAMES.REACTIONS_SOURCE_TOTAL_COUNTS: GCS_FILETYPES.REACTIONS_SOURCE_TOTAL_COUNTS,
             },
-            GCS_ASSETS_DEFS.PUBLIC_URL: "https://storage.googleapis.com/shackett-napistu-public/human_consensus_w_distances.tar.gz",
+            GCS_ASSETS_DEFS.PUBLIC_URL: f"https://storage.googleapis.com/shackett-napistu-public/{GCS_ASSETS_NAMES.HUMAN_CONSENSUS_W_DISTANCES}.tar.gz",
             GCS_ASSETS_DEFS.VERSIONS: {
-                "20250901": "https://storage.googleapis.com/shackett-napistu-public/human_consensus_w_distances_20250901.tar.gz"
+                "20250901": f"https://storage.googleapis.com/shackett-napistu-public/{GCS_ASSETS_NAMES.HUMAN_CONSENSUS_W_DISTANCES}_20250901.tar.gz"
             },
+        },
+        GCS_ASSETS_NAMES.NO_RXN_HUMAN_CONSENSUS: {
+            GCS_ASSETS_DEFS.FILE: f"{GCS_ASSETS_NAMES.NO_RXN_HUMAN_CONSENSUS}.tar.gz",
+            GCS_ASSETS_DEFS.SUBASSETS: {
+                GCS_SUBASSET_NAMES.SBML_DFS: GCS_FILETYPES.SBML_DFS,
+                GCS_SUBASSET_NAMES.NAPISTU_GRAPH: GCS_FILETYPES.NAPISTU_GRAPH,
+                GCS_SUBASSET_NAMES.SPECIES_IDENTIFIERS: GCS_FILETYPES.SPECIES_IDENTIFIERS,
+            },
+            GCS_ASSETS_DEFS.PUBLIC_URL: f"https://storage.googleapis.com/shackett-napistu-public/{GCS_ASSETS_NAMES.NO_RXN_HUMAN_CONSENSUS}.tar.gz",
+            GCS_ASSETS_DEFS.VERSIONS: None,
         },
         GCS_ASSETS_NAMES.REACTOME_MEMBERS: {
             GCS_ASSETS_DEFS.FILE: "external_pathways/external_pathways_reactome_neo4j_members.csv",
