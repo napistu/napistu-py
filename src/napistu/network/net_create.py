@@ -346,11 +346,22 @@ def _create_napistu_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.Data
     edge_vars = network_edges.columns.tolist()
 
     origins = network_edges[network_edges[SBML_DFS.STOICHIOMETRY] <= 0]
-    origin_edges = origins.loc[:, [edge_vars[1], edge_vars[0]] + edge_vars[2:]].rename(
-        columns={
-            NAPISTU_GRAPH_NODE_TYPES.SPECIES: NAPISTU_GRAPH_EDGES.FROM,
-            NAPISTU_GRAPH_NODE_TYPES.REACTION: NAPISTU_GRAPH_EDGES.TO,
-        }
+    origin_edges = (
+        origins.loc[:, [edge_vars[1], edge_vars[0]] + edge_vars[2:]]
+        .rename(
+            columns={
+                NAPISTU_GRAPH_NODE_TYPES.SPECIES: NAPISTU_GRAPH_EDGES.FROM,
+                NAPISTU_GRAPH_NODE_TYPES.REACTION: NAPISTU_GRAPH_EDGES.TO,
+                SBML_DFS.STOICHIOMETRY: NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY,
+                SBML_DFS.SBO_TERM: NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM,
+            }
+        )
+        .assign(
+            **{
+                NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY: None,
+                NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM: None,
+            }
+        )
     )
 
     dests = network_edges[network_edges[SBML_DFS.STOICHIOMETRY] > 0]
@@ -358,6 +369,13 @@ def _create_napistu_graph_bipartite(sbml_dfs: sbml_dfs_core.SBML_dfs) -> pd.Data
         columns={
             NAPISTU_GRAPH_NODE_TYPES.REACTION: NAPISTU_GRAPH_EDGES.FROM,
             NAPISTU_GRAPH_NODE_TYPES.SPECIES: NAPISTU_GRAPH_EDGES.TO,
+            SBML_DFS.STOICHIOMETRY: NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY,
+            SBML_DFS.SBO_TERM: NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM,
+        }
+    ).assign(
+        **{
+            NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY: None,
+            NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM: None,
         }
     )
 
@@ -585,17 +603,19 @@ def _reverse_network_edges(augmented_network_edges: pd.DataFrame) -> pd.DataFram
         augmented_network_edges[NAPISTU_GRAPH_EDGES.R_ISREVERSIBLE]
     ]
 
-    r_reaction_edges = (
-        # ignore edges which start in a regulator or catalyst; even for a reversible reaction it
-        # doesn't make sense for a regulator to be impacted by a target
-        reversible_reaction_edges[
-            ~reversible_reaction_edges[NAPISTU_GRAPH_EDGES.SBO_TERM].isin(
-                [
-                    MINI_SBO_FROM_NAME[x]
-                    for x in SBO_MODIFIER_NAMES.union({SBOTERM_NAMES.CATALYST})
-                ]
-            )
+    # Filter: ignore edges which start in a regulator or catalyst; even for a reversible reaction it
+    # doesn't make sense for a regulator to be impacted by a target
+    filter_mask = ~reversible_reaction_edges[
+        NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM
+    ].isin(
+        [
+            MINI_SBO_FROM_NAME[x]
+            for x in SBO_MODIFIER_NAMES.union({SBOTERM_NAMES.CATALYST})
         ]
+    )
+
+    r_reaction_edges = (
+        reversible_reaction_edges[filter_mask]
         # flip parent and child attributes
         .rename(
             {
@@ -608,38 +628,55 @@ def _reverse_network_edges(augmented_network_edges: pd.DataFrame) -> pd.DataFram
         )
     )
 
-    # switch substrates and products
-    r_reaction_edges[NAPISTU_GRAPH_EDGES.STOICHIOMETRY] = r_reaction_edges[
-        NAPISTU_GRAPH_EDGES.STOICHIOMETRY
-    ].apply(
-        # the ifelse statement prevents 0 being converted to -0 ...
-        lambda x: -1 * x if x != 0 else 0
+    # Swap upstream and downstream attributes
+    temp_upstream_stoi = r_reaction_edges[
+        NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY
+    ].copy()
+    temp_downstream_stoi = r_reaction_edges[
+        NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY
+    ].copy()
+    r_reaction_edges[NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY] = temp_downstream_stoi
+    r_reaction_edges[NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY] = temp_upstream_stoi
+
+    temp_upstream_sbo = r_reaction_edges[NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM].copy()
+    temp_downstream_sbo = r_reaction_edges[
+        NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM
+    ].copy()
+    r_reaction_edges[NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM] = temp_downstream_sbo
+    r_reaction_edges[NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM] = temp_upstream_sbo
+
+    # Negate upstream and downstream stoichiometries
+    r_reaction_edges[NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY] = r_reaction_edges[
+        NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY
+    ].apply(lambda x: -1 * x if x is not None and x != 0 else (0 if x == 0 else x))
+
+    r_reaction_edges[NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY] = r_reaction_edges[
+        NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY
+    ].apply(lambda x: -1 * x if x is not None and x != 0 else (0 if x == 0 else x))
+
+    # Transform SBO terms: swap reactant <-> product
+    reactant_term = MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT]
+    product_term = MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT]
+
+    r_reaction_edges[NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM] = r_reaction_edges[
+        NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM
+    ].replace(
+        {
+            reactant_term: product_term,
+            product_term: reactant_term,
+        }
     )
 
-    transformed_r_reaction_edges = pd.concat(
-        [
-            (
-                r_reaction_edges[
-                    r_reaction_edges[NAPISTU_GRAPH_EDGES.SBO_TERM]
-                    == MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT]
-                ].assign(sbo_term=MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT])
-            ),
-            (
-                r_reaction_edges[
-                    r_reaction_edges[NAPISTU_GRAPH_EDGES.SBO_TERM]
-                    == MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT]
-                ].assign(sbo_term=MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT])
-            ),
-            r_reaction_edges[
-                ~r_reaction_edges[NAPISTU_GRAPH_EDGES.SBO_TERM].isin(
-                    [
-                        MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT],
-                        MINI_SBO_FROM_NAME[SBOTERM_NAMES.PRODUCT],
-                    ]
-                )
-            ],
-        ]
+    r_reaction_edges[NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM] = r_reaction_edges[
+        NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM
+    ].replace(
+        {
+            reactant_term: product_term,
+            product_term: reactant_term,
+        }
     )
+
+    transformed_r_reaction_edges = r_reaction_edges
 
     if transformed_r_reaction_edges.shape[0] != r_reaction_edges.shape[0]:
         raise ValueError(

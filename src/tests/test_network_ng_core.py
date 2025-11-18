@@ -14,6 +14,7 @@ from napistu.network.constants import (
     GRAPH_WIRING_APPROACHES,
     IGRAPH_DEFS,
     NAPISTU_GRAPH,
+    NAPISTU_GRAPH_EDGE_DIRECTIONS,
     NAPISTU_GRAPH_EDGE_ENDPOINT_ATTRIBUTES,
     NAPISTU_GRAPH_EDGES,
     NAPISTU_GRAPH_NODE_TYPES,
@@ -984,13 +985,6 @@ def test_add_degree_attributes_pathological_case(test_graph):
 
 def test_reverse_edges():
     """Test the reverse_edges method."""
-    import igraph as ig
-
-    from napistu.network.constants import (
-        NAPISTU_GRAPH_EDGE_DIRECTIONS,
-        NAPISTU_GRAPH_EDGES,
-    )
-
     # Create test graph with edge attributes
     g = ig.Graph(directed=True)
     g.add_vertices(3, attributes={NAPISTU_GRAPH_VERTICES.NAME: ["A", "B", "C"]})
@@ -1001,7 +995,8 @@ def test_reverse_edges():
     g.es[NAPISTU_GRAPH_EDGES.TO] = ["B", "C"]
     g.es[NAPISTU_GRAPH_EDGES.WEIGHT] = [1.0, 2.0]
     g.es[NAPISTU_GRAPH_EDGES.UPSTREAM_WEIGHT] = [0.5, 1.5]
-    g.es[NAPISTU_GRAPH_EDGES.STOICHIOMETRY] = [1.0, -2.0]
+    g.es[NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY] = [1.0, -2.0]
+    g.es[NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY] = [-1.0, 2.0]
     g.es[NAPISTU_GRAPH_EDGES.DIRECTION] = [
         NAPISTU_GRAPH_EDGE_DIRECTIONS.FORWARD,
         NAPISTU_GRAPH_EDGE_DIRECTIONS.REVERSE,
@@ -1043,8 +1038,12 @@ def test_reverse_edges():
         2,
     ]  # unchanged (total degree)
 
-    # Check special handling
-    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.STOICHIOMETRY] == [-1.0, 2.0]
+    # Check special handling - stoichiometries are swapped then negated
+    # Original: upstream=[1.0, -2.0], downstream=[-1.0, 2.0]
+    # After swap: upstream=[-1.0, 2.0], downstream=[1.0, -2.0]
+    # After negate: upstream=[1.0, -2.0], downstream=[-1.0, 2.0]
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY] == [1.0, -2.0]
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY] == [-1.0, 2.0]
     expected_directions = [
         NAPISTU_GRAPH_EDGE_DIRECTIONS.REVERSE,  # forward -> reverse
         NAPISTU_GRAPH_EDGE_DIRECTIONS.FORWARD,  # reverse -> forward
@@ -1067,6 +1066,9 @@ def test_reverse_edges():
     assert napistu_graph.es[NAPISTU_GRAPH_EDGES.SC_PARENTS] == [0, 1]  # restored
     assert napistu_graph.es[NAPISTU_GRAPH_EDGES.SC_CHILDREN] == [1, 1]  # restored
     assert napistu_graph.es[NAPISTU_GRAPH_EDGES.SC_DEGREE] == [1, 2]  # restored
+    # Stoichiometries restored
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY] == [1.0, -2.0]
+    assert napistu_graph.es[NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY] == [-1.0, 2.0]
 
 
 def test_set_weights():
@@ -1896,8 +1898,10 @@ def test_show_summary(napistu_graph):
     expected_edge_attrs = {
         NAPISTU_GRAPH_EDGES.FROM,
         NAPISTU_GRAPH_EDGES.TO,
-        NAPISTU_GRAPH_EDGES.STOICHIOMETRY,
-        NAPISTU_GRAPH_EDGES.SBO_TERM,
+        NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY,
+        NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY,
+        NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM,
+        NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM,
         SBML_DFS.R_ID,
         NAPISTU_GRAPH_EDGES.SPECIES_TYPE,
         SBML_DFS.R_ISREVERSIBLE,

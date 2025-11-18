@@ -426,10 +426,14 @@ def create_neighborhood_dict_entry(
 
     # Add edge polarity
     if edges.shape[0] > 0:
+        # Use upstream SBO term to determine link polarity (direction of edge)
+        # Fill missing/NaN SBO terms with "bystander" (e.g., when upstream is a reaction)
+        # Bystander doesn't affect polarity calculation
         edges[NET_POLARITY.LINK_POLARITY] = (
-            edges[SBML_DFS.SBO_TERM]
-            .map(MINI_SBO_TO_NAME)
-            .map(MINI_SBO_NAME_TO_POLARITY)
+            edges[NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM]
+            .map(MINI_SBO_TO_NAME, na_action="ignore")
+            .map(MINI_SBO_NAME_TO_POLARITY, na_action="ignore")
+            .fillna(NET_POLARITY.BYSTANDER)
         )
 
     # Get reaction sources with error handling

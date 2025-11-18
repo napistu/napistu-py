@@ -1089,10 +1089,18 @@ class NapistuGraph(ig.Graph):
 
         # edge summaries
         stats["n_edges"] = len(self.es)
-        sbo_name_counts = self.get_edge_series(
-            NAPISTU_GRAPH_EDGES.SBO_TERM
-        ).value_counts()
-        sbo_name_counts.index = sbo_name_counts.index.map(MINI_SBO_TO_NAME)
+
+        # Concatenate and count both upstream and downstream SBO terms, then map to names
+        upstream_sbo_terms = self.get_edge_series(NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM)
+        downstream_sbo_terms = self.get_edge_series(
+            NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM
+        )
+
+        # Concatenate both series, filter out None/NaN and empty strings, count, then map to names
+        all_sbo_terms = pd.concat([upstream_sbo_terms, downstream_sbo_terms])
+        all_sbo_terms = all_sbo_terms[all_sbo_terms.notna() & (all_sbo_terms != "")]
+        sbo_term_counts = all_sbo_terms.value_counts()
+        sbo_name_counts = sbo_term_counts.rename(index=MINI_SBO_TO_NAME)
         stats["sbo_name_counts_dict"] = sbo_name_counts.to_dict()
         stats["edge_attributes"] = self.es.attributes()
 
@@ -2453,13 +2461,13 @@ def _handle_special_reversal_cases(edges_df: pd.DataFrame) -> pd.DataFrame:
     Handle special cases that need more than simple attribute swapping.
 
     This includes:
-    - Flipping stoichiometry signs (* -1)
+    - Flipping stoichiometry signs (* -1) for upstream and downstream stoichiometries
     - Mapping direction enums (forward <-> reverse)
 
     Parameters
     ----------
     edges_df : pd.DataFrame
-        Edge dataframe after basic attribute swapping
+        Edge dataframe after basic attribute swapping (upstream/downstream already swapped)
 
     Returns
     -------
@@ -2472,12 +2480,26 @@ def _handle_special_reversal_cases(edges_df: pd.DataFrame) -> pd.DataFrame:
     """
     result_df = edges_df.copy()
 
-    # Handle stoichiometry sign flip
-    if NAPISTU_GRAPH_EDGES.STOICHIOMETRY in result_df.columns:
-        result_df[NAPISTU_GRAPH_EDGES.STOICHIOMETRY] *= -1
+    # Handle stoichiometry sign flip for upstream and downstream
+    # Note: upstream/downstream attributes are already swapped by _apply_edge_reversal_mapping
+    # so we just need to negate them here
+    if NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY in result_df.columns:
+        result_df[NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY] = result_df[
+            NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY
+        ].apply(lambda x: -1 * x if x is not None and x != 0 else (0 if x == 0 else x))
     else:
         logger.warning(
-            f"Missing expected '{NAPISTU_GRAPH_EDGES.STOICHIOMETRY}' attribute during edge reversal. "
+            f"Missing expected '{NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY}' attribute during edge reversal. "
+            "Stoichiometry signs will not be flipped."
+        )
+
+    if NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY in result_df.columns:
+        result_df[NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY] = result_df[
+            NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY
+        ].apply(lambda x: -1 * x if x is not None and x != 0 else (0 if x == 0 else x))
+    else:
+        logger.warning(
+            f"Missing expected '{NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY}' attribute during edge reversal. "
             "Stoichiometry signs will not be flipped."
         )
 

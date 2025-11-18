@@ -249,11 +249,12 @@ def test_drop_reactions_when_always(reaction_species_examples):
     assert r_id not in edges_multi[NAPISTU_GRAPH_EDGES.FROM].values
     assert r_id not in edges_multi[NAPISTU_GRAPH_EDGES.TO].values
     # the final entry should use the reactant SBO and stoi not the product
+    # The final edge is reactant -> product, so upstream attributes are from reactant
     assert (
-        edges_multi.iloc[-1][NAPISTU_GRAPH_EDGES.SBO_TERM]
+        edges_multi.iloc[-1][NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM]
         == MINI_SBO_FROM_NAME[SBOTERM_NAMES.REACTANT]
     )
-    assert edges_multi.iloc[-1][NAPISTU_GRAPH_EDGES.STOICHIOMETRY] == -1.0
+    assert edges_multi.iloc[-1][NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY] == -1.0
 
 
 def test_drop_reaction_when_edgelist():
@@ -446,8 +447,10 @@ def test_wire_reaction_species_mixed_interactions(reaction_species_examples):
     required_columns = [
         NAPISTU_GRAPH_EDGES.FROM,
         NAPISTU_GRAPH_EDGES.TO,
-        NAPISTU_GRAPH_EDGES.STOICHIOMETRY,
-        NAPISTU_GRAPH_EDGES.SBO_TERM,
+        NAPISTU_GRAPH_EDGES.UPSTREAM_STOICHIOMETRY,
+        NAPISTU_GRAPH_EDGES.DOWNSTREAM_STOICHIOMETRY,
+        NAPISTU_GRAPH_EDGES.UPSTREAM_SBO_TERM,
+        NAPISTU_GRAPH_EDGES.DOWNSTREAM_SBO_TERM,
         SBML_DFS.R_ID,
     ]
 
