@@ -274,3 +274,55 @@ def test_single_entry():
 
     # pathway_id should default to model when not provided
     assert source_obj_default.source.iloc[0][SOURCE_SPEC.PATHWAY_ID] == "test_model"
+
+
+def test_collapse_source_df_dataframe():
+    """Test _collapse_source_df with DataFrame input - validates joining, deduplication, and None handling."""
+    source_df = pd.DataFrame(
+        {
+            SOURCE_SPEC.MODEL: ["model1", "model2", "model1", None],
+            SOURCE_SPEC.PATHWAY_ID: ["path1", "path2", "path1", "path3"],
+            SOURCE_SPEC.DATA_SOURCE: ["Reactome", "KEGG", "Reactome", None],
+            SOURCE_SPEC.ORGANISMAL_SPECIES: ["human", "human", None, None],
+        }
+    )
+
+    result = source._collapse_source_df(source_df)
+
+    assert isinstance(result, pd.Series)
+    assert " OR " in result[SOURCE_SPEC.PATHWAY_ID]  # Values joined
+    assert (
+        "path1" in result[SOURCE_SPEC.PATHWAY_ID]
+        and "path2" in result[SOURCE_SPEC.PATHWAY_ID]
+    )
+    assert (
+        len(result[SOURCE_SPEC.PATHWAY_ID].split(" OR ")) == 3
+    )  # Deduplicated (path1, path2, path3)
+    assert result[SOURCE_SPEC.N_COLLAPSED_PATHWAYS] == 4
+    assert (
+        "Reactome" in result[SOURCE_SPEC.DATA_SOURCE]
+        and "KEGG" in result[SOURCE_SPEC.DATA_SOURCE]
+    )
+    assert (
+        result[SOURCE_SPEC.ORGANISMAL_SPECIES] == "human"
+    )  # None filtered, duplicates removed
+
+
+def test_collapse_source_df_series():
+    """Test _collapse_source_df with Series input - validates single entry handling."""
+    source_series = pd.Series(
+        {
+            SOURCE_SPEC.MODEL: "model1",
+            SOURCE_SPEC.PATHWAY_ID: "path1",
+            SOURCE_SPEC.DATA_SOURCE: "Reactome",
+            SOURCE_SPEC.ORGANISMAL_SPECIES: "human",
+        }
+    )
+
+    result = source._collapse_source_df(source_series)
+
+    assert isinstance(result, pd.Series)
+    assert result[SOURCE_SPEC.MODEL] == "model1"  # Not joined
+    assert result[SOURCE_SPEC.PATHWAY_ID] == "path1"
+    assert result[SOURCE_SPEC.DATA_SOURCE] == "Reactome"
+    assert result[SOURCE_SPEC.N_COLLAPSED_PATHWAYS] == 1
