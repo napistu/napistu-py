@@ -54,7 +54,8 @@ def add_complex_formation_species(
     """
 
     # define all species
-    species_ids = sbml_dfs.get_identifiers(SBML_DFS.SPECIES)
+    # Use keep_source=True since we need s_Source for merging sources later
+    species_ids = sbml_dfs.get_identifiers(SBML_DFS.SPECIES, keep_source=True)
     species_defining_attributes = species_ids[species_ids[IDENTIFIERS.BQB] == BQB.IS]
     complex_membership = species_ids[species_ids[IDENTIFIERS.BQB] == BQB.HAS_PART]
 
@@ -367,7 +368,7 @@ def add_reactome_identifiers(
     select_reactome_ids = _read_reactome_crossref_ids(crossref_path)
 
     # read all current identifiers
-    current_ids = sbml_dfs.get_identifiers(SBML_DFS.SPECIES)
+    current_ids = sbml_dfs.get_identifiers(SBML_DFS.SPECIES, keep_source=True)
     # filter annotations of homologues and literature references
     current_molecular_ids = (
         current_ids[current_ids[IDENTIFIERS.BQB].isin([BQB.IS, BQB.HAS_PART])]
@@ -498,7 +499,7 @@ def _add_entity_sets_species(
         All set components
     """
 
-    species_ids = sbml_dfs.get_identifiers(SBML_DFS.SPECIES)
+    species_ids = sbml_dfs.get_identifiers(SBML_DFS.SPECIES, keep_source=True)
     reactome_ids = species_ids[
         species_ids[IDENTIFIERS.ONTOLOGY] == ONTOLOGIES.REACTOME
     ].copy()

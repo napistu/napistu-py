@@ -15,6 +15,7 @@ from napistu.ingestion.constants import (
     HARMONIZOME_DATASET_FILES,
     HARMONIZOME_DATASET_SHORTNAMES,
     HARMONIZOME_DATASETS,
+    HARMONIZOME_DEFS,
     HARMONIZOME_URL_TEMPLATES,
 )
 from napistu.utils import download_wget, initialize_dir
@@ -290,7 +291,7 @@ class HarmonizomeDataset(BaseModel):
 # public functions
 
 
-def load_datasets(
+def load_harmonizome_datasets(
     dataset_short_names: List[str],
     output_dir: Path,
     datasets_dict: Dict[str, Union[HarmonizomeDataset, Dict]] = None,
@@ -323,12 +324,12 @@ def load_datasets(
 
     Examples
     --------
-    >>> data = load_datasets(['reploglek562essential', 'achilles'], Path('data'))
+    >>> data = load_harmonizome_datasets(['reploglek562essential', 'achilles'], Path('data'))
     >>> interactions = data['reploglek562essential']['interactions']
     >>> genes = data['achilles']['genes']
 
     >>> # Load only specific file types
-    >>> data = load_datasets(
+    >>> data = load_harmonizome_datasets(
     ...     ['reploglek562essential'],
     ...     Path('data'),
     ...     file_types=['interactions']
@@ -338,7 +339,7 @@ def load_datasets(
     >>> my_loaders = {
     ...     'achilles': {'interactions': load_achilles_interactions}
     ... }
-    >>> data = load_datasets(
+    >>> data = load_harmonizome_datasets(
     ...     ['achilles'],
     ...     Path('data'),
     ...     custom_loaders_registry=my_loaders
@@ -387,7 +388,7 @@ def load_datasets(
             except FileNotFoundError:
                 logger.warning(
                     f"  File not found: {file_type} for {name}. "
-                    "Use process_datasets to download and process the dataset or "
+                    "Use process_harmonizome_datasets to download and process the dataset or "
                     "use the HarmonizomeDataset instance to call the download method directly."
                 )
             except Exception as e:
@@ -396,7 +397,7 @@ def load_datasets(
     return all_data
 
 
-def process_datasets(
+def process_harmonizome_datasets(
     dataset_short_names: List[str],
     output_dir: Path,
     datasets_dict: Dict[str, Union[HarmonizomeDataset, Dict]] = HARMONIZOME_DATASETS,
@@ -441,7 +442,7 @@ def process_datasets(
 
     Examples
     --------
-    >>> results = process_datasets(['reploglek562essential'], Path('data'))
+    >>> results = process_harmonizome_datasets(['reploglek562essential'], Path('data'))
     >>> results['reploglek562essential']['stats']['n_edges']
     12345
     >>> results['reploglek562essential']['files']['interactions']
@@ -451,7 +452,7 @@ def process_datasets(
     >>> my_loaders = {
     ...     'achilles': {'interactions': load_achilles_interactions}
     ... }
-    >>> results = process_datasets(
+    >>> results = process_harmonizome_datasets(
     ...     ['achilles'],
     ...     Path('data'),
     ...     custom_loaders_registry=my_loaders
@@ -530,6 +531,73 @@ def _apply_custom_loaders(
     return dataset
 
 
+def _format_perturbatalas_perturbations(interactions: pd.DataFrame) -> pd.DataFrame:
+
+    # use the perturbed gene's symbol<->entrez as an adapter since the perutbation only has a symbol
+    symbol_to_entrez = interactions[
+        [ONTOLOGIES.SYMBOL, ONTOLOGIES.NCBI_ENTREZ_GENE]
+    ].drop_duplicates()
+    # Convert entrez ID to string
+    symbol_to_entrez[ONTOLOGIES.NCBI_ENTREZ_GENE] = symbol_to_entrez[
+        ONTOLOGIES.NCBI_ENTREZ_GENE
+    ].astype(str)
+    # convert to upper case symbols
+    symbol_to_entrez[ONTOLOGIES.SYMBOL] = symbol_to_entrez[
+        ONTOLOGIES.SYMBOL
+    ].str.upper()
+
+    perturbations = (
+        interactions[[HARMONIZOME_DEFS.PERTURBATION]]
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+
+    # Split the Perturbation column by underscore into 5 columns
+    decoded_perturbations = perturbations[HARMONIZOME_DEFS.PERTURBATION].str.split(
+        "_", n=4, expand=True
+    )
+    decoded_perturbations.columns = [
+        "prefix",
+        "ID",
+        HARMONIZOME_DEFS.PERTURBATION_TYPE,
+        ONTOLOGIES.SYMBOL,
+        HARMONIZOME_DEFS.PERTURBATION_STUDY,
+    ]
+    # convert to upper case symbols
+    decoded_perturbations[ONTOLOGIES.SYMBOL] = decoded_perturbations[
+        ONTOLOGIES.SYMBOL
+    ].str.upper()
+    # add the entrez ID of the perturbation
+    decoded_perturbations = decoded_perturbations.merge(
+        symbol_to_entrez, on=ONTOLOGIES.SYMBOL, how="left"
+    )
+
+    # Convert entrez ID to string, converting NaN to None
+    # After merge, NaN values cause pandas to convert the column to float
+    # Convert numeric values to string (removing decimal) and NaN to None
+    decoded_perturbations[ONTOLOGIES.NCBI_ENTREZ_GENE] = decoded_perturbations[
+        ONTOLOGIES.NCBI_ENTREZ_GENE
+    ].apply(lambda x: str(int(float(x))) if pd.notna(x) else None)
+
+    # Add these columns to your original dataframe
+    perturbations[
+        [
+            HARMONIZOME_DEFS.PERTURBED_SYMBOL,
+            HARMONIZOME_DEFS.PERTURBED_NCBI_ENTREZ_GENE,
+            HARMONIZOME_DEFS.PERTURBATION_TYPE,
+            HARMONIZOME_DEFS.PERTURBATION_STUDY,
+        ]
+    ] = decoded_perturbations[
+        [
+            ONTOLOGIES.SYMBOL,
+            ONTOLOGIES.NCBI_ENTREZ_GENE,
+            HARMONIZOME_DEFS.PERTURBATION_TYPE,
+            HARMONIZOME_DEFS.PERTURBATION_STUDY,
+        ]
+    ]
+    return perturbations
+
+
 # custom loaders
 
 
@@ -543,8 +611,15 @@ def _load_achilles_interactions(filepath: Path) -> pd.DataFrame:
         .drop(columns=["NA", "NA.1"])
         .rename(
             columns={
-                "GeneSym": ONTOLOGIES.SYMBOL,
-                "GeneID": ONTOLOGIES.NCBI_ENTREZ_GENE,
+                HARMONIZOME_DEFS.GENE_SYM: ONTOLOGIES.SYMBOL,
+                HARMONIZOME_DEFS.GENE_ID: ONTOLOGIES.NCBI_ENTREZ_GENE,
+            }
+        )
+        .assign(
+            **{
+                ONTOLOGIES.NCBI_ENTREZ_GENE: lambda x: x[
+                    ONTOLOGIES.NCBI_ENTREZ_GENE
+                ].astype(str)
             }
         )
     )
@@ -554,17 +629,40 @@ def _load_clinvar_interactions(filepath: Path) -> pd.DataFrame:
     return (
         pd.read_csv(filepath, sep="\t")
         .rename(
-            columns={"Gene": ONTOLOGIES.SYMBOL, "Gene ID": ONTOLOGIES.NCBI_ENTREZ_GENE}
+            columns={
+                HARMONIZOME_DEFS.GENE: ONTOLOGIES.SYMBOL,
+                HARMONIZOME_DEFS.GENE_ID_SPACED: ONTOLOGIES.NCBI_ENTREZ_GENE,
+            }
         )
         .drop(columns=["id", "Phenotype ID", "Threshold Value"])
+        .assign(
+            **{
+                ONTOLOGIES.NCBI_ENTREZ_GENE: lambda x: x[
+                    ONTOLOGIES.NCBI_ENTREZ_GENE
+                ].astype(str)
+            }
+        )
     )
 
 
 def _load_dbgap_interactions(filepath: Path) -> pd.DataFrame:
 
-    return pd.read_csv(filepath, sep="\t", skiprows=1).rename(
-        columns={"GeneSym": ONTOLOGIES.SYMBOL, "GeneID": ONTOLOGIES.NCBI_ENTREZ_GENE}
-    )[[ONTOLOGIES.SYMBOL, ONTOLOGIES.NCBI_ENTREZ_GENE, "Trait"]]
+    return (
+        pd.read_csv(filepath, sep="\t", skiprows=1)
+        .rename(
+            columns={
+                HARMONIZOME_DEFS.GENE_SYM: ONTOLOGIES.SYMBOL,
+                HARMONIZOME_DEFS.GENE_ID: ONTOLOGIES.NCBI_ENTREZ_GENE,
+            }
+        )
+        .assign(
+            **{
+                ONTOLOGIES.NCBI_ENTREZ_GENE: lambda x: x[
+                    ONTOLOGIES.NCBI_ENTREZ_GENE
+                ].astype(str)
+            }
+        )[[ONTOLOGIES.SYMBOL, ONTOLOGIES.NCBI_ENTREZ_GENE, HARMONIZOME_DEFS.TRAIT]]
+    )
 
 
 def _load_drugbank_interactions(filepath: Path) -> pd.DataFrame:
@@ -572,45 +670,102 @@ def _load_drugbank_interactions(filepath: Path) -> pd.DataFrame:
         pd.read_csv(filepath, sep="\t", encoding="latin-1", skiprows=1)
         .rename(
             columns={
-                "GeneSym": ONTOLOGIES.SYMBOL,
-                "UniprotAcc": ONTOLOGIES.UNIPROT,
-                "GeneID": ONTOLOGIES.NCBI_ENTREZ_GENE,
-                "DrugBankID": ONTOLOGIES.DRUGBANK,
+                HARMONIZOME_DEFS.GENE_SYM: ONTOLOGIES.SYMBOL,
+                HARMONIZOME_DEFS.UNIPROT_ACC: ONTOLOGIES.UNIPROT,
+                HARMONIZOME_DEFS.GENE_ID: ONTOLOGIES.NCBI_ENTREZ_GENE,
+                HARMONIZOME_DEFS.DRUGBANK_ID: ONTOLOGIES.DRUGBANK,
             }
         )
         .drop(columns=["NA", "weight"])
+        .assign(
+            **{
+                ONTOLOGIES.NCBI_ENTREZ_GENE: lambda x: x[
+                    ONTOLOGIES.NCBI_ENTREZ_GENE
+                ].astype(str)
+            }
+        )
     )
 
 
 def _load_drugbank_attributes(filepath: Path) -> pd.DataFrame:
     return pd.read_csv(filepath, sep="\t", encoding="latin-1").rename(
-        columns={"DrugBankID": ONTOLOGIES.DRUGBANK}
+        columns={HARMONIZOME_DEFS.DRUGBANK_ID: ONTOLOGIES.DRUGBANK}
     )
 
 
 def _load_gad_interactions(filepath: Path) -> pd.DataFrame:
-    return pd.read_csv(filepath, sep="\t", skiprows=1).rename(
-        columns={"GeneSym": ONTOLOGIES.SYMBOL, "GeneID": ONTOLOGIES.NCBI_ENTREZ_GENE}
-    )[[ONTOLOGIES.SYMBOL, ONTOLOGIES.NCBI_ENTREZ_GENE, "Disease", "DiseaseClass"]]
+    return (
+        pd.read_csv(filepath, sep="\t", skiprows=1)
+        .rename(
+            columns={
+                HARMONIZOME_DEFS.GENE_SYM: ONTOLOGIES.SYMBOL,
+                HARMONIZOME_DEFS.GENE_ID: ONTOLOGIES.NCBI_ENTREZ_GENE,
+            }
+        )
+        .assign(
+            **{
+                ONTOLOGIES.NCBI_ENTREZ_GENE: lambda x: x[
+                    ONTOLOGIES.NCBI_ENTREZ_GENE
+                ].astype(str)
+            }
+        )[
+            [
+                ONTOLOGIES.SYMBOL,
+                ONTOLOGIES.NCBI_ENTREZ_GENE,
+                HARMONIZOME_DEFS.DISEASE,
+                HARMONIZOME_DEFS.DISEASE_CLASS,
+            ]
+        ]
+    )
 
 
 def _load_replogle_interactions(filepath: Path) -> pd.DataFrame:
     return (
         pd.read_csv(filepath, sep="\t", index_col=0)
         .rename(
-            columns={"Gene": ONTOLOGIES.SYMBOL, "Gene ID": ONTOLOGIES.NCBI_ENTREZ_GENE}
+            columns={
+                HARMONIZOME_DEFS.GENE: ONTOLOGIES.SYMBOL,
+                HARMONIZOME_DEFS.GENE_ID_SPACED: ONTOLOGIES.NCBI_ENTREZ_GENE,
+            }
         )
         .assign(
-            perturbation_ensg=lambda x: x["Gene Perturbation ID"].str.extract(
-                r"(ENS[A-Z]*G[0-9]+)$", expand=False
-            )
+            **{
+                ONTOLOGIES.NCBI_ENTREZ_GENE: lambda x: x[
+                    ONTOLOGIES.NCBI_ENTREZ_GENE
+                ].astype(str)
+            }
+        )
+        .assign(
+            **{
+                HARMONIZOME_DEFS.PERTURBED_ENSEMBL_GENE: lambda x: x[
+                    HARMONIZOME_DEFS.GENE_PERTURBATION_ID
+                ].str.extract(r"(ENS[A-Z]*G[0-9]+)$", expand=False)
+            }
         )
     )
 
 
 def _load_perturbatlas_interactions(filepath: Path) -> pd.DataFrame:
-    return pd.read_csv(filepath, sep="\t", index_col=0).rename(
-        columns={"Gene": ONTOLOGIES.SYMBOL, "Gene ID": ONTOLOGIES.NCBI_ENTREZ_GENE}
+    interactions = (
+        pd.read_csv(filepath, sep="\t", index_col=0)
+        .rename(
+            columns={
+                HARMONIZOME_DEFS.GENE: ONTOLOGIES.SYMBOL,
+                HARMONIZOME_DEFS.GENE_ID_SPACED: ONTOLOGIES.NCBI_ENTREZ_GENE,
+            }
+        )
+        .assign(
+            **{
+                ONTOLOGIES.NCBI_ENTREZ_GENE: lambda x: x[
+                    ONTOLOGIES.NCBI_ENTREZ_GENE
+                ].astype(str)
+            }
+        )
+    )
+
+    formatted_perturbations = _format_perturbatalas_perturbations(interactions)
+    return interactions.merge(
+        formatted_perturbations, on=HARMONIZOME_DEFS.PERTURBATION, how="inner"
     )
 
 

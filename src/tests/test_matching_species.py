@@ -385,10 +385,10 @@ def test_match_features_to_wide_pathway_species(sbml_dfs_glucose_metabolism):
     )
 
     compare_frame_contents(
-        matched_s_ids.drop(columns="s_Source"),
-        matched_s_ids_w_ontologies.drop(columns="s_Source"),
+        matched_s_ids,
+        matched_s_ids_w_ontologies,
     )
     compare_frame_contents(
-        matched_s_ids.drop(columns="s_Source"),
-        matched_s_ids_from_wide.drop(columns="s_Source"),
+        matched_s_ids,
+        matched_s_ids_from_wide,
     )

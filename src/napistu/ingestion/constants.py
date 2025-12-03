@@ -702,3 +702,45 @@ HARMONIZOME_DATASETS = {
     #    HARMONIZOME_DATASET_DEFS.DOWNLOAD_FILES : HARMONIZOME_STANDARD_FILES
     # },
 }
+
+HARMONIZOME_DEFS = SimpleNamespace(
+    # standardized fields
+    PERTURBED_SYMBOL=f"perturbed_{ONTOLOGIES.SYMBOL}",
+    PERTURBED_NCBI_ENTREZ_GENE=f"perturbed_{ONTOLOGIES.NCBI_ENTREZ_GENE}",
+    PERTURBED_ENSEMBL_GENE=f"perturbed_{ONTOLOGIES.ENSEMBL_GENE}",
+    PERTURBATION_TYPE="perturbation_type",
+    PERTURBATION_STUDY="perturbation_study",
+    # Source file column names
+    GENE_SYM="GeneSym",
+    GENE_ID="GeneID",
+    GENE="Gene",
+    GENE_ID_SPACED="Gene ID",
+    GENE_PERTURBATION_ID="Gene Perturbation ID",
+    DISEASE="Disease",
+    DISEASE_CLASS="DiseaseClass",
+    TRAIT="Trait",
+    UNIPROT_ACC="UniprotAcc",
+    DRUGBANK_ID="DrugBankID",
+    PERTURBATION="Perturbation",
+    # interaction columns
+    STANDARDIZED_VALUE="Standardized Value",
+    THRESHOLDED_VALUE="Threshold Value",
+)
+
+# perturbseq
+
+PERTURBSEQ_DEFS = SimpleNamespace(
+    PERTURBED_SYMBOL=f"perturbed_{ONTOLOGIES.SYMBOL}",
+    PERTURBED_NCBI_ENTREZ_GENE=f"perturbed_{ONTOLOGIES.NCBI_ENTREZ_GENE}",
+    PERTURBED_ENSEMBL_GENE=f"perturbed_{ONTOLOGIES.ENSEMBL_GENE}",
+    PERTURBED_SPECIES_ID="perturbed_species_id",
+    TARGET_SYMBOL=f"target_{ONTOLOGIES.SYMBOL}",
+    TARGET_NCBI_ENTREZ_GENE=f"target_{ONTOLOGIES.NCBI_ENTREZ_GENE}",
+    TARGET_ENSEMBL_GENE=f"target_{ONTOLOGIES.ENSEMBL_GENE}",
+    TARGET_SPECIES_ID="target_species_id",
+)
+
+REPLOGLE_DEFS = SimpleNamespace(
+    REPLOGLE_PERTURBSEQ_URI="https://plus.figshare.com/ndownloader/files/38349308",
+    REPLOGLE_PERTURBSEQ_ZIPPED_FILENAME="anderson-darling p-values, BH-corrected.csv.gz",
+)

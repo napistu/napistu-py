@@ -459,6 +459,17 @@ def test_get_identifiers_handles_missing_values(model_source_stub):
     ), "Only Identifiers objects should be returned."
 
 
+def test_get_identifiers_keep_source(sbml_dfs):
+    """Test that get_identifiers excludes source column by default and includes it when keep_source=True."""
+    # Test default behavior (keep_source=False) - source should be excluded
+    result_default = sbml_dfs.get_identifiers(SBML_DFS.SPECIES)
+    assert SBML_DFS.S_SOURCE not in result_default.columns
+
+    # Test with keep_source=True - source should be included
+    result_with_source = sbml_dfs.get_identifiers(SBML_DFS.SPECIES, keep_source=True)
+    assert SBML_DFS.S_SOURCE in result_with_source.columns
+
+
 def test_remove_entity_data_success(sbml_dfs_w_data):
     """Test successful removal of entity data."""
     # Get initial data
