@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import Callable, Dict, Optional, Union
 
+import numpy as np
 import pandas as pd
 
 from napistu.constants import (
@@ -23,6 +24,7 @@ from napistu.ingestion.harmonizome import (
     load_harmonizome_datasets,
     process_harmonizome_datasets,
 )
+from napistu.matching.constants import FEATURE_ID_VAR_DEFAULT
 from napistu.matching.species import features_to_pathway_species
 from napistu.utils import download_wget
 
@@ -151,7 +153,7 @@ def load_replogle_pvalues_with_species_ids(
                 | set(long_replogle_pvalues[PERTURBSEQ_DEFS.TARGET_ENSEMBL_GENE])
             )
         }
-    )
+    ).assign(**{FEATURE_ID_VAR_DEFAULT: lambda x: np.arange(len(x))})
 
     replogle_genes_to_species = features_to_pathway_species(
         feature_identifiers=replogle_gene_ids,
@@ -216,11 +218,14 @@ def _format_harmonizome_replogle_with_species_ids(
     """
 
     # target genes are tracked with NCBI Entrez gene IDs
+    harmonizome_replogle_target_identifiers = (
+        harmonizome_replogle_interactions[[ONTOLOGIES.NCBI_ENTREZ_GENE]]
+        .drop_duplicates()
+        .assign(**{FEATURE_ID_VAR_DEFAULT: lambda x: np.arange(len(x))})
+    )
     harmonizome_replogle_target_species = (
         features_to_pathway_species(
-            feature_identifiers=harmonizome_replogle_interactions[
-                [ONTOLOGIES.NCBI_ENTREZ_GENE]
-            ].drop_duplicates(),
+            feature_identifiers=harmonizome_replogle_target_identifiers,
             species_identifiers=species_identifiers,
             ontologies={ONTOLOGIES.NCBI_ENTREZ_GENE},
             feature_identifiers_var=ONTOLOGIES.NCBI_ENTREZ_GENE,
@@ -235,11 +240,14 @@ def _format_harmonizome_replogle_with_species_ids(
     )
 
     # perturbed genes are tracked with Ensembl gene IDs
+    harmonizome_replogle_perturbed_identifiers = (
+        harmonizome_replogle_interactions[[HARMONIZOME_DEFS.PERTURBED_ENSEMBL_GENE]]
+        .drop_duplicates()
+        .assign(**{FEATURE_ID_VAR_DEFAULT: lambda x: np.arange(len(x))})
+    )
     harmonizome_replogle_perturbed_species = (
         features_to_pathway_species(
-            feature_identifiers=harmonizome_replogle_interactions[
-                [HARMONIZOME_DEFS.PERTURBED_ENSEMBL_GENE]
-            ].drop_duplicates(),
+            feature_identifiers=harmonizome_replogle_perturbed_identifiers,
             species_identifiers=species_identifiers,
             ontologies={ONTOLOGIES.ENSEMBL_GENE},
             feature_identifiers_var=HARMONIZOME_DEFS.PERTURBED_ENSEMBL_GENE,
@@ -323,7 +331,7 @@ def _format_perturbatlas_with_species_ids(
                 )
             )
         }
-    )
+    ).assign(**{FEATURE_ID_VAR_DEFAULT: lambda x: np.arange(len(x))})
 
     perturbatlas_genes_to_species = features_to_pathway_species(
         feature_identifiers=perturbatlas_gene_ids,

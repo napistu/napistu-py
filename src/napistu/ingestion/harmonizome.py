@@ -180,7 +180,7 @@ class HarmonizomeDataset(BaseModel):
             initialize_dir(str(dataset_dir), overwrite=overwrite)
         except FileExistsError:
             if not overwrite:
-                logger.warning(
+                logger.debug(
                     f"Dataset directory {dataset_dir} already exists. Set overwrite=True to replace."
                 )
 
@@ -192,7 +192,7 @@ class HarmonizomeDataset(BaseModel):
             downloaded_files[file_type] = output_path
 
             if output_path.is_file() and not overwrite:
-                logger.warning(
+                logger.debug(
                     f"File {output_path} already exists. Set overwrite=True to replace."
                 )
                 continue
@@ -261,9 +261,9 @@ class HarmonizomeDataset(BaseModel):
         self, output_dir: Path, overwrite: bool = False
     ) -> Dict[str, any]:
         """Download all files and process them."""
-        logger.info("=" * 60)
-        logger.info(f"Processing: {self.name}")
-        logger.info("=" * 60)
+        logger.debug("=" * 60)
+        logger.debug(f"Processing: {self.name}")
+        logger.debug("=" * 60)
 
         # Download files
         files = self.download(output_dir, overwrite=overwrite)
@@ -275,10 +275,10 @@ class HarmonizomeDataset(BaseModel):
             stats = self.process_edge_list(output_dir)
             results["stats"] = stats
 
-            logger.info("Dataset stats:")
-            logger.info(f"  Edges: {stats['n_edges']:,}")
-            logger.info(f"  Genes: {stats['n_genes']:,}")
-            logger.info(f"  Attributes: {stats['n_attributes']:,}")
+            logger.debug("Dataset stats:")
+            logger.debug(f"  Edges: {stats['n_edges']:,}")
+            logger.debug(f"  Genes: {stats['n_genes']:,}")
+            logger.debug(f"  Attributes: {stats['n_attributes']:,}")
 
         return results
 
@@ -376,7 +376,7 @@ def load_harmonizome_datasets(
         # Use a local variable to avoid modifying the parameter across iterations
         files_to_load = dataset.download_files if file_types is None else file_types
 
-        logger.info(f"Loading dataset: {name}")
+        logger.debug(f"Loading dataset: {name}")
 
         all_data[name] = {}
 
@@ -384,7 +384,7 @@ def load_harmonizome_datasets(
             try:
                 df = dataset.load(output_dir, file_type)
                 all_data[name][file_type] = df
-                logger.info(f"  Loaded {file_type}: {df.shape}")
+                logger.debug(f"  Loaded {file_type}: {df.shape}")
             except FileNotFoundError:
                 logger.warning(
                     f"  File not found: {file_type} for {name}. "
