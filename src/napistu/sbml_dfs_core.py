@@ -393,9 +393,7 @@ class SBML_dfs:
                 model_prefix + NAPISTU_STANDARD_OUTPUTS.SPECIES_IDENTIFIERS
             )
             with fs.openbin(species_identifiers_path, "w") as f:
-                species_identifiers.drop([SBML_DFS.S_SOURCE], axis=1).to_csv(
-                    f, sep="\t", index=False
-                )
+                species_identifiers.to_csv(f, sep="\t", index=False)
 
             # export reactions' source total counts
             reactions_source_total_counts_path = (
@@ -790,7 +788,7 @@ class SBML_dfs:
         )
 
     def get_identifiers(
-        self, id_type, filter_by_bqb=None, add_names=True
+        self, id_type, filter_by_bqb=None, add_names=True, keep_source=False
     ) -> pd.DataFrame:
         """
         Get identifiers from a specified entity type.
@@ -807,6 +805,10 @@ class SBML_dfs:
             - "loose": Use BQB_DEFINING_ATTRS_LOOSE (includes encoded/encodes relationships)
         add_names : bool, optional
             Whether to add entity names and other metadata from the entity table, by default True
+        keep_source : bool, optional
+            Whether to include the source column in the output, by default False.
+            Only applies when add_names=True. The source column is excluded by default
+            as it's typically not needed for identifier lookups.
 
         Returns
         -------
@@ -839,17 +841,30 @@ class SBML_dfs:
                     f"id_entry was a {type(id_entry)} and must either be"
                     " an identifiers.Identifiers object or a missing value (None, np.nan, pd.NA)"
                 )
+        # Get the source column name if it exists for this entity type
+        source_col = None
+        if SCHEMA_DEFS.SOURCE in schema[id_type]:
+            source_col = schema[id_type][SCHEMA_DEFS.SOURCE]
+
+        # Determine columns to retain from selected_table when add_names=True
+        # Exclude the ID column, and source column (if present and keep_source=False)
+        id_col = schema[id_type][SCHEMA_DEFS.ID]
+        columns_to_retain = []
+        for col in selected_table.columns:
+            # Always exclude the ID column
+            if col == id_col:
+                continue
+            # Exclude source column unless keep_source=True
+            if source_col is not None and col == source_col and not keep_source:
+                continue
+            # Keep all other columns
+            columns_to_retain.append(col)
+
         if not identifiers_dict:
             # Return empty DataFrame with expected columns if nothing found
             base_columns = [schema[id_type][SCHEMA_DEFS.PK], "entry"]
             if add_names:
-                # Add columns from selected_table (excluding the ID column)
-                name_columns = [
-                    col
-                    for col in selected_table.columns
-                    if col != schema[id_type][SCHEMA_DEFS.ID]
-                ]
-                return pd.DataFrame(columns=base_columns + name_columns)
+                return pd.DataFrame(columns=base_columns + columns_to_retain)
             else:
                 return pd.DataFrame(columns=base_columns)
 
@@ -860,7 +875,7 @@ class SBML_dfs:
         # Conditionally add names and metadata based on add_names parameter
         if add_names:
             result_identifiers = identifiers_tbl.merge(
-                selected_table.drop(schema[id_type][SCHEMA_DEFS.ID], axis=1),
+                selected_table[columns_to_retain],
                 left_on=schema[id_type][SCHEMA_DEFS.PK],
                 right_index=True,
             )
