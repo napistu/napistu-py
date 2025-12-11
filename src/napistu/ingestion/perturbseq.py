@@ -57,7 +57,7 @@ def ingest_replogle_pvalues(target_uri: str) -> None:
     return None
 
 
-def load_aggregated_perturbseq_data_with_species_ids(
+def load_harmonizome_perturbseq_datasets(
     harmonizome_data_dir: str,
     species_identifiers: pd.DataFrame,
     datasets_w_formatters: Optional[Dict[str, Callable]] = None,
