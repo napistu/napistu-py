@@ -13,7 +13,7 @@ on:
         default: 'latest'
         type: string
   schedule:
-    - cron: '0 10 * * *'  # Daily at 2 AM PST (10 AM UTC)
+    - cron: '0 10 * * 1'  # Weekly on Monday at 2 AM PST (10 AM UTC)
 
 env:
   PROJECT_ID: shackett
