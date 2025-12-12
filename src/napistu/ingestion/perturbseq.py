@@ -61,6 +61,7 @@ def load_harmonizome_perturbseq_datasets(
     harmonizome_data_dir: str,
     species_identifiers: pd.DataFrame,
     datasets_w_formatters: Optional[Dict[str, Callable]] = None,
+    return_distinct_interactions: bool = False,
 ) -> pd.DataFrame:
     """
     Load aggregated perturbseq data with species IDs.
@@ -73,6 +74,8 @@ def load_harmonizome_perturbseq_datasets(
         Species identifiers dataframe.
     datasets_w_formatters: Optional[Dict[str, Callable]]
         Dictionary mapping dataset shortnames to formatters. By default, uses the human perturbseq datasets to formatters.
+    return_distinct_interactions: bool
+        Whether to return distinct interactions. Default is False.
 
     Returns
     -------
@@ -103,11 +106,39 @@ def load_harmonizome_perturbseq_datasets(
         for dataset_shortname in datasets_w_formatters.keys()
     }
 
-    return pd.concat(perturbseq_interactions_with_species_ids.values())
+    # add a perturbation_type and perturbation_study columns to tables where they don't exist
+    for dataset_shortname in datasets_w_formatters.keys():
+        if (
+            HARMONIZOME_DEFS.PERTURBATION_TYPE
+            not in perturbseq_interactions_with_species_ids[dataset_shortname].columns
+        ):
+            perturbseq_interactions_with_species_ids[dataset_shortname][
+                HARMONIZOME_DEFS.PERTURBATION_TYPE
+            ] = "KD"
+        if (
+            HARMONIZOME_DEFS.PERTURBATION_STUDY
+            not in perturbseq_interactions_with_species_ids[dataset_shortname].columns
+        ):
+            perturbseq_interactions_with_species_ids[dataset_shortname][
+                HARMONIZOME_DEFS.PERTURBATION_STUDY
+            ] = dataset_shortname
+
+    harmonizome_perturbseq_interactions = pd.concat(
+        perturbseq_interactions_with_species_ids.values()
+    )
+
+    if return_distinct_interactions:
+        return _get_distinct_harmonizome_perturbseq_interactions(
+            harmonizome_perturbseq_interactions
+        )
+    else:
+        return harmonizome_perturbseq_interactions
 
 
 def load_replogle_pvalues_with_species_ids(
-    path_to_wide_replogle_pvalues: Union[str, Path], species_identifiers: pd.DataFrame
+    path_to_wide_replogle_pvalues: Union[str, Path],
+    species_identifiers: pd.DataFrame,
+    return_distinct_interactions: bool = False,
 ) -> pd.DataFrame:
     """
     Load Replogle et al. Perturb-seq p-values with species IDs.
@@ -118,6 +149,8 @@ def load_replogle_pvalues_with_species_ids(
         Path to the wide Replogle et al. Perturb-seq p-values file.
     species_identifiers: pd.DataFrame
         Species identifiers dataframe.
+    return_distinct_interactions: bool
+        Whether to return distinct interactions. Default is False.
 
     Returns
     -------
@@ -185,7 +218,10 @@ def load_replogle_pvalues_with_species_ids(
         how="left",
     )
 
-    return replogle_pvalues_with_species_ids
+    if return_distinct_interactions:
+        return _get_distinct_replogle_pvalues(replogle_pvalues_with_species_ids)
+    else:
+        return replogle_pvalues_with_species_ids
 
 
 # private functions
@@ -388,6 +424,55 @@ def _format_perturbatlas_with_species_ids(
             HARMONIZOME_DEFS.THRESHOLDED_VALUE,
         ]
     ]
+
+
+def _get_distinct_harmonizome_perturbseq_interactions(
+    aggregated_perturbseq_data_with_species_ids: pd.DataFrame,
+) -> pd.DataFrame:
+    """Reduce the harmonizome perturbseq data to a single entry per study-type-perturbed-target pair."""
+
+    grouped = (
+        aggregated_perturbseq_data_with_species_ids.assign(
+            **{"absolute std value": lambda df: df["Standardized Value"].abs()}
+        )
+        .sort_values("absolute std value", ascending=False)
+        .groupby(
+            [
+                "dataset_shortname",
+                "perturbation_study",
+                "perturbation_type",
+                "perturbed_species_id",
+                "target_species_id",
+            ]
+        )
+    )
+
+    distinct_harmonizome_perturbseq_interactions = (
+        grouped.agg(
+            {
+                "Standardized Value": "first",
+                "Threshold Value": "first",
+            }
+        )
+        .assign(n_interactions=grouped.size())
+        .reset_index()
+    )
+
+    return distinct_harmonizome_perturbseq_interactions
+
+
+def _get_distinct_replogle_pvalues(
+    replogle_pvalues_with_species_ids: pd.DataFrame,
+) -> pd.DataFrame:
+    """Reduce the Replogle reported significance to a single entry per perturbed-target pair."""
+
+    grouped = replogle_pvalues_with_species_ids.groupby(
+        ["perturbed_species_id", "target_species_id"]
+    )
+    distinct_replogle_pvalues = (
+        grouped.agg({"pvalue": "min"}).assign(n=grouped.size()).reset_index()
+    )
+    return distinct_replogle_pvalues
 
 
 # human perturbseq datasets to formatters
