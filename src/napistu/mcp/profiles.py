@@ -14,6 +14,7 @@ class ServerProfile:
             "enable_execution": False,
             "enable_codebase": False,
             "enable_tutorials": False,
+            "enable_chat": False,
             "session_context": None,
             "object_registry": None,
             "tutorials_path": None,
@@ -42,6 +43,7 @@ DOCS_PROFILE = ServerProfile(
     enable_documentation=True,
     enable_codebase=True,
     enable_tutorials=True,
+    enable_chat=True,
 )
 
 FULL_PROFILE = ServerProfile(
@@ -50,6 +52,7 @@ FULL_PROFILE = ServerProfile(
     enable_codebase=True,
     enable_execution=True,
     enable_tutorials=True,
+    enable_chat=True,
 )
 
 
