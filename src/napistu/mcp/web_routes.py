@@ -1,154 +1,185 @@
 """
-Web routes for chat interface using FastMCP's custom_route system.
-
-Provides REST API endpoints that complement the MCP protocol.
-These routes are registered directly on the FastMCP server.
+web_routes.py - Route handlers for Napistu chat web interface with CORS support
 """
 
 import logging
-from typing import Dict
 
-from fastapi import HTTPException, Request
-from fastapi.responses import JSONResponse
 from mcp.server import FastMCP
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from napistu.mcp.chat_web import (
-    ChatConfig,
     cost_tracker,
     get_claude_client,
     rate_limiter,
 )
+from napistu.mcp.constants import DEFAULT_ALLOWED_ORIGINS
 
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# Models
-# ============================================================================
+def get_cors_headers(origin: str = None):
+    """
+    Get CORS headers for response.
+
+    Only allows requests from specified origins for security.
+    Returns appropriate CORS headers if origin is in allowed list.
+    """
+    # Check if origin is in allowed list
+    if origin and origin in DEFAULT_ALLOWED_ORIGINS:
+        allowed_origin = origin
+    else:
+        # Default to first allowed origin if no origin header or not in list
+        allowed_origin = DEFAULT_ALLOWED_ORIGINS[0]
+
+    return {
+        "Access-Control-Allow-Origin": allowed_origin,
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Max-Age": "3600",
+    }
 
 
 class ChatMessage(BaseModel):
-    """Request model for chat messages"""
-
     content: str
 
 
-class ChatResponse(BaseModel):
-    """Response model for chat messages"""
-
-    response: str
-    usage: Dict[str, int]
-
-
-class ChatStats(BaseModel):
-    """Stats model for monitoring"""
-
-    daily_budget: float
-    cost_today: float
-    budget_remaining: float
-    rate_limits: Dict[str, int]
-
-
-# ============================================================================
-# Route handlers (called by custom_route decorators)
-# ============================================================================
-
-
 async def handle_chat(request: Request) -> JSONResponse:
-    """
-    Handle chat requests.
+    """Handle chat requests with rate limiting and cost tracking"""
 
-    Rate limits:
-    - 5 messages per hour per IP
-    - 15 messages per day per IP
+    # Handle preflight OPTIONS request
+    if request.method == "OPTIONS":
+        return JSONResponse(
+            content={}, headers=get_cors_headers(request.headers.get("origin"))
+        )
 
-    Daily budget: $5
-    """
-    # Get client IP
-    ip = request.client.host
-
-    # Parse request body
     try:
+        # Get client IP
+        ip = request.client.host
+
+        # Parse request body
         body = await request.json()
         message = ChatMessage(**body)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid request: {str(e)}")
 
-    # Validate message
-    if not message.content or not message.content.strip():
-        raise HTTPException(status_code=400, detail="Message cannot be empty")
+        # Validate message length
+        if not message.content or len(message.content) > 2000:
+            return JSONResponse(
+                content={"detail": "Message must be between 1 and 2000 characters."},
+                status_code=400,
+                headers=get_cors_headers(request.headers.get("origin")),
+            )
 
-    if len(message.content) > ChatConfig.MAX_MESSAGE_LENGTH:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Message must be under {ChatConfig.MAX_MESSAGE_LENGTH} characters",
-        )
+        # Check rate limits
+        is_allowed, error_msg = rate_limiter.check_rate_limit(ip)
+        if not is_allowed:
+            return JSONResponse(
+                content={"detail": error_msg},
+                status_code=429,
+                headers=get_cors_headers(request.headers.get("origin")),
+            )
 
-    # Check rate limits
-    is_allowed, error_msg = rate_limiter.check_limit(ip)
-    if not is_allowed:
-        raise HTTPException(status_code=429, detail=error_msg)
+        # Check daily budget
+        if not cost_tracker.check_daily_budget():
+            return JSONResponse(
+                content={
+                    "detail": "Daily budget exceeded. Service will be available again tomorrow."
+                },
+                status_code=503,
+                headers=get_cors_headers(request.headers.get("origin")),
+            )
 
-    # Check daily budget
-    if not cost_tracker.check_budget():
-        raise HTTPException(
-            status_code=503,
-            detail="Daily budget exceeded. Service will be available tomorrow.",
-        )
-
-    # Call Claude
-    try:
-        claude_client = get_claude_client()
-        result = claude_client.chat(message.content)
+        # Call Claude with MCP tools
+        client = get_claude_client()
+        result = await client.call_claude_with_mcp(message.content)
 
         # Record usage
         rate_limiter.record_request(ip)
         cost_tracker.record_cost(result["usage"])
 
-        return JSONResponse(ChatResponse(**result).model_dump())
+        return JSONResponse(
+            content=result, headers=get_cors_headers(request.headers.get("origin"))
+        )
 
-    except ValueError as e:
-        # API key not configured
-        logger.error(f"Chat API not configured: {e}")
-        raise HTTPException(status_code=503, detail="Chat service not available")
+    except ValidationError as e:
+        return JSONResponse(
+            content={"detail": str(e)},
+            status_code=400,
+            headers=get_cors_headers(request.headers.get("origin")),
+        )
     except Exception as e:
-        logger.error(f"Chat error: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+        return JSONResponse(
+            content={"detail": f"Internal error: {str(e)}"},
+            status_code=500,
+            headers=get_cors_headers(request.headers.get("origin")),
+        )
 
 
 async def handle_stats(request: Request) -> JSONResponse:
-    """Get current usage statistics"""
-    stats = cost_tracker.get_stats()
-    return JSONResponse(
-        ChatStats(
-            daily_budget=ChatConfig.DAILY_BUDGET,
-            cost_today=stats["cost_today"],
-            budget_remaining=stats["budget_remaining"],
-            rate_limits={
-                "per_hour": ChatConfig.RATE_LIMIT_PER_HOUR,
-                "per_day": ChatConfig.RATE_LIMIT_PER_DAY,
+    """Get current usage stats"""
+
+    # Handle preflight OPTIONS request
+    if request.method == "OPTIONS":
+        return JSONResponse(
+            content={}, headers=get_cors_headers(request.headers.get("origin"))
+        )
+
+    try:
+        ip = request.client.host
+        stats = {
+            "budget": {
+                "daily_limit": cost_tracker.daily_budget,
+                "spent_today": round(cost_tracker.get_cost_today(), 2),
+                "remaining": round(
+                    cost_tracker.daily_budget - cost_tracker.get_cost_today(), 2
+                ),
             },
-        ).model_dump()
-    )
+            "rate_limits": {
+                "per_hour": rate_limiter.rate_limits["per_hour"]
+                - len(rate_limiter.get_recent_requests(ip, hours=1)),
+                "per_day": rate_limiter.rate_limits["per_day"]
+                - len(rate_limiter.get_recent_requests(ip, hours=24)),
+            },
+        }
+
+        return JSONResponse(
+            content=stats, headers=get_cors_headers(request.headers.get("origin"))
+        )
+    except Exception as e:
+        return JSONResponse(
+            content={"detail": f"Error getting stats: {str(e)}"},
+            status_code=500,
+            headers=get_cors_headers(request.headers.get("origin")),
+        )
 
 
 async def handle_health(request: Request) -> JSONResponse:
     """Health check for chat API"""
-    try:
-        # Check if API key is configured
-        get_claude_client()
-        api_configured = True
-    except ValueError:
-        api_configured = False
 
-    return JSONResponse(
-        {
-            "status": "healthy" if api_configured else "unavailable",
-            "chat_api": "configured" if api_configured else "not_configured",
-            "budget_ok": cost_tracker.check_budget(),
-        }
-    )
+    # Handle preflight OPTIONS request
+    if request.method == "OPTIONS":
+        return JSONResponse(
+            content={}, headers=get_cors_headers(request.headers.get("origin"))
+        )
+
+    try:
+        client = get_claude_client()
+        api_configured = client.client is not None
+
+        return JSONResponse(
+            content={
+                "status": "healthy",
+                "chat_api": "configured" if api_configured else "not_configured",
+                "budget_ok": cost_tracker.check_daily_budget(),
+            },
+            headers=get_cors_headers(request.headers.get("origin")),
+        )
+    except Exception as e:
+        return JSONResponse(
+            content={"status": "unhealthy", "error": str(e)},
+            status_code=500,
+            headers=get_cors_headers(request.headers.get("origin")),
+        )
 
 
 # functions
