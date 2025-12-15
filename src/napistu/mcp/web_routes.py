@@ -175,9 +175,6 @@ def enable_chat_web_interface(mcp: FastMCP) -> None:
     """
     logger.info("Enabling chat web interface")
 
-    # Import route handlers
-    from napistu.mcp.web_routes import handle_chat, handle_health, handle_stats
-
     # Register endpoints using FastMCP's custom_route decorator
     @mcp.custom_route("/api/chat", methods=["POST"])
     async def chat_route(request):
