@@ -38,6 +38,8 @@ jobs:
       uses: google-github-actions/setup-gcloud@v2
 
     - name: Deploy to Cloud Run
+      env:
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       run: |
         IMAGE_TAG="${{ inputs.image_tag || 'latest' }}"
         IMAGE_URL="${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/napistu-mcp-server:${IMAGE_TAG}"
@@ -58,7 +60,7 @@ jobs:
           --concurrency=10 \
           --timeout=600 \
           --cpu-boost \
-          --set-env-vars="MCP_PROFILE=docs,MCP_SERVER_NAME=napistu-docs,HOST=0.0.0.0,FORWARDED_ALLOW_IPS=*,STARTUP_TIMEOUT=300" \
+          --set-env-vars="MCP_PROFILE=docs,MCP_SERVER_NAME=napistu-docs,HOST=0.0.0.0,FORWARDED_ALLOW_IPS=*,STARTUP_TIMEOUT=300,ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}" \
           --execution-environment=gen2 \
           --project=${{ env.PROJECT_ID }} \
           --quiet

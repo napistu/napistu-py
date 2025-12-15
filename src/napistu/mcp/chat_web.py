@@ -13,7 +13,12 @@ from typing import Dict, List, Optional, Tuple
 
 import anthropic
 
-from napistu.mcp.constants import CHAT_DEFAULTS, CHAT_ENV_VARS, MCP_PRODUCTION_URL
+from napistu.mcp.constants import (
+    CHAT_DEFAULTS,
+    CHAT_ENV_VARS,
+    MCP_DEFAULTS,
+    MCP_PRODUCTION_URL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -209,9 +214,9 @@ class ClaudeClient:
         """
         # Ensure MCP server URL includes /mcp path
         mcp_url = ChatConfig.MCP_SERVER_URL
-        if not mcp_url.endswith("/mcp"):
+        if not mcp_url.endswith(MCP_DEFAULTS.MCP_PATH):
             # Remove trailing slash if present, then append /mcp
-            mcp_url = mcp_url.rstrip("/") + "/mcp"
+            mcp_url = mcp_url.rstrip("/") + MCP_DEFAULTS.MCP_PATH
 
         response = self.client.beta.messages.create(
             model=ChatConfig.CLAUDE_MODEL,
