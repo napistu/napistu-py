@@ -10,6 +10,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from napistu.mcp.chat_web import (
+    ChatConfig,
     cost_tracker,
     get_claude_client,
     rate_limiter,
@@ -125,9 +126,6 @@ async def handle_stats(request: Request) -> JSONResponse:
         )
 
     try:
-        # Import ChatConfig to get budget
-        from napistu.mcp.chat_web import ChatConfig
-
         # Get cost stats
         cost_stats = cost_tracker.get_stats()
 
