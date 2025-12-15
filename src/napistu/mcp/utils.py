@@ -1,4 +1,8 @@
+import logging
+
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 def get_snippet(text: str, query: str, context: int = 100) -> str:

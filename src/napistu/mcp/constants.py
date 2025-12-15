@@ -4,9 +4,11 @@ from types import SimpleNamespace
 from napistu.constants import PACKAGE_DEFS
 
 MCP_COMPONENTS = SimpleNamespace(
+    CHAT="chat",
     CODEBASE="codebase",
     DOCUMENTATION="documentation",
     EXECUTION="execution",
+    HEALTH="health",
     TUTORIALS="tutorials",
 )
 
@@ -155,6 +157,14 @@ PRESET_NAMES = SimpleNamespace(
     PRODUCTION="production",
 )
 
+PROFILE_DEFS = SimpleNamespace(
+    ENABLE_CHAT="enable_chat",
+    ENABLE_CODEBASE="enable_codebase",
+    ENABLE_DOCUMENTATION="enable_documentation",
+    ENABLE_EXECUTION="enable_execution",
+    ENABLE_TUTORIALS="enable_tutorials",
+)
+
 # Health check status constants
 HEALTH_CHECK_DEFS = SimpleNamespace(
     STATUS="status",
@@ -294,3 +304,39 @@ TUTORIAL_URLS = {
 }
 
 TUTORIALS_CACHE_DIR = os.path.join(PACKAGE_DEFS.CACHE_DIR, TUTORIALS.TUTORIALS)
+
+# chat
+
+DEFAULT_ALLOWED_ORIGINS = [
+    "https://napistu.com",
+    "https://www.napistu.com",
+    "http://localhost:4321",
+    "http://127.0.0.1:4321",
+]
+
+API_ENDPOINTS = SimpleNamespace(
+    API="/api",
+    CHAT="chat",
+    STATS="stats",
+    HEALTH="health",
+)
+
+CHAT_DEFAULTS = SimpleNamespace(
+    RATE_LIMIT_PER_HOUR=5,
+    RATE_LIMIT_PER_DAY=15,
+    DAILY_BUDGET=5.0,
+    MAX_TOKENS=2000,
+    MAX_MESSAGE_LENGTH=2000,
+    CLAUDE_MODEL="claude-sonnet-4-20250514",
+)
+
+CHAT_ENV_VARS = SimpleNamespace(
+    RATE_LIMIT_PER_HOUR="CHAT_RATE_LIMIT_HOUR",
+    RATE_LIMIT_PER_DAY="CHAT_RATE_LIMIT_DAY",
+    DAILY_BUDGET="CHAT_DAILY_BUDGET",
+    MAX_TOKENS="CHAT_MAX_TOKENS",
+    MAX_MESSAGE_LENGTH="CHAT_MAX_MESSAGE_LENGTH",
+    ANTHROPIC_API_KEY="ANTHROPIC_API_KEY",
+    MCP_SERVER_URL="MCP_SERVER_URL",
+    CLAUDE_MODEL="CLAUDE_MODEL",
+)

@@ -10,9 +10,15 @@ from mcp.server import FastMCP
 
 from napistu.mcp import codebase, documentation, execution, health, tutorials
 from napistu.mcp.config import MCPServerConfig
-from napistu.mcp.constants import MCP_COMPONENTS, MCP_DEFAULTS, SEARCH_TYPES
+from napistu.mcp.constants import (
+    MCP_COMPONENTS,
+    MCP_DEFAULTS,
+    PROFILE_DEFS,
+    SEARCH_TYPES,
+)
 from napistu.mcp.profiles import ServerProfile, get_profile
 from napistu.mcp.semantic_search import SemanticSearch
+from napistu.mcp.web_routes import enable_chat_web_interface
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +40,14 @@ async def initialize_components(profile: ServerProfile) -> None:
 
     # Define component configurations
     component_configs = [
-        ("documentation", documentation, "enable_documentation"),
-        ("codebase", codebase, "enable_codebase"),
-        ("tutorials", tutorials, "enable_tutorials"),
-        ("execution", execution, "enable_execution"),
+        (
+            MCP_COMPONENTS.DOCUMENTATION,
+            documentation,
+            PROFILE_DEFS.ENABLE_DOCUMENTATION,
+        ),
+        (MCP_COMPONENTS.CODEBASE, codebase, PROFILE_DEFS.ENABLE_CODEBASE),
+        (MCP_COMPONENTS.TUTORIALS, tutorials, PROFILE_DEFS.ENABLE_TUTORIALS),
+        (MCP_COMPONENTS.EXECUTION, execution, PROFILE_DEFS.ENABLE_EXECUTION),
     ]
 
     # Create semantic search instance
@@ -58,14 +68,14 @@ async def initialize_components(profile: ServerProfile) -> None:
     logger.info("Initializing health components")
     try:
         result = await health.initialize_components()
-        initialization_results["health"] = result
+        initialization_results[MCP_COMPONENTS.HEALTH] = result
         if result:
             logger.info("✅ Health components initialized successfully")
         else:
             logger.warning("⚠️ Health components initialized with issues")
     except Exception as e:
         logger.error(f"❌ Health components failed to initialize: {e}")
-        initialization_results["health"] = False
+        initialization_results[MCP_COMPONENTS.HEALTH] = False
 
     # Summary of initialization
     successful = sum(1 for success in initialization_results.values() if success)
@@ -176,12 +186,19 @@ def create_server(profile: ServerProfile, server_config: MCPServerConfig) -> Fas
         server_config.server_name, host=server_config.host, port=server_config.port
     )
 
+    if config.get(PROFILE_DEFS.ENABLE_CHAT, False):
+        enable_chat_web_interface(mcp)
+
     # Define component configurations
     component_configs = [
-        (MCP_COMPONENTS.DOCUMENTATION, documentation, "enable_documentation"),
-        (MCP_COMPONENTS.CODEBASE, codebase, "enable_codebase"),
-        (MCP_COMPONENTS.TUTORIALS, tutorials, "enable_tutorials"),
-        (MCP_COMPONENTS.EXECUTION, execution, "enable_execution"),
+        (
+            MCP_COMPONENTS.DOCUMENTATION,
+            documentation,
+            PROFILE_DEFS.ENABLE_DOCUMENTATION,
+        ),
+        (MCP_COMPONENTS.CODEBASE, codebase, PROFILE_DEFS.ENABLE_CODEBASE),
+        (MCP_COMPONENTS.TUTORIALS, tutorials, PROFILE_DEFS.ENABLE_TUTORIALS),
+        (MCP_COMPONENTS.EXECUTION, execution, PROFILE_DEFS.ENABLE_EXECUTION),
     ]
 
     # Register all components
