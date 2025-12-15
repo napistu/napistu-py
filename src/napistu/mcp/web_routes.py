@@ -80,7 +80,7 @@ async def handle_chat(request: Request) -> JSONResponse:
             )
 
         # Check daily budget
-        if not cost_tracker.check_daily_budget():
+        if not cost_tracker.check_budget():
             return JSONResponse(
                 content={
                     "detail": "Daily budget exceeded. Service will be available again tomorrow."
@@ -125,20 +125,22 @@ async def handle_stats(request: Request) -> JSONResponse:
         )
 
     try:
-        ip = request.client.host
+        # Import ChatConfig to get budget
+        from napistu.mcp.chat_web import ChatConfig
+
+        # Get cost stats
+        cost_stats = cost_tracker.get_stats()
+
+        # Build response
         stats = {
             "budget": {
-                "daily_limit": cost_tracker.daily_budget,
-                "spent_today": round(cost_tracker.get_cost_today(), 2),
-                "remaining": round(
-                    cost_tracker.daily_budget - cost_tracker.get_cost_today(), 2
-                ),
+                "daily_limit": ChatConfig.DAILY_BUDGET,
+                "spent_today": cost_stats["cost_today"],
+                "remaining": cost_stats["budget_remaining"],
             },
             "rate_limits": {
-                "per_hour": rate_limiter.rate_limits["per_hour"]
-                - len(rate_limiter.get_recent_requests(ip, hours=1)),
-                "per_day": rate_limiter.rate_limits["per_day"]
-                - len(rate_limiter.get_recent_requests(ip, hours=24)),
+                "per_hour": ChatConfig.RATE_LIMIT_PER_HOUR,
+                "per_day": ChatConfig.RATE_LIMIT_PER_DAY,
             },
         }
 
@@ -170,7 +172,7 @@ async def handle_health(request: Request) -> JSONResponse:
             content={
                 "status": "healthy",
                 "chat_api": "configured" if api_configured else "not_configured",
-                "budget_ok": cost_tracker.check_daily_budget(),
+                "budget_ok": cost_tracker.check_budget(),
             },
             headers=get_cors_headers(request.headers.get("origin")),
         )
