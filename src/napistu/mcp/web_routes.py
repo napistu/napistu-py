@@ -4,6 +4,7 @@ web_routes.py - Route handlers for Napistu chat web interface with CORS support
 
 import logging
 
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -189,22 +190,28 @@ async def handle_health(request: Request) -> JSONResponse:
 def enable_chat_web_interface(mcp):
     """
     Register chat web interface routes with the MCP server.
-
-    Registers both the actual endpoints and OPTIONS handlers for CORS preflight.
-    FastMCP requires separate route registrations for each HTTP method.
     """
 
-    # register options and endpoints
-    @mcp.custom_route("/api/chat", methods=["OPTIONS", "POST"])
+    # Add CORS middleware to underlying FastAPI app
+    mcp.app.add_middleware(
+        CORSMiddleware,
+        allow_origins=DEFAULT_ALLOWED_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type"],
+    )
+
+    # Register routes (no need for OPTIONS handling in handlers anymore)
+    @mcp.custom_route("/api/chat", methods=["POST"])
     async def chat_route(request):
         return await handle_chat(request)
 
-    @mcp.custom_route("/api/stats", methods=["OPTIONS", "GET"])
+    @mcp.custom_route("/api/stats", methods=["GET"])
     async def stats_route(request):
         return await handle_stats(request)
 
-    @mcp.custom_route("/api/health", methods=["OPTIONS", "GET"])
+    @mcp.custom_route("/api/health", methods=["GET"])
     async def health_route(request):
         return await handle_health(request)
 
-    logger.info("Registered chat endpoints at /api/*")
+    logger.info("Registered chat endpoints with CORS middleware at /api/*")
