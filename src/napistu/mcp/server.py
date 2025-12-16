@@ -117,6 +117,10 @@ def start_mcp_server(profile_name: str, server_config: MCPServerConfig) -> None:
     This function starts the MCP server with the specified profile and server configuration.
     If the chat interface is enabled in the profile, it creates a combined app that includes the MCP server and the chat interface.
     Otherwise, it just runs the MCP server normally.
+
+    The server uses HTTP transport (streamable-http) for all connections.
+    Components are initialized asynchronously before the server starts.
+    Health components are always registered and initialized last.
     """
     # Set up logging
     logging.basicConfig(level=logging.INFO)
