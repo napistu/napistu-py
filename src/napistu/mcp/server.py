@@ -3,13 +3,14 @@ Core MCP server implementation for Napistu.
 """
 
 import asyncio
+import contextlib
 import logging
 from typing import Any, Dict
 
 import uvicorn
 from fastmcp import FastMCP
 from starlette.applications import Starlette
-from starlette.routing import Mount
+from starlette.routing import Mount, Route
 
 from napistu.mcp import codebase, documentation, execution, health, tutorials
 from napistu.mcp.config import MCPServerConfig
@@ -21,7 +22,7 @@ from napistu.mcp.constants import (
 )
 from napistu.mcp.profiles import ServerProfile, get_profile
 from napistu.mcp.semantic_search import SemanticSearch
-from napistu.mcp.web_routes import create_chat_app
+from napistu.mcp.web_routes import create_chat_app, redirect_to_mcp
 
 logger = logging.getLogger(__name__)
 
@@ -162,19 +163,29 @@ def start_mcp_server(profile_name: str, server_config: MCPServerConfig) -> None:
     if config.get(PROFILE_DEFS.ENABLE_CHAT, False):
         logger.info("Chat interface enabled - creating combined app")
 
-        # Create the MCP HTTP app
-        mcp_app = mcp.http_app(path=MCP_DEFAULTS.MCP_PATH)
+        # Create the MCP HTTP app with routes at root "/"
+        # When mounted at /mcp/, requests are stripped so mcp_app sees "/"
+        mcp_app = mcp.http_app(path="/")
 
         # Create the chat app with CORS
         chat_app = create_chat_app()
 
+        @contextlib.asynccontextmanager
+        async def combined_lifespan(app: Starlette):
+            """Run MCP app's lifespan for the combined app"""
+            async with mcp_app.lifespan(app):
+                logger.info("MCP lifespan started")
+                yield
+                logger.info("MCP lifespan stopped")
+
         # Create a wrapper Starlette app that mounts both
         app = Starlette(
             routes=[
-                Mount("/", app=chat_app),  # Chat routes at /api/*
-                Mount(MCP_DEFAULTS.MCP_PATH, app=mcp_app),  # MCP routes at /mcp
+                Route("/mcp", endpoint=redirect_to_mcp, methods=["GET", "POST"]),
+                Mount("/mcp/", app=mcp_app),  # MCP at /mcp/
+                Mount("/", app=chat_app),  # Chat at /
             ],
-            lifespan=mcp_app.lifespan,  # Use MCP's lifespan
+            lifespan=combined_lifespan,
         )
 
         logger.info("🚀 Starting combined server (MCP + Chat API)...")
