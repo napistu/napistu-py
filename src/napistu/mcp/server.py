@@ -6,7 +6,10 @@ import asyncio
 import logging
 from typing import Any, Dict
 
-from mcp.server import FastMCP
+import uvicorn
+from fastmcp import FastMCP
+from starlette.applications import Starlette
+from starlette.routing import Mount
 
 from napistu.mcp import codebase, documentation, execution, health, tutorials
 from napistu.mcp.config import MCPServerConfig
@@ -18,7 +21,7 @@ from napistu.mcp.constants import (
 )
 from napistu.mcp.profiles import ServerProfile, get_profile
 from napistu.mcp.semantic_search import SemanticSearch
-from napistu.mcp.web_routes import enable_chat_web_interface
+from napistu.mcp.web_routes import create_chat_app
 
 logger = logging.getLogger(__name__)
 
@@ -101,20 +104,19 @@ def start_mcp_server(profile_name: str, server_config: MCPServerConfig) -> None:
     Parameters
     ----------
     profile_name : str
-        Server profile to use ('local', 'remote', 'full').
+        Name of the profile to use for the MCP server.
     server_config : MCPServerConfig
-        Validated server configuration.
+        Server configuration with validated host, port, and server name.
 
     Returns
     -------
     None
-        This function runs indefinitely until interrupted.
 
     Notes
     -----
-    The server uses HTTP transport (streamable-http) for all connections.
-    Components are initialized asynchronously before the server starts.
-    Health components are always registered and initialized last.
+    This function starts the MCP server with the specified profile and server configuration.
+    If the chat interface is enabled in the profile, it creates a combined app that includes the MCP server and the chat interface.
+    Otherwise, it just runs the MCP server normally.
     """
     # Set up logging
     logging.basicConfig(level=logging.INFO)
@@ -151,15 +153,49 @@ def start_mcp_server(profile_name: str, server_config: MCPServerConfig) -> None:
     # Run initialization
     asyncio.run(init_components())
 
-    # Debug info
-    logger.info(f"Server settings: {mcp.settings}")
+    # Check if chat is enabled in profile
+    config = profile.get_config()
+    if config.get(PROFILE_DEFS.ENABLE_CHAT, False):
+        logger.info("Chat interface enabled - creating combined app")
 
-    logger.info("🚀 Starting MCP server...")
-    logger.info(
-        f"Using {MCP_DEFAULTS.TRANSPORT} transport on http://{server_config.host}:{server_config.port}"
-    )
+        # Create the MCP HTTP app
+        mcp_app = mcp.http_app(path=MCP_DEFAULTS.MCP_PATH)
 
-    mcp.run(transport=MCP_DEFAULTS.TRANSPORT)
+        # Create the chat app with CORS
+        chat_app = create_chat_app()
+
+        # Create a wrapper Starlette app that mounts both
+        app = Starlette(
+            routes=[
+                Mount("/", app=chat_app),  # Chat routes at /api/*
+                Mount(MCP_DEFAULTS.MCP_PATH, app=mcp_app),  # MCP routes at /mcp
+            ],
+            lifespan=mcp_app.lifespan,  # Use MCP's lifespan
+        )
+
+        logger.info("🚀 Starting combined server (MCP + Chat API)...")
+        logger.info(
+            f"   MCP endpoint: http://{server_config.host}:{server_config.port}{MCP_DEFAULTS.MCP_PATH}"
+        )
+        logger.info(
+            f"   Chat API: http://{server_config.host}:{server_config.port}/api/*"
+        )
+
+        # Run the combined app with uvicorn
+        uvicorn.run(
+            app,
+            host=server_config.host,
+            port=server_config.port,
+            log_level="info",
+        )
+    else:
+        # Just run an MCP server normally
+        logger.info("🚀 Starting MCP server...")
+        logger.info(
+            f"Using {MCP_DEFAULTS.TRANSPORT} transport on http://{server_config.host}:{server_config.port}{MCP_DEFAULTS.MCP_PATH}"
+        )
+
+        mcp.run(transport=MCP_DEFAULTS.TRANSPORT)
 
 
 def create_server(profile: ServerProfile, server_config: MCPServerConfig) -> FastMCP:
@@ -185,9 +221,6 @@ def create_server(profile: ServerProfile, server_config: MCPServerConfig) -> Fas
     mcp = FastMCP(
         server_config.server_name, host=server_config.host, port=server_config.port
     )
-
-    if config.get(PROFILE_DEFS.ENABLE_CHAT, False):
-        enable_chat_web_interface(mcp)
 
     # Define component configurations
     component_configs = [
