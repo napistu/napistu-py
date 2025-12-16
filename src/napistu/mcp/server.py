@@ -196,6 +196,45 @@ def start_mcp_server(profile_name: str, server_config: MCPServerConfig) -> None:
             f"   Chat API: http://{server_config.host}:{server_config.port}/api/*"
         )
 
+        # DEBUG: Log all registered routes
+        logger.info("=" * 60)
+        logger.info("DEBUG: Route Registration Summary")
+        logger.info("=" * 60)
+        logger.info(f"Total routes: {len(app.routes)}")
+
+        for i, route in enumerate(app.routes):
+            route_type = type(route).__name__
+
+            if hasattr(route, "path"):
+                path = route.path
+                methods = getattr(route, "methods", ["ANY"])
+                logger.info(f"  [{i}] {route_type}: {path} [{', '.join(methods)}]")
+            elif hasattr(route, "path_regex"):
+                pattern = (
+                    route.path_regex.pattern
+                    if hasattr(route.path_regex, "pattern")
+                    else str(route.path_regex)
+                )
+                logger.info(f"  [{i}] {route_type}: Pattern={pattern}")
+            else:
+                logger.info(f"  [{i}] {route_type}: {route}")
+
+        logger.info("=" * 60)
+
+        # DEBUG: Check mcp_app routes
+        logger.info(f"MCP app has {len(mcp_app.routes)} internal routes")
+        for i, route in enumerate(mcp_app.routes):
+            if hasattr(route, "path"):
+                logger.info(f"  MCP route [{i}]: {route.path}")
+
+        # DEBUG: Check chat_app routes
+        logger.info(f"Chat app has {len(chat_app.routes)} internal routes")
+        for i, route in enumerate(chat_app.routes):
+            if hasattr(route, "path"):
+                logger.info(f"  Chat route [{i}]: {route.path}")
+
+        logger.info("=" * 60)
+
         # Run the combined app with uvicorn
         uvicorn.run(
             app,
