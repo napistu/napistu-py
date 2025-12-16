@@ -4,13 +4,11 @@ web_routes.py - Route handlers for Napistu chat web interface with CORS support
 
 import logging
 
-from mcp.server import FastMCP
 from pydantic import BaseModel, ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from napistu.mcp.chat_web import (
-    ChatConfig,
     cost_tracker,
     get_claude_client,
     rate_limiter,
@@ -126,6 +124,9 @@ async def handle_stats(request: Request) -> JSONResponse:
         )
 
     try:
+        # Import ChatConfig to get budget
+        from napistu.mcp.chat_web import ChatConfig
+
         # Get cost stats
         cost_stats = cost_tracker.get_stats()
 
@@ -185,37 +186,24 @@ async def handle_health(request: Request) -> JSONResponse:
 # functions
 
 
-def enable_chat_web_interface(mcp: FastMCP) -> None:
+def enable_chat_web_interface(mcp):
     """
-    Enable chat web interface with REST endpoints.
+    Register chat web interface routes with the MCP server.
 
-    Registers three REST endpoints for the landing page chat interface:
-    - POST /api/chat - Main chat endpoint with rate limiting
-    - GET /api/stats - Usage statistics and budget tracking
-    - GET /api/health - Health check and API key validation
-
-    Parameters
-    ----------
-    mcp : FastMCP
-        FastMCP server instance to register endpoints on
-
-    Examples
-    --------
-    >>> mcp = FastMCP("napistu-docs", host="0.0.0.0", port=8080)
-    >>> enable_chat_web_interface(mcp)
+    Registers both the actual endpoints and OPTIONS handlers for CORS preflight.
+    FastMCP requires separate route registrations for each HTTP method.
     """
-    logger.info("Enabling chat web interface")
 
-    # Register endpoints using FastMCP's custom_route decorator
-    @mcp.custom_route("/api/chat", methods=["POST"])
+    # register options and endpoints
+    @mcp.custom_route("/api/chat", methods=["OPTIONS", "POST"])
     async def chat_route(request):
         return await handle_chat(request)
 
-    @mcp.custom_route("/api/stats", methods=["GET"])
+    @mcp.custom_route("/api/stats", methods=["OPTIONS", "GET"])
     async def stats_route(request):
         return await handle_stats(request)
 
-    @mcp.custom_route("/api/health", methods=["GET"])
+    @mcp.custom_route("/api/health", methods=["OPTIONS", "GET"])
     async def health_route(request):
         return await handle_health(request)
 
