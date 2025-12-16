@@ -4,11 +4,12 @@ web_routes.py - Route handlers for Napistu chat web interface with CORS support
 
 import logging
 
-from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ValidationError
+from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, RedirectResponse
+from starlette.routing import Route
 
 from napistu.mcp.chat_web import (
     cost_tracker,
@@ -22,6 +23,41 @@ logger = logging.getLogger(__name__)
 
 class ChatMessage(BaseModel):
     content: str
+
+
+def create_chat_app() -> Starlette:
+    """
+    Create a Starlette app for chat routes with CORS middleware.
+
+    This app is completely separate from the MCP server and only handles
+    the /api/* chat endpoints. CORS is only applied to these routes.
+
+    Returns
+    -------
+    Starlette
+        Starlette app with chat routes and CORS middleware
+    """
+
+    chat_app = Starlette(
+        routes=[
+            Route("/api/chat", endpoint=handle_chat, methods=["POST", "OPTIONS"]),
+            Route("/api/stats", endpoint=handle_stats, methods=["GET", "OPTIONS"]),
+            Route("/api/health", endpoint=handle_health, methods=["GET", "OPTIONS"]),
+        ]
+    )
+
+    # Add CORS middleware ONLY to this app
+    chat_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=DEFAULT_ALLOWED_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type"],
+    )
+
+    logger.info("Created chat API with CORS middleware at /api/*")
+
+    return chat_app
 
 
 async def handle_chat(request: Request) -> JSONResponse:
@@ -127,42 +163,6 @@ async def handle_health(request: Request) -> JSONResponse:
         )
 
 
-def create_chat_app() -> FastAPI:
-    """
-    Create a FastAPI app for chat routes with CORS middleware.
-
-    This app is completely separate from the MCP server and only handles
-    the /api/* chat endpoints. CORS is only applied to these routes.
-
-    Returns
-    -------
-    FastAPI
-        FastAPI app with chat routes and CORS middleware
-    """
-    chat_app = FastAPI(title="Napistu Chat API")
-
-    # Add CORS middleware ONLY to this app
-    chat_app.add_middleware(
-        CORSMiddleware,
-        allow_origins=DEFAULT_ALLOWED_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Content-Type"],
-    )
-
-    # Register chat routes
-    @chat_app.post("/api/chat")
-    async def chat_route(request: Request):
-        return await handle_chat(request)
-
-    @chat_app.get("/api/stats")
-    async def stats_route(request: Request):
-        return await handle_stats(request)
-
-    @chat_app.get("/api/health")
-    async def health_route(request: Request):
-        return await handle_health(request)
-
-    logger.info("Created chat API with CORS middleware at /api/*")
-
-    return chat_app
+async def redirect_to_mcp(request: Request) -> RedirectResponse:
+    """Redirect /mcp to /mcp/ for trailing slash compatibility"""
+    return RedirectResponse(url="/mcp/", status_code=307)

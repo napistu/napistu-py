@@ -1,3 +1,5 @@
+"""Utilities for the MCP server"""
+
 import logging
 
 import httpx
