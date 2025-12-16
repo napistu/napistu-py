@@ -104,7 +104,7 @@ def start_mcp_server(profile_name: str, server_config: MCPServerConfig) -> None:
     Parameters
     ----------
     profile_name : str
-        Name of the profile to use for the MCP server.
+        Name of the profile to use for the MCP server ('local', 'remote', 'full').
     server_config : MCPServerConfig
         Server configuration with validated host, port, and server name.
 
