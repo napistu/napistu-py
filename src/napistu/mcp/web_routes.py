@@ -70,7 +70,7 @@ async def handle_chat(request: Request) -> JSONResponse:
             )
 
         # Check rate limits
-        is_allowed, error_msg = rate_limiter.check_rate_limit(ip)
+        is_allowed, error_msg = rate_limiter.check_limit(ip)
         if not is_allowed:
             return JSONResponse(
                 content={"detail": error_msg},
@@ -90,7 +90,7 @@ async def handle_chat(request: Request) -> JSONResponse:
 
         # Call Claude with MCP tools
         client = get_claude_client()
-        result = await client.call_claude_with_mcp(message.content)
+        result = client.chat(message.content)
 
         # Record usage
         rate_limiter.record_request(ip)
