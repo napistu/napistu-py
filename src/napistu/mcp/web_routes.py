@@ -4,6 +4,7 @@ web_routes.py - Route handlers for Napistu chat web interface with CORS support
 
 import logging
 
+import httpx
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ValidationError
 from starlette.applications import Starlette
@@ -12,6 +13,7 @@ from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Route
 
 from napistu.mcp.chat_web import (
+    ChatConfig,
     cost_tracker,
     get_claude_client,
     rate_limiter,
@@ -43,6 +45,7 @@ def create_chat_app() -> Starlette:
             Route("/api/chat", endpoint=handle_chat, methods=["POST", "OPTIONS"]),
             Route("/api/stats", endpoint=handle_stats, methods=["GET", "OPTIONS"]),
             Route("/api/health", endpoint=handle_health, methods=["GET", "OPTIONS"]),
+            Route("/api/test-mcp", endpoint=handle_mcp_test, methods=["GET"]),
         ]
     )
 
@@ -116,11 +119,74 @@ async def handle_chat(request: Request) -> JSONResponse:
         )
 
 
+async def handle_health(request: Request) -> JSONResponse:
+    """Health check for chat API"""
+    try:
+        client = get_claude_client()
+        api_configured = client.client is not None
+
+        return JSONResponse(
+            content={
+                "status": "healthy",
+                "chat_api": "configured" if api_configured else "not_configured",
+                "budget_ok": cost_tracker.check_budget(),
+            },
+        )
+    except Exception as e:
+        return JSONResponse(
+            content={"status": "unhealthy", "error": str(e)},
+            status_code=500,
+        )
+
+
+async def handle_mcp_test(request: Request) -> JSONResponse:
+    """Test if MCP server is reachable from this container"""
+    from napistu.mcp.constants import MCP_PRODUCTION_URL
+
+    mcp_url = MCP_PRODUCTION_URL + "/mcp/"
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                mcp_url,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json, text/event-stream",
+                },
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {},
+                        "clientInfo": {"name": "test", "version": "1.0"},
+                    },
+                },
+            )
+            return JSONResponse(
+                content={
+                    "status": "reachable",
+                    "code": response.status_code,
+                    "can_reach_external_mcp": True,
+                    "url_tested": mcp_url,
+                }
+            )
+    except Exception as e:
+        return JSONResponse(
+            content={
+                "status": "unreachable",
+                "error": str(e),
+                "can_reach_external_mcp": False,
+                "url_tested": mcp_url,
+            },
+            status_code=500,
+        )
+
+
 async def handle_stats(request: Request) -> JSONResponse:
     """Get current usage stats"""
     try:
-        from napistu.mcp.chat_web import ChatConfig
-
         cost_stats = cost_tracker.get_stats()
 
         stats = {
@@ -139,26 +205,6 @@ async def handle_stats(request: Request) -> JSONResponse:
     except Exception as e:
         return JSONResponse(
             content={"detail": f"Error getting stats: {str(e)}"},
-            status_code=500,
-        )
-
-
-async def handle_health(request: Request) -> JSONResponse:
-    """Health check for chat API"""
-    try:
-        client = get_claude_client()
-        api_configured = client.client is not None
-
-        return JSONResponse(
-            content={
-                "status": "healthy",
-                "chat_api": "configured" if api_configured else "not_configured",
-                "budget_ok": cost_tracker.check_budget(),
-            },
-        )
-    except Exception as e:
-        return JSONResponse(
-            content={"status": "unhealthy", "error": str(e)},
             status_code=500,
         )
 
