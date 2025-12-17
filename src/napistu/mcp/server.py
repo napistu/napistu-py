@@ -181,7 +181,9 @@ def start_mcp_server(profile_name: str, server_config: MCPServerConfig) -> None:
         # Create a wrapper Starlette app that mounts both
         app = Starlette(
             routes=[
-                Route("/mcp", endpoint=redirect_to_mcp, methods=["GET", "POST"]),
+                Route(
+                    "/mcp", endpoint=redirect_to_mcp, methods=["GET", "POST", "DELETE"]
+                ),
                 Mount("/mcp/", app=mcp_app),  # MCP at /mcp/
                 Mount("/", app=chat_app),  # Chat at /
             ],

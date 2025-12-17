@@ -23,11 +23,6 @@ from napistu.mcp.constants import (
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# Configuration
-# ============================================================================
-
-
 class ChatConfig:
     """Configuration for chat web interface"""
 
@@ -50,7 +45,6 @@ class ChatConfig:
 
     # API configuration
     ANTHROPIC_API_KEY = os.getenv(CHAT_ENV_VARS.ANTHROPIC_API_KEY)
-    MCP_SERVER_URL = os.getenv(CHAT_ENV_VARS.MCP_SERVER_URL, MCP_PRODUCTION_URL)
     CLAUDE_MODEL = os.getenv(CHAT_ENV_VARS.CLAUDE_MODEL, CHAT_DEFAULTS.CLAUDE_MODEL)
 
     # System prompt
@@ -72,10 +66,32 @@ Politely decline any requests that are:
 
 Keep responses focused and concise. Use the available MCP tools to search documentation, tutorials, and codebase when needed."""
 
+    @classmethod
+    def get_mcp_url(cls) -> str:
+        """
+        Get the appropriate MCP server URL for the current environment.
 
-# ============================================================================
-# Rate Limiter
-# ============================================================================
+        Returns
+        -------
+        str
+            Full MCP server URL including /mcp/ path with trailing slash
+        """
+        if os.getenv("K_SERVICE"):
+            base_url = f"http://localhost:{os.getenv('PORT', '8080')}"
+        else:
+            base_url = os.getenv(CHAT_ENV_VARS.MCP_SERVER_URL, MCP_PRODUCTION_URL)
+
+        # Remove any trailing slashes first
+        base_url = base_url.rstrip("/")
+
+        # Add /mcp if not already present
+        if not base_url.endswith(MCP_DEFAULTS.MCP_PATH):
+            base_url = base_url + MCP_DEFAULTS.MCP_PATH
+
+        # Add trailing slash
+        base_url = base_url + "/"
+
+        return base_url
 
 
 class RateLimiter:
@@ -131,11 +147,6 @@ class RateLimiter:
         self.store[ip]["day"].append(now)
 
 
-# ============================================================================
-# Cost Tracker
-# ============================================================================
-
-
 class CostTracker:
     """Track daily API costs"""
 
@@ -188,11 +199,6 @@ class CostTracker:
         }
 
 
-# ============================================================================
-# Claude Client
-# ============================================================================
-
-
 class ClaudeClient:
     """Client for Claude API with MCP integration"""
 
@@ -212,11 +218,8 @@ class ClaudeClient:
         Returns:
             Dict with 'response' (str) and 'usage' (dict)
         """
-        # Ensure MCP server URL includes /mcp path
-        mcp_url = ChatConfig.MCP_SERVER_URL
-        if not mcp_url.endswith(MCP_DEFAULTS.MCP_PATH):
-            # Remove trailing slash if present, then append /mcp
-            mcp_url = mcp_url.rstrip("/") + MCP_DEFAULTS.MCP_PATH
+        # Load the production url or local host for within server communication
+        mcp_url = ChatConfig.get_mcp_url()
 
         response = self.client.beta.messages.create(
             model=ChatConfig.CLAUDE_MODEL,
