@@ -69,17 +69,18 @@ Keep responses focused and concise. Use the available MCP tools to search docume
     @classmethod
     def get_mcp_url(cls) -> str:
         """
-        Get the appropriate MCP server URL for the current environment.
+        Get the MCP server URL for Claude API.
+
+        Always returns the external URL since Claude API (running on Anthropic's servers)
+        needs to reach the publicly accessible endpoint.
 
         Returns
         -------
         str
             Full MCP server URL including /mcp/ path with trailing slash
         """
-        if os.getenv("K_SERVICE"):
-            base_url = f"http://localhost:{os.getenv('PORT', '8080')}"
-        else:
-            base_url = os.getenv(CHAT_ENV_VARS.MCP_SERVER_URL, MCP_PRODUCTION_URL)
+        # Always use external URL - Claude API needs to reach it from Anthropic's servers
+        base_url = os.getenv(CHAT_ENV_VARS.MCP_SERVER_URL, MCP_PRODUCTION_URL)
 
         # Remove any trailing slashes first
         base_url = base_url.rstrip("/")
