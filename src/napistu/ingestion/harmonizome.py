@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Union
 
 import pandas as pd
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from napistu.constants import ONTOLOGIES
 from napistu.ingestion.constants import (
@@ -48,11 +48,9 @@ class HarmonizomeDataset(BaseModel):
         description="Custom loader functions for specific file types",
     )
 
-    class Config:
-        # Allow methods on the model
-        arbitrary_types_allowed = True
-        # Make it frozen if you want immutability (optional)
-        # frozen = True
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+    )
 
     @field_validator(HARMONIZOME_DATASET_DEFS.DOWNLOAD_FILES)
     @classmethod
