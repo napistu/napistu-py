@@ -14,10 +14,14 @@ from napistu.constants import (
     SBML_DFS,
 )
 from napistu.ingestion.constants import (
+    GOF_PERTURBATION_TYPES,
     HARMONIZOME_DATASET_FILES,
     HARMONIZOME_DATASET_SHORTNAMES,
     HARMONIZOME_DEFS,
+    LOF_PERTURBATION_TYPES,
     PERTURBSEQ_DEFS,
+    PERTURBSEQ_DIRECTIONS,
+    PERTURBSEQ_PERTURBATION_TYPES,
     REPLOGLE_DEFS,
 )
 from napistu.ingestion.harmonizome import (
@@ -29,6 +33,66 @@ from napistu.matching.species import features_to_pathway_species
 from napistu.utils import download_wget
 
 logger = logging.getLogger(__name__)
+
+
+def assign_predicted_direction(
+    df,
+    perturbation_type_col=HARMONIZOME_DEFS.PERTURBATION_TYPE,
+    standardized_value_col=HARMONIZOME_DEFS.STANDARDIZED_VALUE,
+    threshold_value_col=HARMONIZOME_DEFS.THRESHOLDED_VALUE,
+):
+    """
+    Assign predicted direction categories based on perturbation type and fold-change.
+
+    For OE (overexpression):
+        - standardized_value > threshold: strong activation
+        - 0 < standardized_value <= threshold: weak activation
+        - -threshold <= standardized_value < 0: weak repression
+        - standardized_value < -threshold: strong repression
+
+    For KD/KO (knockdown/knockout) - directions are flipped:
+        - standardized_value > threshold: strong repression
+        - 0 < standardized_value <= threshold: weak repression
+        - -threshold <= standardized_value < 0: weak activation
+        - standardized_value < -threshold: strong activation
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with perturbation data
+    perturbation_type_col : str
+        Column name for perturbation type (should contain 'KD', 'KO', or 'OE')
+    standardized_value_col : str
+        Column name for standardized fold-change values
+    threshold_value_col : str
+        Column name for threshold values (absolute value)
+
+    Returns
+    -------
+    pd.Series
+        Series with predicted direction categories
+    """
+
+    if perturbation_type_col not in df.columns:
+        raise ValueError(
+            f"Perturbation type column {perturbation_type_col} not found in dataframe"
+        )
+    if standardized_value_col not in df.columns:
+        raise ValueError(
+            f"Standardized value column {standardized_value_col} not found in dataframe"
+        )
+    if threshold_value_col not in df.columns:
+        raise ValueError(
+            f"Threshold value column {threshold_value_col} not found in dataframe"
+        )
+
+    return df.apply(
+        _categorize_perturbseq_row,
+        axis=1,
+        perturbation_type_col=perturbation_type_col,
+        standardized_value_col=standardized_value_col,
+        threshold_value_col=threshold_value_col,
+    )
 
 
 def ingest_replogle_pvalues(target_uri: str) -> None:
@@ -114,7 +178,7 @@ def load_harmonizome_perturbseq_datasets(
         ):
             perturbseq_interactions_with_species_ids[dataset_shortname][
                 HARMONIZOME_DEFS.PERTURBATION_TYPE
-            ] = "KD"
+            ] = PERTURBSEQ_PERTURBATION_TYPES.KD
         if (
             HARMONIZOME_DEFS.PERTURBATION_STUDY
             not in perturbseq_interactions_with_species_ids[dataset_shortname].columns
@@ -225,6 +289,84 @@ def load_replogle_pvalues_with_species_ids(
 
 
 # private functions
+
+
+def _categorize_perturbseq_row(
+    row: pd.Series,
+    perturbation_type_col: str,
+    standardized_value_col: str,
+    threshold_value_col: str,
+) -> str:
+    """
+    Categorize a row of perturbseq data into a direction category.
+
+    Parameters
+    ----------
+    row : pd.Series
+        Row of perturbseq data
+    perturbation_type_col : str
+        Column name for perturbation type
+    standardized_value_col : str
+        Column name for standardized value
+    threshold_value_col : str
+        Column name for threshold value
+
+    Returns
+    -------
+    pd.Series
+        Series with direction category
+
+    Examples
+    --------
+    df = pd.Series({
+        'perturbation_type': 'OE',
+        'standardized_value': 1.0,
+        'threshold_value': 0.5
+    })
+    _categorize_perturbseq_row(df, 'perturbation_type', 'standardized_value', 'threshold_value')
+    """
+
+    perturbation_type = row[perturbation_type_col]
+    value = row[standardized_value_col]
+    threshold = abs(row[threshold_value_col])  # Ensure threshold is positive
+
+    # Determine if it's a loss-of-function perturbation
+    is_gof = perturbation_type in GOF_PERTURBATION_TYPES
+    is_lof = perturbation_type in LOF_PERTURBATION_TYPES
+
+    # Calculate categories based on value and threshold
+    if value > threshold:
+        # Strong positive change
+        if is_gof:
+            return PERTURBSEQ_DIRECTIONS.STRONG_ACTIVATION
+        elif is_lof:
+            return PERTURBSEQ_DIRECTIONS.STRONG_REPRESSION
+        else:
+            return PERTURBSEQ_DIRECTIONS.STRONG_CHANGE
+    elif value > 0:
+        # Weak positive change
+        if is_gof:
+            return PERTURBSEQ_DIRECTIONS.WEAK_ACTIVATION
+        elif is_lof:
+            return PERTURBSEQ_DIRECTIONS.WEAK_REPRESSION
+        else:
+            return PERTURBSEQ_DIRECTIONS.WEAK_CHANGE
+    elif value >= -threshold:
+        # Weak negative change
+        if is_gof:
+            return PERTURBSEQ_DIRECTIONS.WEAK_REPRESSION
+        elif is_lof:
+            return PERTURBSEQ_DIRECTIONS.WEAK_ACTIVATION
+        else:
+            return PERTURBSEQ_DIRECTIONS.WEAK_CHANGE
+    else:
+        # Strong negative change
+        if is_gof:
+            return PERTURBSEQ_DIRECTIONS.STRONG_REPRESSION
+        elif is_lof:
+            return PERTURBSEQ_DIRECTIONS.STRONG_ACTIVATION
+        else:
+            return PERTURBSEQ_DIRECTIONS.STRONG_CHANGE
 
 
 def _format_harmonizome_replogle_with_species_ids(
