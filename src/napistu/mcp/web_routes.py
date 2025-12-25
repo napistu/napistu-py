@@ -13,8 +13,8 @@ from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Route
 
 from napistu.mcp.chat_web import (
-    ChatConfig,
     cost_tracker,
+    get_chat_config,
     get_claude_client,
     rate_limiter,
 )
@@ -73,10 +73,15 @@ async def handle_chat(request: Request) -> JSONResponse:
         body = await request.json()
         message = ChatMessage(**body)
 
-        # Validate message length
-        if not message.content or len(message.content) > 2000:
+        # Get config for validation
+        config = get_chat_config()
+
+        # Validate message length using config
+        if not message.content or len(message.content) > config.max_message_length:
             return JSONResponse(
-                content={"detail": "Message must be between 1 and 2000 characters."},
+                content={
+                    "detail": f"Message must be between 1 and {config.max_message_length} characters."
+                },
                 status_code=400,
             )
 
@@ -187,17 +192,18 @@ async def handle_mcp_test(request: Request) -> JSONResponse:
 async def handle_stats(request: Request) -> JSONResponse:
     """Get current usage stats"""
     try:
+        chat_config = get_chat_config()
         cost_stats = cost_tracker.get_stats()
 
         stats = {
             "budget": {
-                "daily_limit": ChatConfig.DAILY_BUDGET,
+                "daily_limit": chat_config.daily_budget,
                 "spent_today": cost_stats["cost_today"],
                 "remaining": cost_stats["budget_remaining"],
             },
             "rate_limits": {
-                "per_hour": ChatConfig.RATE_LIMIT_PER_HOUR,
-                "per_day": ChatConfig.RATE_LIMIT_PER_DAY,
+                "per_hour": chat_config.rate_limit_per_hour,
+                "per_day": chat_config.rate_limit_per_day,
             },
         }
 
