@@ -94,7 +94,9 @@ GCS_ASSETS = SimpleNamespace(
                 GCS_SUBASSET_NAMES.SPECIES_IDENTIFIERS: GCS_FILETYPES.SPECIES_IDENTIFIERS,
             },
             GCS_ASSETS_DEFS.PUBLIC_URL: f"https://storage.googleapis.com/shackett-napistu-public/{GCS_ASSETS_NAMES.HUMAN_CONSENSUS_NO_RXNS}.tar.gz",
-            GCS_ASSETS_DEFS.VERSIONS: None,
+            GCS_ASSETS_DEFS.VERSIONS: {
+                "20251218": f"https://storage.googleapis.com/shackett-napistu-public/{GCS_ASSETS_NAMES.HUMAN_CONSENSUS_NO_RXNS}_20251218.tar.gz"
+            },
         },
         GCS_ASSETS_NAMES.REACTOME_MEMBERS: {
             GCS_ASSETS_DEFS.FILE: "external_pathways/external_pathways_reactome_neo4j_members.csv",
