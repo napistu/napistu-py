@@ -138,6 +138,22 @@ class DocumentationComponent(MCPComponent):
     After loading content, the component initializes semantic search capabilities
     using ChromaDB and sentence transformers for natural language queries.
 
+    Public Methods
+    --------------
+    initialize(semantic_search)
+        Initialize documentation component with content loading and semantic indexing.
+    register(mcp)
+        Register documentation resources and tools with the MCP server.
+
+    Private Methods
+    ---------------
+    _check_initialized()
+        Check if component is initialized, raise clear error if not.
+    _create_state()
+        Create documentation-specific state instance.
+    _initialize_semantic_search()
+        Index documentation content into the shared semantic search instance.
+
     Examples
     --------
     Basic component usage:
@@ -154,17 +170,6 @@ class DocumentationComponent(MCPComponent):
     and semantic search initialization. If semantic search fails, the component
     continues to function with exact text search only.
     """
-
-    def _create_state(self) -> DocumentationState:
-        """
-        Create documentation-specific state instance.
-
-        Returns
-        -------
-        DocumentationState
-            New state instance for managing documentation content and semantic search
-        """
-        return DocumentationState()
 
     async def initialize(self, semantic_search: SemanticSearch = None) -> bool:
         """
@@ -254,46 +259,6 @@ class DocumentationComponent(MCPComponent):
             )
 
         return content_loaded
-
-    async def _initialize_semantic_search(self) -> bool:
-        """
-        Index documentation content into the shared semantic search instance.
-
-        Uses the shared semantic search instance (stored in self.state.semantic_search)
-        to index this component's content into the appropriate collection.
-
-        Returns
-        -------
-        bool
-            True if content was successfully indexed, False if indexing failed
-
-        Notes
-        -----
-        Assumes self.state.semantic_search has already been set to a valid
-        SemanticSearch instance during initialize().
-
-        Failure to index content is not considered a critical error.
-        The component continues to function with exact text search if semantic
-        search indexing fails.
-        """
-        try:
-            if not self.state.semantic_search:
-                logger.warning("No semantic search instance available")
-                return False
-
-            logger.info("Indexing documentation content for semantic search...")
-
-            # Index content using the shared instance stored in component state
-            self.state.semantic_search.index_content(
-                MCP_COMPONENTS.DOCUMENTATION, self.state.docs_cache
-            )
-
-            logger.info("✅ Documentation content indexed successfully")
-            return True
-
-        except Exception as e:
-            logger.error(f"❌ Failed to index documentation content: {e}")
-            return False
 
     def register(self, mcp: FastMCP) -> None:
         """
@@ -436,6 +401,7 @@ class DocumentationComponent(MCPComponent):
             n_results: int = 5,
             max_exact_results: int = 20,
         ):
+            self._check_initialized()
             """
             Search all Napistu project documentation with intelligent search strategy.
 
@@ -554,6 +520,79 @@ class DocumentationComponent(MCPComponent):
                 return documentation_utils._exact_search_documentation(
                     query, self.state.docs_cache, max_exact_results
                 )
+
+    def _check_initialized(self) -> None:
+        """
+        Check if component is initialized, raise clear error if not.
+
+        Distinguishes between:
+        - Still initializing (initialized=False)
+        - Failed initialization (initialized=True, initialization_error set)
+        """
+        if not self.state.initialized:
+            raise RuntimeError(
+                "DocumentationComponent is still initializing. "
+                "This component loads documentation from GitHub and other sources, which may take several minutes. "
+                "Please wait a moment and try again. "
+                "You can check initialization status using the health check endpoint."
+            )
+        elif self.state.initialization_error:
+            raise RuntimeError(
+                f"DocumentationComponent failed to initialize: {self.state.initialization_error}. "
+                "This component requires documentation content to function. "
+                "Please check the server logs for details or try again later."
+            )
+
+    def _create_state(self) -> DocumentationState:
+        """
+        Create documentation-specific state instance.
+
+        Returns
+        -------
+        DocumentationState
+            New state instance for managing documentation content and semantic search
+        """
+        return DocumentationState()
+
+    async def _initialize_semantic_search(self) -> bool:
+        """
+        Index documentation content into the shared semantic search instance.
+
+        Uses the shared semantic search instance (stored in self.state.semantic_search)
+        to index this component's content into the appropriate collection.
+
+        Returns
+        -------
+        bool
+            True if content was successfully indexed, False if indexing failed
+
+        Notes
+        -----
+        Assumes self.state.semantic_search has already been set to a valid
+        SemanticSearch instance during initialize().
+
+        Failure to index content is not considered a critical error.
+        The component continues to function with exact text search if semantic
+        search indexing fails.
+        """
+        try:
+            if not self.state.semantic_search:
+                logger.warning("No semantic search instance available")
+                return False
+
+            logger.info("Indexing documentation content for semantic search...")
+
+            # Index content using the shared instance stored in component state
+            self.state.semantic_search.index_content(
+                MCP_COMPONENTS.DOCUMENTATION, self.state.docs_cache
+            )
+
+            logger.info("✅ Documentation content indexed successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Failed to index documentation content: {e}")
+            return False
 
 
 # Module-level component instance

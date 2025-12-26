@@ -9,7 +9,12 @@ from typing import Any, Dict, TypeVar
 
 from fastmcp import FastMCP
 
-from napistu.mcp.constants import HEALTH_CHECK_DEFS, HEALTH_SUMMARIES, MCP_COMPONENTS
+from napistu.mcp.constants import (
+    HEALTH_CHECK_DEFS,
+    HEALTH_SUMMARIES,
+    MCP_COMPONENTS,
+    PROFILE_DEFS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +28,11 @@ _health_cache = {
     HEALTH_SUMMARIES.LAST_CHECK: None,
 }
 
+# Global profile configuration (set when components are registered)
+_profile_config: Dict[str, Any] = {}
 
-def register_components(mcp: FastMCP) -> None:
+
+def register_components(mcp: FastMCP, profile_config: Dict[str, Any]) -> None:
     """
     Register health check components with the MCP server.
 
@@ -32,7 +40,12 @@ def register_components(mcp: FastMCP) -> None:
     ----------
     mcp : FastMCP
         FastMCP server instance to register the health endpoint with.
+    profile_config : Dict[str, Any]
+        Profile configuration dictionary indicating which components are enabled.
+        Health checks will only check enabled components.
     """
+    global _profile_config
+    _profile_config = profile_config
 
     @mcp.resource("napistu://health")
     async def health_check() -> Dict[str, Any]:
@@ -81,9 +94,20 @@ def register_components(mcp: FastMCP) -> None:
 
         Notes
         -----
-        This returns cached status for fast response. Use check_health() tool
-        for real-time verification if you suspect issues.
+        This returns cached status for fast response. If components haven't been
+        checked yet (empty dict), it will perform a quick check to populate them.
+        Use check_health() tool for real-time verification if you suspect issues.
         """
+        # If components haven't been checked yet, do a quick check now
+        # This ensures component statuses are always visible, even during initialization
+        if not _health_cache.get(HEALTH_SUMMARIES.COMPONENTS):
+            try:
+                component_statuses = await _check_components()
+                _health_cache[HEALTH_SUMMARIES.COMPONENTS] = component_statuses
+            except Exception as e:
+                logger.warning(f"Failed to check components in health resource: {e}")
+                # Return what we have - components will be empty but that's better than failing
+
         return _health_cache
 
     @mcp.tool()
@@ -266,19 +290,44 @@ def _check_component_health(component_name: str, module_path: str) -> Dict[str, 
             try:
                 component = module.get_component()
                 state = component.get_state()
+                # get_health_status() handles initialization gracefully, so we can always call it
                 health_status = state.get_health_status()
                 logger.info(f"{component_name} health: {health_status}")
                 return health_status
             except RuntimeError as e:
-                # Handle execution component that might not be created yet
-                if "not created" in str(e):
-                    logger.warning(f"{component_name} not initialized yet")
+                error_msg = str(e)
+                # Handle components that are still initializing
+                if "still initializing" in error_msg.lower():
+                    logger.info(f"{component_name} still initializing: {error_msg}")
                     return {
                         HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.INITIALIZING,
-                        HEALTH_SUMMARIES.MESSAGE: "Component not created",
+                        HEALTH_SUMMARIES.MESSAGE: error_msg,
+                    }
+                # Handle failed initialization
+                elif "failed to initialize" in error_msg.lower():
+                    logger.warning(
+                        f"{component_name} initialization failed: {error_msg}"
+                    )
+                    return {
+                        HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.UNAVAILABLE,
+                        HEALTH_CHECK_DEFS.ERROR: error_msg,
                     }
                 else:
-                    raise
+                    # Other RuntimeErrors - try to peek at state anyway
+                    try:
+                        component = module.get_component()
+                        state = component.get_state()
+                        # If we can get the state, use its health status
+                        return state.get_health_status()
+                    except (RuntimeError, AttributeError, TypeError):
+                        # If we can't peek at state, return original error
+                        logger.warning(
+                            f"{component_name} error accessing state: {error_msg}"
+                        )
+                        return {
+                            HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.UNAVAILABLE,
+                            HEALTH_CHECK_DEFS.ERROR: error_msg,
+                        }
         else:
             # Component doesn't follow the new pattern
             logger.warning(f"{component_name} doesn't use component class pattern")
@@ -293,11 +342,26 @@ def _check_component_health(component_name: str, module_path: str) -> Dict[str, 
             HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.UNAVAILABLE,
             HEALTH_CHECK_DEFS.ERROR: f"Import failed: {str(e)}",
         }
-    except Exception as e:
-        logger.error(f"{component_name} health check failed: {str(e)}")
+    except (RuntimeError, AttributeError, TypeError, ValueError) as e:
+        error_msg = str(e)
+        logger.error(f"{component_name} health check failed: {error_msg}")
+        # Try to provide a more helpful error message
+        if "Could not get" in error_msg or "health status" in error_msg.lower():
+            # This might be a component that's still initializing
+            # Try to peek at the component state if possible
+            try:
+                module = __import__(module_path, fromlist=[component_name])
+                if hasattr(module, "get_component"):
+                    component = module.get_component()
+                    state = component.get_state()
+                    # If we can access state, use its health status
+                    return state.get_health_status()
+            except (RuntimeError, AttributeError, TypeError, ImportError):
+                pass  # Fall through to return error
+
         return {
             HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.UNAVAILABLE,
-            HEALTH_CHECK_DEFS.ERROR: str(e),
+            HEALTH_CHECK_DEFS.ERROR: error_msg,
         }
 
 
@@ -310,23 +374,43 @@ async def _check_components() -> Dict[str, Dict[str, Any]]:
     Dict[str, Dict[str, Any]]
         Dictionary mapping component names to their health status
     """
-    # Define component configurations
+    # Define component configurations with their enable flags
     component_configs = {
-        MCP_COMPONENTS.DOCUMENTATION: "napistu.mcp.documentation",
-        MCP_COMPONENTS.CODEBASE: "napistu.mcp.codebase",
-        MCP_COMPONENTS.TUTORIALS: "napistu.mcp.tutorials",
-        MCP_COMPONENTS.EXECUTION: "napistu.mcp.execution",
+        MCP_COMPONENTS.DOCUMENTATION: (
+            "napistu.mcp.documentation",
+            PROFILE_DEFS.ENABLE_DOCUMENTATION,
+        ),
+        MCP_COMPONENTS.CODEBASE: (
+            "napistu.mcp.codebase",
+            PROFILE_DEFS.ENABLE_CODEBASE,
+        ),
+        MCP_COMPONENTS.TUTORIALS: (
+            "napistu.mcp.tutorials",
+            PROFILE_DEFS.ENABLE_TUTORIALS,
+        ),
+        MCP_COMPONENTS.EXECUTION: (
+            "napistu.mcp.execution",
+            PROFILE_DEFS.ENABLE_EXECUTION,
+        ),
     }
 
     logger.info("Starting component health checks...")
-    logger.info(f"Checking components: {list(component_configs.keys())}")
 
-    # Check each component using their state objects
-    results = {
-        name: _check_component_health(name, module_path)
-        for name, module_path in component_configs.items()
-    }
+    results = {}
+    for name, (module_path, enable_key) in component_configs.items():
+        # Check if component is enabled in profile
+        is_enabled = _profile_config.get(enable_key, False)
+        if is_enabled:
+            logger.info(f"Checking enabled component: {name}")
+            results[name] = _check_component_health(name, module_path)
+        else:
+            logger.info(f"Skipping disabled component: {name}")
+            results[name] = {
+                HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.INACTIVE,
+                HEALTH_SUMMARIES.MESSAGE: "Component disabled in server profile",
+            }
 
+    # Semantic search is always checked (it's shared across components)
     results["semantic_search"] = _check_semantic_search_health()
 
     logger.info(f"Health check results: {results}")

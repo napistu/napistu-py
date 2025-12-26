@@ -126,6 +126,22 @@ class CodebaseComponent(MCPComponent):
     The component fetches codebase information from the Napistu ReadTheDocs API and
     uses a shared semantic search instance for intelligent code discovery and exploration.
 
+    Public Methods
+    --------------
+    initialize(semantic_search)
+        Initialize codebase component with content loading and semantic indexing.
+    register(mcp)
+        Register codebase resources and tools with the MCP server.
+
+    Private Methods
+    ---------------
+    _check_initialized()
+        Check if component is initialized, raise clear error if not.
+    _create_state()
+        Create codebase-specific state instance.
+    _initialize_semantic_search()
+        Index codebase content into the shared semantic search instance.
+
     Examples
     --------
     Basic component usage:
@@ -148,17 +164,6 @@ class CodebaseComponent(MCPComponent):
     implementation details. Use this component for technical API guidance, not conceptual
     tutorials or general usage patterns.
     """
-
-    def _create_state(self) -> CodebaseState:
-        """
-        Create codebase-specific state instance.
-
-        Returns
-        -------
-        CodebaseState
-            New state instance for managing codebase content and semantic search
-        """
-        return CodebaseState()
 
     async def initialize(self, semantic_search: SemanticSearch = None) -> bool:
         """
@@ -235,46 +240,6 @@ class CodebaseComponent(MCPComponent):
             logger.error(f"Failed to load codebase documentation: {e}")
             return False
 
-    async def _initialize_semantic_search(self) -> bool:
-        """
-        Index codebase content into the shared semantic search instance.
-
-        Uses the shared semantic search instance (stored in self.state.semantic_search)
-        to index this component's codebase content into the "codebase" collection.
-
-        Returns
-        -------
-        bool
-            True if content was successfully indexed, False if indexing failed
-
-        Notes
-        -----
-        Assumes self.state.semantic_search has already been set to a valid
-        SemanticSearch instance during initialize().
-
-        Failure to index content is not considered a critical error.
-        The component continues to function with exact text search if semantic
-        search indexing fails.
-        """
-        try:
-            if not self.state.semantic_search:
-                logger.warning("No semantic search instance available")
-                return False
-
-            logger.info("Indexing codebase content for semantic search...")
-
-            # Index codebase content using the shared semantic search instance
-            self.state.semantic_search.index_content(
-                MCP_COMPONENTS.CODEBASE, self.state.codebase_cache
-            )
-
-            logger.info("✅ Codebase content indexed successfully")
-            return True
-
-        except Exception as e:
-            logger.error(f"❌ Failed to index codebase content: {e}")
-            return False
-
     def register(self, mcp: FastMCP) -> None:
         """
         Register codebase resources and tools with the MCP server.
@@ -297,6 +262,7 @@ class CodebaseComponent(MCPComponent):
         # resources
         @mcp.resource("napistu://codebase/summary")
         async def get_codebase_summary():
+            self._check_initialized()
             """
             Get a summary of all available Napistu codebase information.
 
@@ -341,6 +307,7 @@ class CodebaseComponent(MCPComponent):
 
         @mcp.resource("napistu://codebase/modules/{module_name}")
         async def get_module_details(module_name: str) -> Dict[str, Any]:
+            self._check_initialized()
             """
             Get detailed API documentation for a specific Napistu module.
 
@@ -379,6 +346,7 @@ class CodebaseComponent(MCPComponent):
 
         @mcp.tool()
         async def get_class_documentation(class_name: str) -> Dict[str, Any]:
+            self._check_initialized()
             """
             Get detailed API documentation for a specific Napistu class.
 
@@ -426,6 +394,7 @@ class CodebaseComponent(MCPComponent):
 
         @mcp.tool()
         async def get_function_documentation(function_name: str) -> Dict[str, Any]:
+            self._check_initialized()
             """
             Get detailed API documentation for a specific Napistu function.
 
@@ -933,6 +902,7 @@ class CodebaseComponent(MCPComponent):
             n_results: int = 5,
             max_exact_results: int = 20,
         ) -> Dict[str, Any]:
+            self._check_initialized()
             """
             Search Napistu codebase documentation with intelligent search strategy.
 
@@ -1051,6 +1021,79 @@ class CodebaseComponent(MCPComponent):
                 return codebase_utils._exact_search_codebase(
                     query, self.state.codebase_cache, max_exact_results
                 )
+
+    def _check_initialized(self) -> None:
+        """
+        Check if component is initialized, raise clear error if not.
+
+        Distinguishes between:
+        - Still initializing (initialized=False)
+        - Failed initialization (initialized=True, initialization_error set)
+        """
+        if not self.state.initialized:
+            raise RuntimeError(
+                "CodebaseComponent is still initializing. "
+                "This component loads documentation from ReadTheDocs, which may take several minutes. "
+                "Please wait a moment and try again. "
+                "You can check initialization status using the health check endpoint."
+            )
+        elif self.state.initialization_error:
+            raise RuntimeError(
+                f"CodebaseComponent failed to initialize: {self.state.initialization_error}. "
+                "This component requires ReadTheDocs documentation to function. "
+                "Please check the server logs for details or try again later."
+            )
+
+    def _create_state(self) -> CodebaseState:
+        """
+        Create codebase-specific state instance.
+
+        Returns
+        -------
+        CodebaseState
+            New state instance for managing codebase content and semantic search
+        """
+        return CodebaseState()
+
+    async def _initialize_semantic_search(self) -> bool:
+        """
+        Index codebase content into the shared semantic search instance.
+
+        Uses the shared semantic search instance (stored in self.state.semantic_search)
+        to index this component's codebase content into the "codebase" collection.
+
+        Returns
+        -------
+        bool
+            True if content was successfully indexed, False if indexing failed
+
+        Notes
+        -----
+        Assumes self.state.semantic_search has already been set to a valid
+        SemanticSearch instance during initialize().
+
+        Failure to index content is not considered a critical error.
+        The component continues to function with exact text search if semantic
+        search indexing fails.
+        """
+        try:
+            if not self.state.semantic_search:
+                logger.warning("No semantic search instance available")
+                return False
+
+            logger.info("Indexing codebase content for semantic search...")
+
+            # Index codebase content using the shared semantic search instance
+            self.state.semantic_search.index_content(
+                MCP_COMPONENTS.CODEBASE, self.state.codebase_cache
+            )
+
+            logger.info("✅ Codebase content indexed successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Failed to index codebase content: {e}")
+            return False
 
 
 # Module-level component instance
