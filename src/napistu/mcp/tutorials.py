@@ -103,6 +103,22 @@ class TutorialsComponent(MCPComponent):
     The component loads tutorial content from configured URLs and uses a shared
     semantic search instance for natural language tutorial discovery.
 
+    Public Methods
+    --------------
+    initialize(semantic_search)
+        Initialize tutorials component with content loading and semantic indexing.
+    register(mcp)
+        Register tutorial resources and tools with the MCP server.
+
+    Private Methods
+    ---------------
+    _check_initialized()
+        Check if component is initialized, raise clear error if not.
+    _create_state()
+        Create tutorials-specific state instance.
+    _initialize_semantic_search()
+        Index tutorial content into the shared semantic search instance.
+
     Examples
     --------
     Basic component usage:
@@ -124,17 +140,6 @@ class TutorialsComponent(MCPComponent):
     Tutorials specifically cover Napistu workflows, not general bioinformatics concepts.
     Use this component for Napistu-specific implementation guidance, not broad domain knowledge.
     """
-
-    def _create_state(self) -> TutorialsState:
-        """
-        Create tutorials-specific state instance.
-
-        Returns
-        -------
-        TutorialsState
-            New state instance for managing tutorial content and semantic search
-        """
-        return TutorialsState()
 
     async def initialize(self, semantic_search: SemanticSearch = None) -> bool:
         """
@@ -189,49 +194,6 @@ class TutorialsComponent(MCPComponent):
 
         return content_loaded
 
-    async def _initialize_semantic_search(self) -> bool:
-        """
-        Index tutorial content into the shared semantic search instance.
-
-        Uses the shared semantic search instance (stored in self.state.semantic_search)
-        to index this component's tutorial content into the "tutorials" collection.
-
-        Returns
-        -------
-        bool
-            True if content was successfully indexed, False if indexing failed
-
-        Notes
-        -----
-        Assumes self.state.semantic_search has already been set to a valid
-        SemanticSearch instance during initialize().
-
-        Failure to index content is not considered a critical error.
-        The component continues to function with exact text search if semantic
-        search indexing fails.
-        """
-        try:
-            if not self.state.semantic_search:
-                logger.warning("No semantic search instance available")
-                return False
-
-            logger.info("Indexing tutorial content for semantic search...")
-
-            # Prepare content for indexing in the format expected by SemanticSearch
-            content_dict = {MCP_COMPONENTS.TUTORIALS: self.state.tutorials}
-
-            # Index content into the shared semantic search instance
-            self.state.semantic_search.index_content(
-                MCP_COMPONENTS.TUTORIALS, content_dict
-            )
-
-            logger.info("✅ Tutorial content indexed successfully")
-            return True
-
-        except Exception as e:
-            logger.error(f"❌ Failed to index tutorial content: {e}")
-            return False
-
     def register(self, mcp: FastMCP) -> None:
         """
         Register tutorial resources and tools with the MCP server.
@@ -254,6 +216,8 @@ class TutorialsComponent(MCPComponent):
         # Register resources
         @mcp.resource("napistu://tutorials/index")
         async def get_tutorials_index() -> Dict[str, Any]:
+            # Tutorials index doesn't require initialization (uses static URLs)
+            pass
             """
             Get the index of all available tutorials.
 
@@ -293,6 +257,7 @@ class TutorialsComponent(MCPComponent):
 
         @mcp.resource("napistu://tutorials/content/{tutorial_id}")
         async def get_tutorial_content_resource(tutorial_id: str) -> Dict[str, Any]:
+            self._check_initialized()
             """
             Get the full content of a specific Napistu tutorial as markdown.
 
@@ -358,6 +323,7 @@ class TutorialsComponent(MCPComponent):
             n_results: int = 5,
             max_exact_results: int = 20,
         ) -> Dict[str, Any]:
+            self._check_initialized()
             """
             Search Napistu tutorials with intelligent search strategy.
 
@@ -466,6 +432,82 @@ class TutorialsComponent(MCPComponent):
                 return tutorials_utils._exact_search_tutorials(
                     query, self.state.tutorials, max_exact_results
                 )
+
+    def _check_initialized(self) -> None:
+        """
+        Check if component is initialized, raise clear error if not.
+
+        Distinguishes between:
+        - Still initializing (initialized=False)
+        - Failed initialization (initialized=True, initialization_error set)
+        """
+        if not self.state.initialized:
+            raise RuntimeError(
+                "TutorialsComponent is still initializing. "
+                "This component loads tutorials from GitHub, which may take a few minutes. "
+                "Please wait a moment and try again. "
+                "You can check initialization status using the health check endpoint."
+            )
+        elif self.state.initialization_error:
+            raise RuntimeError(
+                f"TutorialsComponent failed to initialize: {self.state.initialization_error}. "
+                "This component requires GitHub tutorial content to function. "
+                "Please check the server logs for details or try again later."
+            )
+
+    def _create_state(self) -> TutorialsState:
+        """
+        Create tutorials-specific state instance.
+
+        Returns
+        -------
+        TutorialsState
+            New state instance for managing tutorial content and semantic search
+        """
+        return TutorialsState()
+
+    async def _initialize_semantic_search(self) -> bool:
+        """
+        Index tutorial content into the shared semantic search instance.
+
+        Uses the shared semantic search instance (stored in self.state.semantic_search)
+        to index this component's tutorial content into the "tutorials" collection.
+
+        Returns
+        -------
+        bool
+            True if content was successfully indexed, False if indexing failed
+
+        Notes
+        -----
+        Assumes self.state.semantic_search has already been set to a valid
+        SemanticSearch instance during initialize().
+
+        Failure to index content is not considered a critical error.
+        The component continues to function with exact text search if semantic
+        search indexing fails.
+        """
+        try:
+            if not self.state.semantic_search:
+                logger.warning("No semantic search instance available")
+                return False
+
+            logger.info("Indexing tutorial content for semantic search...")
+
+            # Prepare content for indexing in the format expected by SemanticSearch
+            content_dict = {MCP_COMPONENTS.TUTORIALS: self.state.tutorials}
+
+            # Index content into the shared semantic search instance
+            self.state.semantic_search.index_content(
+                MCP_COMPONENTS.TUTORIALS, content_dict
+            )
+
+            logger.info("✅ Tutorial content indexed successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Failed to index tutorial content: {e}")
+            return False
 
 
 # Module-level component instance

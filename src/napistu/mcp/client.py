@@ -94,6 +94,9 @@ async def check_server_health(config: MCPClientConfig) -> Optional[Dict[str, Any
     """
     Health check using FastMCP client.
 
+    Performs an active health check by calling the check_health tool, which
+    verifies current component states and returns real-time status information.
+
     Parameters
     ----------
     config : MCPClientConfig
@@ -105,13 +108,13 @@ async def check_server_health(config: MCPClientConfig) -> Optional[Dict[str, Any
         Dictionary containing health status information if successful, None if failed.
         The dictionary contains:
             - status : str
-                Overall server status ('healthy', 'degraded', or 'unhealthy')
+                Overall server status ('healthy', 'degraded', 'unhealthy', or 'initializing')
             - timestamp : str
                 ISO format timestamp of the health check
             - version : str
                 Version of the Napistu package
             - components : Dict[str, Dict[str, str]]
-                Status of each component ('healthy', 'inactive', or 'unavailable')
+                Current status of each component ('healthy', 'initializing', 'inactive', or 'unavailable')
     """
     try:
         logger.info(f"Connecting to MCP server at: {config.mcp_url}")
@@ -121,40 +124,18 @@ async def check_server_health(config: MCPClientConfig) -> Optional[Dict[str, Any
         async with client:
             logger.info("✅ FastMCP client connected")
 
-            # List all available resources
-            resources = await client.list_resources()
-            logger.info(f"Found {len(resources)} resources")
+            # Use the check_health tool for active checking
+            logger.info("Calling check_health tool for active component status check")
+            result = await client.call_tool("check_health", {})
 
-            # Find health resource
-            health_resource = None
-            for resource in resources:
-                uri_str = str(resource.uri).lower()
-                if "health" in uri_str:
-                    health_resource = resource
-                    logger.info(f"Found health resource: {resource.uri}")
-                    break
-
-            if not health_resource:
-                logger.error("No health resource found")
-                logger.info(f"Available resources: {[str(r.uri) for r in resources]}")
+            # Parse the result
+            parsed_result = _parse_tool_result(result)
+            if parsed_result is None:
+                logger.error("No result from check_health tool")
                 return None
 
-            # Read the health resource
-            logger.info(f"Reading health resource: {health_resource.uri}")
-            result = await client.read_resource(str(health_resource.uri))
-
-            if result and len(result) > 0 and hasattr(result[0], "text"):
-                try:
-                    health_data = json.loads(result[0].text)
-                    logger.info("✅ Health check successful")
-                    return health_data
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse health JSON: {e}")
-                    logger.error(f"Raw response: {result[0].text}")
-                    return None
-            else:
-                logger.error(f"No valid response from health resource: {result}")
-                return None
+            logger.info("✅ Health check successful")
+            return parsed_result
 
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")

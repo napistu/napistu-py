@@ -81,9 +81,20 @@ def register_components(mcp: FastMCP) -> None:
 
         Notes
         -----
-        This returns cached status for fast response. Use check_health() tool
-        for real-time verification if you suspect issues.
+        This returns cached status for fast response. If components haven't been
+        checked yet (empty dict), it will perform a quick check to populate them.
+        Use check_health() tool for real-time verification if you suspect issues.
         """
+        # If components haven't been checked yet, do a quick check now
+        # This ensures component statuses are always visible, even during initialization
+        if not _health_cache.get(HEALTH_SUMMARIES.COMPONENTS):
+            try:
+                component_statuses = await _check_components()
+                _health_cache[HEALTH_SUMMARIES.COMPONENTS] = component_statuses
+            except Exception as e:
+                logger.warning(f"Failed to check components in health resource: {e}")
+                # Return what we have - components will be empty but that's better than failing
+
         return _health_cache
 
     @mcp.tool()
@@ -266,19 +277,47 @@ def _check_component_health(component_name: str, module_path: str) -> Dict[str, 
             try:
                 component = module.get_component()
                 state = component.get_state()
+                # get_health_status() handles initialization gracefully, so we can always call it
                 health_status = state.get_health_status()
                 logger.info(f"{component_name} health: {health_status}")
                 return health_status
             except RuntimeError as e:
-                # Handle execution component that might not be created yet
-                if "not created" in str(e):
-                    logger.warning(f"{component_name} not initialized yet")
+                error_msg = str(e)
+                # Handle components that are still initializing or not created yet
+                if (
+                    "still initializing" in error_msg.lower()
+                    or "not created" in error_msg.lower()
+                ):
+                    logger.info(f"{component_name} still initializing: {error_msg}")
                     return {
                         HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.INITIALIZING,
-                        HEALTH_SUMMARIES.MESSAGE: "Component not created",
+                        HEALTH_SUMMARIES.MESSAGE: error_msg,
+                    }
+                # Handle failed initialization
+                elif "failed to initialize" in error_msg.lower():
+                    logger.warning(
+                        f"{component_name} initialization failed: {error_msg}"
+                    )
+                    return {
+                        HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.UNAVAILABLE,
+                        HEALTH_CHECK_DEFS.ERROR: error_msg,
                     }
                 else:
-                    raise
+                    # Other RuntimeErrors - try to peek at state anyway
+                    try:
+                        component = module.get_component()
+                        state = component.get_state()
+                        # If we can get the state, use its health status
+                        return state.get_health_status()
+                    except (RuntimeError, AttributeError, TypeError):
+                        # If we can't peek at state, return original error
+                        logger.warning(
+                            f"{component_name} error accessing state: {error_msg}"
+                        )
+                        return {
+                            HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.UNAVAILABLE,
+                            HEALTH_CHECK_DEFS.ERROR: error_msg,
+                        }
         else:
             # Component doesn't follow the new pattern
             logger.warning(f"{component_name} doesn't use component class pattern")
@@ -293,11 +332,26 @@ def _check_component_health(component_name: str, module_path: str) -> Dict[str, 
             HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.UNAVAILABLE,
             HEALTH_CHECK_DEFS.ERROR: f"Import failed: {str(e)}",
         }
-    except Exception as e:
-        logger.error(f"{component_name} health check failed: {str(e)}")
+    except (RuntimeError, AttributeError, TypeError, ValueError) as e:
+        error_msg = str(e)
+        logger.error(f"{component_name} health check failed: {error_msg}")
+        # Try to provide a more helpful error message
+        if "Could not get" in error_msg or "health status" in error_msg.lower():
+            # This might be a component that's still initializing
+            # Try to peek at the component state if possible
+            try:
+                module = __import__(module_path, fromlist=[component_name])
+                if hasattr(module, "get_component"):
+                    component = module.get_component()
+                    state = component.get_state()
+                    # If we can access state, use its health status
+                    return state.get_health_status()
+            except (RuntimeError, AttributeError, TypeError, ImportError):
+                pass  # Fall through to return error
+
         return {
             HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.UNAVAILABLE,
-            HEALTH_CHECK_DEFS.ERROR: str(e),
+            HEALTH_CHECK_DEFS.ERROR: error_msg,
         }
 
 
