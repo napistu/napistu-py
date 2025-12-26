@@ -2,6 +2,7 @@
 Utilities for scanning and analyzing the Napistu codebase.
 """
 
+import asyncio
 import json
 import logging
 from typing import Any, Dict, Optional, Set
@@ -138,22 +139,45 @@ def find_item_by_name(name: str, items_dict: dict) -> tuple[str, dict] | None:
     return None
 
 
-async def read_read_the_docs(package_toc_url: str) -> dict:
+async def read_read_the_docs(package_toc_url: str, request_delay: float = 2.0) -> dict:
     """
     Recursively parse all modules and submodules starting from the package TOC.
+
+    Parameters
+    ----------
+    package_toc_url : str
+        URL of the ReadTheDocs package table of contents page
+    request_delay : float, optional
+        Delay in seconds between requests to avoid rate limiting (default: 2.0)
+
+    Returns
+    -------
+    dict
+        Dictionary of parsed module documentation
+
+    Raises
+    ------
+    httpx.HTTPStatusError
+        If any page fails to load after retries (fail-fast behavior)
+    httpx.RequestError
+        If any network error occurs after retries
     """
     # Step 1: Get all module URLs from the TOC
+    # If this fails after retries, exception will propagate (fail-fast)
     packages_dict = await _process_rtd_package_toc(package_toc_url)
     docs_dict = {}
     visited = set()
 
     # Step 2: Recursively parse each module page
+    # If any page fails after retries, exception will propagate (fail-fast)
     for package_name, module_url in packages_dict.items():
         if not module_url.startswith("http"):
             # Make absolute if needed
             base = package_toc_url.rsplit("/", 1)[0]
             module_url = base + "/" + module_url.lstrip("/")
-        await _parse_rtd_module_recursive(module_url, visited, docs_dict)
+        await _parse_rtd_module_recursive(
+            module_url, visited, docs_dict, request_delay=request_delay
+        )
 
     return docs_dict
 
@@ -430,9 +454,28 @@ async def _parse_rtd_module_recursive(
     module_url: str,
     visited: Optional[Set[str]] = None,
     docs_dict: Optional[Dict[str, Any]] = None,
+    request_delay: float = 2.0,
 ) -> Dict[str, Any]:
     """
     Recursively parse a module page and all its submodules.
+
+    Parameters
+    ----------
+    module_url : str
+        URL of the module page to parse
+    visited : Optional[Set[str]], optional
+        Set of already visited URLs to avoid duplicates
+    docs_dict : Optional[Dict[str, Any]], optional
+        Dictionary to accumulate parsed documentation
+    request_delay : float, optional
+        Delay in seconds between requests to avoid rate limiting (default: 2.0)
+
+    Raises
+    ------
+    httpx.HTTPStatusError
+        If the page fails to load after retries (fail-fast behavior)
+    httpx.RequestError
+        If a network error occurs after retries
     """
 
     if visited is None:
@@ -443,6 +486,10 @@ async def _parse_rtd_module_recursive(
     if module_url in visited:
         return docs_dict
     visited.add(module_url)
+
+    # Add delay before request to avoid rate limiting
+    if request_delay > 0:
+        await asyncio.sleep(request_delay)
 
     page_html = await mcp_utils.load_html_page(module_url)
     module_doc = _parse_rtd_module_page(page_html, module_url)
@@ -455,7 +502,9 @@ async def _parse_rtd_module_recursive(
         if not submod_url.startswith("http"):
             base = module_url.rsplit("/", 1)[0]
             submod_url = base + "/" + submod_url.lstrip("/")
-        await _parse_rtd_module_recursive(submod_url, visited, docs_dict)
+        await _parse_rtd_module_recursive(
+            submod_url, visited, docs_dict, request_delay=request_delay
+        )
 
     return docs_dict
 

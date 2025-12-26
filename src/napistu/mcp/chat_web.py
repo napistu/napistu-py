@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
 import anthropic
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from napistu.mcp.constants import (
     CHAT_DEFAULTS,
@@ -281,35 +281,102 @@ class ClaudeClient:
         }
 
 
-# ============================================================================
 # Global instances (module-level singletons)
-# ============================================================================
+
 
 _chat_config: Optional[ChatConfig] = None
 _claude_client: Optional[ClaudeClient] = None
+_rate_limiter: Optional[RateLimiter] = None
+_cost_tracker: Optional[CostTracker] = None
+
+
+# Public gettr and convenience functions
 
 
 def get_chat_config() -> ChatConfig:
-    """Get the chat configuration singleton"""
+    """Get the chat configuration singleton with detailed error logging"""
     global _chat_config
     if _chat_config is None:
         try:
+            logger.info("Initializing ChatConfig...")
             _chat_config = ChatConfig()
             logger.info("✅ Chat configuration validated successfully")
+            logger.info(f"   Model: {_chat_config.claude_model}")
+            logger.info(f"   MCP URL: {_chat_config.get_mcp_url()}")
+            logger.info(f"   Max tokens: {_chat_config.max_tokens}")
+            logger.info(
+                f"   Rate limits: {_chat_config.rate_limit_per_hour}/hr, {_chat_config.rate_limit_per_day}/day"
+            )
+        except ValidationError as e:
+            logger.error("❌ ChatConfig validation failed with Pydantic errors:")
+            for error in e.errors():
+                field = error["loc"][0] if error["loc"] else "unknown"
+                msg = error["msg"]
+                logger.error(f"   Field '{field}': {msg}")
+            raise
         except Exception as e:
-            logger.error(f"❌ Chat configuration validation failed: {e}")
+            logger.error(
+                f"❌ ChatConfig initialization failed: {type(e).__name__}: {e}"
+            )
+            import traceback
+
+            logger.error(traceback.format_exc())
             raise
     return _chat_config
 
 
 def get_claude_client() -> ClaudeClient:
-    """Get or create Claude client singleton"""
+    """Get or create Claude client singleton with error handling"""
     global _claude_client
     if _claude_client is None:
-        _claude_client = ClaudeClient()
+        try:
+            logger.info("Initializing ClaudeClient...")
+            _claude_client = ClaudeClient()
+            logger.info("✅ Claude client initialized successfully")
+        except Exception as e:
+            logger.error(
+                f"❌ ClaudeClient initialization failed: {type(e).__name__}: {e}"
+            )
+            import traceback
+
+            logger.error(traceback.format_exc())
+            raise
     return _claude_client
 
 
-# Initialize after function definitions
-rate_limiter = RateLimiter()
-cost_tracker = CostTracker()
+def get_rate_limiter() -> RateLimiter:
+    """Get or create rate limiter singleton"""
+    global _rate_limiter
+    if _rate_limiter is None:
+        try:
+            logger.info("Initializing RateLimiter...")
+            _rate_limiter = RateLimiter()
+            logger.info("✅ Rate limiter initialized successfully")
+        except Exception as e:
+            logger.error(
+                f"❌ RateLimiter initialization failed: {type(e).__name__}: {e}"
+            )
+            import traceback
+
+            logger.error(traceback.format_exc())
+            raise
+    return _rate_limiter
+
+
+def get_cost_tracker() -> CostTracker:
+    """Get or create cost tracker singleton"""
+    global _cost_tracker
+    if _cost_tracker is None:
+        try:
+            logger.info("Initializing CostTracker...")
+            _cost_tracker = CostTracker()
+            logger.info("✅ Cost tracker initialized successfully")
+        except Exception as e:
+            logger.error(
+                f"❌ CostTracker initialization failed: {type(e).__name__}: {e}"
+            )
+            import traceback
+
+            logger.error(traceback.format_exc())
+            raise
+    return _cost_tracker
