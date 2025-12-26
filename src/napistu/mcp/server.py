@@ -149,14 +149,14 @@ def start_mcp_server(profile_name: str, server_config: MCPServerConfig) -> None:
     # Create server with validated configuration
     mcp = create_server(profile, server_config)
 
-    # Initialize components first (separate async call)
-    async def init_components():
-        logger.info("Initializing MCP components...")
-        await initialize_components(profile)
-        logger.info("✅ Component initialization complete")
-
-    # Run initialization
-    asyncio.run(init_components())
+    # Initialize components in background after server starts
+    async def init_components_background():
+        logger.info("Background: Initializing MCP components...")
+        try:
+            await initialize_components(profile)
+            logger.info("Background: ✅ Component initialization complete")
+        except Exception as e:
+            logger.error(f"Background: ❌ Component initialization failed: {e}")
 
     # Check if chat is enabled in profile
     config = profile.get_config()
@@ -172,9 +172,11 @@ def start_mcp_server(profile_name: str, server_config: MCPServerConfig) -> None:
 
         @contextlib.asynccontextmanager
         async def combined_lifespan(app: Starlette):
-            """Run MCP app's lifespan for the combined app"""
+            """Run MCP app's lifespan and initialize components in background"""
             async with mcp_app.lifespan(app):
-                logger.info("MCP lifespan started")
+                logger.info("MCP lifespan started - server is listening")
+                # Initialize components in background (non-blocking)
+                asyncio.create_task(init_components_background())
                 yield
                 logger.info("MCP lifespan stopped")
 
@@ -200,13 +202,27 @@ def start_mcp_server(profile_name: str, server_config: MCPServerConfig) -> None:
             log_level="info",
         )
     else:
-        # Just run an MCP server normally
+        # Run MCP server using http_app so we can initialize components in background
         logger.info("🚀 Starting MCP server...")
         logger.info(
             f"Using {MCP_DEFAULTS.TRANSPORT} transport on http://{server_config.host}:{server_config.port}{MCP_DEFAULTS.MCP_PATH}"
         )
 
-        mcp.run(transport=MCP_DEFAULTS.TRANSPORT)
+        mcp_app = mcp.http_app(path="/")
+
+        @contextlib.asynccontextmanager
+        async def mcp_lifespan(app: Starlette):
+            """Initialize components in background after server starts listening"""
+            async with mcp_app.lifespan(app):
+                logger.info("MCP server started - server is listening")
+                # Initialize components in background (non-blocking)
+                asyncio.create_task(init_components_background())
+                yield
+
+        app = Starlette(routes=[Mount("/", app=mcp_app)], lifespan=mcp_lifespan)
+        uvicorn.run(
+            app, host=server_config.host, port=server_config.port, log_level="info"
+        )
 
 
 def create_server(profile: ServerProfile, server_config: MCPServerConfig) -> FastMCP:
