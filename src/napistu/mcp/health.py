@@ -9,7 +9,12 @@ from typing import Any, Dict, TypeVar
 
 from fastmcp import FastMCP
 
-from napistu.mcp.constants import HEALTH_CHECK_DEFS, HEALTH_SUMMARIES, MCP_COMPONENTS
+from napistu.mcp.constants import (
+    HEALTH_CHECK_DEFS,
+    HEALTH_SUMMARIES,
+    MCP_COMPONENTS,
+    PROFILE_DEFS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +28,11 @@ _health_cache = {
     HEALTH_SUMMARIES.LAST_CHECK: None,
 }
 
+# Global profile configuration (set when components are registered)
+_profile_config: Dict[str, Any] = {}
 
-def register_components(mcp: FastMCP) -> None:
+
+def register_components(mcp: FastMCP, profile_config: Dict[str, Any]) -> None:
     """
     Register health check components with the MCP server.
 
@@ -32,7 +40,12 @@ def register_components(mcp: FastMCP) -> None:
     ----------
     mcp : FastMCP
         FastMCP server instance to register the health endpoint with.
+    profile_config : Dict[str, Any]
+        Profile configuration dictionary indicating which components are enabled.
+        Health checks will only check enabled components.
     """
+    global _profile_config
+    _profile_config = profile_config
 
     @mcp.resource("napistu://health")
     async def health_check() -> Dict[str, Any]:
@@ -283,11 +296,8 @@ def _check_component_health(component_name: str, module_path: str) -> Dict[str, 
                 return health_status
             except RuntimeError as e:
                 error_msg = str(e)
-                # Handle components that are still initializing or not created yet
-                if (
-                    "still initializing" in error_msg.lower()
-                    or "not created" in error_msg.lower()
-                ):
+                # Handle components that are still initializing
+                if "still initializing" in error_msg.lower():
                     logger.info(f"{component_name} still initializing: {error_msg}")
                     return {
                         HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.INITIALIZING,
@@ -364,23 +374,43 @@ async def _check_components() -> Dict[str, Dict[str, Any]]:
     Dict[str, Dict[str, Any]]
         Dictionary mapping component names to their health status
     """
-    # Define component configurations
+    # Define component configurations with their enable flags
     component_configs = {
-        MCP_COMPONENTS.DOCUMENTATION: "napistu.mcp.documentation",
-        MCP_COMPONENTS.CODEBASE: "napistu.mcp.codebase",
-        MCP_COMPONENTS.TUTORIALS: "napistu.mcp.tutorials",
-        MCP_COMPONENTS.EXECUTION: "napistu.mcp.execution",
+        MCP_COMPONENTS.DOCUMENTATION: (
+            "napistu.mcp.documentation",
+            PROFILE_DEFS.ENABLE_DOCUMENTATION,
+        ),
+        MCP_COMPONENTS.CODEBASE: (
+            "napistu.mcp.codebase",
+            PROFILE_DEFS.ENABLE_CODEBASE,
+        ),
+        MCP_COMPONENTS.TUTORIALS: (
+            "napistu.mcp.tutorials",
+            PROFILE_DEFS.ENABLE_TUTORIALS,
+        ),
+        MCP_COMPONENTS.EXECUTION: (
+            "napistu.mcp.execution",
+            PROFILE_DEFS.ENABLE_EXECUTION,
+        ),
     }
 
     logger.info("Starting component health checks...")
-    logger.info(f"Checking components: {list(component_configs.keys())}")
 
-    # Check each component using their state objects
-    results = {
-        name: _check_component_health(name, module_path)
-        for name, module_path in component_configs.items()
-    }
+    results = {}
+    for name, (module_path, enable_key) in component_configs.items():
+        # Check if component is enabled in profile
+        is_enabled = _profile_config.get(enable_key, False)
+        if is_enabled:
+            logger.info(f"Checking enabled component: {name}")
+            results[name] = _check_component_health(name, module_path)
+        else:
+            logger.info(f"Skipping disabled component: {name}")
+            results[name] = {
+                HEALTH_SUMMARIES.STATUS: HEALTH_CHECK_DEFS.INACTIVE,
+                HEALTH_SUMMARIES.MESSAGE: "Component disabled in server profile",
+            }
 
+    # Semantic search is always checked (it's shared across components)
     results["semantic_search"] = _check_semantic_search_health()
 
     logger.info(f"Health check results: {results}")

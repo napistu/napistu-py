@@ -210,15 +210,18 @@ def print_health_status(health: Optional[Mapping[str, Any]]) -> None:
     if components:
         print("\nComponents:")
         for name, comp_status in components.items():
-            icon = (
-                "✅"
-                if comp_status.get(HEALTH_CHECK_DEFS.STATUS)
-                == HEALTH_CHECK_DEFS.HEALTHY
-                else "❌"
+            status = comp_status.get(
+                HEALTH_CHECK_DEFS.STATUS, HEALTH_CHECK_DEFS.UNKNOWN
             )
-            print(
-                f"  {icon} {name}: {comp_status.get(HEALTH_CHECK_DEFS.STATUS, HEALTH_CHECK_DEFS.UNKNOWN)}"
-            )
+            if status == HEALTH_CHECK_DEFS.HEALTHY:
+                icon = "✅"
+            elif status == HEALTH_CHECK_DEFS.INACTIVE:
+                icon = "⚪"
+            elif status == HEALTH_CHECK_DEFS.INITIALIZING:
+                icon = "🔄"
+            else:
+                icon = "❌"
+            print(f"  {icon} {name}: {status}")
 
     # Show additional info if available
     if "timestamp" in health:

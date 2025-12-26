@@ -273,8 +273,8 @@ def create_server(profile: ServerProfile, server_config: MCPServerConfig) -> Fas
             object_registry=config.get("object_registry"),
         )
 
-    # Always register health components
-    health.register_components(mcp)
+    # Always register health components with profile config
+    health.register_components(mcp, profile_config=config)
     logger.info("Registered health components")
 
     # Register cross-component search tool
