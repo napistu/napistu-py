@@ -15,12 +15,18 @@ from napistu.mcp import (
     health,
     tutorials,
 )
+from napistu.mcp.profiles import FULL_PROFILE
 
 # Regex patterns for validation
 VALID_RESOURCE_PATH = re.compile(
     r"^napistu://[a-zA-Z][a-zA-Z0-9_]*(?:/[a-zA-Z0-9_{}.-]+)*$"
 )
 VALID_TOOL_NAME = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*$")
+
+
+def get_test_profile_config() -> dict:
+    """Get a test profile config with all components enabled."""
+    return FULL_PROFILE.get_config()
 
 
 async def collect_resources_and_tools(mcp: FastMCP) -> Tuple[List[str], List[str]]:
@@ -129,7 +135,7 @@ async def test_execution_naming():
 async def test_health_naming():
     """Test that health component uses valid names."""
     mcp = FastMCP("test")
-    health.register_components(mcp)
+    health.register_components(mcp, profile_config=get_test_profile_config())
 
     resource_paths, tool_names = await collect_resources_and_tools(mcp)
 
@@ -165,8 +171,8 @@ async def test_all_components_naming():
     )
     execution_component.register(mcp)
 
-    # Health component still uses legacy registration
-    health.register_components(mcp)
+    # Health component registration with profile config
+    health.register_components(mcp, profile_config=get_test_profile_config())
 
     resource_paths, tool_names = await collect_resources_and_tools(mcp)
 
@@ -208,8 +214,8 @@ async def test_expected_resources_exist():
     )
     execution_component.register(mcp)
 
-    # Health component still uses legacy registration
-    health.register_components(mcp)
+    # Health component registration with profile config
+    health.register_components(mcp, profile_config=get_test_profile_config())
 
     resource_paths, _ = await collect_resources_and_tools(mcp)
 
@@ -257,8 +263,8 @@ async def test_expected_tools_exist():
     )
     execution_component.register(mcp)
 
-    # Health component still uses legacy registration
-    health.register_components(mcp)
+    # Health component registration with profile config
+    health.register_components(mcp, profile_config=get_test_profile_config())
 
     _, tool_names = await collect_resources_and_tools(mcp)
 
