@@ -67,7 +67,6 @@ def create_chat_app() -> Starlette:
 async def handle_chat(request: Request) -> JSONResponse:
     """Handle chat requests with rate limiting and cost tracking"""
     # debugging
-    logger.critical("🔥 CHAT ENDPOINT HIT - REQUEST RECEIVED")
     try:
         # Get client IP
         ip = request.client.host
@@ -97,7 +96,7 @@ async def handle_chat(request: Request) -> JSONResponse:
         # Call Claude with MCP tools
         logger.info(f"Calling Claude API for message: {message.content[:50]}...")
         try:
-            result = client.chat(message.content)
+            result = await client.chat(message.content)
             logger.info(f"Claude API response received: {result['usage']}")
         except Exception as e:
             logger.error(f"Claude API call failed: {type(e).__name__}: {e}")
