@@ -28,7 +28,23 @@ logger = logging.getLogger(__name__)
 
 
 class ChatConfig(BaseModel):
-    """Configuration for chat web interface with validation"""
+    """
+    Configuration for chat web interface with validation
+
+    Public Methods
+    --------------
+    get_mcp_url()
+        Get formatted MCP URL with /mcp/ path
+
+    Private Methods
+    --------------
+    validate_api_key(v)
+        Validate Anthropic API key is present and valid format
+    validate_mcp_url(v)
+        Validate MCP server URL format
+    validate_rate_limits()
+        Validate rate limits are sensible
+    """
 
     model_config = {"frozen": True}  # Make immutable
 
@@ -89,6 +105,13 @@ class ChatConfig(BaseModel):
         )
     )
 
+    def get_mcp_url(self) -> str:
+        """Get formatted MCP URL with /mcp/ path"""
+        base_url = self.mcp_server_url.rstrip("/")
+        if not base_url.endswith(MCP_DEFAULTS.MCP_PATH):
+            base_url = base_url + MCP_DEFAULTS.MCP_PATH
+        return base_url + "/"
+
     @field_validator("anthropic_api_key")
     @classmethod
     def validate_api_key(cls, v: str) -> str:
@@ -124,16 +147,27 @@ class ChatConfig(BaseModel):
             raise ValueError("Daily rate limit must be >= hourly rate limit")
         return self
 
-    def get_mcp_url(self) -> str:
-        """Get formatted MCP URL with /mcp/ path"""
-        base_url = self.mcp_server_url.rstrip("/")
-        if not base_url.endswith(MCP_DEFAULTS.MCP_PATH):
-            base_url = base_url + MCP_DEFAULTS.MCP_PATH
-        return base_url + "/"
-
 
 class RateLimiter:
-    """In-memory rate limiter for IP-based throttling"""
+    """
+    In-memory rate limiter for IP-based throttling
+
+    Public Methods
+    --------------
+    check_limit(ip)
+        Check if IP has exceeded rate limits
+    get_remaining_requests(ip)
+        Get remaining requests for an IP address
+    record_request(ip)
+        Record a request for rate limiting
+
+    Private Methods
+    --------------
+    _clean_old_timestamps(timestamps, cutoff)
+        Remove timestamps older than cutoff
+    _get_counts(ip)
+        Get current request counts for an IP, cleaning old timestamps
+    """
 
     def __init__(self):
         self.chat_config = get_chat_config()
@@ -141,29 +175,9 @@ class RateLimiter:
             lambda: {"hour": [], "day": []}
         )
 
-    def _clean_old_timestamps(
-        self, timestamps: List[datetime], cutoff: datetime
-    ) -> List[datetime]:
-        """Remove timestamps older than cutoff"""
-        return [ts for ts in timestamps if ts > cutoff]
-
     def check_limit(self, ip: str) -> Tuple[bool, str]:
         """Check if IP has exceeded rate limits"""
-        now = datetime.now()
-        hour_ago = now - timedelta(hours=1)
-        day_ago = now - timedelta(days=1)
-
-        # Clean old timestamps
-        self.store[ip]["hour"] = self._clean_old_timestamps(
-            self.store[ip]["hour"], hour_ago
-        )
-        self.store[ip]["day"] = self._clean_old_timestamps(
-            self.store[ip]["day"], day_ago
-        )
-
-        # Check limits
-        hour_count = len(self.store[ip]["hour"])
-        day_count = len(self.store[ip]["day"])
+        hour_count, day_count = self._get_counts(ip)
 
         if hour_count >= self.chat_config.rate_limit_per_hour:
             return False, (
@@ -179,15 +193,86 @@ class RateLimiter:
 
         return True, ""
 
+    def get_remaining_requests(self, ip: str) -> Dict[str, int]:
+        """
+        Get remaining requests for an IP address.
+
+        Cleans old timestamps and returns both hourly and daily remaining counts.
+
+        Parameters
+        ----------
+        ip : str
+            Client IP address
+
+        Returns
+        -------
+        Dict[str, int]
+            Dictionary with 'per_hour' and 'per_day' remaining counts
+        """
+        hour_count, day_count = self._get_counts(ip)
+
+        return {
+            "per_hour": self.chat_config.rate_limit_per_hour - hour_count,
+            "per_day": self.chat_config.rate_limit_per_day - day_count,
+        }
+
     def record_request(self, ip: str) -> None:
         """Record a request for rate limiting"""
         now = datetime.now()
         self.store[ip]["hour"].append(now)
         self.store[ip]["day"].append(now)
 
+    def _clean_old_timestamps(
+        self, timestamps: List[datetime], cutoff: datetime
+    ) -> List[datetime]:
+        """Remove timestamps older than cutoff"""
+        return [ts for ts in timestamps if ts > cutoff]
+
+    def _get_counts(self, ip: str) -> Tuple[int, int]:
+        """
+        Get current request counts for an IP, cleaning old timestamps.
+
+        Parameters
+        ----------
+        ip : str
+            Client IP address
+
+        Returns
+        -------
+        Tuple[int, int]
+            (hour_count, day_count) - number of requests in last hour and day
+        """
+        now = datetime.now()
+        hour_ago = now - timedelta(hours=1)
+        day_ago = now - timedelta(days=1)
+
+        # Clean old timestamps
+        self.store[ip]["hour"] = self._clean_old_timestamps(
+            self.store[ip]["hour"], hour_ago
+        )
+        self.store[ip]["day"] = self._clean_old_timestamps(
+            self.store[ip]["day"], day_ago
+        )
+
+        # Count remaining
+        return len(self.store[ip]["hour"]), len(self.store[ip]["day"])
+
 
 class CostTracker:
-    """Track daily API costs"""
+    """
+    Track daily API costs
+
+    Public Methods
+    --------------
+    check_budget()
+        Check if daily budget has been exceeded
+    estimate_cost(usage)
+        Estimate cost based on token usage
+    get_stats()
+        Get current cost stats
+    record_cost(usage)
+        Record estimated cost
+    """
 
     # Claude Sonnet 4.5 pricing (as of Dec 2024)
     INPUT_COST_PER_MILLION = 3.0
@@ -218,12 +303,6 @@ class CostTracker:
 
         return input_cost + output_cost
 
-    def record_cost(self, usage: Dict[str, int]) -> None:
-        """Record estimated cost"""
-        cost = self.estimate_cost(usage)
-        self.cost += cost
-        logger.info(f"Request cost: ${cost:.4f}, total today: ${self.cost:.4f}")
-
     def get_stats(self) -> Dict[str, float]:
         """Get current cost stats"""
         today = datetime.now().date().isoformat()
@@ -238,9 +317,22 @@ class CostTracker:
             "budget_remaining": round(self.chat_config.daily_budget - cost_today, 2),
         }
 
+    def record_cost(self, usage: Dict[str, int]) -> None:
+        """Record estimated cost"""
+        cost = self.estimate_cost(usage)
+        self.cost += cost
+        logger.info(f"Request cost: ${cost:.4f}, total today: ${self.cost:.4f}")
+
 
 class ClaudeClient:
-    """Client for Claude API with MCP integration"""
+    """
+    Client for Claude API with MCP integration
+
+    Public Methods
+    --------------
+    chat(user_message)
+        Send a message to Claude with MCP tools
+    """
 
     def __init__(self):
         self.chat_config = get_chat_config()
