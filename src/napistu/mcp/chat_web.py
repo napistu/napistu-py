@@ -5,8 +5,10 @@ This module supports the REST API endpoints for the landing page chat interface.
 Similar to client.py which provides MCP client utilities, this provides chat utilities.
 """
 
+import asyncio
 import logging
 import os
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
@@ -244,7 +246,7 @@ class ClaudeClient:
         self.chat_config = get_chat_config()
         self.client = anthropic.Anthropic(api_key=self.chat_config.anthropic_api_key)
 
-    def chat(self, user_message: str) -> Dict:
+    async def chat(self, user_message: str) -> Dict:
         """
         Send a message to Claude with MCP tools.
 
@@ -254,30 +256,57 @@ class ClaudeClient:
         Returns:
             Dict with 'response' (str) and 'usage' (dict)
         """
-        # Load the production url or local host for within server communication
-        mcp_url = self.chat_config.get_mcp_url()
+        logger.info(f"💬 Starting chat for message: {user_message[:50]}...")
 
-        response = self.client.beta.messages.create(
-            model=self.chat_config.claude_model,
-            max_tokens=self.chat_config.max_tokens,
-            system=CHAT_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_message}],
-            mcp_servers=[{"type": "url", "url": mcp_url, "name": "napistu-mcp"}],
-            extra_headers={"anthropic-beta": "mcp-client-2025-04-04"},
-        )
+        # Get MCP server URL from config
+        mcp_url = self.chat_config.mcp_server_url
+        logger.info(f"🔧 MCP Server URL: {mcp_url}")
+        logger.info("⚠️  TESTING WITHOUT MCP - MCP DISABLED")
 
-        # Extract text from response
+        logger.info("📡 Calling Anthropic API (without MCP)...")
+        start_time = time.time()
+
+        # Use asyncio.wait_for to enforce timeout
+        try:
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self.client.beta.messages.create,
+                    model=self.chat_config.claude_model,
+                    max_tokens=self.chat_config.max_tokens,
+                    system=CHAT_SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": user_message}],
+                ),
+                timeout=60.0,  # 60 second timeout
+            )
+        except asyncio.TimeoutError:
+            elapsed = time.time() - start_time
+            logger.error(f"❌ Anthropic API call TIMED OUT after {elapsed:.2f}s")
+            raise RuntimeError(f"Claude API timed out after {elapsed:.2f}s")
+
+        elapsed = time.time() - start_time
+        logger.info(f"✅ Anthropic API responded in {elapsed:.2f}s")
+
+        # Extract response text
         response_text = ""
         for block in response.content:
-            if block.type == "text":
+            if hasattr(block, "text"):
                 response_text += block.text
+
+        logger.info(f"📝 Response length: {len(response_text)} chars")
+
+        # Track usage
+        usage = {
+            "input_tokens": response.usage.input_tokens,
+            "output_tokens": response.usage.output_tokens,
+        }
+
+        logger.info(
+            f"📊 Token usage: {usage['input_tokens']} in / {usage['output_tokens']} out"
+        )
 
         return {
             "response": response_text,
-            "usage": {
-                "input_tokens": response.usage.input_tokens,
-                "output_tokens": response.usage.output_tokens,
-            },
+            "usage": usage,
         }
 
 
