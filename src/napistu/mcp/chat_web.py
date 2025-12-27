@@ -246,7 +246,7 @@ class ClaudeClient:
         self.chat_config = get_chat_config()
         self.client = anthropic.Anthropic(api_key=self.chat_config.anthropic_api_key)
 
-    def chat(self, user_message: str) -> Dict:
+    async def chat(self, user_message: str) -> Dict:
         """
         Send a message to Claude with MCP tools.
 
