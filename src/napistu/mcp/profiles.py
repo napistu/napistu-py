@@ -41,7 +41,7 @@ EXECUTION_PROFILE = ServerProfile(
 DOCS_PROFILE = ServerProfile(
     server_name="napistu-docs",
     enable_documentation=True,
-    enable_codebase=True,
+    enable_codebase=False,  # while debugging, disable codebase speed up server initialization
     enable_tutorials=True,
     enable_chat=True,
 )
