@@ -200,9 +200,16 @@ async def handle_mcp_test(request: Request) -> JSONResponse:
 async def handle_stats(request: Request) -> JSONResponse:
     """Get current usage stats"""
     try:
+        # Get client IP for rate limit calculations
+        ip = request.client.host
+
         chat_config = get_chat_config()
         cost_tracker = get_cost_tracker()
+        rate_limiter = get_rate_limiter()
         cost_stats = cost_tracker.get_stats()
+
+        # Get remaining requests for this IP
+        remaining = rate_limiter.get_remaining_requests(ip)
 
         stats = {
             "budget": {
@@ -210,11 +217,13 @@ async def handle_stats(request: Request) -> JSONResponse:
                 "spent_today": cost_stats["cost_today"],
                 "remaining": cost_stats["budget_remaining"],
             },
-            "rate_limits": {
-                "per_hour": chat_config.rate_limit_per_hour,
-                "per_day": chat_config.rate_limit_per_day,
-            },
+            "rate_limits": remaining,  # Now just uses the method directly
         }
+
+        logger.info(
+            f"Stats for IP {ip}: {remaining['per_hour']} remaining/hour, "
+            f"{remaining['per_day']} remaining/day"
+        )
 
         return JSONResponse(content=stats)
     except Exception as e:
