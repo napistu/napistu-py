@@ -18,8 +18,11 @@ from napistu.constants import (
     SBML_DFS,
     SBML_DFS_SCHEMA,
     SBOTERM_NAMES,
+    SCHEMA_DEFS,
 )
-from napistu.modify.constants import VALID_ANNOTATION_TYPES
+from napistu.modify.constants import CURATION_DEFS, VALID_ANNOTATION_TYPES
+
+# Public functions (alphabetical order)
 
 
 def curate_sbml_dfs(
@@ -66,9 +69,9 @@ def curate_sbml_dfs(
     curation_dict = read_pathway_curations(curation_dir)
 
     # remove existing entities
-    if "remove" in curation_dict.keys():
+    if CURATION_DEFS.REMOVE in curation_dict.keys():
         invalid_entities_dict = _find_invalid_entities(
-            sbml_dfs, curation_dict["remove"]
+            sbml_dfs, curation_dict[CURATION_DEFS.REMOVE]
         )
         if verbose:
             print(
@@ -98,36 +101,60 @@ def curate_sbml_dfs(
     return sbml_dfs
 
 
-def read_pathway_curations(curation_dir: str) -> dict[str, pd.DataFrame]:
+def format_curated_entities(
+    entity_type: str,
+    new_curated_entities: dict[Any, pd.DataFrame],
+    new_entities: dict[str, pd.DataFrame],
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    curation_id: str = "Calico curations",
+) -> pd.DataFrame:
     """
-    Read Pathway Curations
+    Format Curated Entities
 
-    Load curations that were prepared by parse_manual_annotations.Rmd
+    Convert entities from the curation format to the stucture of SBML_dfs tables
 
     Params
     ------
-    curation_dir: str
-        Directory containing annotations generated using parse_manual_annotation.Rmd
+    entity_type: str
+        The type of entity to update (e.g., reactions, species, ...)
+    new_curated_entities: dict
+        Curation pd.DataFrames generated using read_pathway_curations
+    new_entities: dict
+        Curations formatted as sbml_dfs_core.SBML_dfs tables
+    sbml_dfs: sbml_dfs_core.SBML_dfs
+        A pathway model
+    curation_id: str
+        Name to use as a pathway id in source.Source objects
 
     Returns
     -------
-    curations: dict
-        Dictionary containing different types of annoations
+    new_entity_df: pd.DataFrame
+        Input for entity_type formatted as an SBML_dfs table
+
     """
-    with open_fs(curation_dir) as curation_fs:
-        curation_files = curation_fs.listdir(".")
+    _validate_format_curated_entities_inputs(
+        entity_type, new_curated_entities, new_entities, sbml_dfs, curation_id
+    )
 
-        annotations_types = set(curation_files).intersection(
-            {x + ".tsv" for x in VALID_ANNOTATION_TYPES}
-        )
+    type_schema = SBML_DFS_SCHEMA.SCHEMA[entity_type]
 
-        curation_dict = {}
-        for annotation_file in annotations_types:
-            with curation_fs.open(annotation_file) as f:
-                key = os.path.splitext(annotation_file)[0]
-                curation_dict[key] = pd.read_csv(f, sep="\t")
+    new_curated_entities = _add_entity_labels(
+        new_curated_entities, entity_type, type_schema
+    )
+    new_curated_entities = _add_entity_sources(
+        new_curated_entities, type_schema, curation_id
+    )
+    new_curated_entities = _add_entity_primary_keys(
+        new_curated_entities, entity_type, type_schema, sbml_dfs
+    )
+    new_curated_entities = _add_entity_foreign_keys(
+        new_curated_entities, entity_type, type_schema, new_entities, sbml_dfs
+    )
+    new_curated_entities = _add_entity_identifiers(new_curated_entities, type_schema)
 
-        return curation_dict
+    return new_curated_entities.set_index(type_schema[SCHEMA_DEFS.PK])[
+        type_schema[SCHEMA_DEFS.VARS]
+    ]
 
 
 def format_curations(
@@ -152,7 +179,9 @@ def format_curations(
 
     """
 
-    new_entity_types = set(curation_dict.keys()).difference({"foci", "remove"})
+    new_entity_types = set(curation_dict.keys()).difference(
+        {CURATION_DEFS.FOCI, CURATION_DEFS.REMOVE}
+    )
 
     if SBML_DFS.COMPARTMENTS in new_entity_types:
         raise NotImplementedError("logic for adding compartments does not exist")
@@ -202,6 +231,227 @@ def format_curations(
     return new_entities
 
 
+def read_pathway_curations(curation_dir: str) -> dict[str, pd.DataFrame]:
+    """
+    Read Pathway Curations
+
+    Load curations that were prepared by parse_manual_annotations.Rmd
+
+    Params
+    ------
+    curation_dir: str
+        Directory containing annotations generated using parse_manual_annotation.Rmd
+
+    Returns
+    -------
+    curations: dict
+        Dictionary containing different types of annoations
+    """
+    with open_fs(curation_dir) as curation_fs:
+        curation_files = curation_fs.listdir(".")
+
+        annotations_types = set(curation_files).intersection(
+            {x + ".tsv" for x in VALID_ANNOTATION_TYPES}
+        )
+
+        curation_dict = {}
+        for annotation_file in annotations_types:
+            with curation_fs.open(annotation_file) as f:
+                key = os.path.splitext(annotation_file)[0]
+                curation_dict[key] = pd.read_csv(f, sep="\t")
+
+        return curation_dict
+
+
+# Private functions (alphabetical order)
+
+
+def _add_entity_foreign_keys(
+    new_curated_entities: pd.DataFrame,
+    entity_type: str,
+    type_schema: dict[str, Any],
+    new_entities: dict[str, pd.DataFrame],
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+) -> pd.DataFrame:
+    """Add foreign key columns to curated entities."""
+    if SCHEMA_DEFS.FK not in type_schema:
+        return new_curated_entities
+
+    # find primary keys corresponding to foreign keys, including both existing and newly added entities
+    for fk in type_schema[SCHEMA_DEFS.FK]:
+        # find the table that the fk belongs to
+        fk_of = [
+            x for x, y in SBML_DFS_SCHEMA.SCHEMA.items() if y[SCHEMA_DEFS.PK] == fk
+        ][0]
+
+        # pull up referenced entities table, including newly added entities
+        if fk_of in new_entities.keys():
+            ref_entities = pd.concat([new_entities[fk_of], getattr(sbml_dfs, fk_of)])
+        else:
+            ref_entities = getattr(sbml_dfs, fk_of)
+        key_ref_schema = SBML_DFS_SCHEMA.SCHEMA[fk_of]
+        # add primary key by joining on label
+        new_curated_entities = new_curated_entities.merge(
+            ref_entities[key_ref_schema[SCHEMA_DEFS.LABEL]].reset_index(),
+            how="left",
+        )
+
+        # check that all fks were found
+        failed_join_df = new_curated_entities[
+            new_curated_entities[key_ref_schema[SCHEMA_DEFS.PK]].isna()
+        ]
+        if failed_join_df.shape[0] != 0:
+            if SCHEMA_DEFS.LABEL in type_schema:
+                fail_str = "\n".join(failed_join_df[type_schema[SCHEMA_DEFS.LABEL]])
+            else:
+                fail_str = "\n".join(failed_join_df["label"])
+            raise ValueError(
+                f"{failed_join_df.shape[0]} merges of {fk_of} "
+                f"failed when updating the {entity_type} table:\n{fail_str}"
+            )
+
+    return new_curated_entities
+
+
+def _add_entity_identifiers(
+    new_curated_entities: pd.DataFrame,
+    type_schema: dict[str, Any],
+) -> pd.DataFrame:
+    """Add identifier column to curated entities."""
+    if SCHEMA_DEFS.ID not in type_schema:
+        return new_curated_entities
+
+    ids = list()
+    for i in range(0, new_curated_entities.shape[0]):
+        new_entity_series = new_curated_entities.iloc[i]
+
+        is_identified = not new_entity_series.isna()[CURATION_DEFS.URI]
+        if is_identified:
+            id = [
+                identifiers.format_uri(new_entity_series[CURATION_DEFS.URI], bqb=BQB.IS)
+            ]
+        else:
+            id = [
+                {
+                    IDENTIFIERS.ONTOLOGY: "custom_species",
+                    IDENTIFIERS.IDENTIFIER: new_entity_series[
+                        type_schema[SCHEMA_DEFS.PK]
+                    ],
+                    IDENTIFIERS.BQB: BQB.IS,
+                }
+            ]
+        # stub the id using the entity pk
+        ids.append(identifiers.Identifiers(id))
+
+    new_curated_entities[type_schema[SCHEMA_DEFS.ID]] = ids
+    return new_curated_entities
+
+
+def _add_entity_labels(
+    new_curated_entities: pd.DataFrame,
+    entity_type: str,
+    type_schema: dict[str, Any],
+) -> pd.DataFrame:
+    """Add label column to curated entities."""
+    if SCHEMA_DEFS.LABEL in type_schema:
+        new_curated_entities[type_schema[SCHEMA_DEFS.LABEL]] = new_curated_entities[
+            entity_type
+        ]
+    else:
+        # add a temporary label to improve error messages
+        new_curated_entities["label"] = [
+            ", ".join(new_curated_entities.select_dtypes(include=["object"]).iloc[i])
+            for i in range(0, new_curated_entities.shape[0])
+        ]
+    return new_curated_entities
+
+
+def _add_entity_primary_keys(
+    new_curated_entities: pd.DataFrame,
+    entity_type: str,
+    type_schema: dict[str, Any],
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+) -> pd.DataFrame:
+    """Add primary key column to curated entities."""
+    max_pk = max(
+        sbml_dfs_utils.id_formatter_inv(getattr(sbml_dfs, entity_type).index.tolist())
+    )
+    if max_pk is np.nan:
+        max_pk = int(-1)
+
+    pk_attr = type_schema[SCHEMA_DEFS.PK]
+    new_curated_entities[pk_attr] = sbml_dfs_utils.id_formatter(
+        range(
+            max_pk + 1,
+            max_pk + new_curated_entities.shape[0] + 1,
+        ),
+        pk_attr,
+    )
+    return new_curated_entities
+
+
+def _add_entity_sources(
+    new_curated_entities: pd.DataFrame,
+    type_schema: dict[str, Any],
+    curation_id: str,
+) -> pd.DataFrame:
+    """Add source column to curated entities."""
+    if SCHEMA_DEFS.SOURCE in type_schema:
+        new_curated_entities[CURATION_DEFS.CURATOR] = new_curated_entities[
+            CURATION_DEFS.CURATOR
+        ].fillna(CURATION_DEFS.UNKNOWN)
+        # convert curator entries to Sources
+        new_curated_entities[type_schema[SCHEMA_DEFS.SOURCE]] = [
+            source.Source(
+                pd.DataFrame(
+                    {"model": x, "name": "custom - " + x, "pathway_id": curation_id},
+                    index=[0],
+                )
+            )
+            for x in new_curated_entities[CURATION_DEFS.CURATOR]
+        ]
+    return new_curated_entities
+
+
+def _expand_entities_by_fks(sbml_dfs: sbml_dfs_core.SBML_dfs, pk_dict: dict) -> dict:
+    """
+    Expand Entities By Foreign Keys
+
+    Starting with a dictionary of foreign keys, add all primary keys that are defined by these foreign keys
+
+    Params
+    ------
+    sbml_dfs: sbml_dfs_core.SBML_dfs
+        A pathway model
+    pk_dict: dict
+        Dictionary where keys are types of primary keys in sbml_dfs
+
+    Returns
+    -------
+    pk_dict: dict
+        Input where additional primary keys may have been added
+
+    """
+
+    for tab in SBML_DFS_SCHEMA.SCHEMA.keys():
+        tab_df = getattr(sbml_dfs, tab)
+        tab_schema = SBML_DFS_SCHEMA.SCHEMA[tab]
+        pk = tab_schema[SCHEMA_DEFS.PK]
+
+        if SCHEMA_DEFS.FK in tab_schema:
+            # check for foreign keys which are defined by primary keys
+            # add these to the pk_dict
+            for fk in tab_schema[SCHEMA_DEFS.FK]:
+                if fk in pk_dict.keys():
+                    fks = tab_df[tab_df[fk].isin(pk_dict[fk])]
+                    if pk not in pk_dict.keys():
+                        pk_dict[pk] = set()
+                    for x in fks.index.tolist():
+                        pk_dict[pk].add(x)
+
+    return pk_dict
+
+
 def _find_invalid_entities(
     sbml_dfs: sbml_dfs_core.SBML_dfs, invalid_entities: pd.DataFrame
 ) -> dict[str, set]:
@@ -228,29 +478,33 @@ def _find_invalid_entities(
     """
 
     # find tables where removal will occur (or at least start)
-    unique_tables = invalid_entities["table"].unique().tolist()
-    invalid_tables = [x for x in unique_tables if x not in sbml_dfs.schema.keys()]
+    unique_tables = invalid_entities[CURATION_DEFS.TABLE].unique().tolist()
+    invalid_tables = [
+        x for x in unique_tables if x not in SBML_DFS_SCHEMA.SCHEMA.keys()
+    ]
 
     if len(invalid_tables) > 0:
         raise ValueError(
             f"{', '.join(invalid_tables)} are not valid table names; "
-            f"valid tables are {', '.join(sbml_dfs.schema.keys())}"
+            f"valid tables are {', '.join(SBML_DFS_SCHEMA.SCHEMA.keys())}"
         )
 
     invalid_entities_dict = dict()  # type: dict[str, set]
     for tab in unique_tables:
-        tab_schema = sbml_dfs.schema[tab]
-        tab_vars = tab_schema["vars"] + [tab_schema["pk"]]
+        tab_schema = SBML_DFS_SCHEMA.SCHEMA[tab]
+        tab_vars = tab_schema[SCHEMA_DEFS.VARS] + [tab_schema[SCHEMA_DEFS.PK]]
 
         # pull out the annotations that start with the table being evaluated
-        remove_df = invalid_entities[invalid_entities["table"] == tab]
+        remove_df = invalid_entities[invalid_entities[CURATION_DEFS.TABLE] == tab]
         if not isinstance(remove_df, pd.DataFrame):
             raise TypeError(
                 f"remove_df must be a pandas DataFrame, but got {type(remove_df).__name__}"
             )
 
         invalid_remove_vars = (
-            remove_df["variable"][~remove_df["variable"].isin(tab_vars)]
+            remove_df[CURATION_DEFS.VARIABLE][
+                ~remove_df[CURATION_DEFS.VARIABLE].isin(tab_vars)
+            ]
             .unique()
             .tolist()
         )
@@ -263,30 +517,32 @@ def _find_invalid_entities(
         # find the pk corresponding to each removal annotation
 
         tab_df = getattr(sbml_dfs, tab)
+        pk_attr = tab_schema[SCHEMA_DEFS.PK]
 
-        invalid_entities_dict[tab_schema["pk"]] = set()
+        invalid_entities_dict[pk_attr] = set()
         for i in range(0, remove_df.shape[0]):
             remove_series = remove_df.iloc[i]
 
-            if remove_series["variable"] == tab_schema["pk"]:
+            if remove_series[CURATION_DEFS.VARIABLE] == pk_attr:
                 # check that pk exists and then add to invalid entities
-                if remove_series["remove"] not in tab_df.index:
+                if remove_series[CURATION_DEFS.REMOVE] not in tab_df.index:
                     raise ValueError(
-                        f"{remove_series['remove']} was not found in the index of {tab}"
+                        f"{remove_series[CURATION_DEFS.REMOVE]} was not found in the index of {tab}"
                     )
-                invalid_entities_dict[tab_schema["pk"]].add(remove_series["remove"])
+                invalid_entities_dict[pk_attr].add(remove_series[CURATION_DEFS.REMOVE])
             else:
                 # lookup by
                 matching_entity = tab_df[
-                    tab_df[remove_series["variable"]] == remove_series["remove"]
+                    tab_df[remove_series[CURATION_DEFS.VARIABLE]]
+                    == remove_series[CURATION_DEFS.REMOVE]
                 ]
 
                 if matching_entity.shape[0] == 0:
                     raise ValueError(
-                        f"{remove_series['remove']} was not found in the {remove_series['variable']} column of {tab}"
+                        f"{remove_series[CURATION_DEFS.REMOVE]} was not found in the {remove_series[CURATION_DEFS.VARIABLE]} column of {tab}"
                     )
 
-                [invalid_entities_dict[tab_schema["pk"]].add(x) for x in matching_entity.index.tolist()]  # type: ignore
+                [invalid_entities_dict[pk_attr].add(x) for x in matching_entity.index.tolist()]  # type: ignore
 
     # iterate through primary key -> foreign key relationships
     # to define additional entities which should be removed based on
@@ -308,225 +564,49 @@ def _find_invalid_entities(
     return invalid_entities_dict
 
 
-def _expand_entities_by_fks(sbml_dfs: sbml_dfs_core.SBML_dfs, pk_dict: dict) -> dict:
-    """
-    Expand Entities By Foreign Keys
+def _format_explicit_reaction_species(
+    curation_dict: dict[str, pd.DataFrame],
+) -> pd.DataFrame | None:
+    """Format reaction species which are deirectly defined among curated species."""
 
-    Starting with a dictionary of foreign keys, add all primary keys that are defined by these foreign keys
+    if SBML_DFS.REACTION_SPECIES not in curation_dict.keys():
+        print("No explicitly curated reaction species")
+        return None
 
-    Params
-    ------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
-        A pathway model
-    pk_dict: dict
-        Dictionary where keys are types of primary keys in sbml_dfs
+    # convert from sbo_term_names to sbo_term
+    mini_sbo_terms_df = pd.DataFrame(MINI_SBO_FROM_NAME, index=[SBML_DFS.SBO_TERM]).T
 
-    Returns
-    -------
-    pk_dict: dict
-        Input where additional primary keys may have been added
-
-    """
-
-    for tab in sbml_dfs.schema.keys():
-        tab_df = getattr(sbml_dfs, tab)
-        tab_schema = sbml_dfs.schema[tab]
-        pk = tab_schema["pk"]
-
-        if "fk" in tab_schema.keys():
-            # check for foreign keys which are defined by primary keys
-            # add these to the pk_dict
-            for fk in tab_schema["fk"]:
-                if fk in pk_dict.keys():
-                    fks = tab_df[tab_df[fk].isin(pk_dict[fk])]
-                    if pk not in pk_dict.keys():
-                        pk_dict[pk] = set()
-                    for x in fks.index.tolist():
-                        pk_dict[pk].add(x)
-
-    return pk_dict
-
-
-def _remove_entities(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, pk_dict: dict
-) -> sbml_dfs_core.SBML_dfs:
-    """
-    Remove Entities
-
-    Remove entities whose primary keys are in pk_dict
-
-    Params
-    ------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
-        A pathway model
-    pk_dict: dict
-        Dictionary where keys are types of primary keys in sbml_dfs
-
-    Returns
-    -------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
-        Input with some entities removed
-
-    """
-
-    for tab in sbml_dfs.schema.keys():
-        tab_df = getattr(sbml_dfs, tab)
-        tab_schema = sbml_dfs.schema[tab]
-
-        if tab_schema["pk"] in pk_dict.keys():
-            updated_table = tab_df[~tab_df.index.isin(pk_dict[tab_schema["pk"]])]
-            setattr(sbml_dfs, tab, updated_table)
-
-    return sbml_dfs
-
-
-def format_curated_entities(
-    entity_type: str,
-    new_curated_entities: dict[Any, pd.DataFrame],
-    new_entities: dict[str, pd.DataFrame],
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
-    curation_id: str = "Calico curations",
-) -> pd.DataFrame:
-    """
-    Format Curated Entities
-
-    Convert entities from the curation format to the stucture of SBML_dfs tables
-
-    Params
-    ------
-    entity_type: str
-        The type of entity to update (e.g., reactions, species, ...)
-    new_curated_entities: dict
-        Curation pd.DataFrames generated using read_pathway_curations
-    new_entities: dict
-        Curations formatted as sbml_dfs_core.SBML_dfs tables
-    sbml_dfs: sbml_dfs_core.SBML_dfs
-        A pathway model
-    curation_id: str
-        Name to use as a pathway id in source.Source objects
-
-    Returns
-    -------
-    new_entity_df: pd.DataFrame
-        Input for entity_type formatted as an SBML_dfs table
-
-    """
-
-    if not isinstance(entity_type, str):
-        raise TypeError(f"entity_type was a {type(entity_type)} and must be a str")
-    if not isinstance(new_curated_entities, pd.DataFrame):
-        raise TypeError(
-            f"new_curated_entities was a {type(new_curated_entities)} and must be a pd.DataFrame"
+    augmented_reaction_species = (
+        curation_dict[SBML_DFS.REACTION_SPECIES]
+        .rename({SBML_DFS.REACTION_SPECIES: SBML_DFS.SC_NAME}, axis=1)
+        .merge(
+            mini_sbo_terms_df,
+            left_on=CURATION_DEFS.SBO_TERM_NAME,
+            right_index=True,
+            how="left",
         )
-    if not isinstance(new_entities, dict):
-        raise TypeError(f"new_entities was a {type(new_entities)} and must be a dict")
-    if not isinstance(sbml_dfs, sbml_dfs_core.SBML_dfs):
-        raise TypeError(
-            f"sbml_dfs was a {type(sbml_dfs)} and must be an sbml_dfs_core.SBML_dfs"
-        )
-    if not isinstance(curation_id, str):
-        raise TypeError(f"curation_id was a {type(curation_id)} and must be a str")
-
-    type_schema = sbml_dfs.schema[entity_type]
-
-    # name the entity
-    if "label" in type_schema.keys():
-        new_curated_entities[type_schema["label"]] = new_curated_entities[entity_type]
-    else:
-        # add a temporary label to improve error messages
-        new_curated_entities["label"] = [
-            ", ".join(new_curated_entities.select_dtypes(include=["object"]).iloc[i])
-            for i in range(0, new_curated_entities.shape[0])
-        ]
-
-    if "source" in type_schema.keys():
-        new_curated_entities["curator"] = new_curated_entities["curator"].fillna(
-            "unknown"
-        )
-        # convert curator entries to Sources
-        new_curated_entities[type_schema["source"]] = [
-            source.Source(
-                pd.DataFrame(
-                    {"model": x, "name": "custom - " + x, "pathway_id": curation_id},
-                    index=[0],
-                )
-            )
-            for x in new_curated_entities["curator"]
-        ]
-
-    # add the primary key
-    max_pk = max(
-        sbml_dfs_utils.id_formatter_inv(getattr(sbml_dfs, entity_type).index.tolist())
-    )
-    if max_pk is np.nan:
-        max_pk = int(-1)
-
-    new_curated_entities[type_schema["pk"]] = sbml_dfs_utils.id_formatter(
-        range(
-            max_pk + 1,
-            max_pk + new_curated_entities.shape[0] + 1,
-        ),
-        type_schema["pk"],
     )
 
-    # add foreign keys if they exist
+    # invalid terms
+    invalid_terms_df = augmented_reaction_species[
+        augmented_reaction_species[SBML_DFS.SBO_TERM].isna()
+    ]
+    if invalid_terms_df.shape[0] != 0:
+        invalid_terms = invalid_terms_df[CURATION_DEFS.SBO_TERM_NAME].unique().tolist()
+        raise ValueError(
+            f'{", ".join(invalid_terms)} are invalid entries for "{CURATION_DEFS.SBO_TERM_NAME}", '
+            f'valid entries are {", ".join(mini_sbo_terms_df.index.tolist())}'
+        )
 
-    if "fk" in type_schema.keys():
-        # find primary keys corresponding to foreign keys, including both existing and newly added entities
-        for fk in type_schema["fk"]:
-            # find the table that the fk belongs to
-            fk_of = [x for x, y in sbml_dfs.schema.items() if y["pk"] == fk][0]
+    # there currently isn't a good way to encode evidence and curator annotations
+    # as source objects for reaction_species since they lack a source object
+    # to date they have had the same source as their reaction
+    augmented_reaction_species = augmented_reaction_species.drop(
+        [CURATION_DEFS.SBO_TERM_NAME, CURATION_DEFS.EVIDENCE, CURATION_DEFS.CURATOR],
+        axis=1,
+    )
 
-            # pull up referenced entities table, including newly added entities
-            if fk_of in new_entities.keys():
-                ref_entities = pd.concat(
-                    [new_entities[fk_of], getattr(sbml_dfs, fk_of)]
-                )
-            else:
-                ref_entities = getattr(sbml_dfs, fk_of)
-            key_ref_schema = sbml_dfs.schema[fk_of]
-            # add primary key by joining on label
-            new_curated_entities = new_curated_entities.merge(
-                ref_entities[key_ref_schema["label"]].reset_index(), how="left"
-            )
-
-            # check that all fks were found
-            failed_join_df = new_curated_entities[
-                new_curated_entities[key_ref_schema["pk"]].isna()
-            ]
-            if failed_join_df.shape[0] != 0:
-                if "label" in type_schema.keys():
-                    fail_str = "\n".join(failed_join_df[type_schema["label"]])
-                else:
-                    fail_str = "\n".join(failed_join_df["label"])
-                raise ValueError(
-                    f"{failed_join_df.shape[0]} merges of {fk_of} "
-                    f"failed when updating the {entity_type} table:\n{fail_str}"
-                )
-
-    # add id where applicable
-    if "id" in type_schema.keys():
-        ids = list()
-        for i in range(0, new_curated_entities.shape[0]):
-            new_entity_series = new_curated_entities.iloc[i]
-
-            is_identified = not new_entity_series.isna()["uri"]
-            if is_identified:
-                id = [identifiers.format_uri(new_entity_series["uri"], bqb=BQB.IS)]
-            else:
-                id = [
-                    {
-                        IDENTIFIERS.ONTOLOGY: "custom_species",
-                        IDENTIFIERS.IDENTIFIER: new_entity_series[type_schema["pk"]],
-                        IDENTIFIERS.BQB: BQB.IS,
-                    }
-                ]
-            # stub the id using the entity pk
-            ids.append(identifiers.Identifiers(id))
-
-        new_curated_entities[type_schema["id"]] = ids
-
-    return new_curated_entities.set_index(type_schema["pk"])[type_schema["vars"]]
+    return augmented_reaction_species
 
 
 def _format_implicit_reaction_species(
@@ -588,40 +668,59 @@ def _format_implicit_reaction_species(
     return pd.concat(reaction_species)
 
 
-def _format_explicit_reaction_species(
-    curation_dict: dict[str, pd.DataFrame],
-) -> pd.DataFrame | None:
-    """Format reaction species which are deirectly defined among curated species."""
+def _remove_entities(
+    sbml_dfs: sbml_dfs_core.SBML_dfs, pk_dict: dict
+) -> sbml_dfs_core.SBML_dfs:
+    """
+    Remove Entities
 
-    if SBML_DFS.REACTION_SPECIES not in curation_dict.keys():
-        print("No explicitly curated reaction species")
-        return None
+    Remove entities whose primary keys are in pk_dict
 
-    # convert from sbo_term_names to sbo_term
-    mini_sbo_terms_df = pd.DataFrame(MINI_SBO_FROM_NAME, index=[SBML_DFS.SBO_TERM]).T
+    Params
+    ------
+    sbml_dfs: sbml_dfs_core.SBML_dfs
+        A pathway model
+    pk_dict: dict
+        Dictionary where keys are types of primary keys in sbml_dfs
 
-    augmented_reaction_species = (
-        curation_dict[SBML_DFS.REACTION_SPECIES]
-        .rename({SBML_DFS.REACTION_SPECIES: SBML_DFS.SC_NAME}, axis=1)
-        .merge(mini_sbo_terms_df, left_on="sbo_term_name", right_index=True, how="left")
-    )
+    Returns
+    -------
+    sbml_dfs: sbml_dfs_core.SBML_dfs
+        Input with some entities removed
 
-    # invalid terms
-    invalid_terms_df = augmented_reaction_species[
-        augmented_reaction_species[SBML_DFS.SBO_TERM].isna()
-    ]
-    if invalid_terms_df.shape[0] != 0:
-        invalid_terms = invalid_terms_df["sbo_term_name"].unique().tolist()
-        raise ValueError(
-            f'{", ".join(invalid_terms)} are invalid entries for "sbo_term_name", '
-            f'valid entries are {", ".join(mini_sbo_terms_df.index.tolist())}'
+    """
+
+    for tab in SBML_DFS_SCHEMA.SCHEMA.keys():
+        tab_df = getattr(sbml_dfs, tab)
+        tab_schema = SBML_DFS_SCHEMA.SCHEMA[tab]
+        pk_attr = tab_schema[SCHEMA_DEFS.PK]
+
+        if pk_attr in pk_dict.keys():
+            updated_table = tab_df[~tab_df.index.isin(pk_dict[pk_attr])]
+            setattr(sbml_dfs, tab, updated_table)
+
+    return sbml_dfs
+
+
+def _validate_format_curated_entities_inputs(
+    entity_type: str,
+    new_curated_entities: pd.DataFrame,
+    new_entities: dict[str, pd.DataFrame],
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    curation_id: str,
+) -> None:
+    """Validate inputs for format_curated_entities."""
+    if not isinstance(entity_type, str):
+        raise TypeError(f"entity_type was a {type(entity_type)} and must be a str")
+    if not isinstance(new_curated_entities, pd.DataFrame):
+        raise TypeError(
+            f"new_curated_entities was a {type(new_curated_entities)} and must be a pd.DataFrame"
         )
-
-    # there currently isn't a good way to encode evidence and curator annotations
-    # as source objects for reaction_species since they lack a source object
-    # to date they have had the same source as their reaction
-    augmented_reaction_species = augmented_reaction_species.drop(
-        ["sbo_term_name", "evidence", "curator"], axis=1
-    )
-
-    return augmented_reaction_species
+    if not isinstance(new_entities, dict):
+        raise TypeError(f"new_entities was a {type(new_entities)} and must be a dict")
+    if not isinstance(sbml_dfs, sbml_dfs_core.SBML_dfs):
+        raise TypeError(
+            f"sbml_dfs was a {type(sbml_dfs)} and must be an sbml_dfs_core.SBML_dfs"
+        )
+    if not isinstance(curation_id, str):
+        raise TypeError(f"curation_id was a {type(curation_id)} and must be a str")
