@@ -624,6 +624,47 @@ def api_health(production, local, host, port, https):
     asyncio.run(run_api_health())
 
 
+@cli.command()
+@client_config_options
+@verbosity_option
+def api_test_mcp(production, local, host, port, https):
+    """Test MCP server connectivity from chat API."""
+
+    async def run_test():
+        try:
+            config = validate_client_config_flags(local, production, host, port, https)
+            api_url = f"{config.base_url}{API_ENDPOINTS.API}/test-mcp"
+
+            logger.info("🔧 Testing MCP server connectivity")
+            logger.info("=" * 50)
+            logger.info(f"Server URL: {config.base_url}")
+            logger.info("")
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(api_url)
+                response.raise_for_status()
+                result = response.json()
+
+                logger.info("MCP Test Results:")
+                logger.info("-" * 50)
+                logger.info(json.dumps(result, indent=2))
+
+        except click.BadParameter as e:
+            raise click.ClickException(str(e))
+        except httpx.HTTPStatusError as e:
+            error_detail = "Unknown error"
+            try:
+                error_response = e.response.json()
+                error_detail = error_response.get("detail", str(e))
+            except (ValueError, KeyError):
+                error_detail = str(e)
+            raise click.ClickException(f"MCP test failed: {error_detail}")
+        except Exception as e:
+            raise click.ClickException(f"MCP test request failed: {str(e)}")
+
+    asyncio.run(run_test())
+
+
 # Add commands to the CLI
 cli.add_command(server)
 cli.add_command(health)
@@ -634,6 +675,7 @@ cli.add_command(search)
 cli.add_command(chat)
 cli.add_command(api_stats)
 cli.add_command(api_health)
+cli.add_command(api_test_mcp)
 
 
 if __name__ == "__main__":

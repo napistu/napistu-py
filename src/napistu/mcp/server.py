@@ -10,6 +10,7 @@ from typing import Any, Dict
 import uvicorn
 from fastmcp import FastMCP
 from starlette.applications import Starlette
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.routing import Mount, Route
 
 from napistu.mcp import codebase, documentation, execution, health, tutorials
@@ -25,6 +26,24 @@ from napistu.mcp.semantic_search import SemanticSearch
 from napistu.mcp.web_routes import create_chat_app, redirect_to_mcp
 
 logger = logging.getLogger(__name__)
+
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        # Only log MCP endpoint hits
+        if request.url.path.startswith("/mcp"):
+            logger.critical("=" * 80)
+            logger.critical("🔥 MCP ENDPOINT HIT")
+            logger.critical(f"   Method: {request.method}")
+            logger.critical(f"   Path: {request.url.path}")
+            logger.critical(
+                f"   Client: {request.client.host if request.client else 'unknown'}"
+            )
+            logger.critical(f"   Headers: {dict(request.headers)}")
+            logger.critical("=" * 80)
+
+        response = await call_next(request)
+        return response
 
 
 async def initialize_components(profile: ServerProfile) -> None:
@@ -193,6 +212,8 @@ def start_mcp_server(profile_name: str, server_config: MCPServerConfig) -> None:
         )
 
         _log_combined_app_routes(server_config, app, mcp_app, chat_app)
+
+        app.add_middleware(RequestLoggingMiddleware)
 
         # Run the combined app with uvicorn
         uvicorn.run(

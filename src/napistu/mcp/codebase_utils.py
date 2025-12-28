@@ -139,7 +139,7 @@ def find_item_by_name(name: str, items_dict: dict) -> tuple[str, dict] | None:
     return None
 
 
-async def read_read_the_docs(package_toc_url: str, request_delay: float = 2.0) -> dict:
+async def read_read_the_docs(package_toc_url: str, request_delay: float = 0.5) -> dict:
     """
     Recursively parse all modules and submodules starting from the package TOC.
 
@@ -148,7 +148,7 @@ async def read_read_the_docs(package_toc_url: str, request_delay: float = 2.0) -
     package_toc_url : str
         URL of the ReadTheDocs package table of contents page
     request_delay : float, optional
-        Delay in seconds between requests to avoid rate limiting (default: 2.0)
+        Delay in seconds between requests to avoid rate limiting (default: 0.5)
 
     Returns
     -------
@@ -454,7 +454,7 @@ async def _parse_rtd_module_recursive(
     module_url: str,
     visited: Optional[Set[str]] = None,
     docs_dict: Optional[Dict[str, Any]] = None,
-    request_delay: float = 2.0,
+    request_delay: float = 0.5,
 ) -> Dict[str, Any]:
     """
     Recursively parse a module page and all its submodules.
@@ -468,7 +468,7 @@ async def _parse_rtd_module_recursive(
     docs_dict : Optional[Dict[str, Any]], optional
         Dictionary to accumulate parsed documentation
     request_delay : float, optional
-        Delay in seconds between requests to avoid rate limiting (default: 2.0)
+        Delay in seconds between requests to avoid rate limiting (default: 0.5)
 
     Raises
     ------

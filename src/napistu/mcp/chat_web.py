@@ -352,10 +352,8 @@ class ClaudeClient:
 
         # Get MCP server URL from config
         mcp_url = self.chat_config.mcp_server_url
-        logger.info(f"🔧 MCP Server URL: {mcp_url}")
-        logger.info("⚠️  TESTING WITHOUT MCP - MCP DISABLED")
-
-        logger.info("📡 Calling Anthropic API (without MCP)...")
+        logger.info("📡 Calling Anthropic API ...")
+        logger.critical(f"🔥 MCP URL → Anthropic: {repr(mcp_url)}")
         start_time = time.time()
 
         # Use asyncio.wait_for to enforce timeout
@@ -367,6 +365,10 @@ class ClaudeClient:
                     max_tokens=self.chat_config.max_tokens,
                     system=CHAT_SYSTEM_PROMPT,
                     messages=[{"role": "user", "content": user_message}],
+                    mcp_servers=[
+                        {"type": "url", "url": mcp_url, "name": "napistu-mcp"}
+                    ],
+                    extra_headers={"anthropic-beta": "mcp-client-2025-04-04"},
                 ),
                 timeout=60.0,  # 60 second timeout
             )
