@@ -6,16 +6,6 @@ from types import SimpleNamespace
 
 from napistu.constants import IDENTIFIERS, ONTOLOGIES
 
-VALID_ANNOTATION_TYPES = [
-    "foci",
-    "reactions",
-    "species",
-    "compartments",
-    "compartmentalized_species",
-    "reaction_species",
-    "remove",
-]
-
 # if_all defines reactions species which must all be present for a filter to occur
 # except_any defines reaction species which will override "if_all"
 # as_substrates defines reaction species which must be present as a substrate for filtering to occur
@@ -169,3 +159,34 @@ REACTOME_CROSSREF_SET = {
     REACTOME_CROSSREF_RAW.ONTOLOGY,
     REACTOME_CROSSREF_RAW.URL,
 }
+
+CURATION_DEFS = SimpleNamespace(
+    # Entity types
+    SPECIES="species",
+    REACTIONS="reactions",
+    COMPARTMENTS="compartments",
+    COMPARTMENTALIZED_SPECIES="compartmentalized_species",
+    REACTION_SPECIES="reaction_species",
+    REMOVE="remove",
+    FOCI="foci",
+    # Field names
+    CURATOR="curator",
+    EVIDENCE="evidence",
+    URI="uri",
+    SBO_TERM_NAME="sbo_term_name",
+    # Default values
+    UNKNOWN="unknown",
+    # Remove table columns
+    TABLE="table",
+    VARIABLE="variable",
+)
+
+VALID_ANNOTATION_TYPES = [
+    CURATION_DEFS.FOCI,
+    CURATION_DEFS.REACTIONS,
+    CURATION_DEFS.SPECIES,
+    CURATION_DEFS.COMPARTMENTS,
+    CURATION_DEFS.COMPARTMENTALIZED_SPECIES,
+    CURATION_DEFS.REACTION_SPECIES,
+    CURATION_DEFS.REMOVE,
+]
