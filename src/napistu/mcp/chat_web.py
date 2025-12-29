@@ -328,6 +328,13 @@ class ClaudeClient:
     """
     Client for Claude API with MCP integration
 
+    Attributes
+    ----------
+    chat_config : ChatConfig
+        Chat configuration
+    client : anthropic.Anthropic
+        Anthropic client
+
     Public Methods
     --------------
     chat(user_message)
@@ -342,16 +349,19 @@ class ClaudeClient:
         """
         Send a message to Claude with MCP tools.
 
-        Args:
-            user_message: User's question
+        Parameters
+        ----------
+        user_message : str
+            User's question
 
-        Returns:
-            Dict with 'response' (str) and 'usage' (dict)
+        Returns
+        -------
+        Dict with 'response' (str) and 'usage' (dict)
         """
         logger.info(f"💬 Starting chat for message: {user_message[:50]}...")
 
         # Get MCP server URL from config
-        mcp_url = self.chat_config.mcp_server_url
+        mcp_url = self.chat_config.get_mcp_url()
         logger.info("📡 Calling Anthropic API ...")
         logger.critical(f"🔥 MCP URL → Anthropic: {repr(mcp_url)}")
         start_time = time.time()
