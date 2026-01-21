@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-import os
-from datetime import datetime
-
 import pytest
-from google.cloud import storage
-from pytest import fixture
-from testcontainers.core.container import DockerContainer
 
 from napistu import utils
 from napistu.utils.path_utils import (
@@ -15,55 +9,7 @@ from napistu.utils.path_utils import (
     initialize_dir,
     path_exists,
 )
-
-
-@fixture(scope="session")
-def gcs_storage():
-    """A container running a GCS emulator"""
-    with (
-        DockerContainer("fsouza/fake-gcs-server:1.44")
-        .with_bind_ports(4443, 4443)
-        .with_command("-scheme http -backend memory")
-    ) as gcs:
-        os.environ["STORAGE_EMULATOR_HOST"] = "http://0.0.0.0:4443"
-        yield gcs
-
-
-@fixture
-def gcs_bucket_name(gcs_storage):
-    bucket_name = f"testbucket-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
-    return bucket_name
-
-
-@fixture
-def gcs_bucket(gcs_bucket_name):
-    """A GCS bucket"""
-    client = storage.Client()
-    client.create_bucket(gcs_bucket_name)
-    bucket = client.bucket(gcs_bucket_name)
-    yield bucket
-    bucket.delete(force=True)
-
-
-@fixture
-def gcs_bucket_uri(gcs_bucket, gcs_bucket_name):
-    return f"gs://{gcs_bucket_name}"
-
-
-@fixture
-def gcs_bucket_subdir_uri(gcs_bucket_uri):
-    return f"{gcs_bucket_uri}/testdir"
-
-
-@fixture
-def tmp_new_subdir(tmp_path):
-    """An empty temporary directory"""
-    return tmp_path / "test_dir"
-
-
-def create_blob(bucket, blob_name, content=b"test"):
-    # create the marker file
-    bucket.blob(blob_name).upload_from_string(content)
+from tests.conftest import create_blob
 
 
 def test_get_source_base_and_path_gcs():

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import gzip
-import os
 import tempfile
-from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -11,9 +9,6 @@ import pandas as pd
 import pytest
 from fs.tarfs import TarFS
 from fs.zipfs import ZipFS
-from google.cloud import storage
-from pytest import fixture
-from testcontainers.core.container import DockerContainer
 
 from napistu import utils
 from napistu.network.constants import DISTANCES
@@ -25,50 +20,6 @@ from napistu.utils.io_utils import (
     save_parquet,
     save_pickle,
 )
-
-
-@fixture(scope="session")
-def gcs_storage():
-    """A container running a GCS emulator"""
-    with (
-        DockerContainer("fsouza/fake-gcs-server:1.44")
-        .with_bind_ports(4443, 4443)
-        .with_command("-scheme http -backend memory")
-    ) as gcs:
-        os.environ["STORAGE_EMULATOR_HOST"] = "http://0.0.0.0:4443"
-        yield gcs
-
-
-@fixture
-def gcs_bucket_name(gcs_storage):
-    bucket_name = f"testbucket-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
-    return bucket_name
-
-
-@fixture
-def gcs_bucket(gcs_bucket_name):
-    """A GCS bucket"""
-    client = storage.Client()
-    client.create_bucket(gcs_bucket_name)
-    bucket = client.bucket(gcs_bucket_name)
-    yield bucket
-    bucket.delete(force=True)
-
-
-@fixture
-def gcs_bucket_uri(gcs_bucket, gcs_bucket_name):
-    return f"gs://{gcs_bucket_name}"
-
-
-@fixture
-def gcs_bucket_subdir_uri(gcs_bucket_uri):
-    return f"{gcs_bucket_uri}/testdir"
-
-
-@fixture
-def tmp_new_subdir(tmp_path):
-    """An empty temporary directory"""
-    return tmp_path / "test_dir"
 
 
 def mock_targ_gz(url, tmp_file):
