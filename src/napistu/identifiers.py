@@ -585,12 +585,12 @@ def parse_ensembl_id(input_str: str) -> tuple[str, str, str]:
     # extract the species code (three letters after ENS if non-human)
     species_code_search = re.compile("ENS([A-Z]{3})?[GTP]").search(input_str)
 
-    if species_code_search.group(1) is None:  # type:ignore
+    if species_code_search.group(1) is None:  # type: ignore
         species = "Homo sapiens"
         molecule_type_regex = "ENS([GTP])"
         id_regex = "ENS[GTP][0-9]+"
     else:
-        species_code = species_code_search.group(1)  # type:ignore
+        species_code = species_code_search.group(1)  # type: ignore
 
         if species_code not in ENSEMBL_SPECIES_FROM_CODE.keys():
             raise ValueError(
