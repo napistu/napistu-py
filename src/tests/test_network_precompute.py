@@ -102,7 +102,7 @@ def test_precomputed_distances_shortest_paths(
     )
 
     # using the precomputed distances generates the same result as excluding it
-    (precompute_path_vertices, _, _, _) = paths.find_all_shortest_reaction_paths(
+    precompute_path_vertices, _, _, _ = paths.find_all_shortest_reaction_paths(
         napistu_graph,
         sbml_dfs,
         all_species_pairs,

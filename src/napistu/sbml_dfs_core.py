@@ -1155,7 +1155,7 @@ class SBML_dfs:
         stats["dict_n_species_per_compartment"] = (
             self.compartmentalized_species.groupby(SBML_DFS.C_ID)
             .size()
-            .rename("n_species")  # type:ignore
+            .rename("n_species")  # type: ignore
             .to_frame()
             .join(self.compartments[[SBML_DFS.C_NAME]])
             .reset_index(drop=False)
@@ -1166,7 +1166,7 @@ class SBML_dfs:
         per_reaction_stats = self.reaction_species.groupby(SBML_DFS.R_ID).size()
         stats["stats_species_per_reactions"] = per_reaction_stats.describe().to_dict()
         stats["top10_species_per_reactions"] = (
-            per_reaction_stats.sort_values(ascending=False)  # type:ignore
+            per_reaction_stats.sort_values(ascending=False)  # type: ignore
             .head(10)
             .rename("n_species")
             .to_frame()
