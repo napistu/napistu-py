@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import datetime
 import functools
 import os
 import sys
 import threading
+from datetime import datetime
 
 import pandas as pd
 import pytest
