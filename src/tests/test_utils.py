@@ -175,7 +175,7 @@ def mock_gz(url, tmp_file):
         f.write("test")
 
 
-@patch("napistu.utils.download_wget", side_effect=mock_targ_gz)
+@patch("napistu.utils._legacy_utils.download_wget", side_effect=mock_targ_gz)
 def test_download_and_extract_tar_gz(mock_download, tmp_new_subdir):
     utils.download_and_extract(
         url="http://asdf/bla.tar.gz",
@@ -185,7 +185,7 @@ def test_download_and_extract_tar_gz(mock_download, tmp_new_subdir):
     assert (tmp_new_subdir / "test.txt").exists()
 
 
-@patch("napistu.utils.download_ftp", side_effect=mock_zip)
+@patch("napistu.utils._legacy_utils.download_ftp", side_effect=mock_zip)
 def test_download_and_extract_zip(mock_download, tmp_new_subdir):
     utils.download_and_extract(
         url="http://asdf/bla.txt.zip",
@@ -195,7 +195,7 @@ def test_download_and_extract_zip(mock_download, tmp_new_subdir):
     assert (tmp_new_subdir / "test.txt").exists()
 
 
-@patch("napistu.utils.download_wget", side_effect=mock_gz)
+@patch("napistu.utils._legacy_utils.download_wget", side_effect=mock_gz)
 def test_download_and_extract_gz(mock_download, tmp_new_subdir):
     utils.download_and_extract(
         url="http://asdf/bla.txt.gz",
@@ -214,7 +214,7 @@ def test_download_and_extract_invalid_method(tmp_new_subdir):
         )
 
 
-@patch("napistu.utils.download_ftp", side_effect=mock_zip)
+@patch("napistu.utils._legacy_utils.download_ftp", side_effect=mock_zip)
 def test_download_and_extract_invalid_ext(mock_download, tmp_new_subdir):
     with pytest.raises(ValueError):
         utils.download_and_extract(
