@@ -5,8 +5,8 @@ import pandas as pd
 import pytest
 from scipy import sparse
 
-from napistu.scverse import loading
-from napistu.scverse.constants import ADATA, SCVERSE_DEFS
+from napistu.genomics import scverse_loading
+from napistu.genomics.constants import ADATA, SCVERSE_DEFS
 
 
 @pytest.fixture
@@ -64,12 +64,12 @@ def minimal_adata():
 def test_load_raw_table_success(minimal_adata):
     """Test successful loading of various table types."""
     # Test identity table (X)
-    x_result = loading._load_raw_table(minimal_adata, "X")
+    x_result = scverse_loading._load_raw_table(minimal_adata, "X")
     assert isinstance(x_result, np.ndarray)
     assert x_result.shape == minimal_adata.X.shape
 
     # Test dict-like table with name
-    layer_result = loading._load_raw_table(minimal_adata, "layers", "counts")
+    layer_result = scverse_loading._load_raw_table(minimal_adata, "layers", "counts")
     assert isinstance(layer_result, np.ndarray)
     assert layer_result.shape == minimal_adata.layers["counts"].shape
 
@@ -78,19 +78,21 @@ def test_load_raw_table_errors(minimal_adata):
     """Test error cases for loading tables."""
     # Test invalid table type
     with pytest.raises(ValueError, match="is not a valid AnnData attribute"):
-        loading._load_raw_table(minimal_adata, "invalid_type")
+        scverse_loading._load_raw_table(minimal_adata, "invalid_type")
 
     # Test missing table name when required
     with pytest.raises(
         ValueError, match="Multiple tables found.*and table_name is not specified"
     ):
-        loading._load_raw_table(minimal_adata, "layers")
+        scverse_loading._load_raw_table(minimal_adata, "layers")
 
 
 def test_get_table_from_dict_attr_success(minimal_adata):
     """Test successful retrieval from dict-like attributes."""
     # Test getting specific table
-    result = loading._get_table_from_dict_attr(minimal_adata, "varm", "gene_scores")
+    result = scverse_loading._get_table_from_dict_attr(
+        minimal_adata, "varm", "gene_scores"
+    )
     assert isinstance(result, np.ndarray)
     assert result.shape == (minimal_adata.n_vars, 3)
 
@@ -101,11 +103,13 @@ def test_get_table_from_dict_attr_errors(minimal_adata):
     with pytest.raises(
         ValueError, match="Multiple tables found.*and table_name is not specified"
     ):
-        loading._get_table_from_dict_attr(minimal_adata, "layers")
+        scverse_loading._get_table_from_dict_attr(minimal_adata, "layers")
 
     # Test nonexistent table name
     with pytest.raises(ValueError, match="table_name 'nonexistent' not found"):
-        loading._get_table_from_dict_attr(minimal_adata, "layers", "nonexistent")
+        scverse_loading._get_table_from_dict_attr(
+            minimal_adata, "layers", "nonexistent"
+        )
 
 
 def test_select_results_attrs_success(minimal_adata):
@@ -115,7 +119,7 @@ def test_select_results_attrs_success(minimal_adata):
         minimal_adata.n_obs, minimal_adata.n_vars
     )  # 10x5 to match minimal_adata
     array_results_attrs = minimal_adata.obs.index[:3].tolist()
-    array_result = loading._select_results_attrs(
+    array_result = scverse_loading._select_results_attrs(
         minimal_adata, array, "X", array_results_attrs
     )
     assert isinstance(array_result, pd.DataFrame)
@@ -129,7 +133,7 @@ def test_select_results_attrs_success(minimal_adata):
     varm_features = minimal_adata.uns["gene_scores_features"]
     # Get column indices for the requested features
     varm_col_indices = [varm_features.index(attr) for attr in varm_results_attrs]
-    varm_result = loading._select_results_attrs(
+    varm_result = scverse_loading._select_results_attrs(
         minimal_adata,
         minimal_adata.varm["gene_scores"],
         "varm",
@@ -150,7 +154,7 @@ def test_select_results_attrs_success(minimal_adata):
 
     # Test varp selection with dense matrix
     varp_results_attrs = minimal_adata.var.index[:2].tolist()  # Select first two genes
-    varp_result = loading._select_results_attrs(
+    varp_result = scverse_loading._select_results_attrs(
         minimal_adata, minimal_adata.varp["correlations"], "varp", varp_results_attrs
     )
     assert isinstance(varp_result, pd.DataFrame)
@@ -164,7 +168,7 @@ def test_select_results_attrs_success(minimal_adata):
     )
 
     # Test varp selection with sparse matrix
-    sparse_result = loading._select_results_attrs(
+    sparse_result = scverse_loading._select_results_attrs(
         minimal_adata, minimal_adata.varp["adjacency"], "varp", varp_results_attrs
     )
     assert isinstance(sparse_result, pd.DataFrame)
@@ -173,7 +177,7 @@ def test_select_results_attrs_success(minimal_adata):
     assert list(sparse_result.index) == minimal_adata.var.index.tolist()
 
     # Test full table selection (results_attrs=None)
-    full_varm_result = loading._select_results_attrs(
+    full_varm_result = scverse_loading._select_results_attrs(
         minimal_adata,
         minimal_adata.varm["gene_scores"],
         "varm",
@@ -192,13 +196,15 @@ def test_select_results_attrs_errors(minimal_adata):
     with pytest.raises(
         ValueError, match="The following results attributes were not found"
     ):
-        loading._select_results_attrs(minimal_adata, array, "X", ["nonexistent_attr"])
+        scverse_loading._select_results_attrs(
+            minimal_adata, array, "X", ["nonexistent_attr"]
+        )
 
     # Test invalid gene names for varp
     with pytest.raises(
         ValueError, match="The following results attributes were not found"
     ):
-        loading._select_results_attrs(
+        scverse_loading._select_results_attrs(
             minimal_adata,
             minimal_adata.varp["correlations"],
             "varp",
@@ -207,13 +213,13 @@ def test_select_results_attrs_errors(minimal_adata):
 
     # Test missing table_colnames for varm
     with pytest.raises(ValueError, match="table_colnames is required for varm tables"):
-        loading._select_results_attrs(
+        scverse_loading._select_results_attrs(
             minimal_adata, minimal_adata.varm["gene_scores"], "varm", ["score1"]
         )
 
     # Test DataFrame for array-type table
     with pytest.raises(ValueError, match="must be a numpy array, not a DataFrame"):
-        loading._select_results_attrs(
+        scverse_loading._select_results_attrs(
             minimal_adata,
             pd.DataFrame(minimal_adata.varm["gene_scores"]),
             "varm",
@@ -230,7 +236,7 @@ def test_create_results_df(minimal_adata):
     # Get column indices for the requested features
     varm_col_indices = [varm_features.index(attr) for attr in varm_attrs]
     varm_array = minimal_adata.varm["gene_scores"][:, varm_col_indices]
-    varm_result = loading._create_results_df(
+    varm_result = scverse_loading._create_results_df(
         array=varm_array,
         attrs=varm_attrs,
         var_index=minimal_adata.var.index,
@@ -244,7 +250,7 @@ def test_create_results_df(minimal_adata):
     # Test varp table with dense correlations
     varp_attrs = minimal_adata.var.index[:2].tolist()  # First two genes
     varp_array = minimal_adata.varp["correlations"][:, :2]
-    varp_result = loading._create_results_df(
+    varp_result = scverse_loading._create_results_df(
         array=varp_array,
         attrs=varp_attrs,
         var_index=minimal_adata.var.index,
@@ -258,7 +264,7 @@ def test_create_results_df(minimal_adata):
     # Test X table
     obs_attrs = minimal_adata.obs.index[:3].tolist()  # First three observations
     x_array = minimal_adata.X[0:3, :]  # Select first three observations
-    x_result = loading._create_results_df(
+    x_result = scverse_loading._create_results_df(
         array=x_array,
         attrs=obs_attrs,
         var_index=minimal_adata.var.index,
@@ -274,7 +280,7 @@ def test_create_results_df(minimal_adata):
     layer_array = minimal_adata.layers["counts"][
         0:2, :
     ]  # Select first two observations
-    layer_result = loading._create_results_df(
+    layer_result = scverse_loading._create_results_df(
         array=layer_array,
         attrs=layer_attrs,
         var_index=minimal_adata.var.index,
@@ -323,7 +329,7 @@ def minimal_mudata(minimal_adata):
 def test_prepare_anndata_results_df_anndata(minimal_adata):
     """Test prepare_anndata_results_df with AnnData input."""
     # Test var table
-    var_results = loading.prepare_anndata_results_df(
+    var_results = scverse_loading.prepare_anndata_results_df(
         minimal_adata, table_type=ADATA.VAR
     )
     assert isinstance(var_results, pd.DataFrame)
@@ -332,7 +338,7 @@ def test_prepare_anndata_results_df_anndata(minimal_adata):
     assert "ensembl_transcript" in var_results.columns
 
     # Test varm table
-    varm_results = loading.prepare_anndata_results_df(
+    varm_results = scverse_loading.prepare_anndata_results_df(
         minimal_adata,
         table_type=ADATA.VARM,
         table_name="gene_scores",
@@ -354,7 +360,7 @@ def test_prepare_anndata_results_df_anndata(minimal_adata):
     assert "ensembl_transcript" in varm_results.columns
 
     # Test with ontology extraction
-    var_results_with_ontology = loading.prepare_anndata_results_df(
+    var_results_with_ontology = scverse_loading.prepare_anndata_results_df(
         minimal_adata,
         table_type=ADATA.VAR,
         index_which_ontology="ensembl_gene",  # Use a new ontology name
@@ -371,7 +377,7 @@ def test_prepare_anndata_results_df_anndata(minimal_adata):
     with pytest.raises(
         ValueError, match="Cannot use 'gene_name' as index_which_ontology"
     ):
-        loading.prepare_anndata_results_df(
+        scverse_loading.prepare_anndata_results_df(
             minimal_adata,
             table_type=ADATA.VAR,
             index_which_ontology="gene_name",  # Should fail - already exists
@@ -388,7 +394,7 @@ def test_split_mdata_results_by_modality(minimal_mudata):
     )
 
     # Split by modality
-    modality_results = loading._split_mdata_results_by_modality(
+    modality_results = scverse_loading._split_mdata_results_by_modality(
         minimal_mudata, all_results
     )
 
@@ -429,7 +435,9 @@ def test_split_mdata_results_by_modality_errors(minimal_mudata):
 
     # Should raise error due to index mismatch
     with pytest.raises(ValueError, match="Index mismatch in rna"):
-        loading._split_mdata_results_by_modality(minimal_mudata, wrong_index_results)
+        scverse_loading._split_mdata_results_by_modality(
+            minimal_mudata, wrong_index_results
+        )
 
 
 def test_multimodality_ontology_config():
@@ -449,7 +457,7 @@ def test_multimodality_ontology_config():
             "index_which_ontology": None,
         },
     }
-    config = loading.MultiModalityOntologyConfig.from_dict(config_dict)
+    config = scverse_loading.MultiModalityOntologyConfig.from_dict(config_dict)
 
     # Test dictionary-like access
     assert len(config) == 3
@@ -481,7 +489,7 @@ def test_multimodality_ontology_config():
 
     # Test validation - missing required field
     with pytest.raises(ValueError):
-        loading.MultiModalityOntologyConfig.from_dict(
+        scverse_loading.MultiModalityOntologyConfig.from_dict(
             {
                 "transcriptomics": {
                     "index_which_ontology": "ensembl_gene"  # Missing ontologies field
@@ -491,7 +499,7 @@ def test_multimodality_ontology_config():
 
     # Test validation - wrong type for ontologies
     with pytest.raises(ValueError):
-        loading.MultiModalityOntologyConfig.from_dict(
+        scverse_loading.MultiModalityOntologyConfig.from_dict(
             {
                 "transcriptomics": {
                     "ontologies": "ensembl_gene",  # Should be None, set, or dict
@@ -501,11 +509,11 @@ def test_multimodality_ontology_config():
         )
 
     # Test empty config
-    empty_config = loading.MultiModalityOntologyConfig(root={})
+    empty_config = scverse_loading.MultiModalityOntologyConfig(root={})
     assert len(empty_config) == 0
 
     # Test optional index_which_ontology
-    minimal_config = loading.MultiModalityOntologyConfig.from_dict(
+    minimal_config = scverse_loading.MultiModalityOntologyConfig.from_dict(
         {"transcriptomics": {"ontologies": None}}  # No index_which_ontology
     )
     assert minimal_config["transcriptomics"].index_which_ontology is None
@@ -551,7 +559,7 @@ def test_prepare_mudata_results_df(minimal_mudata):
     }  # Both original and renamed columns
 
     # Act - Test var table extraction
-    var_results = loading.prepare_mudata_results_df(
+    var_results = scverse_loading.prepare_mudata_results_df(
         minimal_mudata, mudata_ontologies=config, table_type=ADATA.VAR
     )
 
@@ -583,7 +591,7 @@ def test_prepare_mudata_results_df(minimal_mudata):
     )
 
     # Act - Test varm table extraction with explicit results_attrs
-    varm_results = loading.prepare_mudata_results_df(
+    varm_results = scverse_loading.prepare_mudata_results_df(
         minimal_mudata,
         mudata_ontologies=config,
         table_type=ADATA.VARM,
@@ -617,7 +625,7 @@ def test_prepare_mudata_results_df_errors(minimal_mudata):
     with pytest.raises(
         ValueError, match="Missing ontology configurations for modalities"
     ):
-        loading.prepare_mudata_results_df(
+        scverse_loading.prepare_mudata_results_df(
             minimal_mudata,
             mudata_ontologies={"rna": {"ontologies": None}},
             table_type=ADATA.VAR,
@@ -625,7 +633,7 @@ def test_prepare_mudata_results_df_errors(minimal_mudata):
 
     # Test invalid table type
     with pytest.raises(ValueError, match="table_type must be one of"):
-        loading.prepare_mudata_results_df(
+        scverse_loading.prepare_mudata_results_df(
             minimal_mudata,
             mudata_ontologies={
                 "rna": {"ontologies": None},
@@ -641,7 +649,7 @@ def test_prepare_mudata_results_df_errors(minimal_mudata):
     )
     minimal_mudata.mod["rna"].uns["scores_features"] = ["score1", "score2", "score3"]
     with pytest.raises(ValueError, match="table_name 'scores' not found in adata.varm"):
-        loading.prepare_mudata_results_df(
+        scverse_loading.prepare_mudata_results_df(
             minimal_mudata,
             mudata_ontologies={
                 "rna": {"ontologies": None},
@@ -675,7 +683,7 @@ def test_prepare_mudata_results_df_adata_level(minimal_mudata):
     }
 
     # Act - Test var table extraction at adata level
-    var_results = loading.prepare_mudata_results_df(
+    var_results = scverse_loading.prepare_mudata_results_df(
         minimal_mudata,
         mudata_ontologies=config,
         table_type=ADATA.VAR,
@@ -723,7 +731,7 @@ def test_prepare_mudata_results_df_mdata_vs_adata_level(minimal_mudata):
     }
 
     # Act - Extract using both levels
-    mdata_results = loading.prepare_mudata_results_df(
+    mdata_results = scverse_loading.prepare_mudata_results_df(
         minimal_mudata,
         mudata_ontologies=config,
         table_type=ADATA.VARM,
@@ -733,7 +741,7 @@ def test_prepare_mudata_results_df_mdata_vs_adata_level(minimal_mudata):
         level=SCVERSE_DEFS.MDATA,
     )
 
-    adata_results = loading.prepare_mudata_results_df(
+    adata_results = scverse_loading.prepare_mudata_results_df(
         minimal_mudata,
         mudata_ontologies=config,
         table_type=ADATA.VARM,
@@ -769,7 +777,7 @@ def test_prepare_mudata_results_df_level_validation(minimal_mudata):
         ValueError,
         match=r"level must be one of \['adata', 'mdata'\], got invalid_level",
     ):
-        loading.prepare_mudata_results_df(
+        scverse_loading.prepare_mudata_results_df(
             minimal_mudata,
             mudata_ontologies=config,
             table_type=ADATA.VAR,

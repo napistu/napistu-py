@@ -10,6 +10,7 @@ Package Overview
    napistu
    napistu.context
    napistu.gcs
+   napistu.genomics
    napistu.ingestion
    napistu.matching
    napistu.mcp
@@ -17,5 +18,5 @@ Package Overview
    napistu.network
    napistu.ontologies
    napistu.rpy2
-   napistu.scverse
    napistu.statistics
+   napistu.utils

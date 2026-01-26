@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Set, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Union
 
-import anndata
-import mudata
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field, RootModel
 
 from napistu.constants import ONTOLOGIES_LIST
-from napistu.matching import species
-from napistu.scverse.constants import (
+from napistu.genomics.constants import (
     ADATA,
     ADATA_ARRAY_ATTRS,
     ADATA_DICTLIKE_ATTRS,
@@ -20,10 +17,20 @@ from napistu.scverse.constants import (
     SCVERSE_DEFS,
     VALID_MUDATA_LEVELS,
 )
+from napistu.matching import species
+from napistu.utils.optional import (
+    require_anndata,
+    require_mudata,
+)
+
+if TYPE_CHECKING:
+    import anndata
+    import mudata
 
 logger = logging.getLogger(__name__)
 
 
+@require_anndata
 def prepare_anndata_results_df(
     adata: Union[anndata.AnnData, mudata.MuData],
     table_type: str = ADATA.VAR,
@@ -101,6 +108,7 @@ def prepare_anndata_results_df(
     return results_table
 
 
+@require_mudata
 def prepare_mudata_results_df(
     mdata: mudata.MuData,
     mudata_ontologies: Union[
@@ -243,6 +251,7 @@ def prepare_mudata_results_df(
     return split_results_tables
 
 
+@require_anndata
 def _load_raw_table(
     adata: Union[anndata.AnnData, mudata.MuData],
     table_type: str,
@@ -286,6 +295,7 @@ def _load_raw_table(
     return _get_table_from_dict_attr(adata, table_type, table_name)
 
 
+@require_anndata
 def _get_table_from_dict_attr(
     adata: Union[anndata.AnnData, mudata.MuData],
     attr_name: str,
@@ -346,6 +356,7 @@ def _get_table_from_dict_attr(
         return attr_dict[table_name]
 
 
+@require_anndata
 def _select_results_attrs(
     adata: anndata.AnnData,
     raw_results_table: Union[pd.DataFrame, np.ndarray],
@@ -513,6 +524,7 @@ def _create_results_df(
         return pd.DataFrame(array, index=attrs, columns=var_index).T
 
 
+@require_mudata
 def _split_mdata_results_by_modality(
     mdata: mudata.MuData,
     results_data_table: pd.DataFrame,
