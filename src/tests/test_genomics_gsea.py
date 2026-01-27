@@ -1,5 +1,6 @@
 """Tests for gene set enrichment analysis (GSEA) functionality."""
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -123,7 +124,7 @@ def sbml_dfs_w_entrez_ids(model_source_stub):
         SBML_DFS.REACTION_SPECIES: reaction_species_df,
     }
 
-    return SBML_dfs(sbml_dict, model_source_stub)
+    return SBML_dfs(sbml_dict, model_source_stub, validate=False)
 
 
 def test_add_gmts_h_all():
@@ -208,3 +209,50 @@ def test_get_gmt_w_napistu_ids_species_and_cspecies(sbml_dfs_w_entrez_ids):
             f"Gene set {geneset} should have at least as many sc_ids as s_ids, "
             f"since one s_id can map to multiple sc_ids"
         )
+
+
+def test_prerank_with_napistu_genesets(sbml_dfs_w_entrez_ids):
+    """Test that napistu-centric geneset formats can be used with gseapy.prerank."""
+    # Create a gene set collection
+    collection = GenesetCollection(organismal_species="Homo sapiens")
+
+    config = GmtsConfig(
+        engine=gp.msigdb.Msigdb,
+        categories=["h.all"],
+        dbver="2023.2.Hs",
+    )
+    collection.add_gmts(gmts_config=config)
+
+    # Get species identifiers from sbml_dfs_w_entrez_ids
+    species_identifiers = sbml_dfs_w_entrez_ids.get_characteristic_species_ids(
+        dogmatic=True
+    )
+
+    # Get napistu geneset with s_id
+    napistu_geneset = collection.get_gmt_w_napistu_ids(
+        species_identifiers=species_identifiers,
+        id_type=SBML_DFS.S_ID,
+    )
+
+    # Create a value series indexed by s_id (similar to sandbox example)
+    example_data = sbml_dfs_w_entrez_ids.species.copy()
+    # Add a column with random normal values
+    example_data["values"] = np.random.randn(example_data.shape[0])
+    # Select the series of values indexed by s_id
+    value_series = example_data["values"]
+
+    # Verify that prerank can be called with the napistu geneset format
+    # Convert Series to DataFrame format that gseapy expects (gene_name, prerank columns)
+    # This avoids the gseapy bug with single-element Series
+    value_df = pd.DataFrame(
+        {"gene_name": value_series.index, "prerank": value_series.values}
+    )
+
+    gsea_results = gp.prerank(rnk=value_df, gene_sets=napistu_geneset, min_size=1)
+
+    # Verify that results were returned
+    assert gsea_results is not None
+    # gseapy.prerank returns a results object with a .res2d attribute containing the results DataFrame
+    assert hasattr(gsea_results, "res2d")
+    assert isinstance(gsea_results.res2d, pd.DataFrame)
+    assert len(gsea_results.res2d) > 0
