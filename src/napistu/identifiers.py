@@ -37,7 +37,7 @@ from __future__ import annotations
 import logging
 import re
 import sys
-from typing import Optional
+from typing import Optional, Union
 from urllib.parse import urlparse
 
 import libsbml
@@ -62,6 +62,7 @@ from napistu.constants import (
     SPECIES_IDENTIFIERS_REQUIRED_VARS,
 )
 from napistu.ingestion.constants import LATIN_SPECIES_NAMES
+from napistu.utils.pd_utils import match_pd_vars
 
 logger = logging.getLogger(__name__)
 
@@ -308,8 +309,7 @@ def check_reactome_identifier_compatibility(
 
 def construct_cspecies_identifiers(
     species_identifiers: pd.DataFrame,
-    sbml_dfs: Optional[sbml_dfs_core.SBML_dfs] = None,
-    sid_to_scids: Optional[pd.DataFrame] = None,
+    cspecies_references: Union[sbml_dfs_core.SBML_dfs, pd.DataFrame],
 ) -> pd.DataFrame:
     """
     Construct compartmentalized species identifiers by adding sc_id to species_identifiers.
@@ -323,10 +323,9 @@ def construct_cspecies_identifiers(
     species_identifiers : pd.DataFrame
         A species identifiers table with columns including s_id, ontology, identifier.
         Must satisfy SPECIES_IDENTIFIERS_REQUIRED_VARS.
-    sbml_dfs: Optional[sbml_dfs_core.SBML_dfs] = None,
-        An sbml_dfs object from which compartmentalized_species will be extracted. If provided with `sid_to_scids` then this argument will be ignored.
-    sid_to_scids : Optional[pd.DataFrame] = None,
-        A 2-column DataFrame with s_id and sc_id columns. If provided then `sbml_dfs` is ignored.
+    cspecies_references : Union[sbml_dfs_core.SBML_dfs, pd.DataFrame]
+        Either an sbml_dfs object from which compartmentalized_species will be extracted,
+        or a 2-column DataFrame with s_id and sc_id columns.
 
     Returns
     -------
@@ -339,15 +338,23 @@ def construct_cspecies_identifiers(
     # Validate input species_identifiers table
     _check_species_identifiers_table(species_identifiers)
 
-    if sbml_dfs is None and sid_to_scids is None:
-        raise ValueError("Either sbml_dfs or sid_to_scids must be provided")
-    elif sbml_dfs is not None and sid_to_scids is not None:
-        logger.info("Both sbml_dfs and sid_to_scids were provided, using sid_to_scids")
-
-    if sid_to_scids is None:
-        sid_to_scids = sbml_dfs.compartmentalized_species.reset_index()[
+    # Extract sid_to_scids table based on type of cspecies_references
+    if isinstance(cspecies_references, sbml_dfs_core.SBML_dfs):
+        sid_to_scids = cspecies_references.compartmentalized_species.reset_index()[
             [SBML_DFS.S_ID, SBML_DFS.SC_ID]
         ]
+    elif isinstance(cspecies_references, pd.DataFrame):
+        sid_to_scids = cspecies_references
+        match_pd_vars(
+            sid_to_scids,
+            req_vars={SBML_DFS.S_ID, SBML_DFS.SC_ID},
+            allow_series=False,
+        ).assert_present()
+    else:
+        raise TypeError(
+            f"cspecies_references must be either an SBML_dfs object or a pandas DataFrame, "
+            f"got {type(cspecies_references)}"
+        )
 
     species_identifiers_w_scids = species_identifiers.merge(
         sid_to_scids,
@@ -357,7 +364,7 @@ def construct_cspecies_identifiers(
 
     if any(species_identifiers_w_scids[SBML_DFS.SC_ID].isna()):
         raise ValueError(
-            "Some species identifiers were not found in the sid_to_scids table"
+            "Some species identifiers were not found in the cspecies_references table"
         )
 
     return species_identifiers_w_scids

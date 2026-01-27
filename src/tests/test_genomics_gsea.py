@@ -179,7 +179,7 @@ def test_get_gmt_w_napistu_ids_species_and_cspecies(sbml_dfs_w_entrez_ids):
     # Create cspecies_identifiers using construct_cspecies_identifiers
     cspecies_identifiers = construct_cspecies_identifiers(
         species_identifiers=species_identifiers,
-        sbml_dfs=sbml_dfs_w_entrez_ids,
+        cspecies_references=sbml_dfs_w_entrez_ids,
     )
 
     # Test with cspecies_identifiers (sc_id)

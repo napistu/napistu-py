@@ -311,7 +311,7 @@ def test_construct_cspecies_identifiers(sbml_dfs):
     # Method 1: Use sbml_dfs directly
     result_from_sbml_dfs = identifiers.construct_cspecies_identifiers(
         species_identifiers=species_identifiers,
-        sbml_dfs=sbml_dfs,
+        cspecies_references=sbml_dfs,
     )
 
     # Method 2: Extract lookup table and use it
@@ -320,7 +320,7 @@ def test_construct_cspecies_identifiers(sbml_dfs):
     ]
     result_from_lookup = identifiers.construct_cspecies_identifiers(
         species_identifiers=species_identifiers,
-        sid_to_scids=sid_to_scids_lookup,
+        cspecies_references=sid_to_scids_lookup,
     )
 
     # Verify both methods produce the same result
