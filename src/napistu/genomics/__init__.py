@@ -19,8 +19,11 @@ from napistu.utils.optional import import_mudata
 
 # Configure mudata to use new behavior and suppress warnings
 # Lazy load mudata to avoid import errors if genomics extra is not installed
-_mudata = import_mudata()
-_mudata.set_options(pull_on_update=False)
+try:
+    mudata = import_mudata()
+    mudata.set_options(pull_on_update=False)
+except ImportError:
+    pass
 
 try:
     __version__ = version("napistu")

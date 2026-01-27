@@ -46,7 +46,11 @@ import logging
 from functools import lru_cache, wraps
 from typing import Any, Callable, TypeVar
 
-from napistu.utils.constants import IMPORTABLE_PACKAGES, PACKAGE_TO_EXTRA
+from napistu.utils.constants import (
+    CRITICAL_LOGGING_ONLY_PACKAGES,
+    IMPORTABLE_PACKAGES,
+    PACKAGE_TO_EXTRA,
+)
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 
@@ -194,19 +198,21 @@ def _configure_package_logging(package_name: str) -> Any:
     Any
         Original logging level that was configured, or None if no configuration was needed.
     """
-    if package_name == "omnipath":
-        # Silence omnipath before it gets imported
-        logging.getLogger("omnipath").setLevel(logging.CRITICAL)
-        # Ensure root logger doesn't get polluted during omnipath import
+    if package_name in CRITICAL_LOGGING_ONLY_PACKAGES:
+        # Silence the package before it gets imported
+        logging.getLogger(package_name).setLevel(logging.CRITICAL)
+        # Ensure root logger doesn't get polluted during import
         root_level = logging.getLogger().level
         logging.getLogger().setLevel(logging.CRITICAL)
         return root_level
+
     # Add other package-specific logging configurations here
     return None
 
 
 def _restore_logging(package_name: str, original_level: Any) -> None:
-    """Restore original logging configuration after import.
+    """
+    Restore original logging configuration after import.
 
     Parameters
     ----------
@@ -215,5 +221,5 @@ def _restore_logging(package_name: str, original_level: Any) -> None:
     original_level : Any
         Original logging level to restore, or None if no restoration is needed.
     """
-    if package_name == "omnipath" and original_level is not None:
+    if package_name in CRITICAL_LOGGING_ONLY_PACKAGES and original_level is not None:
         logging.getLogger().setLevel(original_level)

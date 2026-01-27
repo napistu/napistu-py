@@ -21,9 +21,12 @@ from typing import Any, Dict, List, Optional, Union
 import pandas as pd
 from pydantic import BaseModel
 
+from napistu.constants import ONTOLOGIES, SBML_DFS
 from napistu.genomics.constants import GENESET_COLLECTION_DEFS, GMTS_CONFIG_FIELDS
+from napistu.identifiers import _check_species_identifiers_table
 from napistu.ingestion.constants import LATIN_SPECIES_NAMES
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
+from napistu.matching.species import features_to_pathway_species
 from napistu.utils.optional import import_gseapy, require_gseapy
 
 logger = logging.getLogger(__name__)
@@ -143,6 +146,90 @@ class GenesetCollection:
         # create the shallow gmt
         self.gmt = self._create_gmt()
 
+    def get_gmt_as_df(self) -> pd.DataFrame:
+        """
+        Convert the GMT dictionary to a DataFrame format suitable for matching.
+
+        Returns
+        -------
+        pd.DataFrame
+            A DataFrame with two columns:
+            - "gene_set": The gene set name
+            - "identifier": The identifier (e.g., Entrez ID) for each gene in the set
+
+        Examples
+        --------
+        >>> collection = GenesetCollection(organismal_species="Homo sapiens")
+        >>> collection.add_gmts()
+        >>> gmt_df = collection.get_gmt_as_df()
+        """
+        if len(self.gmt) == 0:
+            raise ValueError(
+                "No gene sets found in the gene set collection. "
+                "Please add gene sets using the `add_gmts` method."
+            )
+
+        rows = []
+        for gene_set_name, identifiers in self.gmt.items():
+            for identifier in identifiers:
+                rows.append(
+                    {
+                        GENESET_COLLECTION_DEFS.GENESET: gene_set_name,
+                        GENESET_COLLECTION_DEFS.IDENTIFIER: identifier,
+                    }
+                )
+
+        return pd.DataFrame(rows)
+
+    def get_gmt_w_napistu_ids(
+        self,
+        species_identifiers: pd.DataFrame,
+        id_type: str = SBML_DFS.S_ID,
+    ) -> pd.DataFrame:
+        """
+        Get the gene set collection with Napistu molecular species IDs.
+
+        Parameters
+        ----------
+        species_identifiers: pd.DataFrame
+            A DataFrame with the species identifiers. Either updated with sbml_dfs.get_characteristic_species_ids()
+            or loaded from a tsv distributed as part of a Napistu GCS tar-balls. To map to compartmentalized species IDs
+            use identifiers.construct_cspecies_identifiers() to add the sc_id column.
+        id_type: str
+            The type of identifier to use. Must be one of {SBML_DFS.S_ID, SBML_DFS.SC_ID}. If using sc_id, then
+            the species_identifiers table must be update to add the sc_id column.
+
+        Returns
+        -------
+        Dict[str, List[str]]
+            A dictionary of gene set names to their Napistu molecular species IDs.
+        """
+
+        _check_species_identifiers_table(species_identifiers)
+        if id_type not in [SBML_DFS.S_ID, SBML_DFS.SC_ID]:
+            raise ValueError(
+                f"Invalid id_type: {id_type}. Must be one of {SBML_DFS.S_ID, SBML_DFS.SC_ID}"
+            )
+        if id_type not in species_identifiers.columns:
+            raise ValueError(
+                f"id_type {id_type} not found in species_identifiers columns: {species_identifiers.columns}"
+            )
+
+        gmt_df = self.get_gmt_as_df()
+
+        gmt_df_w_napistu_ids = features_to_pathway_species(
+            gmt_df.assign(feature_id=lambda x: x.identifier.astype(str)),
+            species_identifiers,
+            ontologies={ONTOLOGIES.NCBI_ENTREZ_GENE},
+        )
+
+        return (
+            gmt_df_w_napistu_ids.groupby("geneset")[id_type]
+            .unique()
+            .apply(list)
+            .to_dict()
+        )
+
     def _create_deep_to_shallow_lookup(self):
         """
         Create a lookup from deep gene set categories to shallow gene set categories.
@@ -231,41 +318,6 @@ class GenesetCollection:
             ][row[GENESET_COLLECTION_DEFS.DEEP_NAME]]
             for _, row in self.deep_to_shallow_lookup.iterrows()
         }
-
-    def get_gmt_as_df(self) -> pd.DataFrame:
-        """
-        Convert the GMT dictionary to a DataFrame format suitable for matching.
-
-        Returns
-        -------
-        pd.DataFrame
-            A DataFrame with two columns:
-            - "gene_set": The gene set name
-            - "identifier": The identifier (e.g., Entrez ID) for each gene in the set
-
-        Examples
-        --------
-        >>> collection = GenesetCollection(organismal_species="Homo sapiens")
-        >>> collection.add_gmts()
-        >>> gmt_df = collection.get_gmt_as_df()
-        """
-        if len(self.gmt) == 0:
-            raise ValueError(
-                "No gene sets found in the gene set collection. "
-                "Please add gene sets using the `add_gmts` method."
-            )
-
-        rows = []
-        for gene_set_name, identifiers in self.gmt.items():
-            for identifier in identifiers:
-                rows.append(
-                    {
-                        GENESET_COLLECTION_DEFS.GENESET: gene_set_name,
-                        GENESET_COLLECTION_DEFS.IDENTIFIER: identifier,
-                    }
-                )
-
-        return pd.DataFrame(rows)
 
     def _format_gmts_config(
         self, gmts_config: Optional[Union[Dict[str, Any], GmtsConfig]] = None
