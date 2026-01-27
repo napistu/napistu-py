@@ -301,3 +301,40 @@ def test_format_uri_url_pathological_ensembl_id_strict_modes(caplog):
         "Could not extract identifier from URI using regex" in record.message
         for record in caplog.records
     )
+
+
+def test_construct_cspecies_identifiers(sbml_dfs):
+    """Test that construct_cspecies_identifiers works with both sbml_dfs and lookup table."""
+    # Get species identifiers from sbml_dfs
+    species_identifiers = sbml_dfs.get_characteristic_species_ids(dogmatic=True)
+
+    # Method 1: Use sbml_dfs directly
+    result_from_sbml_dfs = identifiers.construct_cspecies_identifiers(
+        species_identifiers=species_identifiers,
+        sbml_dfs=sbml_dfs,
+    )
+
+    # Method 2: Extract lookup table and use it
+    sid_to_scids_lookup = sbml_dfs.compartmentalized_species.reset_index()[
+        [SBML_DFS.S_ID, SBML_DFS.SC_ID]
+    ]
+    result_from_lookup = identifiers.construct_cspecies_identifiers(
+        species_identifiers=species_identifiers,
+        sid_to_scids=sid_to_scids_lookup,
+    )
+
+    # Verify both methods produce the same result
+    pd.testing.assert_frame_equal(
+        result_from_sbml_dfs.sort_values(
+            by=[SBML_DFS.S_ID, SBML_DFS.SC_ID]
+        ).reset_index(drop=True),
+        result_from_lookup.sort_values(by=[SBML_DFS.S_ID, SBML_DFS.SC_ID]).reset_index(
+            drop=True
+        ),
+        check_like=True,
+    )
+
+    # Verify the result has the expected structure
+    assert SBML_DFS.SC_ID in result_from_sbml_dfs.columns
+    assert SBML_DFS.S_ID in result_from_sbml_dfs.columns
+    assert result_from_sbml_dfs.shape[0] == 160

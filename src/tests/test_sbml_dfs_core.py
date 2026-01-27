@@ -17,6 +17,7 @@ from napistu.constants import (
     CONSENSUS_CHECKS,
     IDENTIFIERS,
     MINI_SBO_FROM_NAME,
+    NAPISTU_STANDARD_OUTPUTS,
     ONTOLOGIES,
     SBML_DFS,
     SBML_DFS_SCHEMA,
@@ -26,7 +27,7 @@ from napistu.constants import (
     VALID_SBO_TERM_NAMES,
     VALID_SBO_TERMS,
 )
-from napistu.identifiers import Identifiers
+from napistu.identifiers import Identifiers, _check_species_identifiers_table
 from napistu.ingestion import sbml
 from napistu.ingestion.constants import (
     COMPARTMENTS,
@@ -1528,3 +1529,55 @@ def test_force_edgelist_consistency_invalid_compartments(model_source_stub):
             model_source=model_source_stub,
             force_edgelist_consistency=True,
         )
+
+
+def test_export_sbml_dfs(sbml_dfs):
+    """Test that export_sbml_dfs creates all expected files with correct formats."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        model_prefix = "test_"
+        sbml_dfs.export_sbml_dfs(
+            model_prefix=model_prefix,
+            outdir=tmpdir,
+            overwrite=True,
+            dogmatic=True,
+        )
+
+        # Expected files
+        expected_files = {
+            model_prefix + NAPISTU_STANDARD_OUTPUTS.SPECIES_IDENTIFIERS: ".tsv",
+            model_prefix
+            + NAPISTU_STANDARD_OUTPUTS.REACTIONS_SOURCE_TOTAL_COUNTS: ".tsv",
+            model_prefix + NAPISTU_STANDARD_OUTPUTS.SID_TO_SCIDS: ".tsv",
+            model_prefix + NAPISTU_STANDARD_OUTPUTS.SPECIES: ".json",
+            model_prefix + NAPISTU_STANDARD_OUTPUTS.REACTIONS: ".json",
+            model_prefix + NAPISTU_STANDARD_OUTPUTS.REACTION_SPECIES: ".json",
+            model_prefix + NAPISTU_STANDARD_OUTPUTS.COMPARTMENTS: ".json",
+            model_prefix + NAPISTU_STANDARD_OUTPUTS.COMPARTMENTALIZED_SPECIES: ".json",
+        }
+
+        # Verify all files exist with correct extensions
+        for filename, expected_ext in expected_files.items():
+            filepath = os.path.join(tmpdir, filename)
+            assert os.path.exists(filepath), f"Expected file {filename} not found"
+            assert filename.endswith(
+                expected_ext
+            ), f"File {filename} should have extension {expected_ext}"
+
+        # Read and validate species_identifiers.tsv
+        species_identifiers_path = os.path.join(
+            tmpdir, model_prefix + NAPISTU_STANDARD_OUTPUTS.SPECIES_IDENTIFIERS
+        )
+        species_identifiers = pd.read_csv(species_identifiers_path, sep="\t")
+        _check_species_identifiers_table(species_identifiers)
+
+        # Read and validate sid_to_scids.tsv
+        sid_to_scids_path = os.path.join(
+            tmpdir, model_prefix + NAPISTU_STANDARD_OUTPUTS.SID_TO_SCIDS
+        )
+        sid_to_scids = pd.read_csv(sid_to_scids_path, sep="\t")
+        expected_cols = {SBML_DFS.S_ID, SBML_DFS.SC_ID}
+        actual_cols = set(sid_to_scids.columns)
+        assert (
+            actual_cols == expected_cols
+        ), f"sid_to_scids should have columns {expected_cols}, got {actual_cols}"
+        assert len(sid_to_scids) > 0, "sid_to_scids table should not be empty"

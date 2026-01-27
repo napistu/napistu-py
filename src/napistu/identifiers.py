@@ -1,3 +1,37 @@
+"""
+Systematic identifiers for species, reactions, compartments, etc.
+
+Classes
+-------
+Identifiers
+    Identifiers for a single entity or relationship.
+
+Public Functions
+----------------
+check_reactome_identifier_compatibility
+    Check whether two sets of Reactome identifiers are from the same species.
+construct_cspecies_identifiers
+    Construct compartmentalized species identifiers by adding sc_id to species_identifiers.
+create_uri_url
+    Convert from an identifier and ontology to a URL reference for the identifier.
+cv_to_Identifiers
+    Convert an SBML controlled vocabulary element into an Identifiers object.
+df_to_identifiers
+    Convert a DataFrame of identifier information to a Series of Identifiers objects.
+ensembl_id_to_url_regex
+    Map an ensembl ID to a validation regex and its canonical url on ensembl.
+format_uri
+    Convert a RDF URI into an identifier list.
+format_uri_url
+    Convert a URI into an identifier dictionary.
+format_uri_url_identifiers_dot_org
+    Parse identifiers.org identifiers from a split URL path.
+is_known_unsupported_uri
+    Check if a URI is known to be unsupported/pathological.
+parse_ensembl_id
+    Extract the molecule type and species name from an ensembl identifier.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -22,10 +56,12 @@ from napistu.constants import (
     IDENTIFIERS,
     IDENTIFIERS_REQUIRED_VARS,
     ONTOLOGIES,
+    SBML_DFS,
     SBML_DFS_SCHEMA,
     SCHEMA_DEFS,
     SPECIES_IDENTIFIERS_REQUIRED_VARS,
 )
+from napistu.ingestion.constants import LATIN_SPECIES_NAMES
 
 logger = logging.getLogger(__name__)
 
@@ -41,19 +77,23 @@ class Identifiers:
     verbose : bool
         extra reporting, defaults to False
 
-    Methods
+    Properties
+    ----------
+    ids : list
+        (deprecated) a list of identifiers which are each a dict containing an ontology and identifier
+
+    Public Methods
     -------
-    has_ontology(ontologies)
-        Returns a bool of whether 1+ of the ontologies was represented
     get_all_bqbs()
         Returns a set of all BQB entries
     get_all_ontologies()
         Returns a set of all ontology entries
+    has_ontology(ontologies)
+        Returns a bool of whether 1+ of the ontologies was represented
     hoist(ontology)
         Returns value(s) from an ontology
     print
         Print a table of identifiers
-
     """
 
     def __init__(self, id_list: list, verbose: bool = False) -> None:
@@ -220,6 +260,276 @@ class Identifiers:
 
         utils.show(self.df, hide_index=True)
 
+    def __repr__(self) -> str:
+        """Return a string representation of the Identifiers object"""
+        return f"Identifiers({self.df.shape[0]} identifiers)"
+
+
+def check_reactome_identifier_compatibility(
+    reactome_series_a: pd.Series,
+    reactome_series_b: pd.Series,
+) -> None:
+    """
+    Check Reactome Identifier Compatibility
+
+    Determine whether two sets of Reactome identifiers are from the same species.
+
+    Args:
+        reactome_series_a: pd.Series
+            a Series containing Reactome identifiers
+        reactome_series_b: pd.Series
+            a Series containing Reactome identifiers
+
+    Returns:
+        None
+
+    """
+
+    a_species, a_species_counts = _infer_primary_reactome_species(reactome_series_a)
+    b_species, b_species_counts = _infer_primary_reactome_species(reactome_series_b)
+
+    if a_species != b_species:
+        a_name = reactome_series_a.name
+        if a_name is None:
+            a_name = "unnamed"
+
+        b_name = reactome_series_b.name
+        if b_name is None:
+            b_name = "unnamed"
+
+        raise ValueError(
+            "The two provided pd.Series containing Reactome identifiers appear to be from different species. "
+            f"The pd.Series named {a_name} appears to be {a_species} with {a_species_counts} examples of this code. "
+            f"The pd.Series named {b_name} appears to be {b_species} with {b_species_counts} examples of this code."
+        )
+
+    return None
+
+
+def construct_cspecies_identifiers(
+    species_identifiers: pd.DataFrame,
+    sbml_dfs: Optional[sbml_dfs_core.SBML_dfs] = None,
+    sid_to_scids: Optional[pd.DataFrame] = None,
+) -> pd.DataFrame:
+    """
+    Construct compartmentalized species identifiers by adding sc_id to species_identifiers.
+
+    This function merges compartmentalized species IDs (sc_id) into a species_identifiers
+    table, allowing you to work with compartmentalized species without loading the full
+    sbml_dfs object.
+
+    Parameters
+    ----------
+    species_identifiers : pd.DataFrame
+        A species identifiers table with columns including s_id, ontology, identifier.
+        Must satisfy SPECIES_IDENTIFIERS_REQUIRED_VARS.
+    sbml_dfs: Optional[sbml_dfs_core.SBML_dfs] = None,
+        An sbml_dfs object from which compartmentalized_species will be extracted. If provided with `sid_to_scids` then this argument will be ignored.
+    sid_to_scids : Optional[pd.DataFrame] = None,
+        A 2-column DataFrame with s_id and sc_id columns. If provided then `sbml_dfs` is ignored.
+
+    Returns
+    -------
+    pd.DataFrame
+        The species_identifiers table with an additional sc_id column. Each row
+        in the original table will be expanded to include all corresponding sc_ids
+        for that s_id.
+    """
+
+    # Validate input species_identifiers table
+    _check_species_identifiers_table(species_identifiers)
+
+    if sbml_dfs is None and sid_to_scids is None:
+        raise ValueError("Either sbml_dfs or sid_to_scids must be provided")
+    elif sbml_dfs is not None and sid_to_scids is not None:
+        logger.info("Both sbml_dfs and sid_to_scids were provided, using sid_to_scids")
+
+    if sid_to_scids is None:
+        sid_to_scids = sbml_dfs.compartmentalized_species.reset_index()[
+            [SBML_DFS.S_ID, SBML_DFS.SC_ID]
+        ]
+
+    species_identifiers_w_scids = species_identifiers.merge(
+        sid_to_scids,
+        on=SBML_DFS.S_ID,
+        how="left",
+    )
+
+    if any(species_identifiers_w_scids[SBML_DFS.SC_ID].isna()):
+        raise ValueError(
+            "Some species identifiers were not found in the sid_to_scids table"
+        )
+
+    return species_identifiers_w_scids
+
+
+def create_uri_url(ontology: str, identifier: str, strict: bool = True) -> str:
+    """
+    Create URI URL
+
+    Convert from an identifier and ontology to a URL reference for the identifier
+
+    Parameters
+    ----------
+    ontology: str
+        An ontology for organizing genes, metabolites, etc.
+    identifier: str
+        A systematic identifier from the \"ontology\" ontology.
+    strict: bool
+        if strict then throw errors for invalid IDs otherwise return None
+
+    Returns
+    -------
+    url: str
+        A url representing a unique identifier
+    """
+
+    # default to no id_regex
+    id_regex = None
+
+    if ontology in ["ensembl_gene", "ensembl_transcript", "ensembl_protein"]:
+        id_regex, url = ensembl_id_to_url_regex(identifier, ontology)
+    elif ontology == "bigg.metabolite":
+        url = f"http://identifiers.org/bigg.metabolite/{identifier}"
+    elif ontology == "chebi":
+        id_regex = "^[0-9]+$"
+        url = f"http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:{identifier}"
+    elif ontology == "ec-code":
+        id_regex = "^[0-9]+\\.[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
+        url = f"https://identifiers.org/ec-code/{identifier}"
+    elif ontology == "envipath":
+        url = f"http://identifiers.org/envipath/{identifier}"
+    elif ontology == "go":
+        id_regex = "^GO:[0-9]{7}$"
+        url = f"https://www.ebi.ac.uk/QuickGO/term/{identifier}"
+    elif ontology == "ncbi_entrez_gene":
+        url = f"https://www.ncbi.nlm.nih.gov/gene/{identifier}"
+    elif ontology == "ncbi_entrez_pccompound":
+        id_regex = "^[A-Z]{14}\\-[A-Z]{10}\\-[A-Z]{1}$"
+        url = f"http://www.ncbi.nlm.nih.gov/sites/entrez?cmd=search&db=pccompound&term={identifier}"
+    elif ontology == "pubchem":
+        id_regex = "^[0-9]+$"
+        url = f"http://pubchem.ncbi.nlm.nih.gov/compound/{identifier}"
+    elif ontology == "pubmed":
+        id_regex = "^[0-9]+$"
+        url = f"http://www.ncbi.nlm.nih.gov/pubmed/{identifier}"
+    elif ontology == "reactome":
+        id_regex = "^R\\-[A-Z]{3}\\-[0-9]{7}$"
+        url = f"https://reactome.org/content/detail/{identifier}"
+    elif ontology == "uniprot":
+        id_regex = "^[A-Z0-9]+$"
+        url = f"https://purl.uniprot.org/uniprot/{identifier}"
+    elif ontology == "sgc":
+        id_regex = "^[0-9A-Z]+$"
+        url = f"https://www.thesgc.org/structures/structure_description/{identifier}/"
+    elif ontology == "mdpi":
+        id_regex = None
+        url = f"https://www.mdpi.com/{identifier}"
+    elif ontology == "mirbase":
+        id_regex = None
+        if re.match("MIMAT[0-9]", identifier):
+            url = f"https://www.mirbase.org/mature/{identifier}"
+        elif re.match("MI[0-9]", identifier):
+            url = f"https://www.mirbase.org/hairpin/{identifier}"
+        else:
+            raise NotImplementedError(f"url not defined for this MiRBase {identifier}")
+    elif ontology == "rnacentral":
+        id_regex = None
+        url = f"https://rnacentral.org/rna/{identifier}"
+    elif ontology == "chemspider":
+        id_regex = "^[0-9]+$"
+        url = f"https://www.chemspider.com/{identifier}"
+
+    elif ontology == "dx_doi":
+        id_regex = r"^[0-9]+\.[0-9]+$"
+        url = f"https://dx.doi.org/{identifier}"
+    elif ontology == "doi":
+        id_regex = None
+        url = f"https://doi.org/{identifier}"
+
+    elif ontology == "ncbi_books":
+        id_regex = "^[0-9A-Z]+$"
+        url = f"http://www.ncbi.nlm.nih.gov/books/{identifier}/"
+
+    elif ontology == "ncbi_entrez_gene":
+        id_regex = "^[0-9]+$"
+        url = f"https://www.ncbi.nlm.nih.gov/gene/{identifier}"
+    elif ontology == "phosphosite":
+        id_regex = "^[0-9]+$"
+        url = f"https://www.phosphosite.org/siteAction.action?id={identifier}"
+    elif ontology == "NCI_Thesaurus":
+        id_regex = "^[A-Z][0-9]+$"
+        url = f"https://ncithesaurus.nci.nih.gov/ncitbrowser/ConceptReport.jsp?dictionary=NCI_Thesaurus&code={identifier}"
+    elif ontology == "matrixdb_biomolecule":
+        id_regex = "^[0-9A-Za-z]+$"
+        url = f"http://matrixdb.univ-lyon1.fr/cgi-bin/current/newPort?type=biomolecule&value={identifier}"
+    else:
+        raise NotImplementedError(
+            f"No identifier -> url logic exists for the {ontology} ontology in create_uri_url()"
+        )
+
+    # validate identifier with regex if one exists
+    if id_regex is not None:
+        if re.search(id_regex, identifier) is None:
+            failure_msg = f"{identifier} is not a valid {ontology} id, it did not match the regex: {id_regex}"
+            if strict:
+                raise TypeError(failure_msg)
+            else:
+                logger.warning(failure_msg + " returning None")
+                return None
+
+    return url
+
+
+def cv_to_Identifiers(entity, strict: bool = False):
+    """
+    Convert an SBML controlled vocabulary element into a cpr Identifiers object.
+
+    Parameters
+    ----------
+    entity: libsbml.Species
+        An entity (species, reaction, compartment, ...) with attached CV terms
+    strict: bool, default True
+        If True, log full tracebacks for parsing failures.
+        If False, use simple warning messages.
+
+    Returns
+    -------
+    Identifiers
+        An Identifiers object containing the CV terms
+    """
+
+    cv_list = list()
+    for cv in entity.getCVTerms():
+        if cv.getQualifierType() != libsbml.BIOLOGICAL_QUALIFIER:
+            # only care about biological annotations
+            continue
+
+        biological_qualifier_type = BIOLOGICAL_QUALIFIER_CODES[
+            cv.getBiologicalQualifierType()
+        ]
+        out_list = list()
+        for i in range(cv.getNumResources()):
+            uri = cv.getResourceURI(i)
+
+            # Pre-check for known unsupported URIs
+            if is_known_unsupported_uri(uri):
+                logger.warning(f"Skipping known unsupported URI: {uri}")
+                continue
+
+            try:
+                out_list.append(
+                    format_uri(uri, biological_qualifier_type, strict=strict)
+                )
+            except NotImplementedError:
+                if strict:
+                    logger.warning("Not all identifiers resolved: ", exc_info=True)
+                else:
+                    logger.warning(f"Could not parse URI (not implemented): {uri}")
+
+        cv_list.extend(out_list)
+    return Identifiers(cv_list)
+
 
 def df_to_identifiers(df: pd.DataFrame) -> pd.Series:
     """
@@ -261,6 +571,58 @@ def df_to_identifiers(df: pd.DataFrame) -> pd.Series:
     return output
 
 
+def ensembl_id_to_url_regex(identifier: str, ontology: str) -> tuple[str, str]:
+    """
+    Ensembl ID to URL and Regex
+
+    Map an ensembl ID to a validation regex and its canonical url on ensembl
+
+    Args:
+        identifier: str
+            A standard identifier from ensembl genes, transcripts, or proteins
+        ontology: str
+            The standard ontology (ensembl_gene, ensembl_transcript, or ensembl_protein)
+
+    Returns:
+        id_regex: a regex which should match a valid entry in this ontology
+        url: the id's url on ensembl
+    """
+
+    # extract the species name from the 3 letter species code in the id
+    # (these letters are not present for humans)
+    identifier, implied_ontology, species = parse_ensembl_id(identifier)  # type: ignore
+    if implied_ontology != ontology:
+        raise ValueError(
+            f"Implied ontology mismatch: expected {ontology}, got {implied_ontology}"
+        )
+
+    # create an appropriate regex for validating input
+    # this provides testing for other identifiers even if it is redundant with other
+    # validation of ensembl ids
+
+    if species == "Homo sapiens":
+        species_code = ""
+    else:
+        species_code = ENSEMBL_SPECIES_TO_CODE[species]
+    molecule_type_code = ENSEMBL_MOLECULE_TYPES_FROM_ONTOLOGY[ontology]
+
+    id_regex = "ENS" + species_code + molecule_type_code + "[0-9]{11}"
+
+    # convert to species format in ensembl urls
+    species_url_field = re.sub(" ", "_", species)
+
+    if ontology == "ensembl_gene":
+        url = f"http://www.ensembl.org/{species_url_field}/geneview?gene={identifier}"
+    elif ontology == "ensembl_transcript":
+        url = f"http://www.ensembl.org/{species_url_field}/Transcript?t={identifier}"
+    elif ontology == "ensembl_protein":
+        url = f"https://www.ensembl.org/{species_url_field}/Transcript/ProteinSummary?t={identifier}"
+    else:
+        ValueError(f"{ontology} not defined")
+
+    return id_regex, url
+
+
 def format_uri(uri: str, bqb: str, strict: bool = True) -> list[dict]:
     """
     Convert a RDF URI into an identifier list
@@ -295,40 +657,41 @@ def format_uri(uri: str, bqb: str, strict: bool = True) -> list[dict]:
     return identifier
 
 
-def _validate_bqb(bqb: str) -> None:
+def is_known_unsupported_uri(uri: str) -> bool:
     """
-    Validate a BQB code
+    Check if a URI is known to be unsupported/pathological.
+
+    This prevents throwing exceptions for URIs we know we can't parse,
+    allowing for cleaner logging and batch processing.
 
     Parameters
     ----------
-    bqb : str
-        The BQB code to validate
+    uri : str
+        The URI to check
 
     Returns
     -------
-    None
-
-    Raises
-    ------
-    TypeError
-        If the BQB code is not a string
-    ValueError
-        If the BQB code does not start with 'BQB'
+    bool
+        True if the URI is known to be unsupported
     """
+    parsed = urlparse(uri)
+    netloc = parsed.netloc
+    path_parts = parsed.path.split("/")
 
-    if not isinstance(bqb, str):
-        raise TypeError(
-            f"biological_qualifier_type was a {type(bqb)} and must be a str or None"
-        )
+    # Known problematic patterns
+    if netloc == "www.proteinatlas.org":
+        return True
 
-    if not bqb.startswith("BQB"):
-        raise ValueError(
-            f"The provided BQB code was {bqb} and all BQB codes start with "
-            'start with "BQB". Please either use a valid BQB code (see '
-            '"BQB" in constansts.py) or use None'
-        )
+    # Specific Ensembl pattern: /id/EBT... (not supported)
+    if (
+        netloc == "www.ensembl.org"
+        and len(path_parts) >= 3
+        and path_parts[1] == "id"
+        and path_parts[2].startswith("EBT")
+    ):
+        return True
 
-    return None
+    return False
 
 
 def format_uri_url(uri: str, strict: bool = True) -> dict:
@@ -550,80 +913,6 @@ def format_uri_url(uri: str, strict: bool = True) -> dict:
     return id_dict
 
 
-def parse_ensembl_id(input_str: str) -> tuple[str, str, str]:
-    """
-    Parse Ensembl ID
-
-    Extract the molecule type and species name from a string containing an ensembl identifier.
-
-    Args:
-        input_str (str):
-            A string containing an ensembl gene, transcript, or protein identifier
-
-    Returns:
-        identifier (str):
-            The substring matching the full identifier
-        molecule_type (str):
-            The ontology the identifier belongs to:
-                - G -> ensembl_gene
-                - T -> ensembl_transcript
-                - P -> ensembl_protein
-        species (str):
-            The species name the identifier belongs to
-
-    """
-
-    # validate that input is an ensembl ID
-    if not re.search("ENS[GTP][0-9]+", input_str) and not re.search(
-        "ENS[A-Z]{3}[GTP][0-9]+", input_str
-    ):
-        ValueError(
-            f"{input_str} did not match the expected formats of an ensembl identifier:",
-            "ENS[GTP][0-9]+ or ENS[A-Z]{3}[GTP][0-9]+",
-        )
-
-    # extract the species code (three letters after ENS if non-human)
-    species_code_search = re.compile("ENS([A-Z]{3})?[GTP]").search(input_str)
-
-    if species_code_search.group(1) is None:  # type: ignore
-        species = "Homo sapiens"
-        molecule_type_regex = "ENS([GTP])"
-        id_regex = "ENS[GTP][0-9]+"
-    else:
-        species_code = species_code_search.group(1)  # type: ignore
-
-        if species_code not in ENSEMBL_SPECIES_FROM_CODE.keys():
-            raise ValueError(
-                f"The species code for {input_str}: {species_code} did not "
-                "match any of the entries in ENSEMBL_SPECIES_CODE_LOOKUPS."
-            )
-
-        species = ENSEMBL_SPECIES_FROM_CODE[species_code]
-        molecule_type_regex = "ENS[A-Z]{3}([GTP])"
-        id_regex = "ENS[A-Z]{3}[GTP][0-9]+"
-
-    # extract the molecule type (genes, transcripts or proteins)
-    molecule_type_code_search = re.compile(molecule_type_regex).search(input_str)
-    if not molecule_type_code_search:
-        raise ValueError(
-            "The ensembl molecule code (i.e., G, T or P) could not be extracted from {input_str}"
-        )
-    else:
-        molecule_type_code = molecule_type_code_search.group(1)  # type: str
-
-    if molecule_type_code not in ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY.keys():
-        raise ValueError(
-            f"The molecule type code for {input_str}: {molecule_type_code} did not "
-            "match ensembl genes (G), transcripts (T), or proteins (P)."
-        )
-
-    molecule_type = ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY[molecule_type_code]  # type: str
-
-    identifier = utils.extract_regex_search(id_regex, input_str)  # type: str
-
-    return identifier, molecule_type, species
-
-
 def format_uri_url_identifiers_dot_org(split_path: list[str]):
     """Parse identifiers.org identifiers
 
@@ -662,7 +951,7 @@ def format_uri_url_identifiers_dot_org(split_path: list[str]):
     else:
         ontology = split_path[1]
 
-        if ontology in ["chebi"]:
+        if ontology in [ONTOLOGIES.CHEBI]:
             identifier = utils.extract_regex_search("[0-9]+$", split_path[-1])
         elif len(split_path) != 3:
             identifier = "/".join(split_path[2:])
@@ -672,302 +961,80 @@ def format_uri_url_identifiers_dot_org(split_path: list[str]):
     return ontology, identifier
 
 
-def cv_to_Identifiers(entity, strict: bool = False):
+def parse_ensembl_id(input_str: str) -> tuple[str, str, str]:
     """
-    Convert an SBML controlled vocabulary element into a cpr Identifiers object.
+    Parse Ensembl ID
+
+    Extract the molecule type and species name from a string containing an ensembl identifier.
 
     Parameters
     ----------
-    entity: libsbml.Species
-        An entity (species, reaction, compartment, ...) with attached CV terms
-    strict: bool, default True
-        If True, log full tracebacks for parsing failures.
-        If False, use simple warning messages.
+    input_str (str):
+        A string containing an ensembl gene, transcript, or protein identifier
 
     Returns
     -------
-    Identifiers
-        An Identifiers object containing the CV terms
+    tuple[str, str, str]
+        identifier (str):
+            The substring matching the full identifier
+        molecule_type (str):
+            The ontology the identifier belongs to:
+                - G -> ensembl_gene
+                - T -> ensembl_transcript
+                - P -> ensembl_protein
+        organismal_species (str):
+            The species name the identifier belongs to
     """
 
-    cv_list = list()
-    for cv in entity.getCVTerms():
-        if cv.getQualifierType() != libsbml.BIOLOGICAL_QUALIFIER:
-            # only care about biological annotations
-            continue
-
-        biological_qualifier_type = BIOLOGICAL_QUALIFIER_CODES[
-            cv.getBiologicalQualifierType()
-        ]
-        out_list = list()
-        for i in range(cv.getNumResources()):
-            uri = cv.getResourceURI(i)
-
-            # Pre-check for known unsupported URIs
-            if is_known_unsupported_uri(uri):
-                logger.warning(f"Skipping known unsupported URI: {uri}")
-                continue
-
-            try:
-                out_list.append(
-                    format_uri(uri, biological_qualifier_type, strict=strict)
-                )
-            except NotImplementedError:
-                if strict:
-                    logger.warning("Not all identifiers resolved: ", exc_info=True)
-                else:
-                    logger.warning(f"Could not parse URI (not implemented): {uri}")
-
-        cv_list.extend(out_list)
-    return Identifiers(cv_list)
-
-
-def create_uri_url(ontology: str, identifier: str, strict: bool = True) -> str:
-    """
-    Create URI URL
-
-    Convert from an identifier and ontology to a URL reference for the identifier
-
-    Parameters
-    ----------
-    ontology: str
-        An ontology for organizing genes, metabolites, etc.
-    identifier: str
-        A systematic identifier from the \"ontology\" ontology.
-    strict: bool
-        if strict then throw errors for invalid IDs otherwise return None
-
-    Returns
-    -------
-    url: str
-        A url representing a unique identifier
-    """
-
-    # default to no id_regex
-    id_regex = None
-
-    if ontology in ["ensembl_gene", "ensembl_transcript", "ensembl_protein"]:
-        id_regex, url = ensembl_id_to_url_regex(identifier, ontology)
-    elif ontology == "bigg.metabolite":
-        url = f"http://identifiers.org/bigg.metabolite/{identifier}"
-    elif ontology == "chebi":
-        id_regex = "^[0-9]+$"
-        url = f"http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:{identifier}"
-    elif ontology == "ec-code":
-        id_regex = "^[0-9]+\\.[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
-        url = f"https://identifiers.org/ec-code/{identifier}"
-    elif ontology == "envipath":
-        url = f"http://identifiers.org/envipath/{identifier}"
-    elif ontology == "go":
-        id_regex = "^GO:[0-9]{7}$"
-        url = f"https://www.ebi.ac.uk/QuickGO/term/{identifier}"
-    elif ontology == "ncbi_entrez_gene":
-        url = f"https://www.ncbi.nlm.nih.gov/gene/{identifier}"
-    elif ontology == "ncbi_entrez_pccompound":
-        id_regex = "^[A-Z]{14}\\-[A-Z]{10}\\-[A-Z]{1}$"
-        url = f"http://www.ncbi.nlm.nih.gov/sites/entrez?cmd=search&db=pccompound&term={identifier}"
-    elif ontology == "pubchem":
-        id_regex = "^[0-9]+$"
-        url = f"http://pubchem.ncbi.nlm.nih.gov/compound/{identifier}"
-    elif ontology == "pubmed":
-        id_regex = "^[0-9]+$"
-        url = f"http://www.ncbi.nlm.nih.gov/pubmed/{identifier}"
-    elif ontology == "reactome":
-        id_regex = "^R\\-[A-Z]{3}\\-[0-9]{7}$"
-        url = f"https://reactome.org/content/detail/{identifier}"
-    elif ontology == "uniprot":
-        id_regex = "^[A-Z0-9]+$"
-        url = f"https://purl.uniprot.org/uniprot/{identifier}"
-    elif ontology == "sgc":
-        id_regex = "^[0-9A-Z]+$"
-        url = f"https://www.thesgc.org/structures/structure_description/{identifier}/"
-    elif ontology == "mdpi":
-        id_regex = None
-        url = f"https://www.mdpi.com/{identifier}"
-    elif ontology == "mirbase":
-        id_regex = None
-        if re.match("MIMAT[0-9]", identifier):
-            url = f"https://www.mirbase.org/mature/{identifier}"
-        elif re.match("MI[0-9]", identifier):
-            url = f"https://www.mirbase.org/hairpin/{identifier}"
-        else:
-            raise NotImplementedError(f"url not defined for this MiRBase {identifier}")
-    elif ontology == "rnacentral":
-        id_regex = None
-        url = f"https://rnacentral.org/rna/{identifier}"
-    elif ontology == "chemspider":
-        id_regex = "^[0-9]+$"
-        url = f"https://www.chemspider.com/{identifier}"
-
-    elif ontology == "dx_doi":
-        id_regex = r"^[0-9]+\.[0-9]+$"
-        url = f"https://dx.doi.org/{identifier}"
-    elif ontology == "doi":
-        id_regex = None
-        url = f"https://doi.org/{identifier}"
-
-    elif ontology == "ncbi_books":
-        id_regex = "^[0-9A-Z]+$"
-        url = f"http://www.ncbi.nlm.nih.gov/books/{identifier}/"
-
-    elif ontology == "ncbi_entrez_gene":
-        id_regex = "^[0-9]+$"
-        url = f"https://www.ncbi.nlm.nih.gov/gene/{identifier}"
-    elif ontology == "phosphosite":
-        id_regex = "^[0-9]+$"
-        url = f"https://www.phosphosite.org/siteAction.action?id={identifier}"
-    elif ontology == "NCI_Thesaurus":
-        id_regex = "^[A-Z][0-9]+$"
-        url = f"https://ncithesaurus.nci.nih.gov/ncitbrowser/ConceptReport.jsp?dictionary=NCI_Thesaurus&code={identifier}"
-    elif ontology == "matrixdb_biomolecule":
-        id_regex = "^[0-9A-Za-z]+$"
-        url = f"http://matrixdb.univ-lyon1.fr/cgi-bin/current/newPort?type=biomolecule&value={identifier}"
-    else:
-        raise NotImplementedError(
-            f"No identifier -> url logic exists for the {ontology} ontology in create_uri_url()"
-        )
-
-    # validate identifier with regex if one exists
-    if id_regex is not None:
-        if re.search(id_regex, identifier) is None:
-            failure_msg = f"{identifier} is not a valid {ontology} id, it did not match the regex: {id_regex}"
-            if strict:
-                raise TypeError(failure_msg)
-            else:
-                logger.warning(failure_msg + " returning None")
-                return None
-
-    return url
-
-
-def ensembl_id_to_url_regex(identifier: str, ontology: str) -> tuple[str, str]:
-    """
-    Ensembl ID to URL and Regex
-
-    Map an ensembl ID to a validation regex and its canonical url on ensembl
-
-    Args:
-        identifier: str
-            A standard identifier from ensembl genes, transcripts, or proteins
-        ontology: str
-            The standard ontology (ensembl_gene, ensembl_transcript, or ensembl_protein)
-
-    Returns:
-        id_regex: a regex which should match a valid entry in this ontology
-        url: the id's url on ensembl
-    """
-
-    # extract the species name from the 3 letter species code in the id
-    # (these letters are not present for humans)
-    identifier, implied_ontology, species = parse_ensembl_id(identifier)  # type: ignore
-    if implied_ontology != ontology:
-        raise ValueError(
-            f"Implied ontology mismatch: expected {ontology}, got {implied_ontology}"
-        )
-
-    # create an appropriate regex for validating input
-    # this provides testing for other identifiers even if it is redundant with other
-    # validation of ensembl ids
-
-    if species == "Homo sapiens":
-        species_code = ""
-    else:
-        species_code = ENSEMBL_SPECIES_TO_CODE[species]
-    molecule_type_code = ENSEMBL_MOLECULE_TYPES_FROM_ONTOLOGY[ontology]
-
-    id_regex = "ENS" + species_code + molecule_type_code + "[0-9]{11}"
-
-    # convert to species format in ensembl urls
-    species_url_field = re.sub(" ", "_", species)
-
-    if ontology == "ensembl_gene":
-        url = f"http://www.ensembl.org/{species_url_field}/geneview?gene={identifier}"
-    elif ontology == "ensembl_transcript":
-        url = f"http://www.ensembl.org/{species_url_field}/Transcript?t={identifier}"
-    elif ontology == "ensembl_protein":
-        url = f"https://www.ensembl.org/{species_url_field}/Transcript/ProteinSummary?t={identifier}"
-    else:
-        ValueError(f"{ontology} not defined")
-
-    return id_regex, url
-
-
-def check_reactome_identifier_compatibility(
-    reactome_series_a: pd.Series,
-    reactome_series_b: pd.Series,
-) -> None:
-    """
-    Check Reactome Identifier Compatibility
-
-    Determine whether two sets of Reactome identifiers are from the same species.
-
-    Args:
-        reactome_series_a: pd.Series
-            a Series containing Reactome identifiers
-        reactome_series_b: pd.Series
-            a Series containing Reactome identifiers
-
-    Returns:
-        None
-
-    """
-
-    a_species, a_species_counts = _infer_primary_reactome_species(reactome_series_a)
-    b_species, b_species_counts = _infer_primary_reactome_species(reactome_series_b)
-
-    if a_species != b_species:
-        a_name = reactome_series_a.name
-        if a_name is None:
-            a_name = "unnamed"
-
-        b_name = reactome_series_b.name
-        if b_name is None:
-            b_name = "unnamed"
-
-        raise ValueError(
-            "The two provided pd.Series containing Reactome identifiers appear to be from different species. "
-            f"The pd.Series named {a_name} appears to be {a_species} with {a_species_counts} examples of this code. "
-            f"The pd.Series named {b_name} appears to be {b_species} with {b_species_counts} examples of this code."
-        )
-
-    return None
-
-
-def is_known_unsupported_uri(uri: str) -> bool:
-    """
-    Check if a URI is known to be unsupported/pathological.
-
-    This prevents throwing exceptions for URIs we know we can't parse,
-    allowing for cleaner logging and batch processing.
-
-    Parameters
-    ----------
-    uri : str
-        The URI to check
-
-    Returns
-    -------
-    bool
-        True if the URI is known to be unsupported
-    """
-    parsed = urlparse(uri)
-    netloc = parsed.netloc
-    path_parts = parsed.path.split("/")
-
-    # Known problematic patterns
-    if netloc == "www.proteinatlas.org":
-        return True
-
-    # Specific Ensembl pattern: /id/EBT... (not supported)
-    if (
-        netloc == "www.ensembl.org"
-        and len(path_parts) >= 3
-        and path_parts[1] == "id"
-        and path_parts[2].startswith("EBT")
+    # validate that input is an ensembl ID
+    if not re.search("ENS[GTP][0-9]+", input_str) and not re.search(
+        "ENS[A-Z]{3}[GTP][0-9]+", input_str
     ):
-        return True
+        ValueError(
+            f"{input_str} did not match the expected formats of an ensembl identifier:",
+            "ENS[GTP][0-9]+ or ENS[A-Z]{3}[GTP][0-9]+",
+        )
 
-    return False
+    # extract the species code (three letters after ENS if non-human)
+    species_code_search = re.compile("ENS([A-Z]{3})?[GTP]").search(input_str)
+
+    if species_code_search.group(1) is None:  # type: ignore
+        organismal_species = LATIN_SPECIES_NAMES.HOMO_SAPIENS
+        molecule_type_regex = "ENS([GTP])"
+        id_regex = "ENS[GTP][0-9]+"
+    else:
+        species_code = species_code_search.group(1)  # type: ignore
+
+        if species_code not in ENSEMBL_SPECIES_FROM_CODE.keys():
+            raise ValueError(
+                f"The species code for {input_str}: {species_code} did not "
+                "match any of the entries in ENSEMBL_SPECIES_CODE_LOOKUPS."
+            )
+
+        organismal_species = ENSEMBL_SPECIES_FROM_CODE[species_code]
+        molecule_type_regex = "ENS[A-Z]{3}([GTP])"
+        id_regex = "ENS[A-Z]{3}[GTP][0-9]+"
+
+    # extract the molecule type (genes, transcripts or proteins)
+    molecule_type_code_search = re.compile(molecule_type_regex).search(input_str)
+    if not molecule_type_code_search:
+        raise ValueError(
+            "The ensembl molecule code (i.e., G, T or P) could not be extracted from {input_str}"
+        )
+    else:
+        molecule_type_code = molecule_type_code_search.group(1)  # type: str
+
+    if molecule_type_code not in ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY.keys():
+        raise ValueError(
+            f"The molecule type code for {input_str}: {molecule_type_code} did not "
+            "match ensembl genes (G), transcripts (T), or proteins (P)."
+        )
+
+    molecule_type = ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY[molecule_type_code]  # type: str
+
+    identifier = utils.extract_regex_search(id_regex, input_str)  # type: str
+
+    return identifier, molecule_type, organismal_species
 
 
 # private utility functions
@@ -1120,6 +1187,42 @@ def _validate_assets_sbml_ids(
         raise ValueError(
             f"{len(inconsistent_names_list)} species names do not match between "
             f"sbml_dfs and identifiers_df including: {', '.join(example_inconsistent_names)}"
+        )
+
+    return None
+
+
+def _validate_bqb(bqb: str) -> None:
+    """
+    Validate a BQB code
+
+    Parameters
+    ----------
+    bqb : str
+        The BQB code to validate
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    TypeError
+        If the BQB code is not a string
+    ValueError
+        If the BQB code does not start with 'BQB'
+    """
+
+    if not isinstance(bqb, str):
+        raise TypeError(
+            f"biological_qualifier_type was a {type(bqb)} and must be a str or None"
+        )
+
+    if not bqb.startswith("BQB"):
+        raise ValueError(
+            f"The provided BQB code was {bqb} and all BQB codes start with "
+            'start with "BQB". Please either use a valid BQB code (see '
+            '"BQB" in constansts.py) or use None'
         )
 
     return None

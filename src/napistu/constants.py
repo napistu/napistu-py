@@ -231,6 +231,7 @@ NAPISTU_STANDARD_OUTPUTS = SimpleNamespace(
     REACTION_SPECIES="reaction_species.json",
     COMPARTMENTS="compartments.json",
     COMPARTMENTALIZED_SPECIES="compartmentalized_species.json",
+    SID_TO_SCIDS="sid_to_scids.tsv",
 )
 
 CONSENSUS_CHECKS = SimpleNamespace(

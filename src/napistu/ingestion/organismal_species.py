@@ -1,5 +1,10 @@
 """
 This module contains the OrganismalSpeciesValidator class, which is used to validate and convert between common and Latin species names.
+
+Classes
+-------
+OrganismalSpeciesValidator:
+    A class for validating and converting between common and Latin species names.
 """
 
 from typing import Any, Dict, List, Set, Union
@@ -22,10 +27,28 @@ class OrganismalSpeciesValidator:
 
     Attributes
     ----------
-    latin_name : str
-        The Latin species name (e.g., 'Homo sapiens').
     common_name : str
         The common species name (e.g., 'human').
+    latin_name : str
+        The Latin species name (e.g., 'Homo sapiens').
+
+    Public Methods
+    --------------
+    assert_supported:
+        Assert that this species is supported, raising an exception if not.
+    ensure:
+        Ensure that organismal_species is an OrganismalSpeciesValidator object.
+    get_available_species:
+        Return a dictionary of all available species names.
+    lookup_custom_value:
+        Look up a custom value for this species from a provided table.
+    validate_against_supported:
+        Validate that this species is supported by a specific function or analysis.
+
+    Private Methods
+    ---------------
+    _validate_and_set_species:
+        Validate input and set both Latin and common names.
 
     Raises
     ------
@@ -64,78 +87,9 @@ class OrganismalSpeciesValidator:
         ValueError
             If species_input is not recognized or is not a string.
         """
-        self._latin_name = None
         self._common_name = None
+        self._latin_name = None
         self._validate_and_set_species(species_input)
-
-    def _validate_and_set_species(self, species_input: str) -> None:
-        """
-        Validate input and set both Latin and common names.
-
-        Parameters
-        ----------
-        species_input : str
-            The species name to validate and normalize.
-
-        Raises
-        ------
-        ValueError
-            If species_input is not a string or not found in known species.
-        """
-        if not isinstance(species_input, str):
-            raise ValueError("Species input must be a string")
-
-        # Normalize input (strip whitespace, handle case variations)
-        normalized_input = species_input.strip()
-
-        # Create reverse lookup (common name -> Latin name)
-        common_to_latin = {
-            common: latin for latin, common in LATIN_TO_COMMON_SPECIES_NAMES.items()
-        }
-
-        # Check if input is a Latin name (case-insensitive)
-        latin_match = None
-        for latin_name in LATIN_TO_COMMON_SPECIES_NAMES.keys():
-            if normalized_input.lower() == latin_name.lower():
-                latin_match = latin_name
-                break
-
-        if latin_match:
-            self._latin_name = latin_match
-            self._common_name = LATIN_TO_COMMON_SPECIES_NAMES[latin_match]
-            return
-
-        # Check if input is a common name (case-insensitive)
-        common_match = None
-        for common_name in common_to_latin.keys():
-            if normalized_input.lower() == common_name.lower():
-                common_match = common_name
-                break
-
-        if common_match:
-            self._common_name = common_match
-            self._latin_name = common_to_latin[common_match]
-            return
-
-        # If we get here, the species wasn't found
-        available_species = list(LATIN_TO_COMMON_SPECIES_NAMES.keys()) + list(
-            common_to_latin.keys()
-        )
-        raise ValueError(
-            f"Unknown species: '{species_input}'. Available species: {available_species}"
-        )
-
-    @property
-    def latin_name(self) -> str:
-        """
-        Get the Latin species name.
-
-        Returns
-        -------
-        str
-            The Latin species name (e.g., 'Homo sapiens').
-        """
-        return self._latin_name
 
     @property
     def common_name(self) -> str:
@@ -149,96 +103,17 @@ class OrganismalSpeciesValidator:
         """
         return self._common_name
 
-    def __str__(self) -> str:
+    @property
+    def latin_name(self) -> str:
         """
-        Return a human-readable string representation.
+        Get the Latin species name.
 
         Returns
         -------
         str
-            String in format 'common_name (Latin_name)'.
+            The Latin species name (e.g., 'Homo sapiens').
         """
-        return f"{self.common_name} ({self.latin_name})"
-
-    def __repr__(self) -> str:
-        """
-        Return a detailed string representation for debugging.
-
-        Returns
-        -------
-        str
-            String representation of the OrganismalSpeciesValidator instance.
-        """
-        return f"OrganismalSpeciesValidator('{self.latin_name}')"
-
-    @classmethod
-    def get_available_species(cls) -> Dict[str, list]:
-        """
-        Return a dictionary of all available species names.
-
-        Returns
-        -------
-        Dict[str, list]
-            Dictionary with keys 'latin_names' and 'common_names', each
-            containing a list of available species names.
-
-        Examples
-        --------
-        >>> available = OrganismalSpeciesValidator.get_available_species()
-        >>> available['latin_names']
-        ['Homo sapiens', 'Mus musculus', ...]
-        >>> available['common_names']
-        ['human', 'mouse', ...]
-        """
-        common_to_latin = {
-            common: latin for latin, common in LATIN_TO_COMMON_SPECIES_NAMES.items()
-        }
-        return {
-            "latin_names": list(LATIN_TO_COMMON_SPECIES_NAMES.keys()),
-            "common_names": list(common_to_latin.keys()),
-        }
-
-    def validate_against_supported(
-        self, supported_species: Union[List[str], Set[str]]
-    ) -> bool:
-        """
-        Validate that this species is supported by a specific function or analysis.
-
-        Parameters
-        ----------
-        supported_species : Union[List[str], Set[str]]
-            Collection of supported species names. Can contain either common names,
-            Latin names, or a mix of both. Case-insensitive matching.
-
-        Returns
-        -------
-        bool
-            True if this species is in the supported list, False otherwise.
-
-        Examples
-        --------
-        >>> species = OrganismalSpeciesValidator("human")
-        >>> species.validate_against_supported(["human", "mouse", "rat"])
-        True
-
-        >>> species = OrganismalSpeciesValidator("Homo sapiens")
-        >>> species.validate_against_supported(["Homo sapiens", "Mus musculus"])
-        True
-
-        >>> species = OrganismalSpeciesValidator("fly")
-        >>> species.validate_against_supported(["human", "mouse"])
-        False
-        """
-        # Normalize supported species (case-insensitive)
-        normalized_supported = {
-            species.strip().lower() for species in supported_species
-        }
-
-        # Check if either our common name or Latin name is in the supported list
-        return (
-            self.common_name.lower() in normalized_supported
-            or self.latin_name.lower() in normalized_supported
-        )
+        return self._latin_name
 
     def assert_supported(
         self, supported_species: Union[List[str], Set[str]], context: str = ""
@@ -276,6 +151,80 @@ class OrganismalSpeciesValidator:
                 f"Species '{self}' not supported{context_str}. "
                 f"Supported species: {supported_display}"
             )
+
+    @classmethod
+    def ensure(
+        cls, organismal_species: Union[str, "OrganismalSpeciesValidator"]
+    ) -> "OrganismalSpeciesValidator":
+        """
+        Ensure that organismal_species is an OrganismalSpeciesValidator object.
+
+        If organismal_species is a string, it will be converted to an OrganismalSpeciesValidator.
+        If it's already an OrganismalSpeciesValidator, it will be returned as-is.
+
+        Parameters
+        ----------
+        organismal_species : Union[str, OrganismalSpeciesValidator]
+            Either a string species name or an OrganismalSpeciesValidator object
+
+        Returns
+        -------
+        OrganismalSpeciesValidator
+            The OrganismalSpeciesValidator object
+
+        Raises
+        ------
+        ValueError
+            If organismal_species is neither a string nor an OrganismalSpeciesValidator
+
+        Examples
+        --------
+        >>> validator = OrganismalSpeciesValidator.ensure("human")
+        >>> isinstance(validator, OrganismalSpeciesValidator)
+        True
+        >>> validator.latin_name
+        'Homo sapiens'
+
+        >>> existing_validator = OrganismalSpeciesValidator("mouse")
+        >>> validator = OrganismalSpeciesValidator.ensure(existing_validator)
+        >>> validator is existing_validator
+        True
+        """
+        if isinstance(organismal_species, str):
+            return cls(organismal_species)
+        elif isinstance(organismal_species, cls):
+            return organismal_species
+        else:
+            raise ValueError(
+                f"organismal_species must be a string or OrganismalSpeciesValidator object, got {type(organismal_species)}"
+            )
+
+    @classmethod
+    def get_available_species(cls) -> Dict[str, list]:
+        """
+        Return a dictionary of all available species names.
+
+        Returns
+        -------
+        Dict[str, list]
+            Dictionary with keys 'latin_names' and 'common_names', each
+            containing a list of available species names.
+
+        Examples
+        --------
+        >>> available = OrganismalSpeciesValidator.get_available_species()
+        >>> available['latin_names']
+        ['Homo sapiens', 'Mus musculus', ...]
+        >>> available['common_names']
+        ['human', 'mouse', ...]
+        """
+        common_to_latin = {
+            common: latin for latin, common in LATIN_TO_COMMON_SPECIES_NAMES.items()
+        }
+        return {
+            "latin_names": list(LATIN_TO_COMMON_SPECIES_NAMES.keys()),
+            "common_names": list(common_to_latin.keys()),
+        }
 
     def lookup_custom_value(
         self, custom_table: Dict[str, Any], is_latin: bool = True
@@ -345,49 +294,123 @@ class OrganismalSpeciesValidator:
             f"Looking for: '{lookup_key}'"
         )
 
-    @classmethod
-    def ensure(
-        cls, organismal_species: Union[str, "OrganismalSpeciesValidator"]
-    ) -> "OrganismalSpeciesValidator":
+    def validate_against_supported(
+        self, supported_species: Union[List[str], Set[str]]
+    ) -> bool:
         """
-        Ensure that organismal_species is an OrganismalSpeciesValidator object.
-
-        If organismal_species is a string, it will be converted to an OrganismalSpeciesValidator.
-        If it's already an OrganismalSpeciesValidator, it will be returned as-is.
+        Validate that this species is supported by a specific function or analysis.
 
         Parameters
         ----------
-        organismal_species : Union[str, OrganismalSpeciesValidator]
-            Either a string species name or an OrganismalSpeciesValidator object
+        supported_species : Union[List[str], Set[str]]
+            Collection of supported species names. Can contain either common names,
+            Latin names, or a mix of both. Case-insensitive matching.
 
         Returns
         -------
-        OrganismalSpeciesValidator
-            The OrganismalSpeciesValidator object
+        bool
+            True if this species is in the supported list, False otherwise.
+
+        Examples
+        --------
+        >>> species = OrganismalSpeciesValidator("human")
+        >>> species.validate_against_supported(["human", "mouse", "rat"])
+        True
+
+        >>> species = OrganismalSpeciesValidator("Homo sapiens")
+        >>> species.validate_against_supported(["Homo sapiens", "Mus musculus"])
+        True
+
+        >>> species = OrganismalSpeciesValidator("fly")
+        >>> species.validate_against_supported(["human", "mouse"])
+        False
+        """
+        # Normalize supported species (case-insensitive)
+        normalized_supported = {
+            species.strip().lower() for species in supported_species
+        }
+
+        # Check if either our common name or Latin name is in the supported list
+        return (
+            self.common_name.lower() in normalized_supported
+            or self.latin_name.lower() in normalized_supported
+        )
+
+    def __repr__(self) -> str:
+        """
+        Return a detailed string representation for debugging.
+
+        Returns
+        -------
+        str
+            String representation of the OrganismalSpeciesValidator instance.
+        """
+        return f"OrganismalSpeciesValidator('{self.latin_name}')"
+
+    def __str__(self) -> str:
+        """
+        Return a human-readable string representation.
+
+        Returns
+        -------
+        str
+            String in format 'common_name (Latin_name)'.
+        """
+        return f"{self.common_name} ({self.latin_name})"
+
+    def _validate_and_set_species(self, species_input: str) -> None:
+        """
+        Validate input and set both Latin and common names.
+
+        Parameters
+        ----------
+        species_input : str
+            The species name to validate and normalize.
 
         Raises
         ------
         ValueError
-            If organismal_species is neither a string nor an OrganismalSpeciesValidator
-
-        Examples
-        --------
-        >>> validator = OrganismalSpeciesValidator.ensure("human")
-        >>> isinstance(validator, OrganismalSpeciesValidator)
-        True
-        >>> validator.latin_name
-        'Homo sapiens'
-
-        >>> existing_validator = OrganismalSpeciesValidator("mouse")
-        >>> validator = OrganismalSpeciesValidator.ensure(existing_validator)
-        >>> validator is existing_validator
-        True
+            If species_input is not a string or not found in known species.
         """
-        if isinstance(organismal_species, str):
-            return cls(organismal_species)
-        elif isinstance(organismal_species, cls):
-            return organismal_species
-        else:
-            raise ValueError(
-                f"organismal_species must be a string or OrganismalSpeciesValidator object, got {type(organismal_species)}"
-            )
+        if not isinstance(species_input, str):
+            raise ValueError("Species input must be a string")
+
+        # Normalize input (strip whitespace, handle case variations)
+        normalized_input = species_input.strip()
+
+        # Create reverse lookup (common name -> Latin name)
+        common_to_latin = {
+            common: latin for latin, common in LATIN_TO_COMMON_SPECIES_NAMES.items()
+        }
+
+        # Check if input is a Latin name (case-insensitive)
+        latin_match = None
+        for latin_name in LATIN_TO_COMMON_SPECIES_NAMES.keys():
+            if normalized_input.lower() == latin_name.lower():
+                latin_match = latin_name
+                break
+
+        if latin_match:
+            self._latin_name = latin_match
+            self._common_name = LATIN_TO_COMMON_SPECIES_NAMES[latin_match]
+            return
+
+        # Check if input is a common name (case-insensitive)
+        common_match = None
+        for common_name in common_to_latin.keys():
+            if normalized_input.lower() == common_name.lower():
+                common_match = common_name
+                break
+
+        if common_match:
+            self._common_name = common_match
+            self._latin_name = common_to_latin[common_match]
+            return
+
+        # If we get here, the species wasn't found
+        available_species = list(LATIN_TO_COMMON_SPECIES_NAMES.keys()) + list(
+            common_to_latin.keys()
+        )
+        raise ValueError(
+            f"Unknown species: '{species_input}'. Available species: {available_species}"
+        )

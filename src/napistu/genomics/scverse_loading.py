@@ -1,3 +1,14 @@
+"""
+Functions for connection scverse data with Napistu graphs.
+
+Public Functions
+----------------
+prepare_anndata_results_df:
+    Prepare a results table from an AnnData object for use in Napistu.
+prepare_mudata_results_df:
+    Prepare results tables from a MuData object for use in Napistu, with adata-specific ontology handling.
+"""
+
 from __future__ import annotations
 
 import logging

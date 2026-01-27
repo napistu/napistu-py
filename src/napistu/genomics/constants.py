@@ -1,4 +1,8 @@
+"""Constants for the genomics module."""
+
 from types import SimpleNamespace
+
+# scverse constants
 
 ADATA = SimpleNamespace(
     LAYERS="layers",
@@ -26,3 +30,20 @@ ADATA_ARRAY_ATTRS = {
 SCVERSE_DEFS = SimpleNamespace(ADATA="adata", MDATA="mdata")
 
 VALID_MUDATA_LEVELS = {SCVERSE_DEFS.ADATA, SCVERSE_DEFS.MDATA}
+
+# gsea constants
+
+GENESET_COLLECTION_DEFS = SimpleNamespace(
+    GENESET="geneset",  # category
+    GENESET_NAME="gene_set_name",  # category name
+    IDENTIFIER="identifier",  # identifier (e.g., Entrez ID) for a gene in a gene set
+    ONTOLOGY_NAME="ontology_name",  # ontology name
+    DEEP_NAME="deep_name",  # the name of a gene set within an ontology
+    SHALLOW_NAME="shallow_name",  # the name of a gene set within a collection of ontologies
+)
+
+GMTS_CONFIG_FIELDS = SimpleNamespace(
+    ENGINE="engine",
+    CATEGORIES="categories",
+    DBVER="dbver",
+)
