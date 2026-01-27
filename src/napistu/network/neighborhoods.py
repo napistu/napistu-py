@@ -1,3 +1,16 @@
+"""
+Approaches to define the molecular neighborhoods around a compartmentalized species.
+
+Public Functions
+----------------
+create_neighborhoods(s_ids, sbml_dfs, napistu_graph, network_type, order, top_n, verbose)
+    Create neighborhoods for a set of species and return a table containing all species in each query s_ids neighborhood.
+find_and_prune_neighborhoods(sbml_dfs, napistu_graph, compartmentalized_species, precomputed_distances, min_pw_size, source_total_counts, network_type, order, verbose, top_n)
+    Find and prune neighborhoods for a set of species and return a dictionary containing the neighborhood of each compartmentalized species.
+find_neighborhoods(sbml_dfs, napistu_graph, compartmentalized_species, network_type, order, min_pw_size, precomputed_neighbors, source_total_counts, verbose)
+    Find neighborhoods for a set of species and return a dictionary containing the neighborhood of each compartmentalized species.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -32,6 +45,103 @@ from napistu.network.constants import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def create_neighborhoods(
+    s_ids: list[str],
+    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    napistu_graph: ig.Graph,
+    network_type: str,
+    order: int,
+    top_n: int,
+    verbose: bool = False,
+) -> tuple[pd.DataFrame, dict]:
+    """
+    Create Neighborhoods
+
+    Create neighborhoods for a set of species and return
+
+    Parameters
+    ----------
+    s_ids: list(str)
+        create a neighborhood around each species
+    sbml_dfs: sbml_dfs_core.SBML_dfs
+        network model
+    napistu_graph: igraph.Graph
+        network associated with sbml_dfs
+    network_type: str
+        downstream, upstream or hourglass (i.e., downstream and upstream)
+    order: 10
+        maximum number of steps from the focal node
+    top_n: 30
+        target number of upstream and downstream species to retain
+    verbose: bool
+        extra reporting
+
+    Returns
+    -------
+    all_neighborhoods_df: pd.DataFrame
+        A table containing all species in each query s_ids neighborhood
+    neighborhood_dicts: dict
+        Outputs from find_and_prune_neighborhoods for each s_id
+    """
+
+    if not isinstance(s_ids, list):
+        raise TypeError(f"s_ids was a {type(s_ids)} and must be an list")
+
+    for s_id in s_ids:
+        if not isinstance(s_id, str):
+            raise TypeError(f"s_id was a {type(s_id)} and must be an str")
+
+    if not isinstance(network_type, str):
+        raise TypeError(f"network_type was a {type(network_type)} and must be an str")
+
+    if not isinstance(order, int):
+        raise TypeError(f"order was a {type(order)} and must be an int")
+
+    if not isinstance(top_n, int):
+        raise TypeError(f"top_n was a {type(top_n)} and must be an int")
+
+    neighborhoods_list = list()
+    neighborhood_dicts = dict()
+    for s_id in s_ids:
+        query_sc_species = ng_utils.compartmentalize_species(sbml_dfs, s_id)
+
+        compartmentalized_species = query_sc_species[SBML_DFS.SC_ID].tolist()
+
+        neighborhood_dicts = find_and_prune_neighborhoods(
+            sbml_dfs,
+            napistu_graph,
+            compartmentalized_species=compartmentalized_species,
+            network_type=network_type,
+            order=order,
+            top_n=top_n,
+            verbose=verbose,
+        )
+
+        # combine multiple neighborhoods
+
+        neighborhood_entities = pd.concat(
+            [
+                neighborhood_dicts[sc_id][NEIGHBORHOOD_DICT_KEYS.VERTICES].assign(
+                    focal_sc_id=sc_id
+                )
+                for sc_id in neighborhood_dicts.keys()
+            ]
+        ).assign(focal_s_id=s_id)
+
+        neighborhood_species = neighborhood_entities.merge(
+            sbml_dfs.compartmentalized_species[SBML_DFS.S_ID],
+            left_on=NAPISTU_GRAPH_VERTICES.NAME,
+            right_index=True,
+        )
+
+        neighborhoods_list.append(neighborhood_species)
+        neighborhood_dicts[s_id] = neighborhood_dicts
+
+    all_neighborhoods_df = pd.concat(neighborhoods_list).reset_index(drop=True)
+
+    return all_neighborhoods_df, neighborhood_dicts
 
 
 def find_and_prune_neighborhoods(
@@ -139,103 +249,6 @@ def find_and_prune_neighborhoods(
     pruned_neighborhoods = prune_neighborhoods(neighborhood_dicts, top_n=top_n)
 
     return pruned_neighborhoods
-
-
-def create_neighborhoods(
-    s_ids: list[str],
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
-    napistu_graph: ig.Graph,
-    network_type: str,
-    order: int,
-    top_n: int,
-    verbose: bool = False,
-) -> tuple[pd.DataFrame, dict]:
-    """
-    Create Neighborhoods
-
-    Create neighborhoods for a set of species and return
-
-    Parameters
-    ----------
-    s_ids: list(str)
-        create a neighborhood around each species
-    sbml_dfs: sbml_dfs_core.SBML_dfs
-        network model
-    napistu_graph: igraph.Graph
-        network associated with sbml_dfs
-    network_type: str
-        downstream, upstream or hourglass (i.e., downstream and upstream)
-    order: 10
-        maximum number of steps from the focal node
-    top_n: 30
-        target number of upstream and downstream species to retain
-    verbose: bool
-        extra reporting
-
-    Returns
-    -------
-    all_neighborhoods_df: pd.DataFrame
-        A table containing all species in each query s_ids neighborhood
-    neighborhood_dicts: dict
-        Outputs from find_and_prune_neighborhoods for each s_id
-    """
-
-    if not isinstance(s_ids, list):
-        raise TypeError(f"s_ids was a {type(s_ids)} and must be an list")
-
-    for s_id in s_ids:
-        if not isinstance(s_id, str):
-            raise TypeError(f"s_id was a {type(s_id)} and must be an str")
-
-    if not isinstance(network_type, str):
-        raise TypeError(f"network_type was a {type(network_type)} and must be an str")
-
-    if not isinstance(order, int):
-        raise TypeError(f"order was a {type(order)} and must be an int")
-
-    if not isinstance(top_n, int):
-        raise TypeError(f"top_n was a {type(top_n)} and must be an int")
-
-    neighborhoods_list = list()
-    neighborhood_dicts = dict()
-    for s_id in s_ids:
-        query_sc_species = ng_utils.compartmentalize_species(sbml_dfs, s_id)
-
-        compartmentalized_species = query_sc_species[SBML_DFS.SC_ID].tolist()
-
-        neighborhood_dicts = find_and_prune_neighborhoods(
-            sbml_dfs,
-            napistu_graph,
-            compartmentalized_species=compartmentalized_species,
-            network_type=network_type,
-            order=order,
-            top_n=top_n,
-            verbose=verbose,
-        )
-
-        # combine multiple neighborhoods
-
-        neighborhood_entities = pd.concat(
-            [
-                neighborhood_dicts[sc_id][NEIGHBORHOOD_DICT_KEYS.VERTICES].assign(
-                    focal_sc_id=sc_id
-                )
-                for sc_id in neighborhood_dicts.keys()
-            ]
-        ).assign(focal_s_id=s_id)
-
-        neighborhood_species = neighborhood_entities.merge(
-            sbml_dfs.compartmentalized_species[SBML_DFS.S_ID],
-            left_on=NAPISTU_GRAPH_VERTICES.NAME,
-            right_index=True,
-        )
-
-        neighborhoods_list.append(neighborhood_species)
-        neighborhood_dicts[s_id] = neighborhood_dicts
-
-    all_neighborhoods_df = pd.concat(neighborhoods_list).reset_index(drop=True)
-
-    return all_neighborhoods_df, neighborhood_dicts
 
 
 def find_neighborhoods(

@@ -3,6 +3,25 @@ General utilities for working with igraph.Graph objects.
 
 This module contains utilities that can be broadly applied to any igraph.Graph
 object, not specific to NapistuGraph subclasses.
+
+Public Functions
+----------------
+create_induced_subgraph(graph: Graph, vertices: Optional[list[str]] = None, n_vertices: int = 5000) -> Graph:
+    Create a subgraph from an igraph including a set of vertices and their connections.
+define_graph_universe(graph: Graph, vertex_names: Optional[Union[List[str], pd.Series]] = None, edgelist: Optional[pd.DataFrame] = None, observed_only: bool = False, edge_filter_logic: str = 'and', include_self_edges: bool = False) -> Graph:
+    Define a graph universe for enrichment-style analyses.
+filter_to_largest_subgraph(graph: Graph) -> Graph:
+    Filter an igraph to its largest weakly connected component.
+filter_to_largest_subgraphs(graph: Graph, top_k: int) -> list[Graph]:
+    Filter an igraph to its largest weakly connected components.
+get_graph_summary(graph: Graph) -> dict[str, Any]:
+    Calculate common summary statistics for an igraph network.
+graph_to_pandas_dfs(graph: Graph) -> tuple[pd.DataFrame, pd.DataFrame]:
+    Convert an igraph to Pandas DataFrames for vertices and edges.
+validate_edge_attributes(graph: Graph, edge_attributes: list[str]) -> None:
+    Validate that all required edge attributes exist in an igraph.
+validate_vertex_attributes(graph: Graph, vertex_attributes: list[str]) -> None:
+    Validate that all required vertex attributes exist in an igraph.
 """
 
 from __future__ import annotations
@@ -11,20 +30,230 @@ import logging
 import random
 from typing import Any, Dict, List, Optional, Sequence, Union
 
-import igraph as ig
 import numpy as np
 import pandas as pd
+from igraph import Graph
+
+from napistu.network.constants import IGRAPH_DEFS, UNIVERSE_GATES, VALID_UNIVERSE_GATES
 
 logger = logging.getLogger(__name__)
 
 
-def get_graph_summary(graph: ig.Graph) -> dict[str, Any]:
+def create_induced_subgraph(
+    graph: Graph,
+    vertices: Optional[list[str]] = None,
+    n_vertices: int = 5000,
+) -> Graph:
+    """
+    Create a subgraph from an igraph including a set of vertices and their connections.
+
+    Parameters
+    ----------
+    graph : Graph
+        The input network.
+    vertices : list, optional
+        List of vertex names to include. If None, a random sample is selected.
+    n_vertices : int, optional
+        Number of vertices to sample if `vertices` is None. Default is 5000.
+
+    Returns
+    -------
+    Graph
+        The induced subgraph.
+    """
+
+    if not isinstance(graph, Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
+    if vertices is not None:
+        selected_vertices = vertices
+    else:
+        # Assume vertices have a 'name' attribute, fallback to indices
+        if IGRAPH_DEFS.NAME in graph.vs.attributes():
+            vertex_names = graph.vs[IGRAPH_DEFS.NAME]
+        else:
+            vertex_names = list(range(graph.vcount()))
+        selected_vertices = random.sample(
+            vertex_names, min(n_vertices, len(vertex_names))
+        )
+
+    subgraph = graph.induced_subgraph(selected_vertices)
+    return subgraph
+
+
+def define_graph_universe(
+    graph: Graph,
+    vertex_names: Optional[Union[List[str], pd.Series]] = None,
+    edgelist: Optional[pd.DataFrame] = None,
+    observed_only: bool = False,
+    edge_filter_logic: str = UNIVERSE_GATES.AND,
+    include_self_edges: bool = False,
+) -> Graph:
+    """
+    Create a graph defining the search space for enrichment-style analyses.
+
+    The graph represents all possible edges for the null model.
+    By default (no filters), creates a COMPLETE graph on all vertices.
+
+    Parameters
+    ----------
+    graph : Graph
+        Source graph (used for vertex names and directionality)
+    vertex_names : list of str or pd.Series, optional
+        Vertex names to include in universe (matching graph vertex 'name' attribute).
+        If None, includes all vertices.
+    edgelist : pd.DataFrame, optional
+        Two-column DataFrame with columns 'source' and 'target' containing vertex names.
+        Specifies edges to include in universe.
+        If None and observed_only=False, creates complete graph.
+    observed_only : bool
+        If True, extract edgelist from original graph where 'observed' attribute is True.
+    edge_filter_logic : str
+        How to combine edgelist and observed_only filters:
+        - 'and': Keep edges in BOTH edgelists (intersection)
+        - 'or': Keep edges in EITHER edgelist (union)
+    include_self_edges : bool
+        If True, include self-edges (i -> i) in universe.
+        Default is False.
+
+    Returns
+    -------
+    Graph
+        Universe graph with same directionality as source.
+        Vertex indices match the filtered vertex set.
+    """
+    # Validate edge filter logic
+    if edge_filter_logic not in VALID_UNIVERSE_GATES:
+        raise ValueError(
+            f"edge_filter_logic must be one of {VALID_UNIVERSE_GATES}, got {edge_filter_logic}"
+        )
+
+    # Get directionality from source graph
+    is_directed = graph.is_directed()
+
+    # Step 1: Filter vertices
+    selected_names = _get_universe_vertex_names(graph, vertex_names)
+
+    # Step 2: Build edge filters
+    edge_filters = _get_universe_edge_filters(graph, edgelist, observed_only)
+
+    # Step 3: Create final edgelist
+    final_edgelist = _create_universe_edgelist(
+        edge_filters, edge_filter_logic, selected_names, is_directed
+    )
+
+    # Filter edgelist to only vertices in selected_names
+    selected_names_set = set(selected_names)
+    final_edgelist = final_edgelist[
+        final_edgelist[IGRAPH_DEFS.SOURCE].isin(selected_names_set)
+        & final_edgelist[IGRAPH_DEFS.TARGET].isin(selected_names_set)
+    ].reset_index(drop=True)
+
+    # Step 4: Create universe graph
+    universe = Graph(directed=is_directed)
+
+    # Add vertices with names
+    n_vertices = len(selected_names)
+    universe.add_vertices(n_vertices)
+    universe.vs[IGRAPH_DEFS.NAME] = selected_names
+
+    # Build name to new index mapping
+    name_to_new_idx = {name: i for i, name in enumerate(selected_names)}
+
+    # Add edges
+    if len(final_edgelist) > 0:
+        edge_tuples = [
+            (
+                name_to_new_idx[row[IGRAPH_DEFS.SOURCE]],
+                name_to_new_idx[row[IGRAPH_DEFS.TARGET]],
+            )
+            for _, row in final_edgelist.iterrows()
+        ]
+        universe.add_edges(edge_tuples)
+
+    # Simplify: remove duplicate edges and optionally self-loops
+    universe.simplify(multiple=True, loops=not include_self_edges)
+
+    return universe
+
+
+def filter_to_largest_subgraph(graph: Graph) -> Graph:
+    """
+    Filter an igraph to its largest weakly connected component.
+
+    Parameters
+    ----------
+    graph : Graph
+        The input network.
+
+    Returns
+    -------
+    Graph
+        The largest weakly connected component.
+    """
+
+    if not isinstance(graph, Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
+    component_members = graph.components(mode="weak")
+    component_sizes = [len(x) for x in component_members]
+
+    top_component_members = [
+        m
+        for s, m in zip(component_sizes, component_members)
+        if s == max(component_sizes)
+    ][0]
+
+    largest_subgraph = graph.induced_subgraph(top_component_members)
+    return largest_subgraph
+
+
+def filter_to_largest_subgraphs(graph: Graph, top_k: int) -> list[Graph]:
+    """
+    Filter an igraph to its largest weakly connected components.
+
+    Parameters
+    ----------
+    graph : Graph
+        The input network.
+    top_k : int
+        The number of largest components to return.
+
+    Returns
+    -------
+    list[Graph]
+        A list of the top K largest components as graphs.
+    """
+
+    if not isinstance(graph, Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
+    if top_k < 1:
+        raise ValueError("top_k must be 1 or greater.")
+
+    component_members = graph.components(mode="weak")
+    if not component_members:
+        return []
+
+    component_sizes = [len(x) for x in component_members]
+
+    # Sort components by size in descending order
+    sorted_components = sorted(
+        zip(component_sizes, component_members), key=lambda x: x[0], reverse=True
+    )
+
+    # Return a list of the top K subgraphs
+    top_k_components = sorted_components[:top_k]
+    return [graph.induced_subgraph(members) for _, members in top_k_components]
+
+
+def get_graph_summary(graph: Graph) -> dict[str, Any]:
     """
     Calculate common summary statistics for an igraph network.
 
     Parameters
     ----------
-    graph : ig.Graph
+    graph : Graph
         The input network.
 
     Returns
@@ -42,7 +271,7 @@ def get_graph_summary(graph: ig.Graph) -> dict[str, Any]:
         - top10_harmonic_centrality (list[dict]): the top 10 vertices by harmonic centrality
     """
 
-    if not isinstance(graph, ig.Graph):
+    if not isinstance(graph, Graph):
         raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
 
     stats = {}
@@ -76,83 +305,13 @@ def get_graph_summary(graph: ig.Graph) -> dict[str, Any]:
     return stats
 
 
-def filter_to_largest_subgraph(graph: ig.Graph) -> ig.Graph:
-    """
-    Filter an igraph to its largest weakly connected component.
-
-    Parameters
-    ----------
-    graph : ig.Graph
-        The input network.
-
-    Returns
-    -------
-    ig.Graph
-        The largest weakly connected component.
-    """
-
-    if not isinstance(graph, ig.Graph):
-        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
-
-    component_members = graph.components(mode="weak")
-    component_sizes = [len(x) for x in component_members]
-
-    top_component_members = [
-        m
-        for s, m in zip(component_sizes, component_members)
-        if s == max(component_sizes)
-    ][0]
-
-    largest_subgraph = graph.induced_subgraph(top_component_members)
-    return largest_subgraph
-
-
-def filter_to_largest_subgraphs(graph: ig.Graph, top_k: int) -> list[ig.Graph]:
-    """
-    Filter an igraph to its largest weakly connected components.
-
-    Parameters
-    ----------
-    graph : ig.Graph
-        The input network.
-    top_k : int
-        The number of largest components to return.
-
-    Returns
-    -------
-    list[ig.Graph]
-        A list of the top K largest components as graphs.
-    """
-
-    if not isinstance(graph, ig.Graph):
-        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
-
-    if top_k < 1:
-        raise ValueError("top_k must be 1 or greater.")
-
-    component_members = graph.components(mode="weak")
-    if not component_members:
-        return []
-
-    component_sizes = [len(x) for x in component_members]
-
-    # Sort components by size in descending order
-    sorted_components = sorted(
-        zip(component_sizes, component_members), key=lambda x: x[0], reverse=True
-    )
-
-    # Return a list of the top K subgraphs
-    top_k_components = sorted_components[:top_k]
-    return [graph.induced_subgraph(members) for _, members in top_k_components]
-
-
-def graph_to_pandas_dfs(graph: ig.Graph) -> tuple[pd.DataFrame, pd.DataFrame]:
+def graph_to_pandas_dfs(graph: Graph) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Convert an igraph to Pandas DataFrames for vertices and edges.
 
     Parameters
     ----------
-    graph : ig.Graph
+    graph : Graph
         An igraph network.
 
     Returns
@@ -163,70 +322,31 @@ def graph_to_pandas_dfs(graph: ig.Graph) -> tuple[pd.DataFrame, pd.DataFrame]:
         A table with one row per edge.
     """
 
-    if not isinstance(graph, ig.Graph):
+    if not isinstance(graph, Graph):
         raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
 
     vertices = pd.DataFrame(
-        [{**{"index": v.index}, **v.attributes()} for v in graph.vs]
+        [{**{IGRAPH_DEFS.INDEX: v.index}, **v.attributes()} for v in graph.vs]
     )
     edges = pd.DataFrame(
         [
-            {**{"source": e.source, "target": e.target}, **e.attributes()}
+            {
+                **{IGRAPH_DEFS.SOURCE: e.source, IGRAPH_DEFS.TARGET: e.target},
+                **e.attributes(),
+            }
             for e in graph.es
         ]
     )
     return vertices, edges
 
 
-def create_induced_subgraph(
-    graph: ig.Graph,
-    vertices: Optional[list[str]] = None,
-    n_vertices: int = 5000,
-) -> ig.Graph:
-    """
-    Create a subgraph from an igraph including a set of vertices and their connections.
-
-    Parameters
-    ----------
-    graph : ig.Graph
-        The input network.
-    vertices : list, optional
-        List of vertex names to include. If None, a random sample is selected.
-    n_vertices : int, optional
-        Number of vertices to sample if `vertices` is None. Default is 5000.
-
-    Returns
-    -------
-    ig.Graph
-        The induced subgraph.
-    """
-
-    if not isinstance(graph, ig.Graph):
-        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
-
-    if vertices is not None:
-        selected_vertices = vertices
-    else:
-        # Assume vertices have a 'name' attribute, fallback to indices
-        if "name" in graph.vs.attributes():
-            vertex_names = graph.vs["name"]
-        else:
-            vertex_names = list(range(graph.vcount()))
-        selected_vertices = random.sample(
-            vertex_names, min(n_vertices, len(vertex_names))
-        )
-
-    subgraph = graph.induced_subgraph(selected_vertices)
-    return subgraph
-
-
-def validate_edge_attributes(graph: ig.Graph, edge_attributes: list[str]) -> None:
+def validate_edge_attributes(graph: Graph, edge_attributes: list[str]) -> None:
     """
     Validate that all required edge attributes exist in an igraph.
 
     Parameters
     ----------
-    graph : ig.Graph
+    graph : Graph
         The network.
     edge_attributes : list of str
         List of edge attribute names to check.
@@ -243,7 +363,7 @@ def validate_edge_attributes(graph: ig.Graph, edge_attributes: list[str]) -> Non
         If any required edge attribute is missing from the graph.
     """
 
-    if not isinstance(graph, ig.Graph):
+    if not isinstance(graph, Graph):
         raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
 
     if isinstance(edge_attributes, list):
@@ -266,13 +386,13 @@ def validate_edge_attributes(graph: ig.Graph, edge_attributes: list[str]) -> Non
     return None
 
 
-def validate_vertex_attributes(graph: ig.Graph, vertex_attributes: list[str]) -> None:
+def validate_vertex_attributes(graph: Graph, vertex_attributes: list[str]) -> None:
     """
     Validate that all required vertex attributes exist in an igraph.
 
     Parameters
     ----------
-    graph : ig.Graph
+    graph : Graph
         The network.
     vertex_attributes : list of str
         List of vertex attribute names to check.
@@ -289,7 +409,7 @@ def validate_vertex_attributes(graph: ig.Graph, vertex_attributes: list[str]) ->
         If any required vertex attribute is missing from the graph.
     """
 
-    if not isinstance(graph, ig.Graph):
+    if not isinstance(graph, Graph):
         raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
 
     if isinstance(vertex_attributes, list):
@@ -313,6 +433,203 @@ def validate_vertex_attributes(graph: ig.Graph, vertex_attributes: list[str]) ->
 
 
 # Internal utility functions
+
+
+def _create_universe_edgelist(
+    edge_filters: List[pd.DataFrame],
+    edge_filter_logic: str,
+    selected_names: List[str],
+    is_directed: bool,
+) -> pd.DataFrame:
+    """
+    Create edgelist for universe from filters or complete graph.
+
+    Parameters
+    ----------
+    edge_filters : List[pd.DataFrame]
+        List of edgelist DataFrames to combine
+    edge_filter_logic : str
+        'and' for intersection, 'or' for union
+    selected_names : List[str]
+        Vertex names in the universe
+    is_directed : bool
+        Whether graph is directed
+
+    Returns
+    -------
+    pd.DataFrame
+        Final edgelist with 'source' and 'target' columns
+    """
+    if len(edge_filters) == 0:
+        # Create complete graph
+        n_vertices = len(selected_names)
+        if is_directed:
+            complete_edges = [
+                {IGRAPH_DEFS.SOURCE: src, IGRAPH_DEFS.TARGET: tgt}
+                for src in selected_names
+                for tgt in selected_names
+            ]
+        else:
+            complete_edges = [
+                {
+                    IGRAPH_DEFS.SOURCE: selected_names[i],
+                    IGRAPH_DEFS.TARGET: selected_names[j],
+                }
+                for i in range(n_vertices)
+                for j in range(i, n_vertices)
+            ]
+        return pd.DataFrame(complete_edges)
+
+    if len(edge_filters) == 1:
+        return edge_filters[0].copy()
+
+    # Combine multiple filters
+    if edge_filter_logic == UNIVERSE_GATES.AND:
+        # Intersection: edges in both
+        result = edge_filters[0]
+        for ef in edge_filters[1:]:
+            result = pd.merge(
+                result, ef, on=[IGRAPH_DEFS.SOURCE, IGRAPH_DEFS.TARGET], how="inner"
+            )
+        return result
+    elif edge_filter_logic == UNIVERSE_GATES.OR:
+        # Union: edges in either
+        return pd.concat(edge_filters, ignore_index=True).drop_duplicates(
+            subset=[IGRAPH_DEFS.SOURCE, IGRAPH_DEFS.TARGET],
+        )
+    else:
+        raise ValueError(f"Invalid edge_filter_logic: {edge_filter_logic}")
+
+
+def _ensure_valid_attribute(graph: Graph, attribute: str, non_negative: bool = True):
+    """
+    Ensure a vertex attribute is present, numeric, finite, and optionally non-negative for all vertices.
+
+    This utility checks that the specified vertex attribute exists, is numeric, and (optionally) non-negative
+    for all vertices in the graph. Missing or None values are treated as 0. Raises ValueError
+    if the attribute is missing for all vertices, if all values are zero, or if any value is negative (if non_negative=True).
+
+    Parameters
+    ----------
+    graph : NapistuGraph or Graph
+        The input graph (NapistuGraph or igraph.Graph).
+    attribute : str
+        The name of the vertex attribute to check.
+    non_negative : bool, default True
+        Whether to require all values to be non-negative.
+
+    Returns
+    -------
+    np.ndarray
+        Array of attribute values (with missing/None replaced by 0).
+
+    Raises
+    ------
+    ValueError
+        If the attribute is missing for all vertices, all values are zero, or any value is negative (if non_negative=True).
+    """
+
+    if not isinstance(graph, Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
+    all_missing = all(
+        (attribute not in v.attributes() or v[attribute] is None) for v in graph.vs
+    )
+    if all_missing:
+        raise ValueError(f"Vertex attribute '{attribute}' is missing for all vertices.")
+
+    values = [
+        (
+            v[attribute]
+            if (attribute in v.attributes() and v[attribute] is not None)
+            else 0.0
+        )
+        for v in graph.vs
+    ]
+
+    arr = np.array(values, dtype=float)
+
+    if np.all(arr == 0):
+        raise ValueError(
+            f"Vertex attribute '{attribute}' is zero for all vertices; cannot use as reset vector."
+        )
+    if non_negative and np.any(arr < 0):
+        raise ValueError(f"Attribute '{attribute}' contains negative values.")
+    if not np.all(np.isfinite(arr)):
+        raise ValueError(
+            f"Attribute '{attribute}' contains non-finite values (NaN or inf)."
+        )
+
+    return arr
+
+
+def _get_attribute_masks(
+    graph: Graph,
+    mask_specs: Dict[str, Union[str, np.ndarray, List, None]],
+) -> Dict[str, np.ndarray]:
+    """
+    Generate boolean masks for each attribute based on specifications.
+
+    Parameters
+    ----------
+    graph : Graph
+        Input graph.
+    mask_specs : Dict[str, Union[str, np.ndarray, List, None]]
+        Dictionary mapping each attribute to its mask specification.
+
+    Returns
+    -------
+    Dict[str, np.ndarray]
+        Dictionary mapping each attribute to its boolean mask array.
+    """
+
+    if not isinstance(graph, Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
+    n_nodes = graph.vcount()
+    masks = {}
+
+    invalid_attrs = set(mask_specs.keys()).difference(graph.vs.attributes())
+    if invalid_attrs:
+        raise ValueError(f"Attributes {invalid_attrs} not found in graph")
+
+    for attr in mask_specs.keys():
+
+        mask_spec = mask_specs[attr]
+
+        if mask_spec is None:
+            masks[attr] = np.ones(n_nodes, dtype=bool)
+        elif isinstance(mask_spec, str):
+            attr_values = np.array(graph.vs[mask_spec])
+            masks[attr] = attr_values > 0
+        elif isinstance(mask_spec, np.ndarray):
+            masks[attr] = mask_spec.astype(bool)
+        elif isinstance(mask_spec, list):
+            mask_array = np.zeros(n_nodes, dtype=bool)
+            if isinstance(mask_spec[0], str):
+                # Node names
+                node_names = (
+                    graph.vs[IGRAPH_DEFS.NAME]
+                    if IGRAPH_DEFS.NAME in graph.vs.attributes()
+                    else None
+                )
+                if node_names is None:
+                    raise ValueError(
+                        f"Graph has no '{IGRAPH_DEFS.NAME}' attribute for string mask"
+                    )
+                for name in mask_spec:
+                    idx = node_names.index(name)
+                    mask_array[idx] = True
+            else:
+                # Node indices
+                mask_array[mask_spec] = True
+            masks[attr] = mask_array
+        else:
+            raise ValueError(
+                f"Invalid mask specification for attribute '{attr}': {type(mask_spec)}"
+            )
+
+    return masks
 
 
 def _get_top_n_idx(arr: Sequence, n: int, ascending: bool = False) -> Sequence[int]:
@@ -343,7 +660,7 @@ def _get_top_n_objects(
 
 
 def _get_top_n_component_stats(
-    graph: ig.Graph,
+    graph: Graph,
     components,
     component_sizes: Sequence[int],
     n: int = 10,
@@ -354,7 +671,7 @@ def _get_top_n_component_stats(
 
     Parameters
     ----------
-    graph : ig.Graph
+    graph : Graph
         The network.
     components : list
         List of components (as lists of vertex indices).
@@ -373,7 +690,7 @@ def _get_top_n_component_stats(
         - 'examples': up to 10 example vertex attribute dicts from the component
     """
 
-    if not isinstance(graph, ig.Graph):
+    if not isinstance(graph, Graph):
         raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
 
     top_components = _get_top_n_objects(component_sizes, components, n, ascending)
@@ -385,7 +702,7 @@ def _get_top_n_component_stats(
 
 
 def _get_top_n_nodes(
-    graph: ig.Graph,
+    graph: Graph,
     vals: Sequence,
     val_name: str,
     n: int = 10,
@@ -396,7 +713,7 @@ def _get_top_n_nodes(
 
     Parameters
     ----------
-    graph : ig.Graph
+    graph : Graph
         The network.
     vals : Sequence
         Sequence of node attribute values.
@@ -413,13 +730,126 @@ def _get_top_n_nodes(
         Each dict contains the value and the node's attributes.
     """
 
-    if not isinstance(graph, ig.Graph):
+    if not isinstance(graph, Graph):
         raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
 
     top_idxs = _get_top_n_idx(vals, n, ascending=ascending)
     top_node_attrs = [graph.vs[idx].attributes() for idx in top_idxs]
     top_vals = [vals[idx] for idx in top_idxs]
     return [{val_name: val, **node} for val, node in zip(top_vals, top_node_attrs)]
+
+
+def _get_universe_edge_filters(
+    graph: Graph,
+    edgelist: Optional[pd.DataFrame] = None,
+    observed_only: bool = False,
+) -> List[pd.DataFrame]:
+    """
+    Build list of edge filters from user inputs.
+
+    Parameters
+    ----------
+    graph : Graph
+        Source graph
+    edgelist : pd.DataFrame, optional
+        User-provided edgelist with 'source' and 'target' columns
+    observed_only : bool
+        If True, extract observed edges from graph
+
+    Returns
+    -------
+    List[pd.DataFrame]
+        List of edgelist DataFrames to filter by
+    """
+    edge_filters = []
+
+    # Extract observed edges if requested (all edges in the original graph)
+    if observed_only:
+        observed_edges = pd.DataFrame(
+            [
+                {
+                    IGRAPH_DEFS.SOURCE: graph.vs[e.source][IGRAPH_DEFS.NAME],
+                    IGRAPH_DEFS.TARGET: graph.vs[e.target][IGRAPH_DEFS.NAME],
+                }
+                for e in graph.es
+            ]
+        )
+        edge_filters.append(observed_edges)
+
+    # Add user-provided edgelist
+    if edgelist is not None:
+        if (
+            IGRAPH_DEFS.SOURCE not in edgelist.columns
+            or IGRAPH_DEFS.TARGET not in edgelist.columns
+        ):
+            raise ValueError(
+                f"edgelist must have columns '{IGRAPH_DEFS.SOURCE}' and '{IGRAPH_DEFS.TARGET}'"
+            )
+
+        edge_endpoints = set(
+            edgelist[IGRAPH_DEFS.SOURCE].tolist()
+            + edgelist[IGRAPH_DEFS.TARGET].tolist()
+        )
+        valid_vertex_names = set(graph.vs[IGRAPH_DEFS.NAME])
+        invalid_endpoints = edge_endpoints - valid_vertex_names
+        if invalid_endpoints:
+            example_invalid_endpoints = list(invalid_endpoints)[
+                : min(5, len(invalid_endpoints))
+            ]
+            raise ValueError(
+                f"{len(invalid_endpoints)} edge endpoint(s) not found in graph: {example_invalid_endpoints}"
+            )
+        edge_filters.append(edgelist[[IGRAPH_DEFS.SOURCE, IGRAPH_DEFS.TARGET]])
+
+    return edge_filters
+
+
+def _get_universe_vertex_names(
+    graph: Graph,
+    vertex_names: Optional[Union[List[str], pd.Series]] = None,
+) -> List[str]:
+    """
+    Get and validate vertex names for the universe.
+
+    Parameters
+    ----------
+    graph : Graph
+        Source graph
+    vertex_names : list of str or pd.Series, optional
+        Vertex names to include. If None, includes all vertices.
+
+    Returns
+    -------
+    List[str]
+        List of vertex names to include in universe
+
+    Raises
+    ------
+    ValueError
+        If any vertex names are not found in the graph
+    """
+    if vertex_names is not None:
+        if isinstance(vertex_names, pd.Series):
+            vertex_names = vertex_names.tolist()
+
+        # Require at least one vertex if provided
+        if len(vertex_names) == 0:
+            raise ValueError("vertex_names must contain at least one vertex name")
+
+        # Build name to index mapping for original graph
+        name_to_idx = {v[IGRAPH_DEFS.NAME]: v.index for v in graph.vs}
+
+        # Validate all names exist
+        missing = set(vertex_names) - set(name_to_idx.keys())
+        if missing:
+            example_missing = list(missing)[: min(5, len(missing))]
+            raise ValueError(
+                f"{len(missing)} vertex name(s) not found in graph: {example_missing}"
+            )
+
+        return vertex_names
+    else:
+        return [v[IGRAPH_DEFS.NAME] for v in graph.vs]
 
 
 def _parse_mask_input(
@@ -474,71 +904,6 @@ def _parse_mask_input(
     return masks
 
 
-def _get_attribute_masks(
-    graph: ig.Graph,
-    mask_specs: Dict[str, Union[str, np.ndarray, List, None]],
-) -> Dict[str, np.ndarray]:
-    """
-    Generate boolean masks for each attribute based on specifications.
-
-    Parameters
-    ----------
-    graph : ig.Graph
-        Input graph.
-    mask_specs : Dict[str, Union[str, np.ndarray, List, None]]
-        Dictionary mapping each attribute to its mask specification.
-
-    Returns
-    -------
-    Dict[str, np.ndarray]
-        Dictionary mapping each attribute to its boolean mask array.
-    """
-
-    if not isinstance(graph, ig.Graph):
-        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
-
-    n_nodes = graph.vcount()
-    masks = {}
-
-    invalid_attrs = set(mask_specs.keys()).difference(graph.vs.attributes())
-    if invalid_attrs:
-        raise ValueError(f"Attributes {invalid_attrs} not found in graph")
-
-    for attr in mask_specs.keys():
-
-        mask_spec = mask_specs[attr]
-
-        if mask_spec is None:
-            masks[attr] = np.ones(n_nodes, dtype=bool)
-        elif isinstance(mask_spec, str):
-            attr_values = np.array(graph.vs[mask_spec])
-            masks[attr] = attr_values > 0
-        elif isinstance(mask_spec, np.ndarray):
-            masks[attr] = mask_spec.astype(bool)
-        elif isinstance(mask_spec, list):
-            mask_array = np.zeros(n_nodes, dtype=bool)
-            if isinstance(mask_spec[0], str):
-                # Node names
-                node_names = (
-                    graph.vs["name"] if "name" in graph.vs.attributes() else None
-                )
-                if node_names is None:
-                    raise ValueError("Graph has no 'name' attribute for string mask")
-                for name in mask_spec:
-                    idx = node_names.index(name)
-                    mask_array[idx] = True
-            else:
-                # Node indices
-                mask_array[mask_spec] = True
-            masks[attr] = mask_array
-        else:
-            raise ValueError(
-                f"Invalid mask specification for attribute '{attr}': {type(mask_spec)}"
-            )
-
-    return masks
-
-
 def _print_mask_input_result(masks):
     """
     Print a readable summary of the result of _parse_mask_input(mask_input, attributes).
@@ -548,65 +913,3 @@ def _print_mask_input_result(masks):
     logger.info("Mask input parsing result:")
     for attr, spec in masks.items():
         logger.info(f"  Attribute: {attr!r} -> Mask spec: {repr(spec)}")
-
-
-def _ensure_valid_attribute(graph: ig.Graph, attribute: str, non_negative: bool = True):
-    """
-    Ensure a vertex attribute is present, numeric, finite, and optionally non-negative for all vertices.
-
-    This utility checks that the specified vertex attribute exists, is numeric, and (optionally) non-negative
-    for all vertices in the graph. Missing or None values are treated as 0. Raises ValueError
-    if the attribute is missing for all vertices, if all values are zero, or if any value is negative (if non_negative=True).
-
-    Parameters
-    ----------
-    graph : NapistuGraph or ig.Graph
-        The input graph (NapistuGraph or igraph.Graph).
-    attribute : str
-        The name of the vertex attribute to check.
-    non_negative : bool, default True
-        Whether to require all values to be non-negative.
-
-    Returns
-    -------
-    np.ndarray
-        Array of attribute values (with missing/None replaced by 0).
-
-    Raises
-    ------
-    ValueError
-        If the attribute is missing for all vertices, all values are zero, or any value is negative (if non_negative=True).
-    """
-
-    if not isinstance(graph, ig.Graph):
-        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
-
-    all_missing = all(
-        (attribute not in v.attributes() or v[attribute] is None) for v in graph.vs
-    )
-    if all_missing:
-        raise ValueError(f"Vertex attribute '{attribute}' is missing for all vertices.")
-
-    values = [
-        (
-            v[attribute]
-            if (attribute in v.attributes() and v[attribute] is not None)
-            else 0.0
-        )
-        for v in graph.vs
-    ]
-
-    arr = np.array(values, dtype=float)
-
-    if np.all(arr == 0):
-        raise ValueError(
-            f"Vertex attribute '{attribute}' is zero for all vertices; cannot use as reset vector."
-        )
-    if non_negative and np.any(arr < 0):
-        raise ValueError(f"Attribute '{attribute}' contains negative values.")
-    if not np.all(np.isfinite(arr)):
-        raise ValueError(
-            f"Attribute '{attribute}' contains non-finite values (NaN or inf)."
-        )
-
-    return arr

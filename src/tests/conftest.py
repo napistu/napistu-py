@@ -9,6 +9,7 @@ from datetime import datetime
 import pandas as pd
 import pytest
 from google.cloud import storage
+from igraph import Graph
 from pytest import fixture, skip
 from testcontainers.core.container import DockerContainer
 
@@ -24,7 +25,7 @@ from napistu.constants import (
 )
 from napistu.identifiers import Identifiers
 from napistu.ingestion.sbml import SBML
-from napistu.network.constants import NAPISTU_WEIGHTING_STRATEGIES
+from napistu.network.constants import IGRAPH_DEFS, NAPISTU_WEIGHTING_STRATEGIES
 from napistu.network.net_create import process_napistu_graph
 from napistu.network.precompute import precompute_distances
 from napistu.sbml_dfs_core import SBML_dfs
@@ -240,6 +241,26 @@ def species_identifiers_metabolism(sbml_dfs_metabolism):
     """
 
     return sbml_dfs_metabolism.get_characteristic_species_ids()
+
+
+@pytest.fixture
+def simple_directed_graph():
+    """Create a simple directed igraph.Graph with named vertices."""
+    g = Graph(directed=True)
+    g.add_vertices(4)
+    g.vs[IGRAPH_DEFS.NAME] = ["A", "B", "C", "D"]
+    g.add_edges([(0, 1), (1, 2), (2, 3)])
+    g.es["observed"] = [True, True, False]
+    return g
+
+
+@pytest.fixture
+def simple_undirected_graph():
+    """Create a simple undirected igraph.Graph with named vertices."""
+    g = Graph(directed=False)
+    g.add_vertices(3)
+    g.vs[IGRAPH_DEFS.NAME] = ["X", "Y", "Z"]
+    return g
 
 
 @pytest.fixture

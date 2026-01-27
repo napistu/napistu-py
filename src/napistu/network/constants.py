@@ -289,7 +289,6 @@ DEFAULT_WT_TRANS = WEIGHT_TRANSFORMATIONS.IDENTITY
 
 SOURCE_VARS_DICT = {"string_wt": 10}
 
-
 # network propagation
 NET_PROPAGATION_DEFS = SimpleNamespace(PERSONALIZED_PAGERANK="personalized_pagerank")
 
@@ -304,6 +303,13 @@ NULL_STRATEGIES = SimpleNamespace(
 VALID_NULL_STRATEGIES = NULL_STRATEGIES.__dict__.values()
 
 PARAMETRIC_NULL_DEFAULT_DISTRIBUTION = "norm"
+
+UNIVERSE_GATES = SimpleNamespace(
+    AND="and",
+    OR="or",
+)
+
+VALID_UNIVERSE_GATES = list(UNIVERSE_GATES.__dict__.values())
 
 # masks
 MASK_KEYWORDS = SimpleNamespace(
