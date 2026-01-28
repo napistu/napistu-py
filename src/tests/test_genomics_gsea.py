@@ -1,13 +1,21 @@
 """Tests for gene set enrichment analysis (GSEA) functionality."""
 
+from types import SimpleNamespace
+
 import numpy as np
 import pandas as pd
 import pytest
 
 from napistu.constants import BQB, IDENTIFIERS, ONTOLOGIES, SBML_DFS
-from napistu.genomics.gsea import GenesetCollection, GmtsConfig
+from napistu.genomics.gsea import (
+    GenesetCollection,
+    GmtsConfig,
+    _calculate_geneset_edge_counts,
+    _filter_genesets_to_universe,
+)
 from napistu.identifiers import Identifiers, construct_cspecies_identifiers
 from napistu.ingestion.constants import COMPARTMENTS
+from napistu.network.constants import IGRAPH_DEFS
 from napistu.source import Source
 from napistu.utils.optional import import_gseapy
 
@@ -256,3 +264,33 @@ def test_prerank_with_napistu_genesets(sbml_dfs_w_entrez_ids):
     assert hasattr(gsea_results, "res2d")
     assert isinstance(gsea_results.res2d, pd.DataFrame)
     assert len(gsea_results.res2d) > 0
+
+
+def test_filter_genesets_to_universe(napistu_graph):
+    names = napistu_graph.vs[IGRAPH_DEFS.NAME][:3]
+    collection = SimpleNamespace(
+        gmt={"ok": names + ["NOT_IN_UNIVERSE"], "bad": ["ALSO_NOT_IN_UNIVERSE"]}
+    )
+    filtered, df = _filter_genesets_to_universe(
+        napistu_graph, collection.gmt, min_set_size=1
+    )
+    assert set(filtered) == {"ok"} and set(filtered["ok"]) == set(names)
+    assert set(df["geneset"]) == {"ok"} and set(df["vertex_name"]) == set(names)
+
+
+def test_calculate_geneset_edge_counts(napistu_graph):
+    e0 = napistu_graph.es[0]
+    src = napistu_graph.vs[e0.source][IGRAPH_DEFS.NAME]
+    tgt = napistu_graph.vs[e0.target][IGRAPH_DEFS.NAME]
+    observed = pd.DataFrame({IGRAPH_DEFS.SOURCE: [src], IGRAPH_DEFS.TARGET: [tgt]})
+    genesets = SimpleNamespace(gmt={"gs1": [src, tgt], "gs2": [tgt]}).gmt
+    out = _calculate_geneset_edge_counts(
+        observed, genesets, napistu_graph, min_set_size=1, directed=True
+    )
+    ab = out.query("source_geneset == 'gs1' and target_geneset == 'gs2'")[
+        "observed_edges"
+    ].iloc[0]
+    ba = out.query("source_geneset == 'gs2' and target_geneset == 'gs1'")[
+        "observed_edges"
+    ].iloc[0]
+    assert ab == 1 and ba == 0

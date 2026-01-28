@@ -1,4 +1,15 @@
-from typing import Union
+"""
+Hypothesis tests.
+
+Public Functions
+----------------
+fisher_exact_vectorized(observed_members, missing_members, observed_nonmembers, nonobserved_nonmembers)
+    Fast vectorized one-tailed Fisher exact test using normal approximation.
+neat_edge_enrichment_test(observed_edges, out_degrees_a, in_degrees_b, total_edges, same_set)
+    NEAT degree-corrected edge enrichment test.
+"""
+
+from typing import Dict, Union
 
 import numpy as np
 from scipy.stats import norm
@@ -64,3 +75,75 @@ def fisher_exact_vectorized(
     p_values = norm.sf(z)  # 1 - norm.cdf(z)
 
     return odds_ratios, p_values
+
+
+def neat_edge_enrichment_test(
+    observed_edges: int,
+    out_degrees_a: np.ndarray,
+    in_degrees_b: np.ndarray,
+    total_edges: int,
+    same_set: bool = False,
+) -> Dict[str, float]:
+    """
+    NEAT degree-corrected edge enrichment test.
+
+    Works for both directed and undirected graphs without branching.
+    For undirected: out_degrees_a == in_degrees_a and in_degrees_b == out_degrees_b
+
+    Parameters
+    ----------
+    observed_edges : int
+        Number of edges observed between gene sets A and B
+    out_degrees_a : np.ndarray
+        Out-degrees of nodes in gene set A (or total degrees if undirected)
+    in_degrees_b : np.ndarray
+        In-degrees of nodes in gene set B (or total degrees if undirected)
+    total_edges : int
+        Total number of edges in the universe
+    same_set : bool
+        Whether A and B are the same gene set (affects self-loop correction)
+
+    Returns
+    -------
+    dict
+        Statistical test results with keys:
+        - observed: int
+        - expected: float
+        - variance: float
+        - z_score: float
+        - p_value: float
+    """
+    # Expected edges: sum of (out_deg_i * in_deg_j) / total_edges
+    degree_products = np.outer(out_degrees_a, in_degrees_b)
+    expected = np.sum(degree_products) / total_edges
+
+    # Self-loop correction for same set
+    if same_set:
+        # For same set, degrees should be identical (out_degrees_a == in_degrees_b)
+        # Remove self-loops: sum of (deg_i^2) / total_edges
+        expected -= np.sum(out_degrees_a**2) / total_edges
+
+    # Exact variance: sum of p_ij(1 - p_ij)
+    p_ij = degree_products / total_edges
+    variance = np.sum(p_ij * (1 - p_ij))
+
+    # Self-loop variance correction
+    if same_set:
+        self_probs = (out_degrees_a**2) / total_edges
+        variance -= np.sum(self_probs * (1 - self_probs))
+
+    # Z-score and p-value
+    if variance == 0:
+        z_score = 0.0
+        p_value = 1.0
+    else:
+        z_score = (observed_edges - expected) / np.sqrt(variance)
+        p_value = norm.sf(z_score)  # one-tailed upper tail
+
+    return {
+        "observed": observed_edges,
+        "expected": float(expected),
+        "variance": float(variance),
+        "z_score": float(z_score),
+        "p_value": float(p_value),
+    }

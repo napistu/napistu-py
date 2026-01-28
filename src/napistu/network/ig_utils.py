@@ -16,10 +16,14 @@ filter_to_largest_subgraphs(graph: Graph, top_k: int) -> list[Graph]:
     Filter an igraph to its largest weakly connected components.
 get_graph_summary(graph: Graph) -> dict[str, Any]:
     Calculate common summary statistics for an igraph network.
+get_merge_keys(graph: Graph, merge_by: str = IGRAPH_DEFS.NAME) -> tuple[str, str, str]:
+    Get the merge keys for a graph based on the merge_by parameter.
 graph_to_pandas_dfs(graph: Graph) -> tuple[pd.DataFrame, pd.DataFrame]:
     Convert an igraph to Pandas DataFrames for vertices and edges.
 validate_edge_attributes(graph: Graph, edge_attributes: list[str]) -> None:
     Validate that all required edge attributes exist in an igraph.
+validate_edgelist_graph_subset(edgelist: pd.DataFrame, graph: Graph, edgelist_name: str = "edgelist", graph_name: str = "graph", source_name: str = IGRAPH_DEFS.SOURCE, target_name: str = IGRAPH_DEFS.TARGET) -> None:
+    Validate that edgelist is a subset of graph's edges.
 validate_vertex_attributes(graph: Graph, vertex_attributes: list[str]) -> None:
     Validate that all required vertex attributes exist in an igraph.
 """
@@ -28,13 +32,18 @@ from __future__ import annotations
 
 import logging
 import random
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
 from igraph import Graph
 
-from napistu.network.constants import IGRAPH_DEFS, UNIVERSE_GATES, VALID_UNIVERSE_GATES
+from napistu.network.constants import (
+    IGRAPH_DEFS,
+    NAPISTU_GRAPH_EDGES,
+    UNIVERSE_GATES,
+    VALID_UNIVERSE_GATES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +58,7 @@ def create_induced_subgraph(
 
     Parameters
     ----------
-    graph : Graph
+    graph : igraph.Graph
         The input network.
     vertices : list, optional
         List of vertex names to include. If None, a random sample is selected.
@@ -305,6 +314,62 @@ def get_graph_summary(graph: Graph) -> dict[str, Any]:
     return stats
 
 
+def get_merge_keys(
+    graph: Graph, merge_by: str = IGRAPH_DEFS.NAME
+) -> tuple[str, str, str]:
+    """
+    Get the merge keys for a graph based on the merge_by parameter.
+
+    Parameters
+    ----------
+    graph : Graph
+        The graph to get the merge keys for.
+    merge_by : str
+        The attribute to merge by. Must be one of IGRAPH_DEFS.NAME or IGRAPH_DEFS.INDEX.
+
+    Returns
+    -------
+    tuple[str, str, str]
+        The merge keys.
+
+    Raises
+    ------
+    ValueError
+        If merge_by is not one of IGRAPH_DEFS.NAME or IGRAPH_DEFS.INDEX.
+        If the vertex attribute is not unique.
+        If the expected attributes are not present in the graph.
+    """
+
+    if not isinstance(graph, Graph):
+        raise ValueError(f"graph must be an igraph.Graph object but was {type(graph)}")
+
+    VALID_MERGE_BY = [IGRAPH_DEFS.NAME, IGRAPH_DEFS.INDEX]
+    if merge_by not in VALID_MERGE_BY:
+        raise ValueError(f"merge_by must be one of {VALID_MERGE_BY}, got {merge_by}")
+
+    vertex_id_attr = (
+        IGRAPH_DEFS.NAME if merge_by == IGRAPH_DEFS.NAME else IGRAPH_DEFS.INDEX
+    )
+    source_id_attr = (
+        NAPISTU_GRAPH_EDGES.FROM if merge_by == IGRAPH_DEFS.NAME else IGRAPH_DEFS.SOURCE
+    )
+    target_id_attr = (
+        NAPISTU_GRAPH_EDGES.TO if merge_by == IGRAPH_DEFS.NAME else IGRAPH_DEFS.TARGET
+    )
+
+    # validate that these attributes are present and vertices are unique
+    if vertex_id_attr not in graph.vs.attributes():
+        raise ValueError(f"Vertex attribute '{vertex_id_attr}' not found in graph")
+    if source_id_attr not in graph.es.attributes():
+        raise ValueError(f"Edge attribute '{source_id_attr}' not found in graph")
+    if target_id_attr not in graph.es.attributes():
+        raise ValueError(f"Edge attribute '{target_id_attr}' not found in graph")
+    if graph.vs[vertex_id_attr].nunique() != graph.vcount():
+        raise ValueError(f"Vertex attribute '{vertex_id_attr}' is not unique")
+
+    return (vertex_id_attr, source_id_attr, target_id_attr)
+
+
 def graph_to_pandas_dfs(graph: Graph) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Convert an igraph to Pandas DataFrames for vertices and edges.
@@ -384,6 +449,98 @@ def validate_edge_attributes(graph: Graph, edge_attributes: list[str]) -> None:
         )
 
     return None
+
+
+def validate_edgelist_graph_subset(
+    edgelist: pd.DataFrame,
+    graph: Graph,
+    source_name: str = IGRAPH_DEFS.SOURCE,
+    target_name: str = IGRAPH_DEFS.TARGET,
+    merge_by: str = IGRAPH_DEFS.NAME,
+    edgelist_name: str = "edgelist",
+    graph_name: str = "graph",
+) -> None:
+    """
+    Validate that observed edgelist is a subset of universe graph edges.
+
+    Parameters
+    ----------
+    edgelist : pd.DataFrame
+        Edgelist with 'source' and 'target' columns containing vertex names
+    graph : igraph.Graph
+        Graph defining all possible edges
+    source_name : str
+        Name of the source column in the edgelist (default: "source")
+    target_name : str
+        Name of the target column in the edgelist (default: "target")
+    merge_by : str
+        The attribute to merge by. Must be one of IGRAPH_DEFS.NAME or IGRAPH_DEFS.INDEX.
+    edgelist_name : str
+        Name to use for edgelist in error messages (default: "edgelist")
+    graph_name : str
+        Name to use for graph in error messages (default: "graph")
+
+    Raises
+    ------
+    ValueError
+        If edgelist does not have the required columns
+        If edgelist contains vertices not in graph
+        If edgelist contains edges not in graph
+    """
+    if source_name not in edgelist.columns or target_name not in edgelist.columns:
+        raise ValueError(
+            f"{edgelist_name} must have columns '{source_name}' and '{target_name}'"
+        )
+
+    # Determine vertex attribute to use
+    VALID_MERGE_BY = [IGRAPH_DEFS.NAME, IGRAPH_DEFS.INDEX]
+    if merge_by not in VALID_MERGE_BY:
+        raise ValueError(f"merge_by must be one of {VALID_MERGE_BY}, got {merge_by}")
+
+    vertex_id_attr = (
+        IGRAPH_DEFS.NAME if merge_by == IGRAPH_DEFS.NAME else IGRAPH_DEFS.INDEX
+    )
+
+    # Validate vertex attribute exists
+    if vertex_id_attr not in graph.vs.attributes():
+        raise ValueError(f"Vertex attribute '{vertex_id_attr}' not found in graph")
+
+    # check for vertices which are not in the graph
+    invalid_vertices = set(
+        edgelist[source_name].tolist() + edgelist[target_name].tolist()
+    ) - set(graph.vs[vertex_id_attr])
+    if invalid_vertices:
+        example_invalid_vertices = list(invalid_vertices)[
+            : min(5, len(invalid_vertices))
+        ]
+        raise ValueError(
+            f"Found {len(invalid_vertices)} vertex(s) in {edgelist_name} not in {graph_name}: {example_invalid_vertices}"
+        )
+
+    # Build set of universe edges
+    universe_edges = set()
+    for e in graph.es:
+        src_name = graph.vs[e.source][vertex_id_attr]
+        tgt_name = graph.vs[e.target][vertex_id_attr]
+        universe_edges.add((src_name, tgt_name))
+        if not graph.is_directed():
+            # For undirected, also add reverse
+            universe_edges.add((tgt_name, src_name))
+
+    # Check all observed edges are in universe
+    invalid_edges = []
+    for _, row in edgelist.iterrows():
+        edge = (row[source_name], row[target_name])
+        if edge not in universe_edges:
+            invalid_edges.append(edge)
+            if len(invalid_edges) >= 10:  # Limit reporting to first 10
+                break
+
+    if invalid_edges:
+        raise ValueError(
+            f"Found {len(invalid_edges)} edge(s) in {edgelist_name} not in {graph_name}. "
+            f"First few: {invalid_edges[:5]}"
+        )
 
 
 def validate_vertex_attributes(graph: Graph, vertex_attributes: list[str]) -> None:
@@ -802,6 +959,52 @@ def _get_universe_edge_filters(
         edge_filters.append(edgelist[[IGRAPH_DEFS.SOURCE, IGRAPH_DEFS.TARGET]])
 
     return edge_filters
+
+
+def _get_universe_degrees(
+    universe: Graph,
+    directed: bool = False,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Extract degree information from universe graph.
+
+    Always returns (out_degrees, in_degrees).
+    For undirected graphs, out_degrees == in_degrees == total_degree.
+
+    Parameters
+    ----------
+    universe : igraph.Graph
+        Universe graph
+    directed : bool
+        Whether to compute directed degrees. If True, computes separate out and in degrees.
+        If False, returns total degree for both out and in.
+
+    Returns
+    -------
+    Tuple[np.ndarray, np.ndarray]
+        (out_degrees, in_degrees) where each is shape (n_vertices,)
+        For undirected graphs, both arrays are identical.
+
+    Notes
+    -----
+    For undirected graphs, out_degree == in_degree == total_degree.
+    This allows calling code to avoid branching logic based on directedness.
+
+    Examples
+    --------
+    >>> # Works the same for both directed and undirected
+    >>> out_deg, in_deg = _get_universe_degrees(universe, directed=False)
+    >>> out_deg, in_deg = _get_universe_degrees(universe, directed=True)
+    """
+    if directed:
+        out_degrees = np.array(universe.degree(mode="out"))
+        in_degrees = np.array(universe.degree(mode="in"))
+    else:
+        degrees = np.array(universe.degree())
+        out_degrees = degrees
+        in_degrees = degrees
+
+    return out_degrees, in_degrees
 
 
 def _get_universe_vertex_names(

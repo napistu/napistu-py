@@ -16,9 +16,10 @@ get_default_collection_config:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
+from igraph import Graph
 from pydantic import BaseModel
 
 from napistu.constants import ONTOLOGIES, SBML_DFS
@@ -27,6 +28,7 @@ from napistu.identifiers import _check_species_identifiers_table
 from napistu.ingestion.constants import LATIN_SPECIES_NAMES
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.matching.species import features_to_pathway_species
+from napistu.network.constants import IGRAPH_DEFS
 from napistu.utils.optional import import_gseapy, require_gseapy
 
 logger = logging.getLogger(__name__)
@@ -348,6 +350,160 @@ class GenesetCollection:
             )
 
         return gmts_config
+
+
+def _calculate_geneset_edge_counts(
+    edgelist: pd.DataFrame,
+    genesets: Dict[str, List[str]],
+    universe: Graph,
+    min_set_size: int = 5,
+    max_set_size: Optional[int] = None,
+    directed: bool = False,
+) -> pd.DataFrame:
+    """
+    Calculate edge counts between all geneset pairs.
+
+    Parameters
+    ----------
+    edgelist : pd.DataFrame
+        Edgelist with 'source' and 'target' columns containing vertex names.
+        These are the actual edges to count.
+    genesets : Dict[str, List[str]]
+        Dictionary mapping geneset names to lists of vertex names
+    universe : igraph.Graph
+        Universe graph defining the possible edges (used for filtering genesets to valid vertices)
+    min_set_size : int
+        Minimum number of genes in universe for a geneset to be included
+    max_set_size : int, optional
+        Maximum number of genes in universe for a geneset to be included
+    directed : bool
+        Whether edges are directed
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: source_geneset, target_geneset, observed_edges, n_genes_source, n_genes_target
+        One row per geneset pair (upper triangle only if undirected)
+    """
+    # Step 1: Filter genesets to universe vertices and create membership dataframe
+    filtered_genesets, geneset_df = _filter_genesets_to_universe(
+        universe, genesets, min_set_size, max_set_size
+    )
+
+    if len(filtered_genesets) == 0:
+        raise ValueError(
+            "No genesets found in universe after filtering to minimum size"
+        )
+
+    # Step 2: Join observed edges to source genesets
+    edges_with_source = edgelist.merge(
+        geneset_df, left_on=IGRAPH_DEFS.SOURCE, right_on="vertex_name", how="inner"
+    ).rename(columns={"geneset": "source_geneset"})
+
+    # Step 3: Join to target genesets
+    edges_with_both = edges_with_source.merge(
+        geneset_df,
+        left_on=IGRAPH_DEFS.TARGET,
+        right_on="vertex_name",
+        how="inner",
+        suffixes=("_src", "_tgt"),
+    ).rename(columns={"geneset": "target_geneset"})
+
+    # Step 4: Count edges per geneset pair
+    edge_counts = (
+        edges_with_both.groupby(["source_geneset", "target_geneset"])
+        .size()
+        .reset_index(name="observed_edges")
+    )
+
+    # Step 5: Create all possible pairs (including those with 0 edges)
+    geneset_sizes = {name: len(genes) for name, genes in filtered_genesets.items()}
+    pathway_names = list(filtered_genesets.keys())
+
+    if directed:
+        all_pairs = [
+            {"source_geneset": a, "target_geneset": b}
+            for a in pathway_names
+            for b in pathway_names
+        ]
+    else:
+        all_pairs = [
+            {"source_geneset": pathway_names[i], "target_geneset": pathway_names[j]}
+            for i in range(len(pathway_names))
+            for j in range(i, len(pathway_names))
+        ]
+
+    all_pairs_df = pd.DataFrame(all_pairs)
+    all_pairs_df["n_genes_source"] = all_pairs_df["source_geneset"].map(geneset_sizes)
+    all_pairs_df["n_genes_target"] = all_pairs_df["target_geneset"].map(geneset_sizes)
+
+    # Step 6: Merge to include pairs with 0 edges
+    result = all_pairs_df.merge(
+        edge_counts[["source_geneset", "target_geneset", "observed_edges"]],
+        on=["source_geneset", "target_geneset"],
+        how="left",
+    )
+    result["observed_edges"] = result["observed_edges"].fillna(0).astype(int)
+
+    return result
+
+
+def _filter_genesets_to_universe(
+    universe: Graph,
+    genesets: Dict[str, List[str]],
+    min_set_size: int = 5,
+    max_set_size: Optional[int] = None,
+) -> Tuple[Dict[str, List[str]], pd.DataFrame]:
+    """
+    Filter genesets to universe vertices and create membership dataframe.
+
+    Parameters
+    ----------
+    universe : igraph.Graph
+        Universe graph with 'name' attribute on vertices
+    genesets : Dict[str, List[str]]
+        Dictionary mapping geneset names to lists of vertex names
+    min_set_size : int
+        Minimum number of genes in universe for inclusion
+    max_set_size : int, optional
+        Maximum number of genes in universe for inclusion
+
+    Returns
+    -------
+    filtered_genesets : Dict[str, List[str]]
+        Geneset name -> list of vertex names in universe
+    geneset_df : pd.DataFrame
+        Long format with columns: geneset, vertex_name
+        Each row is one gene in one geneset
+    """
+    # Get valid vertex names in universe
+    universe_vertex_names = set(universe.vs[IGRAPH_DEFS.NAME])
+
+    # Filter genesets to universe and by size
+    filtered_genesets = {}
+    geneset_members = []
+
+    for geneset_name, gene_names in genesets.items():
+        # Filter to genes that exist in universe
+        valid_genes = [g for g in gene_names if g in universe_vertex_names]
+
+        # Filter by size
+        if len(valid_genes) >= min_set_size:
+            if max_set_size is None or len(valid_genes) <= max_set_size:
+                filtered_genesets[geneset_name] = valid_genes
+
+                # Add to membership list
+                for gene in valid_genes:
+                    geneset_members.append(
+                        {
+                            "geneset": geneset_name,
+                            "vertex_name": gene,
+                        }
+                    )
+
+    geneset_df = pd.DataFrame(geneset_members)
+
+    return filtered_genesets, geneset_df
 
 
 class GmtsConfig(BaseModel):
