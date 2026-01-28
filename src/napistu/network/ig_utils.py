@@ -22,8 +22,6 @@ graph_to_pandas_dfs(graph: Graph) -> tuple[pd.DataFrame, pd.DataFrame]:
     Convert an igraph to Pandas DataFrames for vertices and edges.
 validate_edge_attributes(graph: Graph, edge_attributes: list[str]) -> None:
     Validate that all required edge attributes exist in an igraph.
-validate_edgelist_graph_subset(edgelist: pd.DataFrame, graph: Graph, edgelist_name: str = "edgelist", graph_name: str = "graph", source_name: str = IGRAPH_DEFS.SOURCE, target_name: str = IGRAPH_DEFS.TARGET) -> None:
-    Validate that edgelist is a subset of graph's edges.
 validate_vertex_attributes(graph: Graph, vertex_attributes: list[str]) -> None:
     Validate that all required vertex attributes exist in an igraph.
 """
@@ -449,98 +447,6 @@ def validate_edge_attributes(graph: Graph, edge_attributes: list[str]) -> None:
         )
 
     return None
-
-
-def validate_edgelist_graph_subset(
-    edgelist: pd.DataFrame,
-    graph: Graph,
-    source_name: str = IGRAPH_DEFS.SOURCE,
-    target_name: str = IGRAPH_DEFS.TARGET,
-    merge_by: str = IGRAPH_DEFS.NAME,
-    edgelist_name: str = "edgelist",
-    graph_name: str = "graph",
-) -> None:
-    """
-    Validate that observed edgelist is a subset of universe graph edges.
-
-    Parameters
-    ----------
-    edgelist : pd.DataFrame
-        Edgelist with 'source' and 'target' columns containing vertex names
-    graph : igraph.Graph
-        Graph defining all possible edges
-    source_name : str
-        Name of the source column in the edgelist (default: "source")
-    target_name : str
-        Name of the target column in the edgelist (default: "target")
-    merge_by : str
-        The attribute to merge by. Must be one of IGRAPH_DEFS.NAME or IGRAPH_DEFS.INDEX.
-    edgelist_name : str
-        Name to use for edgelist in error messages (default: "edgelist")
-    graph_name : str
-        Name to use for graph in error messages (default: "graph")
-
-    Raises
-    ------
-    ValueError
-        If edgelist does not have the required columns
-        If edgelist contains vertices not in graph
-        If edgelist contains edges not in graph
-    """
-    if source_name not in edgelist.columns or target_name not in edgelist.columns:
-        raise ValueError(
-            f"{edgelist_name} must have columns '{source_name}' and '{target_name}'"
-        )
-
-    # Determine vertex attribute to use
-    VALID_MERGE_BY = [IGRAPH_DEFS.NAME, IGRAPH_DEFS.INDEX]
-    if merge_by not in VALID_MERGE_BY:
-        raise ValueError(f"merge_by must be one of {VALID_MERGE_BY}, got {merge_by}")
-
-    vertex_id_attr = (
-        IGRAPH_DEFS.NAME if merge_by == IGRAPH_DEFS.NAME else IGRAPH_DEFS.INDEX
-    )
-
-    # Validate vertex attribute exists
-    if vertex_id_attr not in graph.vs.attributes():
-        raise ValueError(f"Vertex attribute '{vertex_id_attr}' not found in graph")
-
-    # check for vertices which are not in the graph
-    invalid_vertices = set(
-        edgelist[source_name].tolist() + edgelist[target_name].tolist()
-    ) - set(graph.vs[vertex_id_attr])
-    if invalid_vertices:
-        example_invalid_vertices = list(invalid_vertices)[
-            : min(5, len(invalid_vertices))
-        ]
-        raise ValueError(
-            f"Found {len(invalid_vertices)} vertex(s) in {edgelist_name} not in {graph_name}: {example_invalid_vertices}"
-        )
-
-    # Build set of universe edges
-    universe_edges = set()
-    for e in graph.es:
-        src_name = graph.vs[e.source][vertex_id_attr]
-        tgt_name = graph.vs[e.target][vertex_id_attr]
-        universe_edges.add((src_name, tgt_name))
-        if not graph.is_directed():
-            # For undirected, also add reverse
-            universe_edges.add((tgt_name, src_name))
-
-    # Check all observed edges are in universe
-    invalid_edges = []
-    for _, row in edgelist.iterrows():
-        edge = (row[source_name], row[target_name])
-        if edge not in universe_edges:
-            invalid_edges.append(edge)
-            if len(invalid_edges) >= 10:  # Limit reporting to first 10
-                break
-
-    if invalid_edges:
-        raise ValueError(
-            f"Found {len(invalid_edges)} edge(s) in {edgelist_name} not in {graph_name}. "
-            f"First few: {invalid_edges[:5]}"
-        )
 
 
 def validate_vertex_attributes(graph: Graph, vertex_attributes: list[str]) -> None:

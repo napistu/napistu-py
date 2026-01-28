@@ -476,47 +476,6 @@ def test_create_universe_edgelist(simple_undirected_graph):
     assert result.loc[0, IGRAPH_DEFS.TARGET] == "B"
 
 
-def test_validate_edgelist_graph_subset(simple_directed_graph, simple_undirected_graph):
-    """Test _validate_edgelist_graph_subset function."""
-    # Test valid edgelist passes
-    valid_edgelist = pd.DataFrame(
-        {IGRAPH_DEFS.SOURCE: ["A", "B"], IGRAPH_DEFS.TARGET: ["B", "C"]}
-    )
-    ig_utils.validate_edgelist_graph_subset(valid_edgelist, simple_directed_graph)
-
-    # Test missing columns raises error
-    bad_edgelist = pd.DataFrame({"from": ["A"], "to": ["B"]})
-    with pytest.raises(ValueError, match="must have columns 'source' and 'target'"):
-        ig_utils.validate_edgelist_graph_subset(bad_edgelist, simple_directed_graph)
-
-    # Test invalid vertices raises error
-    invalid_vertex_edgelist = pd.DataFrame(
-        {IGRAPH_DEFS.SOURCE: ["A", "E"], IGRAPH_DEFS.TARGET: ["B", "C"]}
-    )
-    with pytest.raises(ValueError, match="vertex\\(s\\) in edgelist not in universe"):
-        ig_utils.validate_edgelist_graph_subset(
-            invalid_vertex_edgelist, simple_directed_graph, graph_name="universe"
-        )
-
-    # Test invalid edges raises error
-    invalid_edge_edgelist = pd.DataFrame(
-        {IGRAPH_DEFS.SOURCE: ["A", "C"], IGRAPH_DEFS.TARGET: ["B", "A"]}
-    )
-    with pytest.raises(ValueError, match="edge\\(s\\) in edgelist not in universe"):
-        ig_utils.validate_edgelist_graph_subset(
-            invalid_edge_edgelist, simple_directed_graph, graph_name="universe"
-        )
-
-    # Test undirected graph accepts reverse edges
-    undirected_edgelist = pd.DataFrame(
-        {IGRAPH_DEFS.SOURCE: ["X", "Y"], IGRAPH_DEFS.TARGET: ["Y", "X"]}
-    )
-    simple_undirected_graph.add_edges([(0, 1)])  # Add edge X-Y
-    ig_utils.validate_edgelist_graph_subset(
-        undirected_edgelist, simple_undirected_graph
-    )
-
-
 def test_get_universe_degrees(simple_directed_graph, simple_undirected_graph):
     """Test _get_universe_degrees function."""
     out_deg, in_deg = ig_utils._get_universe_degrees(
