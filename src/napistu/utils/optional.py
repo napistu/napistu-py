@@ -26,6 +26,10 @@ import_omnipath:
     Import and return omnipath, raising an informative error if missing.
 import_omnipath_interactions:
     Import and return omnipath.interactions, raising an informative error if missing.
+import_statsmodels:
+    Import and return statsmodels, raising an informative error if missing.
+import_statsmodels_multitest:
+    Import and return statsmodels.stats.multitest.multipletests, raising an informative error if missing.
 
 Decorators
 ----------
@@ -37,6 +41,8 @@ require_mudata:
     Decorator ensuring mudata is available before calling a function.
 require_omnipath:
     Decorator ensuring omnipath is available before calling a function.
+require_statsmodels:
+    Decorator ensuring statsmodels is available before calling a function.
 """
 
 from __future__ import annotations
@@ -177,12 +183,17 @@ import_omnipath_interactions = create_package_importer(
 import_anndata = create_package_importer(IMPORTABLE_PACKAGES.ANNDATA)
 import_mudata = create_package_importer(IMPORTABLE_PACKAGES.MUDATA)
 import_gseapy = create_package_importer(IMPORTABLE_PACKAGES.GSEAPY)
+import_statsmodels = create_package_importer(IMPORTABLE_PACKAGES.STATSMODELS)
+import_statsmodels_multitest = create_package_importer(
+    f"{IMPORTABLE_PACKAGES.STATSMODELS}.stats.multitest"
+)
 
 # Convenience decorators
 require_anndata = require_package(IMPORTABLE_PACKAGES.ANNDATA)
 require_gseapy = require_package(IMPORTABLE_PACKAGES.GSEAPY)
 require_mudata = require_package(IMPORTABLE_PACKAGES.MUDATA)
 require_omnipath = require_package(IMPORTABLE_PACKAGES.OMNIPATH)
+require_statsmodels = require_package(IMPORTABLE_PACKAGES.STATSMODELS)
 
 
 def _configure_package_logging(package_name: str) -> Any:

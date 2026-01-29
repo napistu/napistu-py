@@ -5,7 +5,7 @@ Public Functions
 ----------------
 fisher_exact_vectorized(observed_members, missing_members, observed_nonmembers, nonobserved_nonmembers)
     Fast vectorized one-tailed Fisher exact test using normal approximation.
-neat_edge_enrichment_test(observed_edges, out_degrees_a, in_degrees_b, total_edges, same_set)
+neat_edge_enrichment_test(observed_edges, out_degrees_a, in_degrees_b, total_edges_universe, total_edges_observed)
     NEAT degree-corrected edge enrichment test.
 """
 
@@ -81,27 +81,11 @@ def neat_edge_enrichment_test(
     observed_edges: int,
     out_degrees_a: np.ndarray,
     in_degrees_b: np.ndarray,
-    total_edges: int,
-    same_set: bool = False,
+    total_edges_universe: int,
+    total_edges_observed: int,
 ) -> Dict[str, float]:
     """
     NEAT degree-corrected edge enrichment test.
-
-    Works for both directed and undirected graphs without branching.
-    For undirected: out_degrees_a == in_degrees_a and in_degrees_b == out_degrees_b
-
-    Parameters
-    ----------
-    observed_edges : int
-        Number of edges observed between gene sets A and B
-    out_degrees_a : np.ndarray
-        Out-degrees of nodes in gene set A (or total degrees if undirected)
-    in_degrees_b : np.ndarray
-        In-degrees of nodes in gene set B (or total degrees if undirected)
-    total_edges : int
-        Total number of edges in the universe
-    same_set : bool
-        Whether A and B are the same gene set (affects self-loop correction)
 
     Returns
     -------
@@ -112,25 +96,32 @@ def neat_edge_enrichment_test(
         - variance: float
         - z_score: float
         - p_value: float
+        - n_genes_a: int (number of genes in set A)
+        - n_genes_b: int (number of genes in set B)
+        - sum_out_deg_a: float (sum of out-degrees in set A)
+        - sum_in_deg_b: float (sum of in-degrees in set B)
+        - total_edges_universe: int
+        - total_edges_observed: int
     """
-    # Expected edges: sum of (out_deg_i * in_deg_j) / total_edges
-    degree_products = np.outer(out_degrees_a, in_degrees_b)
-    expected = np.sum(degree_products) / total_edges
+    # Expected edges between sets A and B in the FULL universe
+    sum_a = np.sum(out_degrees_a)
+    sum_b = np.sum(in_degrees_b)
+    expected_universe = (sum_a * sum_b) / total_edges_universe
 
-    # Self-loop correction for same set
-    if same_set:
-        # For same set, degrees should be identical (out_degrees_a == in_degrees_b)
-        # Remove self-loops: sum of (deg_i^2) / total_edges
-        expected -= np.sum(out_degrees_a**2) / total_edges
+    # Variance in the FULL universe
+    sum_a_sq = np.sum(out_degrees_a**2)
+    sum_b_sq = np.sum(in_degrees_b**2)
+    variance_universe = expected_universe - (sum_a_sq * sum_b_sq) / (
+        total_edges_universe**2
+    )
 
-    # Exact variance: sum of p_ij(1 - p_ij)
-    p_ij = degree_products / total_edges
-    variance = np.sum(p_ij * (1 - p_ij))
+    # Scale to the observed sample size
+    sampling_fraction = total_edges_observed / total_edges_universe
+    expected = expected_universe * sampling_fraction
+    variance = variance_universe * sampling_fraction
 
-    # Self-loop variance correction
-    if same_set:
-        self_probs = (out_degrees_a**2) / total_edges
-        variance -= np.sum(self_probs * (1 - self_probs))
+    # Ensure variance is non-negative (numerical stability)
+    variance = max(0, variance)
 
     # Z-score and p-value
     if variance == 0:
@@ -138,7 +129,9 @@ def neat_edge_enrichment_test(
         p_value = 1.0
     else:
         z_score = (observed_edges - expected) / np.sqrt(variance)
-        p_value = norm.sf(z_score)  # one-tailed upper tail
+        from scipy.stats import norm
+
+        p_value = norm.sf(z_score)
 
     return {
         "observed": observed_edges,
@@ -146,4 +139,10 @@ def neat_edge_enrichment_test(
         "variance": float(variance),
         "z_score": float(z_score),
         "p_value": float(p_value),
+        "n_genes_a": len(out_degrees_a),
+        "n_genes_b": len(in_degrees_b),
+        "sum_out_deg_a": float(sum_a),
+        "sum_in_deg_b": float(sum_b),
+        "total_edges_universe": total_edges_universe,
+        "total_edges_observed": total_edges_observed,
     }
