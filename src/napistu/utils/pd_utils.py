@@ -1,6 +1,11 @@
 """
 Utilities for pandas DataFrame operations.
 
+Classes
+-------
+match_pd_vars: class
+    Match pandas variables - check if required variables are present in a DataFrame or Series.
+
 Public Functions
 ----------------
 check_unique_index(df: pd.DataFrame, label: str = "") -> None:
@@ -19,8 +24,8 @@ style_df(df: pd.DataFrame, headers: Union[str, list[str], None] = "keys", hide_i
     Style a pandas DataFrame with simple formatting options.
 update_pathological_names(names: pd.Series, prefix: str) -> pd.Series:
     Update pathological names in a pandas Series by adding a prefix if all numeric.
-match_pd_vars: class
-    Match pandas variables - check if required variables are present in a DataFrame or Series.
+validate_merge(left_df: pd.DataFrame, right_df: pd.DataFrame, left_on: Union[str, List[str]], right_on: Union[str, List[str]], relationship: Optional[str] = None) -> None:
+    Validate merge relationship before performing a merge operation.
 """
 
 from __future__ import annotations
@@ -34,8 +39,89 @@ import pandas as pd
 from pandas.io.formats.style import Styler
 
 from napistu.constants import SBML_DFS_SCHEMA, SCHEMA_DEFS
+from napistu.utils.constants import (
+    MERGE_RELATIONSHIP_TYPES,
+    VALID_MERGE_RELATIONSHIP_TYPES,
+)
 
 logger = logging.getLogger(__name__)
+
+
+class match_pd_vars:
+    """
+    Match Pandas Variables.
+
+    Attributes
+    ----------
+    req_vars:
+        A set of variables which should exist in df
+    missing_vars:
+        Required variables which are not present in df
+    extra_vars:
+        Non-required variables which are present in df
+    are_present:
+        Returns True if req_vars are present and False otherwise
+
+    Methods
+    -------
+    assert_present()
+        Raise an exception of req_vars are absent
+
+    """
+
+    def __init__(
+        self, df: pd.DataFrame | pd.Series, req_vars: set, allow_series: bool = True
+    ) -> None:
+        """
+        Connects to an SBML file
+
+        Parameters
+        ----------
+        df
+            A pd.DataFrame or pd.Series
+        req_vars
+            A set of variables which should exist in df
+        allow_series:
+            Can a pd.Series be provided as df?
+
+        Returns
+        -------
+        None.
+        """
+
+        if isinstance(df, pd.Series):
+            if not allow_series:
+                raise TypeError("df was a pd.Series and must be a pd.DataFrame")
+            vars_present = set(df.index.tolist())
+        elif isinstance(df, pd.DataFrame):
+            vars_present = set(df.columns.tolist())
+        else:
+            raise TypeError(
+                f"df was a {type(df).__name__} and must be a pd.DataFrame or pd.Series"
+            )
+
+        self.req_vars = req_vars
+        self.missing_vars = req_vars.difference(vars_present)
+        self.extra_vars = vars_present.difference(req_vars)
+
+        if len(self.missing_vars) == 0:
+            self.are_present = True
+        else:
+            self.are_present = False
+
+    def assert_present(self) -> None:
+        """
+        Raise an error if required variables are missing
+        """
+
+        if not self.are_present:
+            raise ValueError(
+                f"{len(self.missing_vars)} required variables were "
+                "missing from the provided pd.DataFrame or pd.Series: "
+                f"{', '.join(self.missing_vars)}"
+            )
+
+        return None
 
 
 def check_unique_index(df, label=""):
@@ -272,83 +358,6 @@ def matrix_to_edgelist(matrix, row_labels=None, col_labels=None):
     return edgelist
 
 
-class match_pd_vars:
-    """
-    Match Pandas Variables.
-
-    Attributes
-    ----------
-    req_vars:
-        A set of variables which should exist in df
-    missing_vars:
-        Required variables which are not present in df
-    extra_vars:
-        Non-required variables which are present in df
-    are_present:
-        Returns True if req_vars are present and False otherwise
-
-    Methods
-    -------
-    assert_present()
-        Raise an exception of req_vars are absent
-
-    """
-
-    def __init__(
-        self, df: pd.DataFrame | pd.Series, req_vars: set, allow_series: bool = True
-    ) -> None:
-        """
-        Connects to an SBML file
-
-        Parameters
-        ----------
-        df
-            A pd.DataFrame or pd.Series
-        req_vars
-            A set of variables which should exist in df
-        allow_series:
-            Can a pd.Series be provided as df?
-
-        Returns
-        -------
-        None.
-        """
-
-        if isinstance(df, pd.Series):
-            if not allow_series:
-                raise TypeError("df was a pd.Series and must be a pd.DataFrame")
-            vars_present = set(df.index.tolist())
-        elif isinstance(df, pd.DataFrame):
-            vars_present = set(df.columns.tolist())
-        else:
-            raise TypeError(
-                f"df was a {type(df).__name__} and must be a pd.DataFrame or pd.Series"
-            )
-
-        self.req_vars = req_vars
-        self.missing_vars = req_vars.difference(vars_present)
-        self.extra_vars = vars_present.difference(req_vars)
-
-        if len(self.missing_vars) == 0:
-            self.are_present = True
-        else:
-            self.are_present = False
-
-    def assert_present(self) -> None:
-        """
-        Raise an error if required variables are missing
-        """
-
-        if not self.are_present:
-            raise ValueError(
-                f"{len(self.missing_vars)} required variables were "
-                "missing from the provided pd.DataFrame or pd.Series: "
-                f"{', '.join(self.missing_vars)}"
-            )
-
-        return None
-
-
 def style_df(
     df: pd.DataFrame,
     headers: Union[str, list[str], None] = "keys",
@@ -417,6 +426,162 @@ def update_pathological_names(names: pd.Series, prefix: str) -> pd.Series:
     if names.apply(lambda x: x.isdigit()).all():
         names = names.apply(lambda x: f"{prefix}{x}")
     return names
+
+
+def validate_merge(
+    left_df: pd.DataFrame,
+    right_df: pd.DataFrame,
+    left_on: Union[str, List[str]],
+    right_on: Union[str, List[str]],
+    relationship: str,
+    _original_relationship: Optional[str] = None,
+) -> None:
+    """
+    Validate merge relationship before performing a merge operation.
+
+    Parameters
+    ----------
+    left_df : pd.DataFrame
+        Left DataFrame for merge
+    right_df : pd.DataFrame
+        Right DataFrame for merge
+    left_on : str or list of str
+        Column name(s) in left_df to merge on
+    right_on : str or list of str
+        Column name(s) in right_df to merge on
+    relationship : str
+        Expected relationship type to validate:
+        - '1:1' (one-to-one): both keys are unique and match exactly
+        - '1:m' (one-to-many): left keys are unique and can match to 1 or more right keys
+        - 'm:1' (many-to-one): right keys are unique and can match to 1 or more left keys
+        - 'm:m' (many-to-many): both keys may have duplicates
+        - '1:0' (one-to-zero-or-one): left keys are unique and can match to 0 or more right keys
+        - '0:1' (zero-or-one-to-one): right keys are unique and can match to 0 or more left keys
+
+    Raises
+    ------
+    ValueError
+        If relationship validation fails
+    """
+    valid_relationships = VALID_MERGE_RELATIONSHIP_TYPES
+    if relationship not in valid_relationships:
+        raise ValueError(
+            f"relationship must be one of {valid_relationships}, got '{relationship}'"
+        )
+
+    # Handle m:1 and 0:1 by swapping DataFrames
+    if relationship == MERGE_RELATIONSHIP_TYPES.MANY_TO_ONE:
+        original = (
+            _original_relationship
+            if _original_relationship is not None
+            else relationship
+        )
+        validate_merge(
+            right_df,
+            left_df,
+            right_on,
+            left_on,
+            MERGE_RELATIONSHIP_TYPES.ONE_TO_MANY,
+            _original_relationship=original,
+        )
+        return
+    elif relationship == MERGE_RELATIONSHIP_TYPES.ZERO_TO_ONE:
+        original = (
+            _original_relationship
+            if _original_relationship is not None
+            else relationship
+        )
+        validate_merge(
+            right_df,
+            left_df,
+            right_on,
+            left_on,
+            MERGE_RELATIONSHIP_TYPES.ONE_TO_ZERO,
+            _original_relationship=original,
+        )
+        return
+
+    # Normalize column names to lists
+    if isinstance(left_on, str):
+        left_on = [left_on]
+    if isinstance(right_on, str):
+        right_on = [right_on]
+
+    if len(left_on) != len(right_on):
+        raise ValueError(
+            f"left_on and right_on must have the same length, got {len(left_on)} and {len(right_on)}"
+        )
+
+    # Extract key columns
+    left_keys = left_df[left_on]
+    right_keys = right_df[right_on]
+
+    # Check uniqueness
+    left_is_unique = not left_keys.duplicated().any()
+    right_is_unique = not right_keys.duplicated().any()
+
+    # Check if left keys are subset of right keys
+    # Convert to tuples for multi-column keys, or use values directly for single column
+    if len(left_on) == 1:
+        left_key_set = set(left_keys[left_on[0]].unique())
+        right_key_set = set(right_keys[right_on[0]].unique())
+    else:
+        left_key_set = set(left_keys.apply(tuple, axis=1).unique())
+        right_key_set = set(right_keys.apply(tuple, axis=1).unique())
+
+    # Use original relationship in error messages if provided.
+    # When `_original_relationship` is set, we got here via swapping left/right inputs,
+    # so we also swap the *labels* used in messages to match the caller's perspective.
+    rel_for_msg = (
+        _original_relationship if _original_relationship is not None else relationship
+    )
+    swapped = _original_relationship is not None
+    left_msg = "right" if swapped else "left"
+    right_msg = "left" if swapped else "right"
+
+    if relationship != MERGE_RELATIONSHIP_TYPES.ONE_TO_ZERO:
+        if left_key_set != right_key_set:
+            missing_in_right = left_key_set - right_key_set
+            missing_in_left = right_key_set - left_key_set
+            msg_parts = []
+            if missing_in_right:
+                msg_parts.append(
+                    f"{left_msg} keys not in {right_msg}: {missing_in_right}"
+                )
+            if missing_in_left:
+                msg_parts.append(
+                    f"{right_msg} keys not in {left_msg}: {missing_in_left}"
+                )
+            raise ValueError(
+                f"Expected {rel_for_msg} relationship, but key sets don't match. {', '.join(msg_parts)}"
+            )
+
+    if relationship == MERGE_RELATIONSHIP_TYPES.ONE_TO_ONE:
+        if not left_is_unique:
+            raise ValueError(
+                f"Expected {rel_for_msg} relationship, but {left_msg} DataFrame has duplicate keys"
+            )
+        if not right_is_unique:
+            raise ValueError(
+                f"Expected {rel_for_msg} relationship, but {right_msg} DataFrame has duplicate keys"
+            )
+
+    elif relationship == MERGE_RELATIONSHIP_TYPES.ONE_TO_MANY:
+        if not left_is_unique:
+            raise ValueError(
+                f"Expected {rel_for_msg} relationship, but {left_msg} DataFrame has duplicate keys"
+            )
+    elif relationship == MERGE_RELATIONSHIP_TYPES.ONE_TO_ZERO:
+        if not left_is_unique:
+            raise ValueError(
+                f"Expected {rel_for_msg} relationship, but {left_msg} DataFrame has duplicate keys"
+            )
+        if not right_key_set.issubset(left_key_set):
+            missing = right_key_set - left_key_set
+            raise ValueError(
+                f"Expected {rel_for_msg} relationship, but {right_msg} keys are not a subset of {left_msg} keys. "
+                f"Missing in {left_msg}: {missing}"
+            )
 
 
 def _merge_and_log_overwrites(

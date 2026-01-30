@@ -15,13 +15,6 @@ from napistu.constants import (
     SBOTERM_NAMES,
 )
 from napistu.identifiers import Identifiers
-
-# import lazy-loaded omnipath and interactions
-from napistu.ingestion._lazy import (
-    get_omnipath,
-    get_omnipath_interactions,
-    require_omnipath,
-)
 from napistu.ingestion.constants import (
     DATA_SOURCE_DESCRIPTIONS,
     DATA_SOURCES,
@@ -40,6 +33,13 @@ from napistu.ontologies.genodexito import Genodexito
 from napistu.ontologies.mirbase import load_mirbase_xrefs
 from napistu.ontologies.pubchem import map_pubchem_ids
 from napistu.source import Source
+
+# import lazy-loaded omnipath and interactions
+from napistu.utils.optional import (
+    import_omnipath,
+    import_omnipath_interactions,
+    require_omnipath,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -379,7 +379,7 @@ def get_interactions(
 @require_omnipath
 def _get_omnipath_fxn_map():
     """Get a map of dataset names to interaction classes"""
-    interactions = get_omnipath_interactions()
+    interactions = import_omnipath_interactions()
 
     # Map dataset names to interaction classes
     return {
@@ -658,7 +658,7 @@ def _prepare_omnipath_ids_complexes(
         - downstream_stoichiometry: Stoichiometry of complex (typically 1)
     """
 
-    omnipath = get_omnipath()
+    omnipath = import_omnipath()
 
     complexes = omnipath.requests.Complexes().get()
     complexes[OMNIPATH_INTERACTIONS.INTERACTOR_ID] = [

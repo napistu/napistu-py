@@ -8,3 +8,11 @@ CONTINGENCY_TABLE = SimpleNamespace(
     TOTAL_COUNTS="total_counts",  # total size of the reference sets
     N_TOTAL_ENTITIES="n_total_entities",  # the universe of possible entries in the query (e.g., the total number of reactions in the model)
 )
+
+ENRICHMENT_TESTS = SimpleNamespace(
+    PROPORTION="proportion",
+    FISHER_EXACT="fisher_exact",
+    BINOMIAL="binomial",
+)
+
+VALID_ENRICHMENT_TESTS = ENRICHMENT_TESTS.__dict__.values()

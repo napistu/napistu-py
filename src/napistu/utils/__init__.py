@@ -9,6 +9,7 @@ This package provides utilities organized into logical submodules:
 - string_utils: String and text processing
 - ig_utils: igraph operations
 - display_utils: Display and formatting utilities
+- optional: Optional dependency handling and lazy loading
 """
 
 # Import display utilities from display_utils
@@ -44,6 +45,22 @@ from napistu.utils.io_utils import (
     save_pickle,
     write_file_contents_to_path,
     write_pickle,
+)
+
+# Import optional dependency utilities from optional
+from napistu.utils.optional import (
+    create_package_importer,
+    import_anndata,
+    import_gseapy,
+    import_mudata,
+    import_omnipath,
+    import_omnipath_interactions,
+    import_package,
+    require_anndata,
+    require_gseapy,
+    require_mudata,
+    require_omnipath,
+    require_package,
 )
 
 # Import path utilities from path_utils
@@ -133,6 +150,19 @@ __all__ = [
     "find_weakly_connected_subgraphs",
     # Display utilities
     "show",
+    # Optional dependency utilities
+    "create_package_importer",
+    "import_omnipath",
+    "import_omnipath_interactions",
+    "import_package",
+    "import_anndata",
+    "import_gseapy",
+    "import_mudata",
+    "require_anndata",
+    "require_gseapy",
+    "require_mudata",
+    "require_omnipath",
+    "require_package",
     # Private/helper functions (included for backwards compatibility)
     "_add_nameness_score",
     "_add_nameness_score_wrapper",

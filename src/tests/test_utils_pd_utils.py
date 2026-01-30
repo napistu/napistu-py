@@ -4,27 +4,38 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from napistu import utils
 from napistu.constants import SBML_DFS
+from napistu.utils.pd_utils import (
+    _merge_and_log_overwrites,
+    drop_extra_cols,
+    ensure_pd_df,
+    format_identifiers_as_edgelist,
+    infer_entity_type,
+    match_pd_vars,
+    matrix_to_edgelist,
+    style_df,
+    update_pathological_names,
+    validate_merge,
+)
 
 
 def test_match_pd_vars():
     a_series = pd.Series({"foo": 1, "bar": 2})
     a_dataframe = pd.DataFrame({"foo": ["a", "b"], "bar": [1, 2]})
 
-    assert utils.match_pd_vars(a_series, {"foo", "bar"}).are_present
-    assert not utils.match_pd_vars(a_series, {"baz"}).are_present
-    assert utils.match_pd_vars(a_dataframe, {"foo", "bar"}).are_present
-    assert not utils.match_pd_vars(a_dataframe, {"baz"}).are_present
+    assert match_pd_vars(a_series, {"foo", "bar"}).are_present
+    assert not match_pd_vars(a_series, {"baz"}).are_present
+    assert match_pd_vars(a_dataframe, {"foo", "bar"}).are_present
+    assert not match_pd_vars(a_dataframe, {"baz"}).are_present
 
 
 def test_ensure_pd_df():
     source_df = pd.DataFrame({"a": "b"}, index=[0])
     source_series = pd.Series({"a": "b"}).rename(0)
 
-    converted_series = utils.ensure_pd_df(source_series)
+    converted_series = ensure_pd_df(source_series)
 
-    assert isinstance(utils.ensure_pd_df(source_df), pd.DataFrame)
+    assert isinstance(ensure_pd_df(source_df), pd.DataFrame)
     assert isinstance(converted_series, pd.DataFrame)
     assert all(converted_series.index == source_df.index)
     assert all(converted_series.columns == source_df.columns)
@@ -49,24 +60,20 @@ def test_format_identifiers_as_edgelist():
         }
     ).set_index("ind")
 
-    edgelist_df = utils.format_identifiers_as_edgelist(
-        DEGEN_EDGELIST_DF_1, ["ont", "val"]
-    )
+    edgelist_df = format_identifiers_as_edgelist(DEGEN_EDGELIST_DF_1, ["ont", "val"])
     assert edgelist_df["ind"].iloc[0] == "ind_0_a"
     assert edgelist_df["id"].iloc[0] == "id_X_A"
 
-    edgelist_df = utils.format_identifiers_as_edgelist(DEGEN_EDGELIST_DF_1, ["val"])
+    edgelist_df = format_identifiers_as_edgelist(DEGEN_EDGELIST_DF_1, ["val"])
     assert edgelist_df["ind"].iloc[0] == "ind_0_a"
     assert edgelist_df["id"].iloc[0] == "id_A"
 
-    edgelist_df = utils.format_identifiers_as_edgelist(
-        DEGEN_EDGELIST_DF_2, ["ont", "val"]
-    )
+    edgelist_df = format_identifiers_as_edgelist(DEGEN_EDGELIST_DF_2, ["ont", "val"])
     assert edgelist_df["ind"].iloc[0] == "ind_a"
     assert edgelist_df["id"].iloc[0] == "id_X_A"
 
     with pytest.raises(ValueError):
-        utils.format_identifiers_as_edgelist(
+        format_identifiers_as_edgelist(
             DEGEN_EDGELIST_DF_2.reset_index(drop=True), ["ont", "val"]
         )
 
@@ -89,16 +96,16 @@ def test_style_df():
     )
 
     # style a few pd.DataFrames
-    isinstance(utils.style_df(simple_df), pd.io.formats.style.Styler)
+    isinstance(style_df(simple_df), pd.io.formats.style.Styler)
     isinstance(
-        utils.style_df(simple_df, headers=None, hide_index=True),
+        style_df(simple_df, headers=None, hide_index=True),
         pd.io.formats.style.Styler,
     )
     isinstance(
-        utils.style_df(simple_df, headers=["a", "b", "c", "d"], hide_index=True),
+        style_df(simple_df, headers=["a", "b", "c", "d"], hide_index=True),
         pd.io.formats.style.Styler,
     )
-    isinstance(utils.style_df(multiindexed_df), pd.io.formats.style.Styler)
+    isinstance(style_df(multiindexed_df), pd.io.formats.style.Styler)
 
 
 def test_drop_extra_cols():
@@ -116,7 +123,7 @@ def test_drop_extra_cols():
     )
 
     # Test basic functionality without always_include
-    result = utils.drop_extra_cols(df_in, df_out)
+    result = drop_extra_cols(df_in, df_out)
 
     # Check that extra column was dropped
     assert "col4" not in result.columns
@@ -135,31 +142,29 @@ def test_drop_extra_cols():
     )
 
     # Test with always_include
-    result_with_include = utils.drop_extra_cols(df_in, df_out, always_include=["col4"])
+    result_with_include = drop_extra_cols(df_in, df_out, always_include=["col4"])
 
     # Check that col4 is retained and appears at the end
     assert list(result_with_include.columns) == list(df_in.columns) + ["col4"]
     assert result_with_include["col4"].equals(df_out["col4"])
 
     # Test with always_include containing non-existent column
-    result_non_existent = utils.drop_extra_cols(
+    result_non_existent = drop_extra_cols(
         df_in, df_out, always_include=["col4", "col5"]
     )
     assert list(result_non_existent.columns) == list(df_in.columns) + ["col4"]
 
     # Test with always_include containing column from df_in
-    result_overlap = utils.drop_extra_cols(
-        df_in, df_out, always_include=["col1", "col4"]
-    )
+    result_overlap = drop_extra_cols(df_in, df_out, always_include=["col1", "col4"])
     assert list(result_overlap.columns) == list(df_in.columns) + ["col4"]
 
     # Test with no overlapping columns but some in always_include
     df_out_no_overlap = pd.DataFrame({"col4": [1, 2, 3], "col5": [4, 5, 6]})
-    result_no_overlap = utils.drop_extra_cols(df_in, df_out_no_overlap)
+    result_no_overlap = drop_extra_cols(df_in, df_out_no_overlap)
     assert result_no_overlap.empty
     assert list(result_no_overlap.columns) == []
 
-    result_no_overlap_with_include = utils.drop_extra_cols(
+    result_no_overlap_with_include = drop_extra_cols(
         df_in, df_out_no_overlap, always_include=["col4"]
     )
     assert list(result_no_overlap_with_include.columns) == ["col4"]
@@ -169,12 +174,12 @@ def test_drop_extra_cols():
     df_out_subset = pd.DataFrame(
         {"col1": [1, 2, 3], "col3": [7, 8, 9], "col4": [10, 11, 12]}
     )
-    result_subset = utils.drop_extra_cols(df_in, df_out_subset)
+    result_subset = drop_extra_cols(df_in, df_out_subset)
 
     assert list(result_subset.columns) == ["col1", "col3"]
     pd.testing.assert_frame_equal(result_subset, df_out_subset[["col1", "col3"]])
 
-    result_subset_with_include = utils.drop_extra_cols(
+    result_subset_with_include = drop_extra_cols(
         df_in, df_out_subset, always_include=["col4"]
     )
     assert list(result_subset_with_include.columns) == ["col1", "col3", "col4"]
@@ -193,7 +198,7 @@ def test_matrix_to_edgelist():
             "value": np.array([1, 2, 3, 4, 5, 6], dtype=np.float64),
         }
     )
-    result = utils.matrix_to_edgelist(matrix)
+    result = matrix_to_edgelist(matrix)
     pd.testing.assert_frame_equal(result, expected_edgelist)
 
     # Test case 2: With row and column labels
@@ -206,14 +211,14 @@ def test_matrix_to_edgelist():
             "value": np.array([1, 2, 3, 4, 5, 6], dtype=np.float64),
         }
     )
-    result_labeled = utils.matrix_to_edgelist(
+    result_labeled = matrix_to_edgelist(
         matrix, row_labels=row_labels, col_labels=col_labels
     )
     pd.testing.assert_frame_equal(result_labeled, expected_labeled_edgelist)
 
     # Test case 3: Empty matrix (all NaN)
     empty_matrix = np.full((2, 2), np.nan)
-    empty_result = utils.matrix_to_edgelist(empty_matrix)
+    empty_result = matrix_to_edgelist(empty_matrix)
     assert empty_result.empty
 
     # Test case 4: Single value matrix
@@ -221,7 +226,7 @@ def test_matrix_to_edgelist():
     expected_single = pd.DataFrame(
         {"row": [0], "column": [0], "value": np.array([1], dtype=np.int64)}
     )
-    result_single = utils.matrix_to_edgelist(single_matrix)
+    result_single = matrix_to_edgelist(single_matrix)
     pd.testing.assert_frame_equal(result_single, expected_single)
 
 
@@ -229,18 +234,18 @@ def test_update_pathological_names():
 
     # All numeric
     s = pd.Series(["1", "2", "3"])
-    out = utils.update_pathological_names(s, "prefix_")
+    out = update_pathological_names(s, "prefix_")
     assert all(x.startswith("prefix_") for x in out)
     assert list(out) == ["prefix_1", "prefix_2", "prefix_3"]
 
     # Mixed numeric and non-numeric
     s2 = pd.Series(["1", "foo", "3"])
-    out2 = utils.update_pathological_names(s2, "prefix_")
+    out2 = update_pathological_names(s2, "prefix_")
     assert list(out2) == ["1", "foo", "3"]
 
     # All non-numeric
     s3 = pd.Series(["foo", "bar", "baz"])
-    out3 = utils.update_pathological_names(s3, "prefix_")
+    out3 = update_pathological_names(s3, "prefix_")
     assert list(out3) == ["foo", "bar", "baz"]
 
 
@@ -252,7 +257,7 @@ def test_infer_entity_type():
         {SBML_DFS.C_NAME: ["cytoplasm"], SBML_DFS.C_IDENTIFIERS: ["GO:0005737"]}
     )
     df.index.name = SBML_DFS.C_ID
-    result = utils.infer_entity_type(df)
+    result = infer_entity_type(df)
     assert result == SBML_DFS.COMPARTMENTS
 
     # Test species with index as primary key
@@ -260,7 +265,7 @@ def test_infer_entity_type():
         {SBML_DFS.S_NAME: ["glucose"], SBML_DFS.S_IDENTIFIERS: ["CHEBI:17234"]}
     )
     df.index.name = SBML_DFS.S_ID
-    result = utils.infer_entity_type(df)
+    result = infer_entity_type(df)
     assert result == SBML_DFS.SPECIES
 
     # Test entity type inference by exact column matching.
@@ -272,7 +277,7 @@ def test_infer_entity_type():
             SBML_DFS.C_ID: ["cytoplasm"],
         }
     )
-    result = utils.infer_entity_type(df)
+    result = infer_entity_type(df)
     assert result == "compartmentalized_species"
 
     # Test reaction_species (has foreign keys)
@@ -283,12 +288,12 @@ def test_infer_entity_type():
             SBML_DFS.SC_ID: ["glucose_c"],
         }
     )
-    result = utils.infer_entity_type(df)
+    result = infer_entity_type(df)
     assert result == SBML_DFS.REACTION_SPECIES
 
     # Test reactions (only primary key)
     df = pd.DataFrame({SBML_DFS.R_ID: ["rxn1"]})
-    result = utils.infer_entity_type(df)
+    result = infer_entity_type(df)
     assert result == SBML_DFS.REACTIONS
 
 
@@ -297,21 +302,21 @@ def test_infer_entity_type_errors():
     # Test no matching entity type
     df = pd.DataFrame({"random_column": ["value"], "another_col": ["data"]})
     with pytest.raises(ValueError, match="No entity type matches DataFrame"):
-        utils.infer_entity_type(df)
+        infer_entity_type(df)
 
     # Test partial match (missing required foreign key)
     df = pd.DataFrame(
         {SBML_DFS.SC_ID: ["glucose_c"], SBML_DFS.S_ID: ["glucose"]}
     )  # Missing c_id
     with pytest.raises(ValueError):
-        utils.infer_entity_type(df)
+        infer_entity_type(df)
 
     # Test extra primary keys that shouldn't be there
     df = pd.DataFrame(
         {SBML_DFS.R_ID: ["rxn1"], SBML_DFS.S_ID: ["glucose"]}
     )  # Two primary keys
     with pytest.raises(ValueError):
-        utils.infer_entity_type(df)
+        infer_entity_type(df)
 
 
 def test_infer_entity_type_multindex():
@@ -320,7 +325,7 @@ def test_infer_entity_type_multindex():
     df.index = pd.MultiIndex.from_tuples(
         [("rxn1", "a"), ("rxn2", "b")], names=[SBML_DFS.R_ID, "foo"]
     )
-    result = utils.infer_entity_type(df)
+    result = infer_entity_type(df)
     assert result == SBML_DFS.REACTIONS
 
     # DataFrame with MultiIndex (sc_id, bar), should infer as compartmentalized_species
@@ -328,7 +333,7 @@ def test_infer_entity_type_multindex():
     df.index = pd.MultiIndex.from_tuples(
         [("glucose_c", "a"), ("atp_c", "b")], names=[SBML_DFS.SC_ID, "bar"]
     )
-    result = utils.infer_entity_type(df)
+    result = infer_entity_type(df)
     assert result == SBML_DFS.COMPARTMENTALIZED_SPECIES
 
 
@@ -338,14 +343,14 @@ def test_merge_and_log_overwrites(caplog):
     # Test basic merge with no conflicts
     df1 = pd.DataFrame({"id": [1, 2], "value1": ["a", "b"]})
     df2 = pd.DataFrame({"id": [1, 2], "value2": ["c", "d"]})
-    result = utils._merge_and_log_overwrites(df1, df2, "test", on="id")
+    result = _merge_and_log_overwrites(df1, df2, "test", on="id")
     assert set(result.columns) == {"id", "value1", "value2"}
     assert len(caplog.records) == 0
 
     # Test merge with column conflict
     df1 = pd.DataFrame({"id": [1, 2], "name": ["a", "b"], "value": [10, 20]})
     df2 = pd.DataFrame({"id": [1, 2], "name": ["c", "d"]})
-    result = utils._merge_and_log_overwrites(df1, df2, "test", on="id")
+    result = _merge_and_log_overwrites(df1, df2, "test", on="id")
 
     # Check that the right columns exist
     assert set(result.columns) == {"id", "name", "value"}
@@ -366,7 +371,7 @@ def test_merge_and_log_overwrites(caplog):
     df2 = pd.DataFrame(
         {"id": [1, 2], "name": ["c", "d"], "status": ["pending", "done"]}
     )
-    result = utils._merge_and_log_overwrites(df1, df2, "test", on="id")
+    result = _merge_and_log_overwrites(df1, df2, "test", on="id")
 
     # Check that the right columns exist
     assert set(result.columns) == {"id", "name", "value", "status"}
@@ -385,7 +390,7 @@ def test_merge_and_log_overwrites(caplog):
     caplog.clear()
     df1 = pd.DataFrame({"name": ["a", "b"], "value": [10, 20]}, index=[1, 2])
     df2 = pd.DataFrame({"name": ["c", "d"]}, index=[1, 2])
-    result = utils._merge_and_log_overwrites(
+    result = _merge_and_log_overwrites(
         df1, df2, "test", left_index=True, right_index=True
     )
 
@@ -399,3 +404,122 @@ def test_merge_and_log_overwrites(caplog):
     assert len(caplog.records) == 1
     assert "test merge" in caplog.records[0].message
     assert "name" in caplog.records[0].message
+
+
+def test_validate_merge():
+    """Test validate_merge function for different relationship types."""
+    # Test 1:1 relationship (both unique)
+    left_1_1 = pd.DataFrame({"key": [1, 2, 3], "val1": ["a", "b", "c"]})
+    right_1_1 = pd.DataFrame({"key": [1, 2, 3], "val2": ["x", "y", "z"]})
+    validate_merge(left_1_1, right_1_1, "key", "key", "1:1")
+
+    # Test 1:1 failure - left has duplicates (but key sets still match)
+    left_dup = pd.DataFrame({"key": [1, 1, 2, 3], "val1": ["a", "b", "c", "d"]})
+    with pytest.raises(
+        ValueError, match="Expected 1:1 relationship, but left DataFrame"
+    ):
+        validate_merge(left_dup, right_1_1, "key", "key", "1:1")
+
+    # Test 1:1 failure - right has duplicates
+    right_dup = pd.DataFrame({"key": [1, 2, 2, 3], "val2": ["x", "y", "z", "w"]})
+    with pytest.raises(
+        ValueError, match="Expected 1:1 relationship, but right DataFrame"
+    ):
+        validate_merge(left_1_1, right_dup, "key", "key", "1:1")
+
+    # Test 1:1 failure - key sets don't match
+    right_mismatch = pd.DataFrame({"key": [1, 2, 4], "val2": ["x", "y", "z"]})
+    with pytest.raises(
+        ValueError, match="Expected 1:1 relationship, but key sets don't match"
+    ):
+        validate_merge(left_1_1, right_mismatch, "key", "key", "1:1")
+
+    # Test 1:m relationship (left unique, right can have duplicates, and key sets match)
+    left_1_m = pd.DataFrame({"key": [1, 2, 3], "val1": ["a", "b", "c"]})
+    right_1_m = pd.DataFrame({"key": [1, 1, 2, 3], "val2": ["x", "y", "z", "w"]})
+    validate_merge(left_1_m, right_1_m, "key", "key", "1:m")
+
+    # Test 1:m failure - left has duplicates
+    with pytest.raises(
+        ValueError, match="Expected 1:m relationship, but left DataFrame"
+    ):
+        validate_merge(left_dup, right_1_m, "key", "key", "1:m")
+
+    # Test 1:m failure - key sets don't match
+    right_1_m_bad = pd.DataFrame({"key": [1, 1, 2, 4], "val2": ["x", "y", "z", "w"]})
+    with pytest.raises(
+        ValueError, match="Expected 1:m relationship, but key sets don't match"
+    ):
+        validate_merge(left_1_m, right_1_m_bad, "key", "key", "1:m")
+
+    # Test m:1 relationship (right unique, left can have duplicates, right is subset of left)
+    left_m_1 = pd.DataFrame({"key": [1, 1, 2, 3], "val1": ["a", "b", "c", "d"]})
+    right_m_1 = pd.DataFrame({"key": [1, 2, 3], "val2": ["x", "y", "z"]})
+    validate_merge(left_m_1, right_m_1, "key", "key", "m:1")
+
+    # Test m:1 failure - right has duplicates (key sets still match)
+    right_m_1_dup = pd.DataFrame({"key": [1, 2, 2, 3], "val2": ["x", "y", "z", "w"]})
+    with pytest.raises(
+        ValueError, match="Expected m:1 relationship, but right DataFrame"
+    ):
+        validate_merge(left_m_1, right_m_1_dup, "key", "key", "m:1")
+
+    # Test m:1 failure - key sets don't match
+    right_m_1_mismatch = pd.DataFrame({"key": [1, 2], "val2": ["x", "y"]})
+    with pytest.raises(
+        ValueError, match="Expected m:1 relationship, but key sets don't match"
+    ):
+        validate_merge(left_m_1, right_m_1_mismatch, "key", "key", "m:1")
+
+    # Test m:m relationship (both can have duplicates)
+    left_m_m = pd.DataFrame({"key": [1, 1, 2], "val1": ["a", "b", "c"]})
+    right_m_m = pd.DataFrame({"key": [1, 2, 2], "val2": ["x", "y", "z"]})
+    validate_merge(left_m_m, right_m_m, "key", "key", "m:m")
+
+    # Test 1:0 relationship (left unique, right can be duplicated, right is subset of left)
+    left_1_0 = pd.DataFrame({"key": [1, 2, 3], "val1": ["a", "b", "c"]})
+    right_1_0 = pd.DataFrame({"key": [1, 2], "val2": ["x", "y"]})
+    validate_merge(left_1_0, right_1_0, "key", "key", "1:0")
+
+    # Test 1:0 failure - left has duplicates
+    with pytest.raises(
+        ValueError, match="Expected 1:0 relationship, but left DataFrame"
+    ):
+        validate_merge(left_dup, right_1_0, "key", "key", "1:0")
+
+    # Test 1:0 failure - right keys not subset of left
+    right_1_0_bad = pd.DataFrame({"key": [1, 1, 2, 4], "val2": ["x", "y", "z", "w"]})
+    with pytest.raises(
+        ValueError, match="Expected 1:0 relationship, but right keys are not a subset"
+    ):
+        validate_merge(left_1_0, right_1_0_bad, "key", "key", "1:0")
+
+    # Test 0:1 relationship (right unique; left keys must be a subset of right keys)
+    left_0_1 = pd.DataFrame({"key": [1, 1, 2, 4], "val1": ["a", "b", "c", "d"]})
+    # Include an extra right key (3) to represent a 0-match case on the left.
+    right_0_1 = pd.DataFrame({"key": [1, 2, 3, 4], "val2": ["x", "y", "z", "w"]})
+    validate_merge(left_0_1, right_0_1, "key", "key", "0:1")
+
+    # Test 0:1 failure - right has duplicate keys
+    right_0_1_bad = pd.DataFrame({"key": [1, 2, 2], "val2": ["x", "y", "z"]})
+    with pytest.raises(
+        ValueError, match="Expected 0:1 relationship, but right DataFrame"
+    ):
+        validate_merge(left_0_1, right_0_1_bad, "key", "key", "0:1")
+
+    # Test invalid relationship
+    with pytest.raises(ValueError, match="relationship must be one of"):
+        validate_merge(left_1_1, right_1_1, "key", "key", "invalid")
+
+    # Test multi-column keys
+    left_multi = pd.DataFrame({"key1": [1, 2], "key2": ["a", "b"], "val1": [10, 20]})
+    right_multi = pd.DataFrame({"key1": [1, 2], "key2": ["a", "b"], "val2": [100, 200]})
+    validate_merge(left_multi, right_multi, ["key1", "key2"], ["key1", "key2"], "1:1")
+
+    # Test multi-column keys with 1:m
+    right_multi_dup = pd.DataFrame(
+        {"key1": [1, 1, 2], "key2": ["a", "a", "b"], "val2": [100, 101, 200]}
+    )
+    validate_merge(
+        left_multi, right_multi_dup, ["key1", "key2"], ["key1", "key2"], "1:m"
+    )

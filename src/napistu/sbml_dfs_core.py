@@ -1,3 +1,12 @@
+"""
+The core SBML DataFrame class for representing a SBML model as a collection of pandas DataFrames.
+
+Classes
+-------
+SBML_dfs
+    A class representing a SBML model as a collection of pandas DataFrames.
+"""
+
 from __future__ import annotations
 
 import copy
@@ -401,6 +410,14 @@ class SBML_dfs:
             )
             with fs.openbin(reactions_source_total_counts_path, "w") as f:
                 reactions_source_total_counts.to_csv(f, sep="\t", index=True)
+
+            # export s_id to sc_id lookup table
+            sid_to_scids = self.compartmentalized_species.reset_index()[
+                [SBML_DFS.S_ID, SBML_DFS.SC_ID]
+            ]
+            sid_to_scids_path = model_prefix + NAPISTU_STANDARD_OUTPUTS.SID_TO_SCIDS
+            with fs.openbin(sid_to_scids_path, "w") as f:
+                sid_to_scids.to_csv(f, sep="\t", index=False)
 
             # export jsons
             species_path = model_prefix + NAPISTU_STANDARD_OUTPUTS.SPECIES
