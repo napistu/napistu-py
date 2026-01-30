@@ -47,3 +47,30 @@ GMTS_CONFIG_FIELDS = SimpleNamespace(
     CATEGORIES="categories",
     DBVER="dbver",
 )
+
+# predefined gene sets
+
+GENESET_SOURCES = SimpleNamespace(
+    MSIGDB="msigdb",
+)
+
+GENESET_COLLECTIONS = SimpleNamespace(
+    H_ALL="h.all",
+    C2_CP_KEGG_LEGACY="c2.cp.kegg_legacy",
+    C5_GO_BP="c5.go.bp",
+    C2_CP_WIKIPATHWAYS="c2.cp.wikipathways",
+)
+
+GENESET_SOURCE_VERSIONS = SimpleNamespace(
+    HS_2023_2="2023.2.Hs",
+)
+
+GENESET_DEFAULT_CONFIG_NAMES = SimpleNamespace(
+    BP_KEGG_HALLMARKS="bp_kegg_hallmarks",
+    HALLMARKS="hallmarks",
+    WIKIPATHWAYS="wikipathways",
+)
+
+VALID_GENESET_DEFAULT_CONFIG_NAMES = list(
+    GENESET_DEFAULT_CONFIG_NAMES.__dict__.values()
+)

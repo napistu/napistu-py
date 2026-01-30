@@ -25,15 +25,28 @@ from igraph import Graph
 from pydantic import BaseModel
 
 from napistu.constants import ONTOLOGIES, SBML_DFS
-from napistu.genomics.constants import GENESET_COLLECTION_DEFS, GMTS_CONFIG_FIELDS
+from napistu.genomics.constants import (
+    GENESET_COLLECTION_DEFS,
+    GENESET_COLLECTIONS,
+    GENESET_DEFAULT_CONFIG_NAMES,
+    GENESET_SOURCE_VERSIONS,
+    GENESET_SOURCES,
+    GMTS_CONFIG_FIELDS,
+    VALID_GENESET_DEFAULT_CONFIG_NAMES,
+)
 from napistu.identifiers import _check_species_identifiers_table
 from napistu.ingestion.constants import LATIN_SPECIES_NAMES
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.matching.species import features_to_pathway_species
 from napistu.network.constants import IGRAPH_DEFS, NAPISTU_GRAPH
 from napistu.network.edgelist import Edgelist
-from napistu.network.ig_utils import _get_universe_degrees, define_graph_universe
-from napistu.statistics.hypothesis_testing import neat_edge_enrichment_test
+from napistu.network.ig_utils import define_graph_universe
+from napistu.statistics.constants import ENRICHMENT_TESTS, VALID_ENRICHMENT_TESTS
+from napistu.statistics.hypothesis_testing import (
+    binomial_test_vectorized,
+    fisher_exact_vectorized,
+    proportion_test_vectorized,
+)
 from napistu.utils.optional import (
     import_gseapy,
     import_statsmodels_multitest,
@@ -88,7 +101,7 @@ class GenesetCollection:
 
     def add_gmts(
         self,
-        gmts_config: Union[Dict[str, Any], GmtsConfig, None] = None,
+        gmts_config: Union[Dict[str, Any], GmtsConfig, str, None] = None,
         entrez: bool = True,
     ):
         """
@@ -96,10 +109,13 @@ class GenesetCollection:
 
         Parameters
         ----------
-        gmts_config: Union[Dict[str, Any], GmtsConfig, None]
-            The configuration for the gene set collection. The engine can be specified
-            as a string (e.g., "msigdb") or as a callable class. If None, uses the
-            default collection config for the organismal species.
+        gmts_config: Union[Dict[str, Any], GmtsConfig, str, None]
+            The configuration for the gene set collection. Can be:
+            - A string name from GENESET_DEFAULT_CONFIG_NAMES (e.g., "hallmarks", "bp_kegg_hallmarks", "wikipathways")
+            - A dict with engine, categories, and optionally dbver
+            - A GmtsConfig object
+            - None: uses the default collection config for the organismal species from GENESET_DEFAULT_BY_SPECIES
+            The engine can be specified as a string (e.g., "msigdb") or as a callable class.
         entrez: bool
             Whether to use Entrez gene IDs (True) or gene symbols (False).
         """
@@ -322,16 +338,20 @@ class GenesetCollection:
         }
 
     def _format_gmts_config(
-        self, gmts_config: Optional[Union[Dict[str, Any], GmtsConfig]] = None
-    ):
+        self, gmts_config: Optional[Union[Dict[str, Any], GmtsConfig, str]] = None
+    ) -> GmtsConfig:
         """
         Format a gmts config into a GmtsConfig object.
 
         Parameters
         ----------
-        gmts_config: Optional[Union[Dict[str, Any], GmtsConfig]]
-            The gmts config to format. If a dict is provided, the engine can be
-            specified as a string (e.g., "msigdb") or as a callable class.
+        gmts_config: Optional[Union[Dict[str, Any], GmtsConfig, str]]
+            The gmts config to format. Can be:
+            - A string name from GENESET_DEFAULT_CONFIG_NAMES (e.g., "hallmarks", "bp_kegg_hallmarks", "wikipathways")
+            - A dict with engine, categories, and optionally dbver
+            - A GmtsConfig object
+            - None: uses the default collection config for the organismal species from GENESET_DEFAULT_BY_SPECIES
+            If a dict is provided, the engine can be specified as a string (e.g., "msigdb") or as a callable class.
 
         Returns
         -------
@@ -341,6 +361,12 @@ class GenesetCollection:
 
         if gmts_config is None:
             gmts_config = get_default_collection_config(self.organismal_species)
+        elif isinstance(gmts_config, str):
+            if gmts_config not in VALID_GENESET_DEFAULT_CONFIG_NAMES:
+                raise ValueError(
+                    f"Invalid config name: {gmts_config}. Must be one of {VALID_GENESET_DEFAULT_CONFIG_NAMES}"
+                )
+            gmts_config = GENESET_DEFAULT_CONFIGS[gmts_config]
 
         if isinstance(gmts_config, dict):
             # Convert string engine names to callables if needed
@@ -360,10 +386,9 @@ class GenesetCollection:
                     gmts_config.engine
                 )
                 gmts_config = GmtsConfig(**engine_dict)
-
-        if not isinstance(gmts_config, GmtsConfig):
+        else:
             raise ValueError(
-                f"gmts_config must be a GmtsConfig object, got {type(gmts_config)}"
+                f"gmts_config must be a GmtsConfig instance a string, a dict or None; got {type(gmts_config)}"
             )
 
         return gmts_config
@@ -374,6 +399,7 @@ def edgelist_gsea(
     edgelist: Union[pd.DataFrame, Edgelist],
     genesets: Union[GenesetCollection, Dict[str, List[str]]],
     graph: Graph,
+    enrichment_test: str = ENRICHMENT_TESTS.FISHER_EXACT,
     universe_vertex_names: Optional[Union[List[str], pd.Series]] = None,
     universe_edgelist: Optional[pd.DataFrame] = None,
     universe_observed_only: bool = False,
@@ -381,14 +407,15 @@ def edgelist_gsea(
     include_self_edges: bool = False,
     min_set_size: int = 5,
     max_set_size: Optional[int] = None,
+    min_x_geneset_edges_possible: int = 5,
+    chunk_size: int = 10,
     verbose: bool = True,
 ) -> pd.DataFrame:
     """
     Test pathway edge enrichment using NEAT degree-corrected method.
 
     Performs gene set edge enrichment analysis to identify pairs of pathways
-    with more edges between them than expected by chance, accounting for
-    degree heterogeneity using the configuration model.
+    with more edges between them than expected by chance based on a Fisher's exact test.
 
     Parameters
     ----------
@@ -400,6 +427,11 @@ def edgelist_gsea(
         mapping geneset names to lists of gene names.
     graph : ig.Graph
         Source network graph
+    enrichment_test : str
+        The enrichment test to use. Must be one of "fisher_exact", "proportion", or "binomial". Default is "fisher_exact".
+        - "fisher_exact": Uses a Fisher's exact test to test for enrichment.
+        - "proportion": Uses a proportion test to test for enrichment.
+        - "binomial": Uses a binomial test to test for enrichment.
     universe_vertex_names : list of str or pd.Series, optional
         Vertex names to include in universe. If None, filter to the vertices present in at least one geneset.
     universe_edgelist : pd.DataFrame, optional
@@ -415,6 +447,12 @@ def edgelist_gsea(
         Minimum geneset size (after filtering to universe)
     max_set_size : int, optional
         Maximum geneset size (after filtering to universe)
+    min_x_geneset_edges_possible : int
+        Minimum number of possible edges in universe between geneset pairs to include in results.
+        If there are only a small number of possible edges, seeing 1 would be statistically surprising
+        but not meaningful. Default is 5.
+    chunk_size : int
+        Number of target genesets to process at once. Only used when counting edges between genesets in the universe.
     verbose : bool
         If True, print progress information
 
@@ -425,9 +463,6 @@ def edgelist_gsea(
         - source_geneset, target_geneset: Pathway names
         - n_genes_source, n_genes_target: Pathway sizes in universe
         - observed_edges: Number of observed edges between pathways
-        - expected_edges: Expected number under configuration model
-        - variance: Variance of expected edges
-        - z_score: Standardized enrichment score
         - p_value: One-tailed p-value (upper tail)
         - q_value: FDR-corrected p-value (Benjamini-Hochberg)
 
@@ -438,27 +473,22 @@ def edgelist_gsea(
     ...     'source': ['A', 'B', 'C'],
     ...     'target': ['B', 'C', 'D']
     ... })
-    >>> results = pathway_edge_enrichment(
+    >>> results = edgelist_gsea(
     ...     observed, genesets, graph
     ... )
 
     >>> # Test with gene-only universe
     >>> gene_names = [v['name'] for v in graph.vs if v.get('biotype') == 'gene']
-    >>> results = pathway_edge_enrichment(
+    >>> results = edgelist_gsea(
     ...     observed, genesets, graph,
     ...     universe_vertex_names=gene_names
     ... )
 
     >>> # Test with observed edges only in universe
-    >>> results = pathway_edge_enrichment(
+    >>> results = edgelist_gsea(
     ...     observed, genesets, graph,
     ...     universe_observed_only=True
     ... )
-
-    References
-    ----------
-    Signorelli et al. (2016) NEAT: an efficient network enrichment analysis test.
-    BMC Bioinformatics 17:558.
     """
 
     multipletests_module = import_statsmodels_multitest()
@@ -469,11 +499,19 @@ def edgelist_gsea(
     else:
         edgelist.validate_subset(graph, validate=NAPISTU_GRAPH.EDGES)
 
+    # resolve edgelist to check for duplicates and reciprocal edges
+    edgelist = _resolve_edgelist(graph, edgelist)
+
     # Extract genesets dict if GenesetCollection provided
     if isinstance(genesets, GenesetCollection):
         genesets_dict = genesets.gmt
     else:
         genesets_dict = genesets
+
+    if enrichment_test not in VALID_ENRICHMENT_TESTS:
+        raise ValueError(
+            f"Invalid enrichment test: {enrichment_test}. Must be one of {VALID_ENRICHMENT_TESTS}"
+        )
 
     _log_edgelist_gsea_input(verbose, graph, edgelist, genesets_dict)
 
@@ -503,7 +541,7 @@ def edgelist_gsea(
 
     _log_edgelist_gsea_universe(verbose, universe)
 
-    # Step 3: Calculate observed edge counts between all geneset pairs
+    # Step 3: Calculate edges in the observed edgelist and universe between all geneset pairs
 
     edge_counts_df = _calculate_geneset_edge_counts(
         edgelist=edgelist,
@@ -511,62 +549,45 @@ def edgelist_gsea(
         universe=universe,
         min_set_size=min_set_size,
         max_set_size=max_set_size,
-        directed=graph.is_directed(),
+        chunk_size=chunk_size,
     )
 
-    _log_edgelist_gsea_paired_counts(
-        verbose, edge_counts_df, min_set_size, max_set_size
+    # Filter to minimum universe edges threshold
+    edge_counts_df = edge_counts_df[
+        edge_counts_df["universe_edges"] >= min_x_geneset_edges_possible
+    ].copy()
+
+    if len(edge_counts_df) == 0:
+        raise ValueError(
+            f"No geneset pairs found with at least {min_x_geneset_edges_possible} possible edges in universe"
+        )
+
+    # Step 4: Calculate expected edge counts and enrichment statistics
+    odds_ratios, p_values = _calculate_enrichment_statistics(
+        enrichment_test=enrichment_test,
+        edge_counts_df=edge_counts_df,
+        edgelist_size=len(edgelist),
+        universe_size=universe.ecount(),
     )
 
-    # Step 4: Get universe properties for NEAT test
+    edge_counts_df["odds_ratio"] = odds_ratios
+    edge_counts_df["p_value"] = p_values
 
-    out_degrees, in_degrees = _get_universe_degrees(
-        universe, directed=graph.is_directed()
-    )
-
-    # Create name to index mapping for degree lookup
-    name_to_idx = {v[IGRAPH_DEFS.NAME]: v.index for v in universe.vs}
-
-    # Get filtered genesets with universe indices
-    filtered_genesets, _ = _filter_genesets_to_universe(
-        universe, genesets_dict, min_set_size, max_set_size
-    )
-    geneset_to_indices = {
-        name: np.array([name_to_idx[g] for g in genes])
-        for name, genes in filtered_genesets.items()
-    }
-
-    # Step 5: Run NEAT test for each geneset pair
-    total_edges_universe = universe.ecount()
-    total_edges_observed = len(edgelist)
-    enrichment_stats = edge_counts_df.apply(
-        _test_geneset_pair,
-        axis=1,
-        geneset_to_indices=geneset_to_indices,
-        out_degrees=out_degrees,
-        in_degrees=in_degrees,
-        total_edges_universe=total_edges_universe,
-        total_edges_observed=total_edges_observed,
-    )
-
-    # Step 6: Combine results
-    results_df = pd.concat([edge_counts_df, enrichment_stats], axis=1)
-
-    # Step 7: Multiple testing correction (FDR)
+    # Step 5: Multiple testing correction (FDR)
     if verbose:
         logger.info("Applying FDR correction...")
 
     _, q_values, _, _ = multipletests_module.multipletests(
-        results_df["p_value"], method="fdr_bh"
+        edge_counts_df["p_value"], method="fdr_bh"
     )
-    results_df["q_value"] = q_values
+    edge_counts_df["q_value"] = q_values
 
-    # Step 8: Sort by significance
-    results_df = results_df.sort_values("p_value").reset_index(drop=True)
+    # Step 6: Sort by significance
+    edge_counts_df = edge_counts_df.sort_values("p_value").reset_index(drop=True)
 
-    _log_edgelist_gsea_paired_results(verbose, results_df)
+    _log_edgelist_gsea_paired_results(verbose, edge_counts_df)
 
-    return results_df
+    return edge_counts_df
 
 
 @require_gseapy
@@ -574,25 +595,15 @@ def get_default_collection_config(
     organismal_species: Union[str, OrganismalSpeciesValidator],
 ) -> GmtsConfig:
 
-    gp = import_gseapy()
-
     organismal_species = OrganismalSpeciesValidator.ensure(organismal_species)
 
-    GENESET_COLLECTION_DEFAULTS = {
-        LATIN_SPECIES_NAMES.HOMO_SAPIENS: {
-            GMTS_CONFIG_FIELDS.ENGINE: gp.msigdb.Msigdb,
-            GMTS_CONFIG_FIELDS.CATEGORIES: ["h.all", "c2.cp.kegg_legacy", "c5.go.bp"],
-            GMTS_CONFIG_FIELDS.DBVER: "2023.2.Hs",
-        }
-    }
-
     organismal_species_str = organismal_species.latin_name
-    if organismal_species_str not in GENESET_COLLECTION_DEFAULTS:
+    if organismal_species_str not in GENESET_DEFAULT_BY_SPECIES:
         raise ValueError(
             f"The organismal species {organismal_species_str} does not have a default collection config available through `get_default_collection_config`. Please create a config manually."
         )
 
-    return GmtsConfig(**GENESET_COLLECTION_DEFAULTS[organismal_species_str])
+    return GENESET_DEFAULT_BY_SPECIES[organismal_species_str]
 
 
 def _calculate_geneset_edge_counts(
@@ -601,10 +612,10 @@ def _calculate_geneset_edge_counts(
     universe: Graph,
     min_set_size: int = 5,
     max_set_size: Optional[int] = None,
-    directed: bool = False,
+    chunk_size: int = 10,
 ) -> pd.DataFrame:
     """
-    Calculate edge counts between all geneset pairs.
+    Calculate edge counts between all geneset pairs in both observed edgelist and universe.
 
     Parameters
     ----------
@@ -619,13 +630,13 @@ def _calculate_geneset_edge_counts(
         Minimum number of genes in universe for a geneset to be included
     max_set_size : int, optional
         Maximum number of genes in universe for a geneset to be included
-    directed : bool
-        Whether edges are directed
+    chunk_size : int
+        Number of target genesets to process at once. Set to np.inf to process all at once.
 
     Returns
     -------
     pd.DataFrame
-        Columns: source_geneset, target_geneset, observed_edges, n_genes_source, n_genes_target
+        Columns: source_geneset, target_geneset, observed_edges, universe_edges, n_genes_source, n_genes_target
         One row per geneset pair (upper triangle only if undirected)
     """
     # Step 1: Filter genesets to universe vertices and create membership dataframe
@@ -638,7 +649,7 @@ def _calculate_geneset_edge_counts(
             "No genesets found in universe after filtering to minimum size"
         )
 
-    # Step 2: Join observed edges to source genesets
+    # Step 2: Convert edgelist to DataFrame if needed
     if isinstance(edgelist, Edgelist):
         edgelist_df = edgelist.to_dataframe()
     elif isinstance(edgelist, pd.DataFrame):
@@ -646,31 +657,32 @@ def _calculate_geneset_edge_counts(
     else:
         raise ValueError(f"Invalid edgelist type: {type(edgelist)}")
 
-    edges_with_source = edgelist_df.merge(
-        geneset_df, left_on=IGRAPH_DEFS.SOURCE, right_on="vertex_name", how="inner"
-    ).rename(columns={"geneset": "source_geneset"})
-
-    # Step 3: Join to target genesets
-    edges_with_both = edges_with_source.merge(
-        geneset_df,
-        left_on=IGRAPH_DEFS.TARGET,
-        right_on="vertex_name",
-        how="inner",
-        suffixes=("_src", "_tgt"),
-    ).rename(columns={"geneset": "target_geneset"})
-
-    # Step 4: Count edges per geneset pair
-    edge_counts = (
-        edges_with_both.groupby(["source_geneset", "target_geneset"])
-        .size()
-        .reset_index(name="observed_edges")
+    # Step 3: Create universe edgelist from the graph
+    universe_edgelist_df = pd.DataFrame(
+        [
+            {
+                IGRAPH_DEFS.SOURCE: universe.vs[e.source][IGRAPH_DEFS.NAME],
+                IGRAPH_DEFS.TARGET: universe.vs[e.target][IGRAPH_DEFS.NAME],
+            }
+            for e in universe.es
+        ]
     )
 
-    # Step 5: Create all possible pairs (including those with 0 edges)
+    # Step 4: Count observed edges (no chunking needed for small edgelists)
+    observed_counts = _count_edges_by_geneset_pair_chunked(
+        edgelist_df, geneset_df, "observed_edges", chunk_size=np.inf
+    )
+
+    # Step 5: Count universe edges (with chunking for large universes)
+    universe_counts = _count_edges_by_geneset_pair_chunked(
+        universe_edgelist_df, geneset_df, "universe_edges", chunk_size=chunk_size
+    )
+
+    # Step 6: Create all possible pairs
     geneset_sizes = {name: len(genes) for name, genes in filtered_genesets.items()}
     pathway_names = list(filtered_genesets.keys())
 
-    if directed:
+    if universe.is_directed():
         all_pairs = [
             {"source_geneset": a, "target_geneset": b}
             for a in pathway_names
@@ -687,15 +699,87 @@ def _calculate_geneset_edge_counts(
     all_pairs_df["n_genes_source"] = all_pairs_df["source_geneset"].map(geneset_sizes)
     all_pairs_df["n_genes_target"] = all_pairs_df["target_geneset"].map(geneset_sizes)
 
-    # Step 6: Merge to include pairs with 0 edges
+    # Step 7: Merge both edge counts
     result = all_pairs_df.merge(
-        edge_counts[["source_geneset", "target_geneset", "observed_edges"]],
-        on=["source_geneset", "target_geneset"],
-        how="left",
+        observed_counts, on=["source_geneset", "target_geneset"], how="left"
     )
     result["observed_edges"] = result["observed_edges"].fillna(0).astype(int)
 
+    result = result.merge(
+        universe_counts, on=["source_geneset", "target_geneset"], how="left"
+    )
+    result["universe_edges"] = result["universe_edges"].fillna(0).astype(int)
+
     return result
+
+
+def _count_edges_by_geneset_pair_chunked(
+    edgelist_df: pd.DataFrame,
+    geneset_df: pd.DataFrame,
+    count_column_name: str,
+    chunk_size: int = 10,
+) -> pd.DataFrame:
+    """
+    Count edges between geneset pairs, processing target genesets in chunks to limit memory.
+
+    Parameters
+    ----------
+    edgelist_df : pd.DataFrame
+        Edgelist with 'source' and 'target' columns
+    geneset_df : pd.DataFrame
+        Long format with columns: geneset, vertex_name
+    count_column_name : str
+        Name for the count column in output
+    chunk_size : int
+        Number of target genesets to process at once
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: source_geneset, target_geneset, {count_column_name}
+    """
+    # Join edges to source genesets once (reuse for all chunks)
+    edges_with_source = edgelist_df.merge(
+        geneset_df, left_on=IGRAPH_DEFS.SOURCE, right_on="vertex_name", how="inner"
+    ).rename(columns={"geneset": "source_geneset"})
+
+    # Get unique genesets for chunking
+    unique_genesets = geneset_df["geneset"].unique()
+    all_results = []
+
+    # Convert chunk_size to int, handling np.inf
+    if chunk_size == np.inf or chunk_size >= len(unique_genesets):
+        chunk_size_int = len(unique_genesets)
+    else:
+        chunk_size_int = int(chunk_size)
+
+    # Process target genesets in chunks
+    for i in range(0, len(unique_genesets), chunk_size_int):
+        chunk_genesets = unique_genesets[i : i + chunk_size_int]
+        geneset_df_chunk = geneset_df[geneset_df["geneset"].isin(chunk_genesets)]
+
+        # Join to target genesets (only for this chunk)
+        edges_with_both = edges_with_source.merge(
+            geneset_df_chunk,
+            left_on=IGRAPH_DEFS.TARGET,
+            right_on="vertex_name",
+            how="inner",
+            suffixes=("_src", "_tgt"),
+        ).rename(columns={"geneset": "target_geneset"})
+
+        # Count edges for this chunk
+        edge_counts = (
+            edges_with_both.groupby(["source_geneset", "target_geneset"])
+            .size()
+            .reset_index(name=count_column_name)
+        )
+
+        all_results.append(edge_counts)
+
+    # Combine all chunks
+    return pd.concat(all_results, ignore_index=True)[
+        ["source_geneset", "target_geneset", count_column_name]
+    ]
 
 
 def _filter_genesets_to_universe(
@@ -754,50 +838,6 @@ def _filter_genesets_to_universe(
     geneset_df = pd.DataFrame(geneset_members)
 
     return filtered_genesets, geneset_df
-
-
-def _test_geneset_pair(
-    row: pd.Series,
-    geneset_to_indices: Dict[str, np.ndarray],
-    out_degrees: np.ndarray,
-    in_degrees: np.ndarray,
-    total_edges_universe: int,
-    total_edges_observed: int,
-) -> pd.Series:
-    """Calculate the NEAT enrichment statistic for a single geneset pair in a pd.DataFrame."""
-
-    if row["observed_edges"] == 0:
-        return pd.Series(
-            {
-                "observed_edges": 0,
-                "expected_edges": None,
-                "variance": None,
-                "z_score": None,
-                "p_value": 1,
-                "n_genes_a": None,
-                "n_genes_b": None,
-                "sum_out_deg_a": None,
-                "sum_in_deg_b": None,
-                "total_edges_universe": total_edges_universe,
-                "total_edges_observed": total_edges_observed,
-            }
-        )
-
-    source_name = row["source_geneset"]
-    target_name = row["target_geneset"]
-
-    indices_source = geneset_to_indices[source_name]
-    indices_target = geneset_to_indices[target_name]
-
-    result = neat_edge_enrichment_test(
-        observed_edges=row["observed_edges"],
-        out_degrees_a=out_degrees[indices_source],
-        in_degrees_b=in_degrees[indices_target],
-        total_edges_universe=total_edges_universe,
-        total_edges_observed=total_edges_observed,
-    )
-
-    return pd.Series(result)
 
 
 def _log_edgelist_gsea_input(
@@ -865,6 +905,107 @@ def _log_edgelist_gsea_paired_results(verbose: bool, results_df: pd.DataFrame):
             logger.info(
                 f"  Top enrichment: {top_result['source_geneset']} <-> {top_result['target_geneset']}"
             )
+
+
+def _resolve_edgelist(graph: Graph, edgelist: Edgelist) -> Edgelist:
+
+    if graph.is_directed():
+        if edgelist.has_duplicated_edges:
+            logger.warning("Edgelist contains duplicate edges. Removing duplicates.")
+            edgelist = edgelist.remove_duplicated_edges()
+    else:
+        has_duplicates = edgelist.has_duplicated_edges
+        if edgelist.has_reciprocal_edges:
+            if has_duplicates:
+                raise ValueError(
+                    "The provided edgelist has both duplicate edges and reciprocal edges (). Please remove duplicates from the edgelist to allow for automatic resolution of reciprocal edges."
+                )
+            else:
+                logger.warning(
+                    "The provided graph is undirected but some edges are present in both directions (A-B and B-A). Only retaining a single example of each pair."
+                )
+                edgelist = edgelist.remove_reciprocal_edges()
+        else:
+            logger.warning("Edgelist contains duplicate edges. Removing duplicates.")
+            edgelist = edgelist.remove_duplicated_edges()
+
+        # add back B-A reciprocal edges so that A-B and B-A are present for all provided edges
+        reciprocal_edges = edgelist.to_dataframe().copy()
+        reciprocal_edges[IGRAPH_DEFS.SOURCE, IGRAPH_DEFS.TARGET] = reciprocal_edges[
+            IGRAPH_DEFS.TARGET, IGRAPH_DEFS.SOURCE
+        ]
+        reciprocal_edges[IGRAPH_DEFS.TARGET, IGRAPH_DEFS.SOURCE] = reciprocal_edges[
+            IGRAPH_DEFS.SOURCE, IGRAPH_DEFS.TARGET
+        ]
+        edgelist = Edgelist(pd.concat([edgelist.to_dataframe(), reciprocal_edges]))
+
+    return edgelist
+
+
+def _calculate_enrichment_statistics(
+    enrichment_test: str,
+    edge_counts_df: pd.DataFrame,
+    edgelist_size: int,
+    universe_size: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Calculate enrichment statistics using the specified test method.
+
+    Parameters
+    ----------
+    enrichment_test : str
+        Test method: "proportion", "fisher_exact", or "binomial"
+    edge_counts_df : pd.DataFrame
+        DataFrame with observed_edges and universe_edges columns
+    edgelist_size : int
+        Total number of edges in the observed edgelist
+    universe_size : int
+        Total number of edges in the universe
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Tuple of (odds_ratios, p_values) arrays
+    """
+    if enrichment_test == ENRICHMENT_TESTS.PROPORTION:
+        _, odds_ratios, p_values = proportion_test_vectorized(
+            sample_successes=edge_counts_df["observed_edges"].values,
+            sample_total=edgelist_size,
+            population_successes=edge_counts_df["universe_edges"].values,
+            population_total=universe_size,
+        )
+    elif enrichment_test == ENRICHMENT_TESTS.FISHER_EXACT:
+        observed_members = edge_counts_df["observed_edges"].values
+        missing_members = (
+            edge_counts_df["universe_edges"].values
+            - edge_counts_df["observed_edges"].values
+        )
+        observed_nonmembers = edgelist_size - observed_members
+        nonobserved_nonmembers = (
+            universe_size - observed_members - missing_members - observed_nonmembers
+        )
+
+        odds_ratios, p_values = fisher_exact_vectorized(
+            observed_members=observed_members,
+            missing_members=missing_members,
+            observed_nonmembers=observed_nonmembers,
+            nonobserved_nonmembers=nonobserved_nonmembers,
+        )
+    elif enrichment_test == ENRICHMENT_TESTS.BINOMIAL:
+        _, p_values = binomial_test_vectorized(
+            sample_successes=edge_counts_df["observed_edges"].values,
+            sample_total=edgelist_size,
+            population_successes=edge_counts_df["universe_edges"].values,
+            population_total=universe_size,
+        )
+        # Odds ratio doesn't make sense with binomial test, return NaN
+        odds_ratios = np.full(len(edge_counts_df), np.nan, dtype=float)
+    else:
+        raise ValueError(
+            f"Invalid enrichment test: {enrichment_test}. Must be one of {VALID_ENRICHMENT_TESTS}"
+        )
+
+    return odds_ratios, p_values
 
 
 def _validate_edgelist_universe(edgelist, universe):
@@ -967,3 +1108,38 @@ class GmtsConfig(BaseModel):
     engine: Union[str, Callable]
     categories: List[str]
     dbver: Optional[str] = None
+
+
+GENESET_DEFAULT_CONFIGS = {
+    GENESET_DEFAULT_CONFIG_NAMES.HALLMARKS: GmtsConfig(
+        **{
+            GMTS_CONFIG_FIELDS.ENGINE: GENESET_SOURCES.MSIGDB,
+            GMTS_CONFIG_FIELDS.CATEGORIES: [GENESET_COLLECTIONS.H_ALL],
+            GMTS_CONFIG_FIELDS.DBVER: GENESET_SOURCE_VERSIONS.HS_2023_2,
+        }
+    ),
+    GENESET_DEFAULT_CONFIG_NAMES.BP_KEGG_HALLMARKS: GmtsConfig(
+        **{
+            GMTS_CONFIG_FIELDS.ENGINE: GENESET_SOURCES.MSIGDB,
+            GMTS_CONFIG_FIELDS.CATEGORIES: [
+                GENESET_COLLECTIONS.H_ALL,
+                GENESET_COLLECTIONS.C2_CP_KEGG_LEGACY,
+                GENESET_COLLECTIONS.C5_GO_BP,
+            ],
+            GMTS_CONFIG_FIELDS.DBVER: GENESET_SOURCE_VERSIONS.HS_2023_2,
+        }
+    ),
+    GENESET_DEFAULT_CONFIG_NAMES.WIKIPATHWAYS: GmtsConfig(
+        **{
+            GMTS_CONFIG_FIELDS.ENGINE: GENESET_SOURCES.MSIGDB,
+            GMTS_CONFIG_FIELDS.CATEGORIES: [GENESET_COLLECTIONS.C2_CP_WIKIPATHWAYS],
+            GMTS_CONFIG_FIELDS.DBVER: GENESET_SOURCE_VERSIONS.HS_2023_2,
+        }
+    ),
+}
+
+GENESET_DEFAULT_BY_SPECIES = {
+    LATIN_SPECIES_NAMES.HOMO_SAPIENS: GENESET_DEFAULT_CONFIGS[
+        GENESET_DEFAULT_CONFIG_NAMES.HALLMARKS
+    ],
+}

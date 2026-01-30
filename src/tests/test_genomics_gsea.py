@@ -8,21 +8,29 @@ import pytest
 
 from napistu.constants import BQB, IDENTIFIERS, ONTOLOGIES, SBML_DFS
 from napistu.genomics.gsea import (
+    GENESET_DEFAULT_BY_SPECIES,
+    GENESET_DEFAULT_CONFIGS,
     GenesetCollection,
     GmtsConfig,
     _calculate_geneset_edge_counts,
     _filter_genesets_to_universe,
+    edgelist_gsea,
 )
 from napistu.identifiers import Identifiers, construct_cspecies_identifiers
 from napistu.ingestion.constants import COMPARTMENTS
 from napistu.network.constants import IGRAPH_DEFS
 from napistu.source import Source
-from napistu.utils.optional import import_gseapy
+from napistu.utils.optional import import_gseapy, import_statsmodels_multitest
 
 try:
     gp = import_gseapy()
 except ImportError:
     pytest.skip("gseapy is not available", allow_module_level=True)
+
+try:
+    stm = import_statsmodels_multitest()
+except ImportError:
+    pytest.skip("statsmodels is not available", allow_module_level=True)
 
 
 @pytest.fixture
@@ -285,7 +293,10 @@ def test_calculate_geneset_edge_counts(napistu_graph):
     observed = pd.DataFrame({IGRAPH_DEFS.SOURCE: [src], IGRAPH_DEFS.TARGET: [tgt]})
     genesets = SimpleNamespace(gmt={"gs1": [src, tgt], "gs2": [tgt]}).gmt
     out = _calculate_geneset_edge_counts(
-        observed, genesets, napistu_graph, min_set_size=1, directed=True
+        observed,
+        genesets,
+        napistu_graph,
+        min_set_size=1,
     )
     ab = out.query("source_geneset == 'gs1' and target_geneset == 'gs2'")[
         "observed_edges"
@@ -294,3 +305,99 @@ def test_calculate_geneset_edge_counts(napistu_graph):
         "observed_edges"
     ].iloc[0]
     assert ab == 1 and ba == 0
+
+
+def test_geneset_default_configs_are_gmts_config():
+    """Test that GENESET_DEFAULT_CONFIGS contains GmtsConfig objects."""
+    assert isinstance(GENESET_DEFAULT_CONFIGS, dict)
+    for config_name, config in GENESET_DEFAULT_CONFIGS.items():
+        assert isinstance(config, GmtsConfig), (
+            f"GENESET_DEFAULT_CONFIGS[{config_name}] should be a GmtsConfig, "
+            f"got {type(config)}"
+        )
+
+
+def test_geneset_default_by_species_are_gmts_config():
+    """Test that GENESET_DEFAULT_BY_SPECIES contains GmtsConfig objects."""
+    assert isinstance(GENESET_DEFAULT_BY_SPECIES, dict)
+    for species_name, config in GENESET_DEFAULT_BY_SPECIES.items():
+        assert isinstance(config, GmtsConfig), (
+            f"GENESET_DEFAULT_BY_SPECIES[{species_name}] should be a GmtsConfig, "
+            f"got {type(config)}"
+        )
+
+
+def test_edgelist_gsea(napistu_graph):
+    """Test the edgelist_gsea function with a simple geneset and edgelist."""
+    # Sample edges from the graph to create observed edgelist
+
+    # Sample up to 20 edges from the graph
+    n_edges_to_sample = min(20, napistu_graph.ecount())
+    sampled_edge_indices = np.random.choice(
+        napistu_graph.ecount(), size=n_edges_to_sample, replace=False
+    )
+
+    observed_edges = []
+    source_vertices = set()
+    target_vertices = set()
+
+    for edge_idx in sampled_edge_indices:
+        edge = napistu_graph.es[edge_idx]
+        src = napistu_graph.vs[edge.source][IGRAPH_DEFS.NAME]
+        tgt = napistu_graph.vs[edge.target][IGRAPH_DEFS.NAME]
+        observed_edges.append({IGRAPH_DEFS.SOURCE: src, IGRAPH_DEFS.TARGET: tgt})
+        source_vertices.add(src)
+        target_vertices.add(tgt)
+
+    # Create genesets based on the sampled edges
+    # geneset1: source vertices, geneset2: target vertices
+    # This ensures there will be edges between the genesets
+    all_vertices = list(source_vertices | target_vertices)
+
+    if len(all_vertices) < 2:
+        pytest.skip("Not enough unique vertices in sampled edges")
+
+    # Split vertices into two genesets with some overlap
+    mid_point = len(all_vertices) // 2
+    genesets = {
+        "geneset1": all_vertices[: mid_point + 1],
+        "geneset2": all_vertices[mid_point:],
+    }
+
+    edgelist_df = pd.DataFrame(observed_edges)
+
+    # Run edgelist_gsea
+    results = edgelist_gsea(
+        edgelist=edgelist_df,
+        genesets=genesets,
+        graph=napistu_graph,
+        min_set_size=2,
+        min_x_geneset_edges_possible=1,
+        verbose=False,
+    )
+
+    # Verify results structure
+    assert isinstance(results, pd.DataFrame)
+    assert len(results) > 0
+
+    # Check required columns
+    required_columns = [
+        "source_geneset",
+        "target_geneset",
+        "observed_edges",
+        "universe_edges",
+        "n_genes_source",
+        "n_genes_target",
+        "odds_ratio",
+        "p_value",
+        "q_value",
+    ]
+    for col in required_columns:
+        assert col in results.columns
+
+    # Verify data ranges
+    assert (results["observed_edges"] >= 0).all()
+    assert (results["universe_edges"] >= 1).all()
+    assert (results["p_value"] >= 0).all() and (results["p_value"] <= 1).all()
+    assert (results["q_value"] >= 0).all() and (results["q_value"] <= 1).all()
+    assert (results["odds_ratio"] >= 0).all()

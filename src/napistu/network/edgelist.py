@@ -9,6 +9,7 @@ Edgelist
 
 from __future__ import annotations
 
+import logging
 from typing import Optional, Union
 
 import pandas as pd
@@ -16,6 +17,8 @@ from igraph import Graph
 
 from napistu.network.constants import IGRAPH_DEFS, NAPISTU_GRAPH, NAPISTU_GRAPH_EDGES
 from napistu.utils.pd_utils import validate_merge
+
+logger = logging.getLogger(__name__)
 
 
 class Edgelist:
@@ -144,6 +147,77 @@ class Edgelist:
         # Fallback to name-based merge
         return IGRAPH_DEFS.NAME
 
+    @property
+    def has_duplicated_edges(self) -> bool:
+        """
+        Check if the edgelist contains duplicate edges.
+
+        Duplicate edges are multiple rows with the same (source, target) pair,
+        regardless of other attributes.
+
+        Returns
+        -------
+        bool
+            True if duplicate edges exist, False otherwise.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> el = Edgelist(pd.DataFrame({
+        ...     'source': ['A', 'B', 'A'],
+        ...     'target': ['B', 'C', 'B'],
+        ...     'weight': [1.0, 2.0, 1.5]
+        ... }))
+        >>> el.has_duplicated_edges
+        True  # A->B appears twice
+        """
+        # Check for duplicates based only on source and target columns
+        duplicates = self.df.duplicated(
+            subset=[self.source_col, self.target_col], keep=False
+        )
+        return duplicates.any()
+
+    @property
+    def has_reciprocal_edges(self) -> bool:
+        """
+        Check if the edgelist contains reciprocal edges.
+
+        A reciprocal edge is a pair (A, B) where both (A, B) and (B, A) exist
+        in the edgelist.
+
+        Returns
+        -------
+        bool
+            True if reciprocal edges exist, False otherwise.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> el = Edgelist(pd.DataFrame({
+        ...     'source': ['A', 'B', 'C'],
+        ...     'target': ['B', 'A', 'D']
+        ... }))
+        >>> el.has_reciprocal_edges
+        True  # A->B and B->A both exist
+        """
+        # Filter out self-loops upfront (A-A edges don't count as reciprocal)
+        non_self_loops = self.df[self.df[self.source_col] != self.df[self.target_col]]
+
+        if len(non_self_loops) == 0:
+            return False
+
+        # Create a set of (source, target) tuples
+        edges = set(
+            zip(non_self_loops[self.source_col], non_self_loops[self.target_col])
+        )
+
+        # Check if any (target, source) pair exists in the edges set
+        for source, target in edges:
+            if (target, source) in edges:
+                return True
+
+        return False
+
     @classmethod
     def ensure(self, data: Union[pd.DataFrame, Edgelist]) -> Edgelist:
         """
@@ -238,6 +312,151 @@ class Edgelist:
         )
 
         return Edgelist(merged, source_col=self.source_col, target_col=self.target_col)
+
+    def remove_duplicated_edges(
+        self, keep: str = "first", inplace: bool = False
+    ) -> Optional[Edgelist]:
+        """
+        Remove duplicate edges from the edgelist.
+
+        For edges with the same (source, target) pair, keeps only one based
+        on the `keep` parameter. Only considers source and target columns,
+        ignoring all other attributes.
+
+        Parameters
+        ----------
+        keep : str, default "first"
+            Which duplicate edge to keep:
+            - "first": Keep the first occurrence (by DataFrame order)
+            - "last": Keep the last occurrence (by DataFrame order)
+        inplace : bool, default False
+            If True, modify the edgelist in place. If False, return a new Edgelist.
+
+        Returns
+        -------
+        Edgelist or None
+            If inplace=False, returns a new Edgelist with duplicate edges removed.
+            If inplace=True, returns None.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> el = Edgelist(pd.DataFrame({
+        ...     'source': ['A', 'B', 'A'],
+        ...     'target': ['B', 'C', 'B'],
+        ...     'weight': [1.0, 2.0, 1.5]
+        ... }))
+        >>> el_cleaned = el.remove_duplicated_edges(keep="first")
+        >>> len(el_cleaned)
+        2  # One of the A->B duplicates is removed
+        """
+        if keep not in ["first", "last"]:
+            raise ValueError(f"keep must be 'first' or 'last', got '{keep}'")
+
+        # Use pandas drop_duplicates on source and target columns only
+        df_cleaned = self.df.drop_duplicates(
+            subset=[self.source_col, self.target_col], keep=keep
+        ).reset_index(drop=True)
+
+        if inplace:
+            self.df = df_cleaned
+            return None
+        else:
+            return Edgelist(
+                df_cleaned, source_col=self.source_col, target_col=self.target_col
+            )
+
+    def remove_reciprocal_edges(
+        self, keep: str = "first", inplace: bool = False
+    ) -> Optional[Edgelist]:
+        """
+        Remove reciprocal edges from the edgelist.
+
+        For pairs of edges (A, B) and (B, A), keeps only one direction based
+        on the `keep` parameter.
+
+        Parameters
+        ----------
+        keep : str, default "first"
+            Which edge to keep when a reciprocal pair is found:
+            - "first": Keep the first edge encountered (by DataFrame order)
+            - "lexicographic": Keep the edge where source < target (lexicographically)
+        inplace : bool, default False
+            If True, modify the edgelist in place. If False, return a new Edgelist.
+
+        Returns
+        -------
+        Edgelist or None
+            If inplace=False, returns a new Edgelist with reciprocal edges removed.
+            If inplace=True, returns None.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> el = Edgelist(pd.DataFrame({
+        ...     'source': ['A', 'B', 'C'],
+        ...     'target': ['B', 'A', 'D']
+        ... }))
+        >>> el_cleaned = el.remove_reciprocal_edges(keep="first")
+        >>> len(el_cleaned)
+        2  # One of A->B or B->A is removed
+        """
+        if keep not in ["first", "lexicographic"]:
+            raise ValueError(f"keep must be 'first' or 'lexicographic', got '{keep}'")
+
+        # Check for duplicate edges upfront
+        if self.has_duplicated_edges:
+            n_duplicates = self.df.duplicated(
+                subset=[self.source_col, self.target_col], keep=False
+            ).sum()
+            logger.warning(
+                f"Edgelist contains {n_duplicates} duplicate edge(s). "
+                f"remove_reciprocal_edges will only keep one edge per (source, target) pair, "
+                f"so duplicates will be removed along with reciprocal pairs. "
+                f"Consider calling remove_duplicated_edges() first if you want to preserve duplicates."
+            )
+
+        df = self.df.copy()
+
+        # Create canonical columns for grouping reciprocal pairs
+        # _source = min(source, target), _target = max(source, target)
+        df["_source"] = df[[self.source_col, self.target_col]].min(axis=1)
+        df["_target"] = df[[self.source_col, self.target_col]].max(axis=1)
+
+        # Filter out self-loops (they can't be reciprocal)
+        non_self_loops = df[self.source_col] != df[self.target_col]
+        self_loops = df[~non_self_loops]
+        df_non_self = df[non_self_loops].copy()
+
+        if len(df_non_self) == 0:
+            # No non-self-loop edges, return original
+            df_cleaned = df.drop(columns=["_source", "_target"])
+        else:
+            if keep == "lexicographic":
+                # For lexicographic, we want source < target
+                # Filter to only edges where original source < target
+                df_non_self = df_non_self[
+                    df_non_self[self.source_col] < df_non_self[self.target_col]
+                ]
+            else:  # keep == "first"
+                # For "first", group by canonical pair and keep first occurrence
+                df_non_self = df_non_self.groupby(
+                    ["_source", "_target"], as_index=False
+                ).first()
+
+            # Combine with self-loops (always kept)
+            df_cleaned = pd.concat([df_non_self, self_loops], ignore_index=True)
+            df_cleaned = df_cleaned.drop(columns=["_source", "_target"]).reset_index(
+                drop=True
+            )
+
+        if inplace:
+            self.df = df_cleaned
+            return None
+        else:
+            return Edgelist(
+                df_cleaned, source_col=self.source_col, target_col=self.target_col
+            )
 
     def to_dataframe(self) -> pd.DataFrame:
         """

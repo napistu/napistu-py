@@ -3,16 +3,62 @@ Hypothesis tests.
 
 Public Functions
 ----------------
+binomial_test_vectorized(sample_successes, sample_total, population_successes, population_total)
+    Fast vectorized one-tailed binomial test using normal approximation.
 fisher_exact_vectorized(observed_members, missing_members, observed_nonmembers, nonobserved_nonmembers)
     Fast vectorized one-tailed Fisher exact test using normal approximation.
-neat_edge_enrichment_test(observed_edges, out_degrees_a, in_degrees_b, total_edges_universe, total_edges_observed)
-    NEAT degree-corrected edge enrichment test.
+proportion_test_vectorized(sample_successes, sample_total, population_successes, population_total)
+    Fast vectorized one-tailed proportion test using normal approximation.
 """
 
-from typing import Dict, Union
+from typing import Union
 
 import numpy as np
-from scipy.stats import norm
+from scipy.stats import binom, norm
+
+
+def binomial_test_vectorized(
+    sample_successes, sample_total, population_successes, population_total
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Binomial test for enrichment in sampled edges.
+
+    H0: Sample edges are drawn proportionally from universe
+    H1: This pathway pair is enriched in sample
+
+    Parameters
+    ----------
+    sample_successes : array
+        Observed edges for each pathway pair
+    sample_total : int
+        Total edges in sample (e.g., 10K)
+    population_successes : array
+        Universe edges for each pathway pair
+    population_total : int
+        Total edges in universe (e.g., 8M)
+
+    Returns
+    -------
+    expected : array
+        Expected edges under null
+    p_values : array
+        One-tailed p-values (upper tail)
+    """
+
+    # Probability under null hypothesis
+    p_null = population_successes / population_total
+
+    # Expected value
+    expected = sample_total * p_null
+
+    # P(X >= k) where X ~ Binomial(n=sample_total, p=p_null)
+    # Using survival function: P(X >= k) = 1 - P(X <= k-1)
+    p_values = binom.sf(sample_successes - 1, sample_total, p_null)
+
+    # Handle edge cases (p_null = 0)
+    p_values = np.where(p_null == 0, 1.0, p_values)
+
+    return expected, p_values
 
 
 def fisher_exact_vectorized(
@@ -77,72 +123,91 @@ def fisher_exact_vectorized(
     return odds_ratios, p_values
 
 
-def neat_edge_enrichment_test(
-    observed_edges: int,
-    out_degrees_a: np.ndarray,
-    in_degrees_b: np.ndarray,
-    total_edges_universe: int,
-    total_edges_observed: int,
-) -> Dict[str, float]:
+def proportion_test_vectorized(
+    sample_successes: Union[list[int], np.ndarray],
+    sample_total: int,
+    population_successes: Union[list[int], np.ndarray],
+    population_total: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    NEAT degree-corrected edge enrichment test.
+    Fast vectorized one-tailed proportion test using normal approximation.
+
+    Tests whether the proportion of successes in a sample differs from the
+    proportion in a reference population.
+
+    Parameters
+    ----------
+    sample_successes : array-like
+        Number of successes in the sample (must be non-negative)
+    sample_total : int
+        Total number of observations in the sample (must be positive)
+    population_successes : array-like
+        Number of successes in the population (must be non-negative)
+    population_total : int
+        Total number of observations in the population (must be positive)
 
     Returns
     -------
-    dict
-        Statistical test results with keys:
-        - observed: int
-        - expected: float
-        - variance: float
-        - z_score: float
-        - p_value: float
-        - n_genes_a: int (number of genes in set A)
-        - n_genes_b: int (number of genes in set B)
-        - sum_out_deg_a: float (sum of out-degrees in set A)
-        - sum_in_deg_b: float (sum of in-degrees in set B)
-        - total_edges_universe: int
-        - total_edges_observed: int
+    expected_successes : numpy array
+        Expected number of successes in sample under null hypothesis
+    odds_ratios : numpy array
+        Odds ratios for each test
+    p_values : numpy array
+        One-tailed p-values (tests for enrichment, upper tail)
     """
-    # Expected edges between sets A and B in the FULL universe
-    sum_a = np.sum(out_degrees_a)
-    sum_b = np.sum(in_degrees_b)
-    expected_universe = (sum_a * sum_b) / total_edges_universe
 
-    # Variance in the FULL universe
-    sum_a_sq = np.sum(out_degrees_a**2)
-    sum_b_sq = np.sum(in_degrees_b**2)
-    variance_universe = expected_universe - (sum_a_sq * sum_b_sq) / (
-        total_edges_universe**2
+    # Convert to numpy arrays
+    sample_succ = np.array(sample_successes, dtype=float)
+    pop_succ = np.array(population_successes, dtype=float)
+
+    # Check for negative values
+    if np.any(sample_succ < 0) or np.any(pop_succ < 0):
+        raise ValueError("All count values must be non-negative")
+    if population_total <= 0 or sample_total <= 0:
+        raise ValueError("Total counts must be positive")
+
+    # Proportions
+    p_sample = sample_succ / sample_total
+    p_population = pop_succ / population_total
+
+    # Expected under null hypothesis (sample has same proportion as population)
+    expected = sample_total * p_population
+
+    # Standard error for difference in proportions
+    # SE = sqrt(p_pop * (1 - p_pop) * (1/n_sample + 1/n_pop))
+    # For large population relative to sample, approximate as:
+    # SE ≈ sqrt(p_pop * (1 - p_pop) / n_sample)
+    se = np.sqrt(p_population * (1 - p_population) / sample_total)
+    se = np.maximum(se, 1e-10)  # Ensure positive
+
+    # Z-score: (p_sample - p_population) / SE
+    z = (p_sample - p_population) / se
+
+    # One-tailed p-value (upper tail for enrichment)
+    p_values = norm.sf(z)
+
+    # Handle edge cases
+    p_values = np.where((sample_succ == 0) | (pop_succ == 0), 1.0, p_values)
+
+    # Calculate odds ratios
+    # OR = (sample_succ/sample_fail) / (pop_succ/pop_fail)
+    sample_ratio = np.divide(
+        sample_succ,
+        sample_total - sample_succ,
+        out=np.full_like(sample_succ, np.inf, dtype=float),
+        where=(sample_succ < sample_total),
+    )
+    pop_ratio = np.divide(
+        pop_succ,
+        population_total - pop_succ,
+        out=np.full_like(pop_succ, np.inf, dtype=float),
+        where=(pop_succ < population_total),
+    )
+    odds_ratios = np.divide(
+        sample_ratio,
+        pop_ratio,
+        out=np.full_like(sample_ratio, np.inf, dtype=float),
+        where=(pop_ratio > 0),
     )
 
-    # Scale to the observed sample size
-    sampling_fraction = total_edges_observed / total_edges_universe
-    expected = expected_universe * sampling_fraction
-    variance = variance_universe * sampling_fraction
-
-    # Ensure variance is non-negative (numerical stability)
-    variance = max(0, variance)
-
-    # Z-score and p-value
-    if variance == 0:
-        z_score = 0.0
-        p_value = 1.0
-    else:
-        z_score = (observed_edges - expected) / np.sqrt(variance)
-        from scipy.stats import norm
-
-        p_value = norm.sf(z_score)
-
-    return {
-        "observed": observed_edges,
-        "expected": float(expected),
-        "variance": float(variance),
-        "z_score": float(z_score),
-        "p_value": float(p_value),
-        "n_genes_a": len(out_degrees_a),
-        "n_genes_b": len(in_degrees_b),
-        "sum_out_deg_a": float(sum_a),
-        "sum_in_deg_b": float(sum_b),
-        "total_edges_universe": total_edges_universe,
-        "total_edges_observed": total_edges_observed,
-    }
+    return expected, odds_ratios, p_values
