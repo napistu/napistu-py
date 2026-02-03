@@ -135,7 +135,7 @@ class Edgelist:
             IGRAPH_DEFS.SOURCE,
             IGRAPH_DEFS.TARGET,
         }:
-            return IGRAPH_DEFS.NAME
+            return IGRAPH_DEFS.INDEX
         if self.source_col in {
             NAPISTU_GRAPH_EDGES.FROM,
             NAPISTU_GRAPH_EDGES.TO,
@@ -143,7 +143,7 @@ class Edgelist:
             NAPISTU_GRAPH_EDGES.FROM,
             NAPISTU_GRAPH_EDGES.TO,
         }:
-            return IGRAPH_DEFS.INDEX
+            return IGRAPH_DEFS.NAME
         # Fallback to name-based merge
         return IGRAPH_DEFS.NAME
 
