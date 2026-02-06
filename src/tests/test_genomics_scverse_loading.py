@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 import pytest
-from pathlib import Path
 from pydantic import ValidationError
 from scipy import sparse
 
@@ -807,8 +806,7 @@ def test_dataset_config_validation(tmp_path, minimal_adata, minimal_mudata):
 
     # Valid config with HTTPS URI
     config = scverse_loading.DatasetConfig(
-        uri="https://example.com/dataset",
-        path=str(test_h5ad)
+        name="test_dataset", uri="https://example.com/dataset", path=str(test_h5ad)
     )
     assert config.uri == "https://example.com/dataset"
     assert config.path == test_h5ad
@@ -821,8 +819,7 @@ def test_dataset_config_validation(tmp_path, minimal_adata, minimal_mudata):
 
     # Valid config with HTTP URI for h5mu
     config_mu = scverse_loading.DatasetConfig(
-        uri="http://example.com/mudata",
-        path=str(test_h5mu)
+        name="test_mudata", uri="http://example.com/mudata", path=str(test_h5mu)
     )
     assert config_mu.uri == "http://example.com/mudata"
 
@@ -834,8 +831,7 @@ def test_dataset_config_validation(tmp_path, minimal_adata, minimal_mudata):
     # Invalid URI - no protocol
     with pytest.raises(ValidationError) as exc_info:
         scverse_loading.DatasetConfig(
-            uri="example.com/data",
-            path=str(test_h5ad)
+            name="test_dataset", uri="example.com/data", path=str(test_h5ad)
         )
     assert "uri must start with http:// or https://" in str(exc_info.value)
 
@@ -843,8 +839,9 @@ def test_dataset_config_validation(tmp_path, minimal_adata, minimal_mudata):
     nonexistent_file = tmp_path / "nonexistent.h5ad"
     with pytest.raises(ValidationError) as exc_info:
         scverse_loading.DatasetConfig(
+            name="test_dataset",
             uri="https://example.com/data",
-            path=str(nonexistent_file)
+            path=str(nonexistent_file),
         )
     assert "does not exist" in str(exc_info.value)
 
@@ -858,18 +855,19 @@ def test_datasets_config_validation_and_access(tmp_path, minimal_adata, minimal_
         minimal_adata.write(test_file)
         test_files[f"dataset_{i}"] = {
             DATASET.URI: f"https://example.com/dataset_{i}",
-            DATASET.PATH: str(test_file)
+            DATASET.PATH: str(test_file),
         }
+
     # Add a mudata file
     test_mu_file = tmp_path / "dataset_mu.h5mu"
     minimal_mudata.write(test_mu_file)
     test_files["dataset_mu"] = {
         DATASET.URI: "https://example.com/mudata",
-        DATASET.PATH: str(test_mu_file)
+        DATASET.PATH: str(test_mu_file),
     }
 
     # Valid config from dictionary
-    config = scverse_loading.DatasetsConfig.from_dict(test_files)
+    config = scverse_loading.DatasetsConfig(test_files)
 
     # Test dictionary-style access
     assert "dataset_0" in config
@@ -883,28 +881,31 @@ def test_datasets_config_validation_and_access(tmp_path, minimal_adata, minimal_
     # Test loading from configs
     loaded_adata = config["dataset_0"].load_h5ad()
     assert isinstance(loaded_adata, anndata.AnnData)
-    
+
     loaded_mudata = config["dataset_mu"].load_h5mu()
     assert isinstance(loaded_mudata, mudata.MuData)
 
     # Test keys(), values()
     assert set(config.keys()) == {"dataset_0", "dataset_1", "dataset_mu"}
-    
+
     values = list(config.values())
     assert len(values) == 3
     assert all(isinstance(v, scverse_loading.DatasetConfig) for v in values)
 
     # Test get() method
     assert config.get("dataset_0").uri == "https://example.com/dataset_0"
-    assert config.get("nonexistent") is None
+    with pytest.raises(
+        KeyError, match="Dataset 'nonexistent' not found. Available datasets"
+    ):
+        config.get("nonexistent")
 
     # Invalid config - bad URI
     invalid_config = {
         "bad_dataset": {
             DATASET.URI: "not-a-url",
-            DATASET.PATH: str(tmp_path / "test.h5ad")
+            DATASET.PATH: str(tmp_path / "test.h5ad"),
         }
     }
     minimal_adata.write(tmp_path / "test.h5ad")
     with pytest.raises(ValidationError):
-        scverse_loading.DatasetsConfig.from_dict(invalid_config)
+        scverse_loading.DatasetsConfig(invalid_config)

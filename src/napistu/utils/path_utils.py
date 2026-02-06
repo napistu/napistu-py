@@ -21,12 +21,12 @@ path_exists(path: str) -> bool:
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Union
 import logging
 import os
 import re
 import warnings
+from pathlib import Path
+from typing import Union
 from urllib.parse import urlparse
 
 with warnings.catch_warnings():

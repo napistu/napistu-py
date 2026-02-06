@@ -77,6 +77,7 @@ VALID_GENESET_DEFAULT_CONFIG_NAMES = list(
 
 DATASET = SimpleNamespace(
     PATH="path",
+    NAME="name",
     URI="uri",
 )
 

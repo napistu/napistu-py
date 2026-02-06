@@ -181,6 +181,15 @@ def define_graph_universe(
     # Simplify: remove duplicate edges and optionally self-loops
     universe.simplify(multiple=True, loops=not include_self_edges)
 
+    # Add from/to edge attributes for compatibility with edgelist validation
+    if universe.ecount() > 0:
+        universe.es[NAPISTU_GRAPH_EDGES.FROM] = [
+            universe.vs[e.source][IGRAPH_DEFS.NAME] for e in universe.es
+        ]
+        universe.es[NAPISTU_GRAPH_EDGES.TO] = [
+            universe.vs[e.target][IGRAPH_DEFS.NAME] for e in universe.es
+        ]
+
     return universe
 
 

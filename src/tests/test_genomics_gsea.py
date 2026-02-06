@@ -18,7 +18,7 @@ from napistu.genomics.gsea import (
 )
 from napistu.identifiers import Identifiers, construct_cspecies_identifiers
 from napistu.ingestion.constants import COMPARTMENTS
-from napistu.network.constants import IGRAPH_DEFS
+from napistu.network.constants import IGRAPH_DEFS, NAPISTU_GRAPH_EDGES
 from napistu.source import Source
 from napistu.utils.optional import import_gseapy, import_statsmodels_multitest
 
@@ -290,7 +290,9 @@ def test_calculate_geneset_edge_counts(napistu_graph):
     e0 = napistu_graph.es[0]
     src = napistu_graph.vs[e0.source][IGRAPH_DEFS.NAME]
     tgt = napistu_graph.vs[e0.target][IGRAPH_DEFS.NAME]
-    observed = pd.DataFrame({IGRAPH_DEFS.SOURCE: [src], IGRAPH_DEFS.TARGET: [tgt]})
+    observed = pd.DataFrame(
+        {NAPISTU_GRAPH_EDGES.FROM: [src], NAPISTU_GRAPH_EDGES.TO: [tgt]}
+    )
     genesets = SimpleNamespace(gmt={"gs1": [src, tgt], "gs2": [tgt]}).gmt
     out = _calculate_geneset_edge_counts(
         observed,
@@ -345,7 +347,9 @@ def test_edgelist_gsea(napistu_graph):
         edge = napistu_graph.es[edge_idx]
         src = napistu_graph.vs[edge.source][IGRAPH_DEFS.NAME]
         tgt = napistu_graph.vs[edge.target][IGRAPH_DEFS.NAME]
-        observed_edges.append({IGRAPH_DEFS.SOURCE: src, IGRAPH_DEFS.TARGET: tgt})
+        observed_edges.append(
+            {NAPISTU_GRAPH_EDGES.FROM: src, NAPISTU_GRAPH_EDGES.TO: tgt}
+        )
         source_vertices.add(src)
         target_vertices.add(tgt)
 
@@ -435,11 +439,16 @@ def test_edgelist_gsea_universe_observed_only_validation(napistu_graph):
             break
 
     if non_existent_edge is None:
-        pytest.skip("All vertex pairs have edges, cannot test non-existent edge scenario")
+        pytest.skip(
+            "All vertex pairs have edges, cannot test non-existent edge scenario"
+        )
 
     # Test 1: universe_observed_only=True should fail with non-existent edge
     invalid_edgelist = pd.DataFrame(
-        {IGRAPH_DEFS.SOURCE: [non_existent_edge[0]], IGRAPH_DEFS.TARGET: [non_existent_edge[1]]}
+        {
+            NAPISTU_GRAPH_EDGES.FROM: [non_existent_edge[0]],
+            NAPISTU_GRAPH_EDGES.TO: [non_existent_edge[1]],
+        }
     )
     with pytest.raises(ValueError, match="edge.*not in graph"):
         edgelist_gsea(

@@ -38,7 +38,7 @@ from napistu.identifiers import _check_species_identifiers_table
 from napistu.ingestion.constants import LATIN_SPECIES_NAMES
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.matching.species import features_to_pathway_species
-from napistu.network.constants import IGRAPH_DEFS, NAPISTU_GRAPH
+from napistu.network.constants import IGRAPH_DEFS, NAPISTU_GRAPH, NAPISTU_GRAPH_EDGES
 from napistu.network.edgelist import Edgelist
 from napistu.network.ig_utils import define_graph_universe
 from napistu.statistics.constants import ENRICHMENT_TESTS, VALID_ENRICHMENT_TESTS
@@ -651,11 +651,25 @@ def _calculate_geneset_edge_counts(
             "No genesets found in universe after filtering to minimum size"
         )
 
-    # Step 2: Convert edgelist to DataFrame if needed
+    # Step 2: Convert edgelist to DataFrame if needed and detect column names
     if isinstance(edgelist, Edgelist):
         edgelist_df = edgelist.to_dataframe()
+        edgelist_source_col = edgelist.source_col
+        edgelist_target_col = edgelist.target_col
     elif isinstance(edgelist, pd.DataFrame):
         edgelist_df = edgelist
+        # Detect column names
+        if (
+            NAPISTU_GRAPH_EDGES.FROM in edgelist_df.columns
+            and NAPISTU_GRAPH_EDGES.TO in edgelist_df.columns
+        ):
+            edgelist_source_col = NAPISTU_GRAPH_EDGES.FROM
+            edgelist_target_col = NAPISTU_GRAPH_EDGES.TO
+        else:
+            raise ValueError(
+                f"Edgelist DataFrame must have ('{NAPISTU_GRAPH_EDGES.FROM}', '{NAPISTU_GRAPH_EDGES.TO}') columns."
+                f"Found columns: {list(edgelist_df.columns)}"
+            )
     else:
         raise ValueError(f"Invalid edgelist type: {type(edgelist)}")
 
@@ -663,8 +677,8 @@ def _calculate_geneset_edge_counts(
     universe_edgelist_df = pd.DataFrame(
         [
             {
-                IGRAPH_DEFS.SOURCE: universe.vs[e.source][IGRAPH_DEFS.NAME],
-                IGRAPH_DEFS.TARGET: universe.vs[e.target][IGRAPH_DEFS.NAME],
+                NAPISTU_GRAPH_EDGES.FROM: universe.vs[e.source][IGRAPH_DEFS.NAME],
+                NAPISTU_GRAPH_EDGES.TO: universe.vs[e.target][IGRAPH_DEFS.NAME],
             }
             for e in universe.es
         ]
@@ -672,12 +686,22 @@ def _calculate_geneset_edge_counts(
 
     # Step 4: Count observed edges (no chunking needed for small edgelists)
     observed_counts = _count_edges_by_geneset_pair_chunked(
-        edgelist_df, geneset_df, "observed_edges", chunk_size=np.inf
+        edgelist_df,
+        geneset_df,
+        "observed_edges",
+        edgelist_source_col,
+        edgelist_target_col,
+        chunk_size=np.inf,
     )
 
     # Step 5: Count universe edges (with chunking for large universes)
     universe_counts = _count_edges_by_geneset_pair_chunked(
-        universe_edgelist_df, geneset_df, "universe_edges", chunk_size=chunk_size
+        universe_edgelist_df,
+        geneset_df,
+        "universe_edges",
+        NAPISTU_GRAPH_EDGES.FROM,
+        NAPISTU_GRAPH_EDGES.TO,
+        chunk_size=chunk_size,
     )
 
     # Step 6: Create all possible pairs
@@ -719,6 +743,8 @@ def _count_edges_by_geneset_pair_chunked(
     edgelist_df: pd.DataFrame,
     geneset_df: pd.DataFrame,
     count_column_name: str,
+    source_col: str,
+    target_col: str,
     chunk_size: int = 10,
 ) -> pd.DataFrame:
     """
@@ -727,11 +753,15 @@ def _count_edges_by_geneset_pair_chunked(
     Parameters
     ----------
     edgelist_df : pd.DataFrame
-        Edgelist with 'source' and 'target' columns
+        Edgelist with source and target columns
     geneset_df : pd.DataFrame
         Long format with columns: geneset, vertex_name
     count_column_name : str
         Name for the count column in output
+    source_col : str
+        Name of the source column in edgelist_df
+    target_col : str
+        Name of the target column in edgelist_df
     chunk_size : int
         Number of target genesets to process at once
 
@@ -742,7 +772,7 @@ def _count_edges_by_geneset_pair_chunked(
     """
     # Join edges to source genesets once (reuse for all chunks)
     edges_with_source = edgelist_df.merge(
-        geneset_df, left_on=IGRAPH_DEFS.SOURCE, right_on="vertex_name", how="inner"
+        geneset_df, left_on=source_col, right_on="vertex_name", how="inner"
     ).rename(columns={"geneset": "source_geneset"})
 
     # Get unique genesets for chunking
@@ -763,7 +793,7 @@ def _count_edges_by_geneset_pair_chunked(
         # Join to target genesets (only for this chunk)
         edges_with_both = edges_with_source.merge(
             geneset_df_chunk,
-            left_on=IGRAPH_DEFS.TARGET,
+            left_on=target_col,
             right_on="vertex_name",
             how="inner",
             suffixes=("_src", "_tgt"),
@@ -933,11 +963,10 @@ def _resolve_edgelist(graph: Graph, edgelist: Edgelist) -> Edgelist:
 
         # add back B-A reciprocal edges so that A-B and B-A are present for all provided edges
         reciprocal_edges = edgelist.to_dataframe().copy()
-        reciprocal_edges[IGRAPH_DEFS.SOURCE, IGRAPH_DEFS.TARGET] = reciprocal_edges[
-            IGRAPH_DEFS.TARGET, IGRAPH_DEFS.SOURCE
-        ]
-        reciprocal_edges[IGRAPH_DEFS.TARGET, IGRAPH_DEFS.SOURCE] = reciprocal_edges[
-            IGRAPH_DEFS.SOURCE, IGRAPH_DEFS.TARGET
+        source_col = edgelist.source_col
+        target_col = edgelist.target_col
+        reciprocal_edges[[source_col, target_col]] = reciprocal_edges[
+            [target_col, source_col]
         ]
         edgelist = Edgelist(pd.concat([edgelist.to_dataframe(), reciprocal_edges]))
 

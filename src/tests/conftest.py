@@ -25,7 +25,11 @@ from napistu.constants import (
 )
 from napistu.identifiers import Identifiers
 from napistu.ingestion.sbml import SBML
-from napistu.network.constants import IGRAPH_DEFS, NAPISTU_WEIGHTING_STRATEGIES
+from napistu.network.constants import (
+    IGRAPH_DEFS,
+    NAPISTU_GRAPH_EDGES,
+    NAPISTU_WEIGHTING_STRATEGIES,
+)
 from napistu.network.net_create import process_napistu_graph
 from napistu.network.precompute import precompute_distances
 from napistu.sbml_dfs_core import SBML_dfs
@@ -245,21 +249,31 @@ def species_identifiers_metabolism(sbml_dfs_metabolism):
 
 @pytest.fixture
 def simple_directed_graph():
-    """Create a simple directed igraph.Graph with named vertices."""
+    """Create a simple directed igraph.Graph with named vertices and from/to edge attributes."""
+
     g = Graph(directed=True)
     g.add_vertices(4)
     g.vs[IGRAPH_DEFS.NAME] = ["A", "B", "C", "D"]
     g.add_edges([(0, 1), (1, 2), (2, 3)])
     g.es["observed"] = [True, True, False]
+    # Add from/to edge attributes
+    g.es[NAPISTU_GRAPH_EDGES.FROM] = [g.vs[e.source][IGRAPH_DEFS.NAME] for e in g.es]
+    g.es[NAPISTU_GRAPH_EDGES.TO] = [g.vs[e.target][IGRAPH_DEFS.NAME] for e in g.es]
     return g
 
 
 @pytest.fixture
 def simple_undirected_graph():
-    """Create a simple undirected igraph.Graph with named vertices."""
+    """Create a simple undirected igraph.Graph with named vertices and from/to edge attributes."""
+
     g = Graph(directed=False)
     g.add_vertices(3)
     g.vs[IGRAPH_DEFS.NAME] = ["X", "Y", "Z"]
+    # Add an edge
+    g.add_edges([(0, 1)])
+    # Add from/to edge attributes
+    g.es[NAPISTU_GRAPH_EDGES.FROM] = [g.vs[e.source][IGRAPH_DEFS.NAME] for e in g.es]
+    g.es[NAPISTU_GRAPH_EDGES.TO] = [g.vs[e.target][IGRAPH_DEFS.NAME] for e in g.es]
     return g
 
 

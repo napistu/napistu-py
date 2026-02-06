@@ -50,8 +50,8 @@ class Edgelist:
 
     Properties
     ----------------
-    standard_merge_by : str
-        The column to merge by for standard merge operations.
+    standard_merge_by : list[str]
+        List of supported merge_by values based on column conventions.
 
     Public Methods
     --------------
@@ -100,12 +100,24 @@ class Edgelist:
             ):
                 source_col = IGRAPH_DEFS.SOURCE
                 target_col = IGRAPH_DEFS.TARGET
+
+                for col, col_name in [(source_col, "Source"), (target_col, "Target")]:
+                    if not pd.api.types.is_integer_dtype(data[col]):
+                        raise ValueError(
+                            f"{col_name} column '{col}' must contain integers (vertex indices) "
+                            f"when using source/target convention, but got dtype: {data[col].dtype}"
+                        )
+
             else:
                 raise ValueError(
                     f"DataFrame must have either ('{IGRAPH_DEFS.SOURCE}', '{IGRAPH_DEFS.TARGET}') "
                     f"or ('{NAPISTU_GRAPH_EDGES.FROM}', '{NAPISTU_GRAPH_EDGES.TO}') columns. "
                     f"Found columns: {list(data.columns)}"
                 )
+
+            logger.info(
+                f"Auto-detected source/target columns: {source_col}/{target_col}"
+            )
 
         # Validate columns exist
         if source_col not in data.columns:
@@ -125,8 +137,9 @@ class Edgelist:
         Returns
         -------
         str
-            IGRAPH_DEFS.NAME for 'source'/'target' style columns,
-            IGRAPH_DEFS.INDEX for 'from'/'to' style columns.
+            name for 'source'/'target' style columns,
+            index for 'from'/'to' style columns.
+            custom merge attribute based on source_col and target_col
         """
         if self.source_col in {
             IGRAPH_DEFS.SOURCE,
@@ -136,6 +149,7 @@ class Edgelist:
             IGRAPH_DEFS.TARGET,
         }:
             return IGRAPH_DEFS.INDEX
+
         if self.source_col in {
             NAPISTU_GRAPH_EDGES.FROM,
             NAPISTU_GRAPH_EDGES.TO,
@@ -144,8 +158,9 @@ class Edgelist:
             NAPISTU_GRAPH_EDGES.TO,
         }:
             return IGRAPH_DEFS.NAME
-        # Fallback to name-based merge
-        return IGRAPH_DEFS.NAME
+
+        # custom merge attribute based on source_col and target_col
+        return f"{self.source_col}/{self.target_col}"
 
     @property
     def has_duplicated_edges(self) -> bool:
@@ -277,7 +292,7 @@ class Edgelist:
         Raises
         ------
         ValueError
-            If standard_merge_by properties don't match
+            If edgelists have no overlapping supported merge_by conventions
             If relationship validation fails
         """
         if isinstance(other, pd.DataFrame):
@@ -472,7 +487,6 @@ class Edgelist:
     def validate_subset(
         self,
         graph: Graph,
-        merge_by: Optional[str] = None,
         validate: str = "both",
         edgelist_name: str = "edgelist",
         graph_name: str = "graph",
@@ -480,12 +494,16 @@ class Edgelist:
         """
         Validate that this edgelist is a subset of the graph's edges.
 
+        The merge_by convention is automatically determined from the edgelist's
+        source/target column conventions:
+        - If using 'source'/'target' columns, validates against vertex indices
+        - If using 'from'/'to' columns, validates against vertex names
+        - For custom columns, validates against vertex names
+
         Parameters
         ----------
         graph : Graph
             Graph to validate against.
-        merge_by : Optional[str]
-            Attribute to merge by: 'name' or 'index'. If None, uses standard_merge_by.
         validate: str
             Entities to validate: 'vertices', 'edges', or 'both'. If 'both', validates both vertices and edges.
         edgelist_name : str
@@ -497,25 +515,56 @@ class Edgelist:
         ------
         ValueError
             If edgelist contains vertices or edges not in graph
+            If source/target columns are not edge attributes in the graph
         """
-        # Resolve merge_by if not provided
-        if merge_by is None:
-            merge_by = self.standard_merge_by
 
-        VALID_MERGE_BY = [IGRAPH_DEFS.NAME, IGRAPH_DEFS.INDEX]
-        if merge_by not in VALID_MERGE_BY:
-            raise ValueError(
-                f"merge_by must be one of {VALID_MERGE_BY}, got {merge_by}"
-            )
+        # Get actual edge attributes if graph has edges
+        if graph.ecount() == 0:
+            raise ValueError(f"Graph {graph_name} has no edges")
 
-        vertex_id_attr = (
-            IGRAPH_DEFS.NAME if merge_by == IGRAPH_DEFS.NAME else IGRAPH_DEFS.INDEX
+        # 'source' and 'target' are built-in igraph properties (vertex indices),
+        # not edge attributes. 'from' and 'to' are actual edge attributes.
+        # Built-in igraph properties (always available)
+        available_edge_attrs = {IGRAPH_DEFS.SOURCE, IGRAPH_DEFS.TARGET} | set(
+            graph.es.attributes()
         )
 
-        # Validate vertex attribute exists
-        if vertex_id_attr not in graph.vs.attributes():
+        missing_cols = []
+        if self.source_col not in available_edge_attrs:
+            missing_cols.append(self.source_col)
+        if self.target_col not in available_edge_attrs:
+            missing_cols.append(self.target_col)
+        if missing_cols:
             raise ValueError(
-                f"Vertex attribute '{vertex_id_attr}' not found in {graph_name}"
+                f"Column(s) {missing_cols} not found as edge attributes in {graph_name}. "
+                f"Available: {available_edge_attrs}"
+            )
+
+        # Auto-determine merge_by from edgelist's column conventions
+        merge_by = self.standard_merge_by
+
+        # Determine vertex attribute to use for validation
+        # If using source/target columns, check against vertex indices
+        # Otherwise (from/to or custom), check against vertex names
+        if merge_by == IGRAPH_DEFS.INDEX:
+            vertex_id_attr = IGRAPH_DEFS.INDEX
+        elif merge_by == IGRAPH_DEFS.NAME:
+            vertex_id_attr = IGRAPH_DEFS.NAME
+        else:
+            # Custom merge_by - use name attribute for validation
+            logger.info(
+                f"Since merge_by is custom, '{self.source_col}' and '{self.target_col}' will be compared to vertex '{IGRAPH_DEFS.NAME}' for validation"
+            )
+            vertex_id_attr = IGRAPH_DEFS.NAME
+
+        # Validate vertex attribute exists
+        # Note: 'index' is a built-in igraph property (always available), not a vertex attribute
+        if (
+            vertex_id_attr == IGRAPH_DEFS.NAME
+            and IGRAPH_DEFS.NAME not in graph.vs.attributes()
+        ):
+            raise ValueError(
+                "Edge validation requires the 'name' vertex attribute unless merging by source/target indices"
             )
 
         VALID_VALIDATE = [NAPISTU_GRAPH.VERTICES, NAPISTU_GRAPH.EDGES, "both"]
@@ -534,9 +583,14 @@ class Edgelist:
 
         if validate_vertices:
             # check for vertices which are not in the graph
+            if vertex_id_attr == IGRAPH_DEFS.INDEX:
+                vertex_ids = graph.vs.indices
+            else:
+                vertex_ids = graph.vs[vertex_id_attr]
+
             invalid_vertices = set(
                 self.df[self.source_col].tolist() + self.df[self.target_col].tolist()
-            ) - set(graph.vs[vertex_id_attr])
+            ) - set(vertex_ids)
             if invalid_vertices:
                 example_invalid_vertices = list(invalid_vertices)[
                     : min(5, len(invalid_vertices))
@@ -549,8 +603,12 @@ class Edgelist:
             # Build set of universe edges
             universe_edges = set()
             for e in graph.es:
-                src_name = graph.vs[e.source][vertex_id_attr]
-                tgt_name = graph.vs[e.target][vertex_id_attr]
+                if vertex_id_attr == IGRAPH_DEFS.INDEX:
+                    src_name = e.source
+                    tgt_name = e.target
+                else:
+                    src_name = graph.vs[e.source][vertex_id_attr]
+                    tgt_name = graph.vs[e.target][vertex_id_attr]
                 universe_edges.add((src_name, tgt_name))
                 if not graph.is_directed():
                     # For undirected, also add reverse

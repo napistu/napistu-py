@@ -19,8 +19,8 @@ prepare_mudata_results_df:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Dict, List, Optional, Set, Union
 from pathlib import Path
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Union
 
 import numpy as np
 import pandas as pd
@@ -54,44 +54,66 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-
 class DatasetConfig(BaseModel):
-    """Pydantic model for a single dataset configuration."""
-    
+    """
+    Pydantic model for a single dataset configuration.
+
+    Parameters
+    ----------
+    name : str
+        Name of the dataset.
+    uri : str
+        URI/URL for the dataset (must start with http:// or https://).
+    path : Path
+        Local file path to the dataset file (.h5ad or .h5mu).
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> config = DatasetConfig(
+    ...     name="my_dataset",
+    ...     uri="https://example.com/dataset",
+    ...     path=Path("/path/to/dataset.h5ad")
+    ... )
+    >>> adata = config.load_h5ad()
+    """
+
+    name: str
     uri: str
     path: Path
-    
+
     @field_validator(DATASET.URI)
     @classmethod
     def validate_uri(cls, v: str) -> str:
         """Validate that uri is a valid URL."""
         if not v.startswith(("http://", "https://")):
-            raise ValueError(
-                f"uri must start with http:// or https://, got: {v}"
-            )
+            raise ValueError(f"uri must start with http:// or https://, got: {v}")
         return v
-    
+
     @field_validator(DATASET.PATH)
     @classmethod
     def validate_path(cls, v: Union[str, Path]) -> Path:
-        """Validate that path is a non-empty string."""
-        if not v or not v.strip():
-            raise ValueError("path cannot be empty")
+        """Validate that path is a non-empty string or Path."""
         # Expand user path if it contains ~
         v = ensure_path(v, expand_user=True)
+
+        # Validate that path is non-empty after normalization
+        v_str = str(v)
+        if not v_str or not v_str.strip():
+            raise ValueError("path cannot be empty")
 
         if not v.is_file():
             raise ValueError(f"path {v} does not exist")
 
         return v
-    
+
     model_config = {"extra": "forbid"}
 
     @require_anndata
     def load_h5ad(self) -> anndata.AnnData:
         """Load an .h5ad file as an AnnData object."""
         anndata = import_anndata()
-        
+
         if self.path.suffix == DATASET_FILE_EXTENSIONS.H5AD:
             return anndata.read_h5ad(self.path)
         else:
@@ -101,45 +123,117 @@ class DatasetConfig(BaseModel):
     def load_h5mu(self) -> mudata.MuData:
         """Load a .h5mu file as a MuData object."""
         mudata = import_mudata()
-        
+
         if self.path.suffix == DATASET_FILE_EXTENSIONS.H5MU:
             return mudata.read_h5mu(self.path)
         else:
             raise ValueError(f"File is not a .h5mu file: {self.path.suffix}")
 
 
-class DatasetsConfig(BaseModel):
-    """Pydantic model for the ADATASETS_CONFIG dictionary."""
-    
-    root: Dict[str, DatasetConfig]
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Dict[str, str]]) -> "DatasetsConfig":
-        """Create ADatasetsConfig from a dictionary."""
-        validated_data = {
-            name: DatasetConfig(**config) for name, config in data.items()
-        }
-        return cls(root=validated_data)
-    
+class DatasetsConfig:
+    """
+    Container for multiple dataset configurations.
+
+    Parameters
+    ----------
+    data : Dict[str, DatasetConfig]
+        Dictionary mapping dataset names to DatasetConfig objects.
+
+    Public Methods
+    --------------
+    get:
+        Get dataset config by name, raising KeyError if not found.
+    __getitem__:
+        Support dictionary-style access.
+    __contains__:
+        Support 'in' operator.
+    keys:
+        Return dataset names.
+    values:
+        Return dataset configs.
+    items:
+        Return (name, config) pairs.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> data = {
+    ...     "dataset1": {
+    ...         "uri": "https://example.com/dataset1",
+    ...         "path": "/path/to/dataset1.h5ad"
+    ...     },
+    ...     "dataset2": {
+    ...         "uri": "https://example.com/dataset2",
+    ...         "path": "/path/to/dataset2.h5mu"
+    ...     }
+    ... }
+    >>> configs = DatasetsConfig(data)
+    >>> # Access datasets
+    >>> dataset1 = configs["dataset1"]
+    >>> dataset2 = configs.get("dataset2")
+    >>> # Check if dataset exists
+    >>> "dataset1" in configs
+    True
+    >>> # Iterate over datasets
+    >>> for name, config in configs.items():
+    ...     print(f"{name}: {config.uri}")
+    """
+
+    def __init__(
+        self, data: Dict[str, Union[DatasetConfig, Dict[str, Union[str, Path]]]]
+    ):
+        """
+        Initialize DatasetsConfig from a dictionary, ensuring each DatasetConfig has its name set.
+
+        Parameters
+        ----------
+        data : Dict[str, Union[DatasetConfig, Dict[str, Union[str, Path]]]]
+            Dictionary mapping dataset names to either:
+            - DatasetConfig objects (name will be set from key if missing)
+            - Dicts that will be converted to DatasetConfig (name will be set from key)
+        """
+        # Convert dicts to DatasetConfig and ensure name is set
+        self.data: Dict[str, DatasetConfig] = {}
+        for name, config in data.items():
+            if isinstance(config, DatasetConfig):
+                # If name is not set, update it
+                if config.name is None:
+                    config = config.model_copy(update={DATASET.NAME: name})
+            else:
+                # Create DatasetConfig from dict, setting name if not provided
+                if DATASET.NAME not in config:
+                    config = {**config, DATASET.NAME: name}
+                config = DatasetConfig(**config)
+            self.data[name] = config
+
+    def get(self, key: str) -> DatasetConfig:
+        """Get dataset config by name, raising KeyError if not found."""
+        if key not in self.data:
+            available_keys = list(self.data.keys())
+            raise KeyError(
+                f"Dataset '{key}' not found. Available datasets: {available_keys}"
+            )
+        return self.data[key]
+
     def __getitem__(self, key: str) -> DatasetConfig:
         """Support dictionary-style access."""
-        return self.root[key]
-    
+        return self.data[key]
+
     def __contains__(self, key: str) -> bool:
         """Support 'in' operator."""
-        return key in self.root
-    
+        return key in self.data
+
     def keys(self):
         """Return dataset names."""
-        return self.root.keys()
-    
+        return self.data.keys()
+
     def values(self):
         """Return dataset configs."""
-        return self.root.values()
-    
+        return self.data.values()
+
     def items(self):
         """Return (name, config) pairs."""
-        return self.root.items()
+        return self.data.items()
 
 
 @require_anndata
