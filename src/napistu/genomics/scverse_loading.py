@@ -58,7 +58,7 @@ class DatasetConfig(BaseModel):
     """
     Pydantic model for a single dataset configuration.
 
-    Parameters
+    Attributes
     ----------
     name : str
         Name of the dataset.
@@ -66,6 +66,13 @@ class DatasetConfig(BaseModel):
         URI/URL for the dataset (must start with http:// or https://).
     path : Path
         Local file path to the dataset file (.h5ad or .h5mu).
+
+    Public Methods
+    --------------
+    load_h5ad:
+        Load an .h5ad file as an AnnData object.
+    load_h5mu:
+        Load a .h5mu file as a MuData object.
 
     Examples
     --------
@@ -134,7 +141,7 @@ class DatasetsConfig:
     """
     Container for multiple dataset configurations.
 
-    Parameters
+    Attributes
     ----------
     data : Dict[str, DatasetConfig]
         Dictionary mapping dataset names to DatasetConfig objects.
@@ -143,16 +150,19 @@ class DatasetsConfig:
     --------------
     get:
         Get dataset config by name, raising KeyError if not found.
-    __getitem__:
-        Support dictionary-style access.
-    __contains__:
-        Support 'in' operator.
     keys:
         Return dataset names.
     values:
         Return dataset configs.
     items:
         Return (name, config) pairs.
+
+    Private Methods
+    ---------------
+    _get_item:
+        Support dictionary-style access.
+    _contains:
+        Support 'in' operator.
 
     Examples
     --------
