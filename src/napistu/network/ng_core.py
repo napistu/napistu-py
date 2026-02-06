@@ -1202,7 +1202,7 @@ class NapistuGraph(ig.Graph):
                 )
 
             merged_species = self._compare_and_merge_attrs(
-                graph_attrs["species"],
+                graph_attrs[SBML_DFS.SPECIES],
                 NAPISTU_METADATA_KEYS.SPECIES_ATTRS,
                 mode,
                 overwrite,

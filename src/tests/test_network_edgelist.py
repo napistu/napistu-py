@@ -11,9 +11,9 @@ from napistu.network.edgelist import Edgelist
 
 def test_validate_subset(simple_directed_graph, simple_undirected_graph):
     """Test Edgelist.validate_subset method."""
-    # Test valid edgelist passes
+    # Test valid edgelist passes (using from/to columns with vertex names)
     valid_edgelist = pd.DataFrame(
-        {IGRAPH_DEFS.SOURCE: ["A", "B"], IGRAPH_DEFS.TARGET: ["B", "C"]}
+        {NAPISTU_GRAPH_EDGES.FROM: ["A", "B"], NAPISTU_GRAPH_EDGES.TO: ["B", "C"]}
     )
     el = Edgelist(valid_edgelist)
     el.validate_subset(simple_directed_graph)
@@ -25,7 +25,7 @@ def test_validate_subset(simple_directed_graph, simple_undirected_graph):
 
     # Test invalid vertices raises error
     invalid_vertex_edgelist = pd.DataFrame(
-        {IGRAPH_DEFS.SOURCE: ["A", "E"], IGRAPH_DEFS.TARGET: ["B", "C"]}
+        {NAPISTU_GRAPH_EDGES.FROM: ["A", "E"], NAPISTU_GRAPH_EDGES.TO: ["B", "C"]}
     )
     el_invalid = Edgelist(invalid_vertex_edgelist)
     with pytest.raises(ValueError, match="vertex\\(s\\) in edgelist not in universe"):
@@ -33,7 +33,7 @@ def test_validate_subset(simple_directed_graph, simple_undirected_graph):
 
     # Test invalid edges raises error
     invalid_edge_edgelist = pd.DataFrame(
-        {IGRAPH_DEFS.SOURCE: ["A", "C"], IGRAPH_DEFS.TARGET: ["B", "A"]}
+        {NAPISTU_GRAPH_EDGES.FROM: ["A", "C"], NAPISTU_GRAPH_EDGES.TO: ["B", "A"]}
     )
     el_invalid_edge = Edgelist(invalid_edge_edgelist)
     with pytest.raises(ValueError, match="edge\\(s\\) in edgelist not in universe"):
@@ -41,44 +41,43 @@ def test_validate_subset(simple_directed_graph, simple_undirected_graph):
 
     # Test undirected graph accepts reverse edges
     undirected_edgelist = pd.DataFrame(
-        {IGRAPH_DEFS.SOURCE: ["X", "Y"], IGRAPH_DEFS.TARGET: ["Y", "X"]}
+        {NAPISTU_GRAPH_EDGES.FROM: ["X", "Y"], NAPISTU_GRAPH_EDGES.TO: ["Y", "X"]}
     )
-    simple_undirected_graph.add_edges([(0, 1)])  # Add edge X-Y
     el_undirected = Edgelist(undirected_edgelist)
     el_undirected.validate_subset(simple_undirected_graph)
 
 
 def test_standard_merge_by():
     """Test standard_merge_by property."""
-    # Test source/target columns return NAME
+    # Test source/target columns return INDEX (must be integers)
     df_source_target = pd.DataFrame(
-        {IGRAPH_DEFS.SOURCE: ["A", "B"], IGRAPH_DEFS.TARGET: ["B", "C"]}
+        {IGRAPH_DEFS.SOURCE: [0, 1], IGRAPH_DEFS.TARGET: [1, 2]}
     )
     el = Edgelist(df_source_target)
-    assert el.standard_merge_by == IGRAPH_DEFS.NAME
+    assert el.standard_merge_by == IGRAPH_DEFS.INDEX
 
-    # Test from/to columns return INDEX
+    # Test from/to columns return NAME (can be strings)
     df_from_to = pd.DataFrame(
-        {NAPISTU_GRAPH_EDGES.FROM: [0, 1], NAPISTU_GRAPH_EDGES.TO: [1, 2]}
+        {NAPISTU_GRAPH_EDGES.FROM: ["A", "B"], NAPISTU_GRAPH_EDGES.TO: ["B", "C"]}
     )
     el_from_to = Edgelist(df_from_to)
-    assert el_from_to.standard_merge_by == IGRAPH_DEFS.INDEX
+    assert el_from_to.standard_merge_by == IGRAPH_DEFS.NAME
 
 
 def test_merge_edgelists():
     """Test merge_edgelists method."""
-    # Test merging source/target edgelists
+    # Test merging from/to edgelists
     df1 = pd.DataFrame(
         {
-            IGRAPH_DEFS.SOURCE: ["A", "B"],
-            IGRAPH_DEFS.TARGET: ["B", "C"],
+            NAPISTU_GRAPH_EDGES.FROM: ["A", "B"],
+            NAPISTU_GRAPH_EDGES.TO: ["B", "C"],
             "weight": [1.0, 2.0],
         }
     )
     df2 = pd.DataFrame(
         {
-            IGRAPH_DEFS.SOURCE: ["A", "B"],
-            IGRAPH_DEFS.TARGET: ["B", "C"],
+            NAPISTU_GRAPH_EDGES.FROM: ["A", "B"],
+            NAPISTU_GRAPH_EDGES.TO: ["B", "C"],
             "score": [0.5, 0.8],
         }
     )
@@ -91,18 +90,18 @@ def test_merge_edgelists():
     assert merged.df.loc[0, "weight"] == 1.0
     assert merged.df.loc[0, "score"] == 0.5
 
-    # Test merging from/to edgelists
+    # Test merging source/target edgelists (with integers)
     df3 = pd.DataFrame(
         {
-            NAPISTU_GRAPH_EDGES.FROM: [0, 1],
-            NAPISTU_GRAPH_EDGES.TO: [1, 2],
+            IGRAPH_DEFS.SOURCE: [0, 1],
+            IGRAPH_DEFS.TARGET: [1, 2],
             "weight": [1.0, 2.0],
         }
     )
     df4 = pd.DataFrame(
         {
-            NAPISTU_GRAPH_EDGES.FROM: [0, 1],
-            NAPISTU_GRAPH_EDGES.TO: [1, 2],
+            IGRAPH_DEFS.SOURCE: [0, 1],
+            IGRAPH_DEFS.TARGET: [1, 2],
             "score": [0.5, 0.8],
         }
     )
@@ -126,8 +125,8 @@ def test_merge_edgelists():
     # Test inner merge (default)
     df5 = pd.DataFrame(
         {
-            IGRAPH_DEFS.SOURCE: ["A"],
-            IGRAPH_DEFS.TARGET: ["B"],
+            NAPISTU_GRAPH_EDGES.FROM: ["A"],
+            NAPISTU_GRAPH_EDGES.TO: ["B"],
             "value": [10],
         }
     )
@@ -145,8 +144,8 @@ def test_has_and_remove_duplicated_edges():
     # Test edgelist with duplicates
     df_with_duplicates = pd.DataFrame(
         {
-            IGRAPH_DEFS.SOURCE: ["A", "B", "A", "C"],
-            IGRAPH_DEFS.TARGET: ["B", "C", "B", "D"],
+            NAPISTU_GRAPH_EDGES.FROM: ["A", "B", "A", "C"],
+            NAPISTU_GRAPH_EDGES.TO: ["B", "C", "B", "D"],
             "weight": [1.0, 2.0, 1.5, 3.0],
         }
     )
@@ -180,8 +179,8 @@ def test_has_and_remove_duplicated_edges():
     # Test edgelist without duplicates
     df_no_duplicates = pd.DataFrame(
         {
-            IGRAPH_DEFS.SOURCE: ["A", "B", "C"],
-            IGRAPH_DEFS.TARGET: ["B", "C", "D"],
+            NAPISTU_GRAPH_EDGES.FROM: ["A", "B", "C"],
+            NAPISTU_GRAPH_EDGES.TO: ["B", "C", "D"],
             "weight": [1.0, 2.0, 3.0],
         }
     )
@@ -190,18 +189,18 @@ def test_has_and_remove_duplicated_edges():
     el_no_dup_cleaned = el_no_dup.remove_duplicated_edges()
     assert len(el_no_dup_cleaned) == 3  # No change
 
-    # Test with from/to columns
-    df_from_to = pd.DataFrame(
+    # Test with source/target columns (integers)
+    df_source_target = pd.DataFrame(
         {
-            NAPISTU_GRAPH_EDGES.FROM: [0, 1, 0],
-            NAPISTU_GRAPH_EDGES.TO: [1, 2, 1],
+            IGRAPH_DEFS.SOURCE: [0, 1, 0],
+            IGRAPH_DEFS.TARGET: [1, 2, 1],
             "weight": [1.0, 2.0, 1.5],
         }
     )
-    el_from_to = Edgelist(df_from_to)
-    assert el_from_to.has_duplicated_edges
-    el_from_to_cleaned = el_from_to.remove_duplicated_edges(keep="first")
-    assert len(el_from_to_cleaned) == 2
+    el_source_target = Edgelist(df_source_target)
+    assert el_source_target.has_duplicated_edges
+    el_source_target_cleaned = el_source_target.remove_duplicated_edges(keep="first")
+    assert len(el_source_target_cleaned) == 2
 
 
 def test_has_and_remove_reciprocal_edges():
@@ -209,8 +208,8 @@ def test_has_and_remove_reciprocal_edges():
     # Test edgelist with reciprocal edges
     df_with_reciprocal = pd.DataFrame(
         {
-            IGRAPH_DEFS.SOURCE: ["A", "B", "C"],
-            IGRAPH_DEFS.TARGET: ["B", "A", "D"],
+            NAPISTU_GRAPH_EDGES.FROM: ["A", "B", "C"],
+            NAPISTU_GRAPH_EDGES.TO: ["B", "A", "D"],
             "weight": [1.0, 2.0, 3.0],
         }
     )
@@ -256,8 +255,8 @@ def test_has_and_remove_reciprocal_edges():
     # Test edgelist without reciprocal edges
     df_no_reciprocal = pd.DataFrame(
         {
-            IGRAPH_DEFS.SOURCE: ["A", "B", "C"],
-            IGRAPH_DEFS.TARGET: ["B", "C", "D"],
+            NAPISTU_GRAPH_EDGES.FROM: ["A", "B", "C"],
+            NAPISTU_GRAPH_EDGES.TO: ["B", "C", "D"],
             "weight": [1.0, 2.0, 3.0],
         }
     )
@@ -269,8 +268,8 @@ def test_has_and_remove_reciprocal_edges():
     # Test with self-loops (A->A) - should not count as reciprocal
     df_with_self_loops = pd.DataFrame(
         {
-            IGRAPH_DEFS.SOURCE: ["A", "A", "B"],
-            IGRAPH_DEFS.TARGET: ["A", "B", "A"],
+            NAPISTU_GRAPH_EDGES.FROM: ["A", "A", "B"],
+            NAPISTU_GRAPH_EDGES.TO: ["A", "B", "A"],
             "weight": [1.0, 2.0, 3.0],
         }
     )
@@ -292,8 +291,8 @@ def test_has_and_remove_reciprocal_edges():
     # Test edgelist with only self-loops - no reciprocal edges
     df_only_self = pd.DataFrame(
         {
-            IGRAPH_DEFS.SOURCE: ["A", "B"],
-            IGRAPH_DEFS.TARGET: ["A", "B"],
+            NAPISTU_GRAPH_EDGES.FROM: ["A", "B"],
+            NAPISTU_GRAPH_EDGES.TO: ["A", "B"],
             "weight": [1.0, 2.0],
         }
     )
