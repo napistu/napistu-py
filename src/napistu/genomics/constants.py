@@ -74,3 +74,13 @@ GENESET_DEFAULT_CONFIG_NAMES = SimpleNamespace(
 VALID_GENESET_DEFAULT_CONFIG_NAMES = list(
     GENESET_DEFAULT_CONFIG_NAMES.__dict__.values()
 )
+
+DATASET = SimpleNamespace(
+    PATH="path",
+    URI="uri",
+)
+
+DATASET_FILE_EXTENSIONS = SimpleNamespace(
+    H5AD=".h5ad",
+    H5MU=".h5mu",
+)

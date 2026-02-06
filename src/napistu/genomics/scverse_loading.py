@@ -1,6 +1,13 @@
 """
 Functions for connection scverse data with Napistu graphs.
 
+Classes
+--------
+DatasetConfig:
+    Pydantic model for a single dataset configuration.
+DatasetsConfig:
+    Pydantic model for multiple datasets configuration.
+
 Public Functions
 ----------------
 prepare_anndata_results_df:
@@ -13,10 +20,11 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Union
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel, Field, RootModel
+from pydantic import BaseModel, Field, RootModel, field_validator
 
 from napistu.constants import ONTOLOGIES_LIST
 from napistu.genomics.constants import (
@@ -25,20 +33,113 @@ from napistu.genomics.constants import (
     ADATA_DICTLIKE_ATTRS,
     ADATA_FEATURELEVEL_ATTRS,
     ADATA_IDENTITY_ATTRS,
+    DATASET,
+    DATASET_FILE_EXTENSIONS,
     SCVERSE_DEFS,
     VALID_MUDATA_LEVELS,
 )
 from napistu.matching import species
 from napistu.utils.optional import (
+    import_anndata,
+    import_mudata,
     require_anndata,
     require_mudata,
 )
+from napistu.utils.path_utils import ensure_path
 
 if TYPE_CHECKING:
     import anndata
     import mudata
 
 logger = logging.getLogger(__name__)
+
+
+
+class DatasetConfig(BaseModel):
+    """Pydantic model for a single dataset configuration."""
+    
+    uri: str
+    path: Path
+    
+    @field_validator(DATASET.URI)
+    @classmethod
+    def validate_uri(cls, v: str) -> str:
+        """Validate that uri is a valid URL."""
+        if not v.startswith(("http://", "https://")):
+            raise ValueError(
+                f"uri must start with http:// or https://, got: {v}"
+            )
+        return v
+    
+    @field_validator(DATASET.PATH)
+    @classmethod
+    def validate_path(cls, v: Union[str, Path]) -> Path:
+        """Validate that path is a non-empty string."""
+        if not v or not v.strip():
+            raise ValueError("path cannot be empty")
+        # Expand user path if it contains ~
+        v = ensure_path(v, expand_user=True)
+
+        if not v.is_file():
+            raise ValueError(f"path {v} does not exist")
+
+        return v
+    
+    model_config = {"extra": "forbid"}
+
+    @require_anndata
+    def load_h5ad(self) -> anndata.AnnData:
+        """Load an .h5ad file as an AnnData object."""
+        anndata = import_anndata()
+        
+        if self.path.suffix == DATASET_FILE_EXTENSIONS.H5AD:
+            return anndata.read_h5ad(self.path)
+        else:
+            raise ValueError(f"File is not an .h5ad file: {self.path.suffix}")
+
+    @require_mudata
+    def load_h5mu(self) -> mudata.MuData:
+        """Load a .h5mu file as a MuData object."""
+        mudata = import_mudata()
+        
+        if self.path.suffix == DATASET_FILE_EXTENSIONS.H5MU:
+            return mudata.read_h5mu(self.path)
+        else:
+            raise ValueError(f"File is not a .h5mu file: {self.path.suffix}")
+
+
+class DatasetsConfig(BaseModel):
+    """Pydantic model for the ADATASETS_CONFIG dictionary."""
+    
+    root: Dict[str, DatasetConfig]
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Dict[str, str]]) -> "DatasetsConfig":
+        """Create ADatasetsConfig from a dictionary."""
+        validated_data = {
+            name: DatasetConfig(**config) for name, config in data.items()
+        }
+        return cls(root=validated_data)
+    
+    def __getitem__(self, key: str) -> DatasetConfig:
+        """Support dictionary-style access."""
+        return self.root[key]
+    
+    def __contains__(self, key: str) -> bool:
+        """Support 'in' operator."""
+        return key in self.root
+    
+    def keys(self):
+        """Return dataset names."""
+        return self.root.keys()
+    
+    def values(self):
+        """Return dataset configs."""
+        return self.root.values()
+    
+    def items(self):
+        """Return (name, config) pairs."""
+        return self.root.items()
 
 
 @require_anndata

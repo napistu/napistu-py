@@ -1,12 +1,24 @@
-import anndata
-import mudata
 import numpy as np
 import pandas as pd
 import pytest
+from pathlib import Path
+from pydantic import ValidationError
 from scipy import sparse
 
 from napistu.genomics import scverse_loading
-from napistu.genomics.constants import ADATA, SCVERSE_DEFS
+from napistu.genomics.constants import ADATA, DATASET, SCVERSE_DEFS
+from napistu.utils.optional import import_anndata, import_mudata
+
+# Import optional dependencies, skip tests if not available
+try:
+    anndata = import_anndata()
+except ImportError:
+    pytest.skip("anndata is not available", allow_module_level=True)
+
+try:
+    mudata = import_mudata()
+except ImportError:
+    pytest.skip("mudata is not available", allow_module_level=True)
 
 
 @pytest.fixture
@@ -59,6 +71,40 @@ def minimal_adata():
     adata.varp["adjacency"] = adjacency
 
     return adata
+
+
+@pytest.fixture
+def minimal_mudata(minimal_adata):
+    """Create a minimal MuData object for testing.
+
+    Uses minimal_adata as the RNA modality and creates a simple protein modality.
+    Focuses on testing MuData-level operations rather than modality-specific features.
+    """
+    # Create protein modality with minimal features
+    n_vars_protein = 3
+    adata_protein = anndata.AnnData(
+        X=np.random.randn(minimal_adata.n_obs, n_vars_protein),
+        obs=minimal_adata.obs,  # Share obs to ensure alignment
+        var=pd.DataFrame(
+            {
+                "uniprot": [
+                    f"P{i:05d}" for i in range(n_vars_protein)
+                ]  # Valid ontology column
+            },
+            index=[f"protein_{i}" for i in range(n_vars_protein)],
+        ),
+    )
+
+    # Create MuData with both modalities
+    mdata = mudata.MuData({"rna": minimal_adata, "protein": adata_protein})
+
+    # Add varm table at MuData level
+    n_features = 3
+    varm_array = np.random.randn(mdata.n_vars, n_features)
+    mdata.varm["gene_scores"] = varm_array
+    mdata.uns["gene_scores_features"] = ["score1", "score2", "score3"]
+
+    return mdata
 
 
 def test_load_raw_table_success(minimal_adata):
@@ -290,40 +336,6 @@ def test_create_results_df(minimal_adata):
     pd.testing.assert_index_equal(layer_result.index, minimal_adata.var.index)
     pd.testing.assert_index_equal(layer_result.columns, pd.Index(layer_attrs))
     np.testing.assert_array_equal(layer_result.values, layer_array.T)
-
-
-@pytest.fixture
-def minimal_mudata(minimal_adata):
-    """Create a minimal MuData object for testing.
-
-    Uses minimal_adata as the RNA modality and creates a simple protein modality.
-    Focuses on testing MuData-level operations rather than modality-specific features.
-    """
-    # Create protein modality with minimal features
-    n_vars_protein = 3
-    adata_protein = anndata.AnnData(
-        X=np.random.randn(minimal_adata.n_obs, n_vars_protein),
-        obs=minimal_adata.obs,  # Share obs to ensure alignment
-        var=pd.DataFrame(
-            {
-                "uniprot": [
-                    f"P{i:05d}" for i in range(n_vars_protein)
-                ]  # Valid ontology column
-            },
-            index=[f"protein_{i}" for i in range(n_vars_protein)],
-        ),
-    )
-
-    # Create MuData with both modalities
-    mdata = mudata.MuData({"rna": minimal_adata, "protein": adata_protein})
-
-    # Add varm table at MuData level
-    n_features = 3
-    varm_array = np.random.randn(mdata.n_vars, n_features)
-    mdata.varm["gene_scores"] = varm_array
-    mdata.uns["gene_scores_features"] = ["score1", "score2", "score3"]
-
-    return mdata
 
 
 def test_prepare_anndata_results_df_anndata(minimal_adata):
@@ -783,3 +795,116 @@ def test_prepare_mudata_results_df_level_validation(minimal_mudata):
             table_type=ADATA.VAR,
             level="invalid_level",
         )
+
+
+def test_dataset_config_validation(tmp_path, minimal_adata, minimal_mudata):
+    """Test DatasetConfig validation and loading."""
+    # Save files for testing
+    test_h5ad = tmp_path / "dataset.h5ad"
+    test_h5mu = tmp_path / "dataset.h5mu"
+    minimal_adata.write(test_h5ad)
+    minimal_mudata.write(test_h5mu)
+
+    # Valid config with HTTPS URI
+    config = scverse_loading.DatasetConfig(
+        uri="https://example.com/dataset",
+        path=str(test_h5ad)
+    )
+    assert config.uri == "https://example.com/dataset"
+    assert config.path == test_h5ad
+
+    # Test loading h5ad file
+    loaded_adata = config.load_h5ad()
+    assert isinstance(loaded_adata, anndata.AnnData)
+    assert loaded_adata.n_obs == minimal_adata.n_obs
+    assert loaded_adata.n_vars == minimal_adata.n_vars
+
+    # Valid config with HTTP URI for h5mu
+    config_mu = scverse_loading.DatasetConfig(
+        uri="http://example.com/mudata",
+        path=str(test_h5mu)
+    )
+    assert config_mu.uri == "http://example.com/mudata"
+
+    # Test loading h5mu file
+    loaded_mudata = config_mu.load_h5mu()
+    assert isinstance(loaded_mudata, mudata.MuData)
+    assert set(loaded_mudata.mod.keys()) == {"rna", "protein"}
+
+    # Invalid URI - no protocol
+    with pytest.raises(ValidationError) as exc_info:
+        scverse_loading.DatasetConfig(
+            uri="example.com/data",
+            path=str(test_h5ad)
+        )
+    assert "uri must start with http:// or https://" in str(exc_info.value)
+
+    # Invalid path - file doesn't exist
+    nonexistent_file = tmp_path / "nonexistent.h5ad"
+    with pytest.raises(ValidationError) as exc_info:
+        scverse_loading.DatasetConfig(
+            uri="https://example.com/data",
+            path=str(nonexistent_file)
+        )
+    assert "does not exist" in str(exc_info.value)
+
+
+def test_datasets_config_validation_and_access(tmp_path, minimal_adata, minimal_mudata):
+    """Test DatasetsConfig validation and dictionary-style access."""
+    # Save files for testing
+    test_files = {}
+    for i in range(2):
+        test_file = tmp_path / f"dataset_{i}.h5ad"
+        minimal_adata.write(test_file)
+        test_files[f"dataset_{i}"] = {
+            DATASET.URI: f"https://example.com/dataset_{i}",
+            DATASET.PATH: str(test_file)
+        }
+    # Add a mudata file
+    test_mu_file = tmp_path / "dataset_mu.h5mu"
+    minimal_mudata.write(test_mu_file)
+    test_files["dataset_mu"] = {
+        DATASET.URI: "https://example.com/mudata",
+        DATASET.PATH: str(test_mu_file)
+    }
+
+    # Valid config from dictionary
+    config = scverse_loading.DatasetsConfig.from_dict(test_files)
+
+    # Test dictionary-style access
+    assert "dataset_0" in config
+    assert "dataset_1" in config
+    assert "dataset_mu" in config
+    assert "nonexistent" not in config
+
+    assert config["dataset_0"].uri == "https://example.com/dataset_0"
+    assert config["dataset_mu"].uri == "https://example.com/mudata"
+
+    # Test loading from configs
+    loaded_adata = config["dataset_0"].load_h5ad()
+    assert isinstance(loaded_adata, anndata.AnnData)
+    
+    loaded_mudata = config["dataset_mu"].load_h5mu()
+    assert isinstance(loaded_mudata, mudata.MuData)
+
+    # Test keys(), values()
+    assert set(config.keys()) == {"dataset_0", "dataset_1", "dataset_mu"}
+    
+    values = list(config.values())
+    assert len(values) == 3
+    assert all(isinstance(v, scverse_loading.DatasetConfig) for v in values)
+
+    # Test get() method
+    assert config.get("dataset_0").uri == "https://example.com/dataset_0"
+    assert config.get("nonexistent") is None
+
+    # Invalid config - bad URI
+    invalid_config = {
+        "bad_dataset": {
+            DATASET.URI: "not-a-url",
+            DATASET.PATH: str(tmp_path / "test.h5ad")
+        }
+    }
+    minimal_adata.write(tmp_path / "test.h5ad")
+    with pytest.raises(ValidationError):
+        scverse_loading.DatasetsConfig.from_dict(invalid_config)

@@ -5,6 +5,8 @@ Public Functions
 ----------------
 copy_uri(input_uri: str, output_uri: str, is_file: bool = True) -> None:
     Copy a file or folder from one URI to another.
+ensure_path(path: Union[str, Path], expand_user: bool = True) -> Path:
+    Convert a string or Path to a Path object, optionally expanding user home directory.
 get_extn_from_url(url: str) -> str:
     Retrieve file extension from a URL.
 get_source_base_and_path(uri: str) -> tuple[str, str]:
@@ -19,6 +21,8 @@ path_exists(path: str) -> bool:
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Union
 import logging
 import os
 import re
@@ -64,6 +68,45 @@ def copy_uri(input_uri: str, output_uri: str, is_file=True):
                     copy_fun(source_fs, source_path, target_fs, target_path)
                 else:
                     raise (e)
+
+
+def ensure_path(path: Union[str, Path], expand_user: bool = True) -> Path:
+    """
+    Convert a string or Path to a Path object, optionally expanding user home directory.
+
+    Parameters
+    ----------
+    path : Union[str, Path]
+        Path to convert. Can be a string (e.g., "~/data/store") or Path object.
+    expand_user : bool, default=True
+        If True, expand tildes (~) to the user's home directory.
+
+    Returns
+    -------
+    Path
+        Path object, with user expanded if expand_user=True.
+
+    Raises
+    ------
+    TypeError
+        If path is not a str or Path object.
+
+    Examples
+    --------
+    >>> ensure_path("~/data/store")
+    PosixPath('/home/user/data/store')
+    >>> ensure_path(Path("./relative/path"))
+    PosixPath('./relative/path')
+    >>> ensure_path("~/data", expand_user=False)
+    PosixPath('~/data')
+    """
+    if not isinstance(path, (str, Path)):
+        raise TypeError(f"path must be a str or Path object, got {type(path).__name__}")
+    if isinstance(path, str):
+        path = Path(path)
+    if expand_user:
+        path = path.expanduser()
+    return path
 
 
 def get_extn_from_url(url: str) -> str:

@@ -401,3 +401,67 @@ def test_edgelist_gsea(napistu_graph):
     assert (results["p_value"] >= 0).all() and (results["p_value"] <= 1).all()
     assert (results["q_value"] >= 0).all() and (results["q_value"] <= 1).all()
     assert (results["odds_ratio"] >= 0).all()
+
+
+def test_edgelist_gsea_universe_observed_only_validation(napistu_graph):
+    """Test edgelist validation with universe_observed_only flag."""
+    vertex_names = napistu_graph.vs[IGRAPH_DEFS.NAME]
+    if len(vertex_names) < 4:
+        pytest.skip("Not enough vertices in graph for test")
+
+    v1, v2, v3, v4 = vertex_names[:4]
+    genesets = {"geneset1": [v1, v2], "geneset2": [v3, v4]}
+    universe_vertex_names = [v1, v2, v3, v4]
+
+    # Build set of existing edges
+    existing_edges = set()
+    for e in napistu_graph.es:
+        src = napistu_graph.vs[e.source][IGRAPH_DEFS.NAME]
+        tgt = napistu_graph.vs[e.target][IGRAPH_DEFS.NAME]
+        existing_edges.add((src, tgt))
+        if not napistu_graph.is_directed():
+            existing_edges.add((tgt, src))
+
+    # Find a non-existent edge and an existing edge
+    non_existent_edge = None
+    existing_edge = None
+    for src in [v1, v2]:
+        for tgt in [v3, v4]:
+            if (src, tgt) not in existing_edges and non_existent_edge is None:
+                non_existent_edge = (src, tgt)
+            if (src, tgt) in existing_edges and existing_edge is None:
+                existing_edge = (src, tgt)
+        if non_existent_edge and existing_edge:
+            break
+
+    if non_existent_edge is None:
+        pytest.skip("All vertex pairs have edges, cannot test non-existent edge scenario")
+
+    # Test 1: universe_observed_only=True should fail with non-existent edge
+    invalid_edgelist = pd.DataFrame(
+        {IGRAPH_DEFS.SOURCE: [non_existent_edge[0]], IGRAPH_DEFS.TARGET: [non_existent_edge[1]]}
+    )
+    with pytest.raises(ValueError, match="edge.*not in graph"):
+        edgelist_gsea(
+            edgelist=invalid_edgelist,
+            genesets=genesets,
+            graph=napistu_graph,
+            universe_observed_only=True,
+            min_set_size=1,
+            min_x_geneset_edges_possible=1,
+            verbose=False,
+        )
+
+    # Test 2: universe_observed_only=False should allow non-existent edges
+    results = edgelist_gsea(
+        edgelist=invalid_edgelist,
+        genesets=genesets,
+        graph=napistu_graph,
+        universe_observed_only=False,
+        universe_vertex_names=universe_vertex_names,
+        min_set_size=1,
+        min_x_geneset_edges_possible=1,
+        verbose=False,
+    )
+    assert isinstance(results, pd.DataFrame)
+    assert len(results) > 0

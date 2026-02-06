@@ -497,7 +497,9 @@ def edgelist_gsea(
     if universe_observed_only:
         edgelist.validate_subset(graph)
     else:
-        edgelist.validate_subset(graph, validate=NAPISTU_GRAPH.EDGES)
+        # When universe_observed_only=False, only validate vertices exist in graph.
+        # Edges will be validated later against the universe (which includes all possible edges).
+        edgelist.validate_subset(graph, validate=NAPISTU_GRAPH.VERTICES)
 
     # resolve edgelist to check for duplicates and reciprocal edges
     edgelist = _resolve_edgelist(graph, edgelist)
