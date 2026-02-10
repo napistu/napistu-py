@@ -38,13 +38,11 @@ from napistu.utils.io_utils import (
     load_parquet,
     load_pickle,
     pickle_cache,
-    read_pickle,
     requests_retry_session,
     save_json,
     save_parquet,
     save_pickle,
     write_file_contents_to_path,
-    write_pickle,
 )
 
 # Import optional dependency utilities from optional
@@ -119,7 +117,6 @@ __all__ = [
     "save_parquet",
     "save_pickle",
     "write_file_contents_to_path",
-    "write_pickle",
     # Path utilities
     "copy_uri",
     "get_extn_from_url",

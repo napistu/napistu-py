@@ -316,7 +316,13 @@ def _copy_dir(
     source: _FsspecFS, source_path: str, target: _FsspecFS, target_path: str
 ) -> None:
     target.makedirs(target_path, recreate=True)
+    source_basename = posixpath.basename(source_path) if source_path else ""
     for name in source.listdir(source_path):
+        if not name or name in (".", ".."):
+            continue
+        # GCS and similar backends can return the listed directory itself as an entry; skip it
+        if source_basename and name == source_basename:
+            continue
         src_child = posixpath.join(source_path, name) if source_path else name
         tgt_child = posixpath.join(target_path, name) if target_path else name
         if source.isdir(src_child):

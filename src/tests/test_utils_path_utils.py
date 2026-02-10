@@ -43,7 +43,7 @@ def test_initialize_dir_new(tmp_new_subdir):
     assert tmp_new_subdir.exists()
 
 
-@pytest.mark.unix_only
+@pytest.mark.skip_on_windows
 def test_initialize_dir_new_gcs(gcs_bucket_uri):
     test_uri = f"{gcs_bucket_uri}/testdir"
     initialize_dir(test_uri, overwrite=False)
@@ -56,7 +56,7 @@ def test_initialize_dir_new_2_layers(tmp_new_subdir):
     assert target_sub_dir.exists()
 
 
-@pytest.mark.unix_only
+@pytest.mark.skip_on_windows
 def test_initialize_dir_new_2_layers_gcs(gcs_bucket_uri):
     test_uri = f"{gcs_bucket_uri}/testdir/testdir2"
     initialize_dir(test_uri, overwrite=False)
@@ -77,7 +77,7 @@ def test_initialize_dir_existing(tmp_new_subdir):
     assert test_file.exists() is False
 
 
-@pytest.mark.unix_only
+@pytest.mark.skip_on_windows
 def test_initialize_dir_existing_gcs(gcs_bucket, gcs_bucket_uri):
     # create the file
     create_blob(gcs_bucket, "testdir/file")
@@ -107,7 +107,7 @@ def test_path_exists(tmp_path, tmp_new_subdir):
     assert path_exists(tmp_new_subdir)
 
 
-@pytest.mark.unix_only
+@pytest.mark.skip_on_windows
 def test_path_exists_gcs(gcs_bucket, gcs_bucket_uri):
     assert path_exists(gcs_bucket_uri)
     test_dir = "testdir"
@@ -147,7 +147,7 @@ def test_copy_uri_fol(tmp_path, tmp_new_subdir):
     assert out_file.exists()
 
 
-@pytest.mark.unix_only
+@pytest.mark.skip_on_windows
 def test_copy_uri_file_gcs(gcs_bucket_uri, gcs_bucket_subdir_uri):
     basename = "test.txt"
     content = "test"
@@ -159,7 +159,7 @@ def test_copy_uri_file_gcs(gcs_bucket_uri, gcs_bucket_subdir_uri):
     assert utils.load_pickle(fn_out) == content
 
 
-@pytest.mark.unix_only
+@pytest.mark.skip_on_windows
 def test_copy_uri_fol_gcs(gcs_bucket_uri, gcs_bucket_subdir_uri):
     basename = "test.txt"
     content = "test"

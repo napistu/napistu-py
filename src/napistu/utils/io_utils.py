@@ -21,8 +21,6 @@ load_pickle(path: str) -> Any:
     Load pickle object from path.
 pickle_cache(path: str, overwrite: bool = False) -> Callable:
     Decorator to cache a function call result to pickle.
-read_pickle(path: str) -> Any:
-    Alias for load_pickle.
 requests_retry_session(retries: int = 5, backoff_factor: float = 0.3, status_forcelist: tuple = (500, 502, 503, 504), session: requests.Session | None = None, **kwargs) -> requests.Session:
     Create a requests session with retry logic.
 save_json(uri: str, object: Any) -> None:
@@ -33,8 +31,6 @@ save_pickle(path: str, dat: object) -> None:
     Save object to path as pickle.
 write_file_contents_to_path(path: str, contents: Any) -> None:
     Helper function to write file contents to a path.
-write_pickle(path: str, dat: object) -> None:
-    Alias for save_pickle.
 """
 
 from __future__ import annotations
@@ -45,8 +41,10 @@ import json
 import logging
 import os
 import pickle
+import posixpath
 import re
 import shutil
+import tempfile
 import urllib.request as request
 import warnings
 import zipfile
@@ -54,6 +52,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import Any, Callable, Union
 
+import fsspec
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -63,14 +62,11 @@ from requests.adapters import HTTPAdapter, Retry
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
     from fs import open_fs
-    from fs.copy import copy_fs
     from fs.errors import ResourceNotFound
-    from fs.tarfs import TarFS
-    from fs.tempfs import TempFS
-    from fs.zipfs import ZipFS
 
 from napistu.constants import FILE_EXT_GZ, FILE_EXT_ZIP
 from napistu.utils.constants import DOWNLOAD_METHODS, VALID_DOWNLOAD_METHODS
+from napistu.utils.path_utils import _open_fs as _path_open_fs
 
 # Import helper functions from path_utils
 from napistu.utils.path_utils import (
@@ -116,43 +112,53 @@ def download_and_extract(
     output_dir_path = str(output_dir_path)
     initialize_dir(output_dir_path, overwrite)
 
-    out_fs = open_fs(output_dir_path)
     extn = get_extn_from_url(url)
 
-    # download archive file
-    tmp_fs = TempFS()
-    tmp_file = os.path.join(tmp_fs.root_path, f"napistu_tmp{extn}")
+    fd, tmp_file = tempfile.mkstemp(suffix=extn)
+    try:
+        os.close(fd)
+        if download_method == DOWNLOAD_METHODS.WGET:
+            download_wget(url, tmp_file)
+        elif download_method == DOWNLOAD_METHODS.FTP:
+            download_ftp(url, tmp_file)
+        else:
+            raise ValueError(
+                f"Undefined download_method, defined methods are {VALID_DOWNLOAD_METHODS}"
+            )
 
-    if download_method == DOWNLOAD_METHODS.WGET:
-        download_wget(url, tmp_file)
-    elif download_method == DOWNLOAD_METHODS.FTP:
-        download_ftp(url, tmp_file)
-    else:
-        raise ValueError(
-            f"Undefined download_method, defined methods are {VALID_DOWNLOAD_METHODS}"
-        )
-
-    if re.search(".tar\\.gz$", extn) or re.search("\\.tgz$", extn):
-        # untar .tar.gz into individual files
-        with TarFS(tmp_file) as tar_fs:
-            copy_fs(tar_fs, out_fs)
-            logger.info(f"Archive downloaded and untared to {output_dir_path}")
-    elif re.search("\\.zip$", extn):
-        with ZipFS(tmp_file) as zip_fs:
-            copy_fs(zip_fs, out_fs)
-            logger.info(f"Archive downloaded and unzipped to {output_dir_path}")
-    elif re.search("\\.gz$", extn):
-        outfile = url.split("/")[-1].replace(".gz", "")
-        # gunzip file
-        with gzip.open(tmp_file, "rb") as f_in:
-            with out_fs.open(outfile, "wb") as f_out:
-                f_out.write(f_in.read())
-    else:
-        raise ValueError(f"{extn} is not supported")
-
-    # Close fs
-    tmp_fs.close()
-    out_fs.close()
+        with _path_open_fs(output_dir_path, create=True) as out_fs:
+            if re.search(r".tar\.gz$", extn) or re.search(r"\.tgz$", extn):
+                tar_fs = fsspec.filesystem("tar", fo=tmp_file)
+                try:
+                    _copy_archive_to_fs(tar_fs, out_fs)
+                finally:
+                    try:
+                        tar_fs.close()
+                    except Exception:
+                        pass
+                logger.info("Archive downloaded and untared to %s", output_dir_path)
+            elif re.search(r"\.zip$", extn):
+                with open(tmp_file, "rb") as zip_fo:
+                    zip_fs = fsspec.filesystem("zip", fo=zip_fo)
+                    try:
+                        _copy_archive_to_fs(zip_fs, out_fs)
+                    finally:
+                        try:
+                            zip_fs.close()
+                        except Exception:
+                            pass
+                logger.info("Archive downloaded and unzipped to %s", output_dir_path)
+            elif re.search(r"\.gz$", extn):
+                outfile = url.split("/")[-1].replace(".gz", "")
+                with gzip.open(tmp_file, "rb") as f_in:
+                    out_fs.writebytes(outfile, f_in.read())
+            else:
+                raise ValueError(f"{extn} is not supported")
+    finally:
+        try:
+            os.unlink(tmp_file)
+        except OSError:
+            pass
 
     return None
 
@@ -279,28 +285,34 @@ def extract(file: str):
     except FileExistsError:
         pass
 
-    out_fs = open_fs(output_dir_path)
-
-    if re.search(".tar\\.gz$", extn) or re.search("\\.tgz$", extn):
-        # untar .tar.gz into individual files
-        with TarFS(file) as tar_fs:
-            copy_fs(tar_fs, out_fs)
-            logger.info(f"Archive downloaded and untared to {output_dir_path}")
-    elif re.search("\\.zip$", extn):
-        with ZipFS(file) as zip_fs:
-            copy_fs(zip_fs, out_fs)
-            logger.info(f"Archive downloaded and unzipped to {output_dir_path}")
-    elif re.search("\\.gz$", extn):
-        outfile = file.split("/")[-1].replace(".gz", "")
-        # gunzip file
-        with gzip.open(file, "rb") as f_in:
-            with out_fs.open(outfile, "wb") as f_out:
-                f_out.write(f_in.read())
-    else:
-        raise ValueError(f"{extn} is not supported")
-
-    # Close fs
-    out_fs.close()
+    with _path_open_fs(output_dir_path, create=True) as out_fs:
+        if re.search(r".tar\.gz$", extn) or re.search(r"\.tgz$", extn):
+            tar_fs = fsspec.filesystem("tar", fo=file)
+            try:
+                _copy_archive_to_fs(tar_fs, out_fs)
+            finally:
+                try:
+                    tar_fs.close()
+                except Exception:
+                    pass
+            logger.info("Archive untared to %s", output_dir_path)
+        elif re.search(r"\.zip$", extn):
+            with open(file, "rb") as zip_fo:
+                zip_fs = fsspec.filesystem("zip", fo=zip_fo)
+                try:
+                    _copy_archive_to_fs(zip_fs, out_fs)
+                finally:
+                    try:
+                        zip_fs.close()
+                    except Exception:
+                        pass
+            logger.info("Archive unzipped to %s", output_dir_path)
+        elif re.search(r"\.gz$", extn):
+            outfile = os.path.basename(file).replace(".gz", "")
+            with gzip.open(file, "rb") as f_in:
+                out_fs.writebytes(outfile, f_in.read())
+        else:
+            raise ValueError(f"{extn} is not supported")
 
     return None
 
@@ -331,16 +343,13 @@ def gunzip(gzipped_path: str, outpath: str | None = None) -> None:
         # determine outfile name automatically if not provided
         outpath = os.path.join(
             os.path.dirname(gzipped_path),
-            gzipped_path.split("/")[-1].replace(".gz", ""),
+            os.path.basename(gzipped_path).replace(".gz", ""),
         )
     outfile = os.path.basename(outpath)
 
-    out_fs = open_fs(os.path.dirname(outpath))
-    # gunzip file
-    with gzip.open(gzipped_path, "rb") as f_in:
-        with out_fs.open(outfile, "wb") as f_out:
-            f_out.write(f_in.read())
-    out_fs.close()
+    with _path_open_fs(os.path.dirname(outpath), create=True) as out_fs:
+        with gzip.open(gzipped_path, "rb") as f_in:
+            out_fs.writebytes(outfile, f_in.read())
 
     return None
 
@@ -634,5 +643,13 @@ def write_file_contents_to_path(path: str, contents) -> None:
     return None
 
 
-read_pickle = load_pickle
-write_pickle = save_pickle
+def _copy_archive_to_fs(archive_fs: fsspec.AbstractFileSystem, target_fs) -> None:
+    """Copy all files from an fsspec archive FS to a target FS (e.g. path_utils _FsspecFS)."""
+    for dirpath, _dirs, filenames in archive_fs.walk(""):
+        for name in filenames:
+            full_path = posixpath.join(dirpath, name) if dirpath else name
+            data = archive_fs.cat_file(full_path)
+            dir_part = posixpath.dirname(full_path)
+            if dir_part:
+                target_fs.makedirs(dir_part, recreate=True)
+            target_fs.writebytes(full_path, data)

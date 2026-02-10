@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import gzip
+import io
+import tarfile
 import tempfile
+import zipfile
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pandas as pd
 import pytest
-from fs.tarfs import TarFS
-from fs.zipfs import ZipFS
 
 from napistu import utils
 from napistu.network.constants import DISTANCES
@@ -23,15 +24,19 @@ from napistu.utils.io_utils import (
 
 
 def mock_targ_gz(url, tmp_file):
-    with TarFS(tmp_file, write=True) as fol:
-        with fol.open("test.txt", "w") as f:
-            f.write("test")
+    """Create a gzip-compressed tar that fsspec can read."""
+    with gzip.open(tmp_file, "wb") as gz:
+        with tarfile.open(fileobj=gz, mode="w") as tar:
+            data = b"test"
+            info = tarfile.TarInfo(name="test.txt")
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
 
 
 def mock_zip(url, tmp_file):
-    with ZipFS(tmp_file, write=True) as fol:
-        with fol.open("test.txt", "w") as f:
-            f.write("test")
+    """Create a zip archive that fsspec can read."""
+    with zipfile.ZipFile(tmp_file, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("test.txt", "test")
 
 
 def mock_gz(url, tmp_file):
@@ -88,7 +93,7 @@ def test_download_and_extract_invalid_ext(mock_download, tmp_new_subdir):
         )
 
 
-@pytest.mark.unix_only
+@pytest.mark.skip_on_windows
 def test_save_load_pickle_existing_folder(tmp_path):
     fn = tmp_path / "test.pkl"
     payload = "test"
@@ -106,7 +111,7 @@ def test_save_load_pickle_new_folder(tmp_new_subdir):
     assert load_pickle(fn) == payload
 
 
-@pytest.mark.unix_only
+@pytest.mark.skip_on_windows
 def test_save_load_pickle_existing_folder_gcs(gcs_bucket_uri):
     fn = f"{gcs_bucket_uri}/test.pkl"
     payload = "test"
@@ -115,7 +120,7 @@ def test_save_load_pickle_existing_folder_gcs(gcs_bucket_uri):
     assert load_pickle(fn) == payload
 
 
-@pytest.mark.unix_only
+@pytest.mark.skip_on_windows
 def test_save_load_pickle_new_folder_gcs(gcs_bucket_subdir_uri):
     fn = f"{gcs_bucket_subdir_uri}/test.pkl"
     payload = "test"
