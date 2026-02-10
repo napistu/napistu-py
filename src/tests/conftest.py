@@ -6,6 +6,7 @@ import sys
 import threading
 from datetime import datetime
 
+import fsspec
 import pandas as pd
 import pytest
 from google.cloud import storage
@@ -599,14 +600,49 @@ def gcs_bucket_subdir_uri(gcs_bucket_uri):
 
 
 @fixture
+def mock_fs():
+    """In-memory filesystem for testing - works on all platforms."""
+    fs = fsspec.filesystem("memory")
+    yield fs
+    fs.store.clear()
+
+
+@fixture
+def mock_bucket_name():
+    """Generate unique bucket name for each test."""
+    return f"testbucket-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+
+
+@fixture
+def mock_bucket_uri(mock_fs, mock_bucket_name):
+    """URI for a test bucket in memory filesystem."""
+    mock_fs.makedirs(mock_bucket_name, exist_ok=True)
+    return f"memory://{mock_bucket_name}"
+
+
+@fixture
+def mock_bucket_subdir_uri(mock_fs, mock_bucket_uri):
+    """URI for a subdirectory in the test bucket."""
+    subdir_path = f"{mock_bucket_uri}/testdir"
+    # Extract path without protocol for filesystem operations
+    path = subdir_path.replace("memory://", "")
+    mock_fs.makedirs(path, exist_ok=True)
+    return subdir_path
+
+
+@fixture
 def tmp_new_subdir(tmp_path):
-    """An empty temporary directory."""
+    """An empty temporary directory - unchanged from current."""
     return tmp_path / "test_dir"
 
 
-def create_blob(bucket, blob_name, content=b"test"):
-    """Helper function to create a blob in GCS.
+def create_blob(fs, blob_path, content=b"test"):
+    """Helper to create a file in any fsspec filesystem.
 
-    Not a fixture - just a helper function available to all tests.
+    Args:
+        fs: fsspec filesystem instance (e.g., from mock_fs fixture)
+        blob_path: Path without protocol (e.g., "testbucket/file.txt")
+        content: Byte content to write
     """
-    bucket.blob(blob_name).upload_from_string(content)
+    with fs.open(blob_path, "wb") as f:
+        f.write(content)

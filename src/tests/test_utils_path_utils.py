@@ -43,9 +43,8 @@ def test_initialize_dir_new(tmp_new_subdir):
     assert tmp_new_subdir.exists()
 
 
-@pytest.mark.unix_only
-def test_initialize_dir_new_gcs(gcs_bucket_uri):
-    test_uri = f"{gcs_bucket_uri}/testdir"
+def test_initialize_dir_new_mock(mock_bucket_uri):
+    test_uri = f"{mock_bucket_uri}/testdir"
     initialize_dir(test_uri, overwrite=False)
     path_exists(test_uri)
 
@@ -56,9 +55,8 @@ def test_initialize_dir_new_2_layers(tmp_new_subdir):
     assert target_sub_dir.exists()
 
 
-@pytest.mark.unix_only
-def test_initialize_dir_new_2_layers_gcs(gcs_bucket_uri):
-    test_uri = f"{gcs_bucket_uri}/testdir/testdir2"
+def test_initialize_dir_new_2_layers_mock(mock_bucket_uri):
+    test_uri = f"{mock_bucket_uri}/testdir/testdir2"
     initialize_dir(test_uri, overwrite=False)
     path_exists(test_uri)
 
@@ -77,15 +75,14 @@ def test_initialize_dir_existing(tmp_new_subdir):
     assert test_file.exists() is False
 
 
-@pytest.mark.unix_only
-def test_initialize_dir_existing_gcs(gcs_bucket, gcs_bucket_uri):
-    # create the file
-    create_blob(gcs_bucket, "testdir/file")
-    # This is a drawback of the current implementation - folders are only
-    # recognized if they have a marker file.
-    create_blob(gcs_bucket, "testdir/")
+def test_initialize_dir_existing_mock(mock_fs, mock_bucket_uri):
+    # Get the bucket name from URI for filesystem operations
+    bucket_name = mock_bucket_uri.replace("memory://", "")
 
-    test_uri = f"{gcs_bucket_uri}/testdir"
+    # create the file
+    create_blob(mock_fs, f"{bucket_name}/testdir/file")
+
+    test_uri = f"{mock_bucket_uri}/testdir"
     test_uri_file = f"{test_uri}/file"
     with pytest.raises(FileExistsError):
         initialize_dir(test_uri, overwrite=False)
@@ -107,26 +104,29 @@ def test_path_exists(tmp_path, tmp_new_subdir):
     assert path_exists(tmp_new_subdir)
 
 
-@pytest.mark.unix_only
-def test_path_exists_gcs(gcs_bucket, gcs_bucket_uri):
-    assert path_exists(gcs_bucket_uri)
+def test_path_exists_mock(mock_fs, mock_bucket_uri):
+    bucket_name = mock_bucket_uri.replace("memory://", "")
+
+    assert path_exists(mock_bucket_uri)
     test_dir = "testdir"
-    gcs_test_dir_uri = f"{gcs_bucket_uri}/{test_dir}"
-    assert path_exists(gcs_test_dir_uri) is False
-    # Create the marker file for the directory, such that it 'exists'
-    create_blob(gcs_bucket, f"{test_dir}/")
-    assert path_exists(gcs_test_dir_uri)
+    mock_test_dir_uri = f"{mock_bucket_uri}/{test_dir}"
 
-    # Test if files exists
+    # Directory doesn't exist yet
+    assert path_exists(mock_test_dir_uri) is False
+
+    # Create directory by creating a file in it
     test_file = f"{test_dir}/test.txt"
-    gcs_test_file_uri = f"{gcs_bucket_uri}/{test_file}"
-    assert path_exists(gcs_test_file_uri) is False
-    # create the file
-    create_blob(gcs_bucket, test_file)
-    assert path_exists(gcs_test_file_uri)
+    mock_test_file_uri = f"{mock_bucket_uri}/{test_file}"
+    assert path_exists(mock_test_file_uri) is False
+
+    # Create the file (this implicitly creates the directory)
+    create_blob(mock_fs, f"{bucket_name}/{test_file}")
+    assert path_exists(mock_test_file_uri)
+
+    # Now the directory exists too
+    assert path_exists(mock_test_dir_uri)
 
 
-@pytest.mark.skip_on_windows
 def test_copy_uri_file(tmp_path, tmp_new_subdir):
     basename = "test.txt"
     fn = tmp_path / basename
@@ -136,7 +136,6 @@ def test_copy_uri_file(tmp_path, tmp_new_subdir):
     assert fn_out.read_text() == "test"
 
 
-@pytest.mark.skip_on_windows
 def test_copy_uri_fol(tmp_path, tmp_new_subdir):
     tmp_new_subdir.mkdir()
     (tmp_new_subdir / "test").touch()
@@ -147,25 +146,112 @@ def test_copy_uri_fol(tmp_path, tmp_new_subdir):
     assert out_file.exists()
 
 
-@pytest.mark.unix_only
-def test_copy_uri_file_gcs(gcs_bucket_uri, gcs_bucket_subdir_uri):
+def test_copy_uri_file_mock(mock_bucket_uri, mock_bucket_subdir_uri):
     basename = "test.txt"
     content = "test"
-    fn = f"{gcs_bucket_uri}/{basename}"
+    fn = f"{mock_bucket_uri}/{basename}"
     utils.save_pickle(fn, content)
-    fn_out = f"{gcs_bucket_subdir_uri}/{basename}"
+    fn_out = f"{mock_bucket_subdir_uri}/{basename}"
     copy_uri(fn, fn_out)
     assert path_exists(fn_out)
     assert utils.load_pickle(fn_out) == content
 
 
-@pytest.mark.unix_only
-def test_copy_uri_fol_gcs(gcs_bucket_uri, gcs_bucket_subdir_uri):
+def test_copy_uri_fol_mock(mock_bucket_uri, mock_bucket_subdir_uri):
     basename = "test.txt"
     content = "test"
-    fn = f"{gcs_bucket_subdir_uri}/{basename}"
+    fn = f"{mock_bucket_subdir_uri}/{basename}"
     utils.save_pickle(fn, content)
-    out_dir = f"{gcs_bucket_uri}/new_dir"
+    out_dir = f"{mock_bucket_uri}/new_dir"
     out_file = f"{out_dir}/{basename}"
-    copy_uri(gcs_bucket_subdir_uri, out_dir, is_file=False)
+    copy_uri(mock_bucket_subdir_uri, out_dir, is_file=False)
     assert path_exists(out_file)
+
+
+@pytest.mark.parametrize(
+    "source_fixture,dest_fixture",
+    [
+        ("tmp_path", "tmp_new_subdir"),  # local -> local
+        ("mock_bucket_uri", "tmp_path"),  # memory -> local
+        ("tmp_path", "mock_bucket_uri"),  # local -> memory
+        ("mock_bucket_uri", "mock_bucket_subdir_uri"),  # memory -> memory
+    ],
+)
+def test_copy_uri_file_cross_filesystem(source_fixture, dest_fixture, request):
+    """Test copying files between different filesystem types."""
+    source_base = request.getfixturevalue(source_fixture)
+    dest_base = request.getfixturevalue(dest_fixture)
+
+    # Setup source file - use pickle format for all to be consistent
+    basename = "test_cross.pkl"
+    content = "cross-filesystem test"
+
+    # Create source file using pickle for consistency across all filesystems
+    if hasattr(source_base, "exists"):  # It's a Path
+        source_uri = str(source_base / basename)
+    else:  # It's a URI string
+        source_uri = f"{source_base}/{basename}"
+
+    utils.save_pickle(source_uri, content)
+
+    # Setup destination
+    if hasattr(dest_base, "exists"):  # It's a Path
+        dest_uri = str(dest_base / basename)
+    else:  # It's a URI string
+        dest_uri = f"{dest_base}/{basename}"
+
+    # Copy and verify
+    copy_uri(source_uri, dest_uri)
+    assert path_exists(dest_uri)
+
+    # Verify content using pickle for consistency
+    assert utils.load_pickle(dest_uri) == content
+
+
+@pytest.mark.parametrize(
+    "source_fixture,dest_fixture",
+    [
+        ("tmp_path", "tmp_new_subdir"),  # local -> local
+        ("mock_bucket_uri", "tmp_path"),  # memory -> local
+        ("tmp_path", "mock_bucket_uri"),  # local -> memory
+        (
+            "mock_bucket_subdir_uri",
+            "mock_bucket_uri",
+        ),  # memory -> memory (different paths)
+    ],
+)
+def test_copy_uri_directory_cross_filesystem(source_fixture, dest_fixture, request):
+    """Test copying directories between different filesystem types."""
+    source_base = request.getfixturevalue(source_fixture)
+    dest_base = request.getfixturevalue(dest_fixture)
+
+    # Setup source directory with files - use pickle for consistency
+    files = ["file1.pkl", "file2.pkl", "subdir/file3.pkl"]
+    content = "directory test"
+
+    # Create source directory structure
+    if hasattr(source_base, "exists"):  # It's a Path
+        source_uri = str(source_base / "test_dir")
+    else:  # It's a URI string
+        source_uri = f"{source_base}/test_dir"
+
+    # Create files using pickle for consistency
+    for file in files:
+        file_uri = f"{source_uri}/{file}"
+        utils.save_pickle(file_uri, content)
+
+    # Setup destination
+    if hasattr(dest_base, "exists"):  # It's a Path
+        dest_uri = str(dest_base / "dest_dir")
+    else:  # It's a URI string
+        dest_uri = f"{dest_base}/dest_dir"
+
+    # Copy directory
+    copy_uri(source_uri, dest_uri, is_file=False)
+
+    # Verify all files were copied
+    for file in files:
+        file_dest = f"{dest_uri}/{file}"
+        assert path_exists(file_dest)
+        # Verify content
+        assert utils.load_pickle(file_dest) == content
