@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import gzip
+import io
+import tarfile
 import tempfile
+import zipfile
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pandas as pd
 import pytest
-from fs.tarfs import TarFS
-from fs.zipfs import ZipFS
 
 from napistu import utils
 from napistu.network.constants import DISTANCES
@@ -23,15 +24,18 @@ from napistu.utils.io_utils import (
 
 
 def mock_targ_gz(url, tmp_file):
-    with TarFS(tmp_file, write=True) as fol:
-        with fol.open("test.txt", "w") as f:
-            f.write("test")
+    """Create a test tar.gz archive."""
+    with tarfile.open(tmp_file, "w:gz") as tar:
+        test_content = b"test"
+        info = tarfile.TarInfo(name="test.txt")
+        info.size = len(test_content)
+        tar.addfile(info, io.BytesIO(test_content))
 
 
 def mock_zip(url, tmp_file):
-    with ZipFS(tmp_file, write=True) as fol:
-        with fol.open("test.txt", "w") as f:
-            f.write("test")
+    """Create a test zip archive."""
+    with zipfile.ZipFile(tmp_file, "w") as z:
+        z.writestr("test.txt", "test")
 
 
 def mock_gz(url, tmp_file):

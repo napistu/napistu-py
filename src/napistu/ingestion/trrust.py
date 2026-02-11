@@ -2,13 +2,9 @@ from __future__ import annotations
 
 import datetime
 import os
-import warnings
 from itertools import chain
 from typing import Union
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
 import pandas as pd
 
 from napistu import identifiers, utils
@@ -38,6 +34,7 @@ from napistu.ontologies.constants import GENODEXITO_DEFS
 from napistu.ontologies.genodexito import Genodexito
 from napistu.sbml_dfs_core import SBML_dfs
 from napistu.source import Source
+from napistu.utils.path_utils import open_fs
 
 
 def download_trrust(target_uri: str) -> None:

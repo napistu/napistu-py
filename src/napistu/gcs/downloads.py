@@ -8,7 +8,6 @@ import re
 import shutil
 from typing import List, Optional
 
-from napistu import utils
 from napistu.gcs.assets import GCSAssets
 from napistu.gcs.constants import (
     GCS_ASSET_DEFS,
@@ -16,6 +15,11 @@ from napistu.gcs.constants import (
     INIT_DATA_DIR_MSG,
 )
 from napistu.gcs.utils import _initialize_data_dir
+from napistu.utils.io_utils import (
+    download_wget,
+    extract,
+    get_extn_from_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +70,7 @@ def download_public_napistu_asset(
 
     logger.info(f"Downloading target URI: {target_uri} to {out_path}")
 
-    utils.download_wget(target_uri, out_path)
+    download_wget(target_uri, out_path)
 
     if not os.path.isfile(out_path):
         raise FileNotFoundError(f"Download failed: {out_path} was not created.")
@@ -148,17 +152,18 @@ def load_public_napistu_asset(
     if overwrite:
         _remove_asset_files_if_needed(asset, data_dir, gcs_assets)
     if not os.path.isfile(download_path):
-        download_public_napistu_asset(asset, version, download_path, gcs_assets)
+        download_public_napistu_asset(asset, version, download_path)
 
     # gunzip if needed
-    extn = utils.get_extn_from_url(download_path)
+    extn = get_extn_from_url(download_path)
+    print(f"Extension: {extn}")
     if (
         re.search(".tar\\.gz$", extn)
         or re.search("\\.tgz$", extn)
         or re.search("\\.zip$", extn)
         or re.search("\\.gz$", extn)
     ):
-        utils.extract(download_path)
+        extract(download_path)
 
     # check that the asset_path exists
     if not os.path.isfile(asset_path):

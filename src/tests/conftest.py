@@ -9,10 +9,8 @@ from datetime import datetime
 import fsspec
 import pandas as pd
 import pytest
-from google.cloud import storage
 from igraph import Graph
 from pytest import fixture, skip
-from testcontainers.core.container import DockerContainer
 
 from napistu import consensus, indices
 from napistu.constants import (
@@ -556,47 +554,6 @@ def sbml_dfs_characteristic_test_data(model_source_stub):
     sbml_dfs._mock_species_ids = mock_species_ids
 
     return sbml_dfs
-
-
-@fixture(scope="session")
-def gcs_storage():
-    """A container running a GCS emulator - shared across all test files."""
-    with (
-        DockerContainer("fsouza/fake-gcs-server:1.44")
-        .with_bind_ports(4443, 4443)
-        .with_command("-scheme http -backend memory")
-    ) as gcs:
-        os.environ["STORAGE_EMULATOR_HOST"] = "http://0.0.0.0:4443"
-        yield gcs
-
-
-@fixture
-def gcs_bucket_name(gcs_storage):
-    """Generate unique bucket name for each test."""
-    bucket_name = f"testbucket-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
-    return bucket_name
-
-
-@fixture
-def gcs_bucket(gcs_bucket_name):
-    """A GCS bucket - cleaned up after test."""
-    client = storage.Client()
-    client.create_bucket(gcs_bucket_name)
-    bucket = client.bucket(gcs_bucket_name)
-    yield bucket
-    bucket.delete(force=True)
-
-
-@fixture
-def gcs_bucket_uri(gcs_bucket, gcs_bucket_name):
-    """URI for the test GCS bucket."""
-    return f"gs://{gcs_bucket_name}"
-
-
-@fixture
-def gcs_bucket_subdir_uri(gcs_bucket_uri):
-    """URI for a subdirectory in the test bucket."""
-    return f"{gcs_bucket_uri}/testdir"
 
 
 @fixture

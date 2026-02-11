@@ -41,10 +41,10 @@ import json
 import logging
 import os
 import pickle
-import re
 import shutil
+import tarfile
+import tempfile
 import urllib.request as request
-import warnings
 import zipfile
 from contextlib import closing
 from pathlib import Path
@@ -57,16 +57,8 @@ import pyarrow.parquet as pq
 import requests
 from requests.adapters import HTTPAdapter, Retry
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
-    from fs.copy import copy_fs
-    from fs.tarfs import TarFS
-    from fs.tempfs import TempFS
-    from fs.zipfs import ZipFS
-
-from napistu.constants import FILE_EXT_GZ, FILE_EXT_ZIP
-from napistu.utils.constants import DOWNLOAD_METHODS, VALID_DOWNLOAD_METHODS
+from napistu.constants import FILE_EXT_ZIP
+from napistu.utils.constants import DOWNLOAD_METHODS
 
 # Import helper functions from path_utils
 from napistu.utils.path_utils import (
@@ -84,71 +76,68 @@ def download_and_extract(
     download_method: str = DOWNLOAD_METHODS.WGET,
     overwrite: bool = False,
 ) -> None:
-    """
-    Download and Unpack
+    """Download archive and extract to directory."""
 
-    Download an archive and then extract to a new folder
-
-    Parameters
-    ----------
-    url : str
-        Url of archive.
-    output_dir_path : str
-        Path to output directory.
-    download_method : str
-        Method to use to download the archive.
-    overwrite : bool
-        Overwrite an existing output directory.
-
-    Returns
-    -------
-    None
-        Files are downloaded and extracted to the specified directory
-    """
-
-    # initialize output directory
-    output_dir_path = str(output_dir_path)
     initialize_dir(output_dir_path, overwrite)
-
-    out_fs = open_fs(output_dir_path)
     extn = get_extn_from_url(url)
 
-    # download archive file
-    tmp_fs = TempFS()
-    tmp_file = os.path.join(tmp_fs.root_path, f"napistu_tmp{extn}")
+    # Download to temp file (AS-IS, no decompression)
+    with tempfile.NamedTemporaryFile(suffix=extn, delete=False) as tmp:
+        if download_method == DOWNLOAD_METHODS.WGET:
+            download_wget(url, tmp.name)
+        elif download_method == DOWNLOAD_METHODS.FTP:
+            download_ftp(url, tmp.name)
+        else:
+            raise ValueError(f"Unsupported method: {download_method}")
+        tmp_path = tmp.name
 
-    if download_method == DOWNLOAD_METHODS.WGET:
-        download_wget(url, tmp_file)
-    elif download_method == DOWNLOAD_METHODS.FTP:
-        download_ftp(url, tmp_file)
-    else:
-        raise ValueError(
-            f"Undefined download_method, defined methods are {VALID_DOWNLOAD_METHODS}"
-        )
+    try:
+        # Now extract (handles all decompression)
+        if extn.endswith((".tar.gz", ".tgz")):
+            _extract_tarball(tmp_path, output_dir_path)
+        elif extn.endswith(".zip"):
+            _extract_zip(tmp_path, output_dir_path)
+        elif extn.endswith(".gz"):
+            # Single file - extract directly
+            outfile = url.split("/")[-1].replace(".gz", "")
+            gunzip(tmp_path, f"{output_dir_path}/{outfile}")
+        else:
+            raise ValueError(f"Unsupported format: {extn}")
+    finally:
+        os.unlink(tmp_path)
 
-    if re.search(".tar\\.gz$", extn) or re.search("\\.tgz$", extn):
-        # untar .tar.gz into individual files
-        with TarFS(tmp_file) as tar_fs:
-            copy_fs(tar_fs, out_fs)
-            logger.info(f"Archive downloaded and untared to {output_dir_path}")
-    elif re.search("\\.zip$", extn):
-        with ZipFS(tmp_file) as zip_fs:
-            copy_fs(zip_fs, out_fs)
-            logger.info(f"Archive downloaded and unzipped to {output_dir_path}")
-    elif re.search("\\.gz$", extn):
-        outfile = url.split("/")[-1].replace(".gz", "")
-        # gunzip file
-        with gzip.open(tmp_file, "rb") as f_in:
-            with out_fs.open(outfile, "wb") as f_out:
-                f_out.write(f_in.read())
-    else:
-        raise ValueError(f"{extn} is not supported")
 
-    # Close fs
-    tmp_fs.close()
-    out_fs.close()
+def _extract_tarball(tar_path: str, output_uri: str) -> None:
+    """Extract tarball using standard library."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with tarfile.open(tar_path, "r:gz") as tar:
+            # Security: filter to prevent path traversal
+            tar.extractall(tmpdir, filter="data")  # Python 3.12+
+        _copy_tree(tmpdir, output_uri)
 
-    return None
+
+def _extract_zip(zip_path: str, output_uri: str) -> None:
+    """Extract zip using standard library."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with zipfile.ZipFile(zip_path) as z:
+            z.extractall(tmpdir)
+        _copy_tree(tmpdir, output_uri)
+
+
+def _copy_tree(source_dir: str, dest_uri: str) -> None:
+    """Copy directory tree to any fsspec destination."""
+    source_path = Path(source_dir)
+
+    for file_path in source_path.rglob("*"):
+        if file_path.is_file():
+            rel_path = file_path.relative_to(source_path)
+            dest_file_uri = f"{dest_uri}/{rel_path}".replace(
+                "\\", "/"
+            )  # Windows compat
+
+            with open(file_path, "rb") as src:
+                with fsspec.open(dest_file_uri, "wb") as dst:
+                    dst.write(src.read())
 
 
 def download_ftp(url: str, path: str) -> None:
@@ -220,84 +209,67 @@ def download_wget(
         logger.error(f"Failed to download {url} after {max_retries} retries: {str(e)}")
         raise
 
-    # check if the content is a ZIP file
-    if (
+    # Special case: ZIP with target_filename
+    if target_filename and (
         r.headers.get("Content-Type") == "application/zip"
         or url.endswith(f".{FILE_EXT_ZIP}")
-    ) and target_filename:
-        # load the ZIP file in memory
+    ):
+        # Extract specific file from ZIP
         with zipfile.ZipFile(io.BytesIO(r.content)) as z:
-            # check if the target file exists in the ZIP archive
             if target_filename in z.namelist():
                 with z.open(target_filename) as target_file:
-                    # apply the same logic as below to the target file
                     return write_file_contents_to_path(path, target_file.read())
             else:
                 raise FileNotFoundError(
                     f"{target_filename} not found in the ZIP archive"
                 )
-    # check if the content is a GZIP (single-file compression)
-    elif url.endswith(f".{FILE_EXT_GZ}"):
-        with gzip.GzipFile(fileobj=io.BytesIO(r.content)) as gz:
-            return write_file_contents_to_path(path, gz.read())
-    else:
-        # not an archive -> default case -> write file directly
-        return write_file_contents_to_path(path, r.content)
+
+    return write_file_contents_to_path(path, r.content)
 
 
-def extract(file: str):
+def extract(file_uri: str) -> None:
+    """Extract archive at file_uri to same directory.
+
+    Supports: .tar.gz, .tgz, .zip, .gz
     """
-    Untar, unzip and gunzip a file.
+    extn = get_extn_from_url(file_uri)
 
-    Parameters
-    ----------
-    file : str
-        Path to compressed file
-
-    Returns
-    -------
-    None
-    """
-
-    extn = get_extn_from_url(file)
-    if re.search(".tar\\.gz$", extn) or re.search("\\.tgz$", extn):
-        output_dir_path = os.path.join(
-            os.path.join(
-                os.path.dirname(file), os.path.basename(file).replace(extn, "")
-            )
-        )
+    # Determine output directory
+    if extn.endswith((".tar.gz", ".tgz")):
+        output_uri = file_uri.replace(extn, "")
     else:
-        output_dir_path = os.path.dirname(file)
+        output_uri = os.path.dirname(file_uri)
 
     try:
-        initialize_dir(output_dir_path, overwrite=False)
+        initialize_dir(output_uri, overwrite=False)
     except FileExistsError:
-        pass
+        pass  # OK if exists
 
-    out_fs = open_fs(output_dir_path)
-
-    if re.search(".tar\\.gz$", extn) or re.search("\\.tgz$", extn):
-        # untar .tar.gz into individual files
-        with TarFS(file) as tar_fs:
-            copy_fs(tar_fs, out_fs)
-            logger.info(f"Archive downloaded and untared to {output_dir_path}")
-    elif re.search("\\.zip$", extn):
-        with ZipFS(file) as zip_fs:
-            copy_fs(zip_fs, out_fs)
-            logger.info(f"Archive downloaded and unzipped to {output_dir_path}")
-    elif re.search("\\.gz$", extn):
-        outfile = file.split("/")[-1].replace(".gz", "")
-        # gunzip file
-        with gzip.open(file, "rb") as f_in:
-            with out_fs.open(outfile, "wb") as f_out:
-                f_out.write(f_in.read())
+    # Download to temp if remote
+    if file_uri.startswith(("gs://", "s3://", "http://", "https://")):
+        with tempfile.NamedTemporaryFile(suffix=extn, delete=False) as tmp:
+            with fsspec.open(file_uri, "rb") as src:
+                with open(tmp.name, "wb") as dst:
+                    dst.write(src.read())
+            local_path = tmp.name
+        delete_after = True
     else:
-        raise ValueError(f"{extn} is not supported")
+        local_path = file_uri
+        delete_after = False
 
-    # Close fs
-    out_fs.close()
-
-    return None
+    try:
+        if extn.endswith((".tar.gz", ".tgz")):
+            _extract_tarball(local_path, output_uri)
+        elif extn.endswith(".zip"):
+            _extract_zip(local_path, output_uri)
+        elif extn.endswith(".gz"):
+            outfile = file_uri.split("/")[-1].replace(".gz", "")
+            gunzip(file_uri, f"{output_uri}/{outfile}")
+        else:
+            raise ValueError(f"Unsupported format: {extn}")
+    finally:
+        if delete_after:
+            os.unlink(local_path)
 
 
 def gunzip(gzipped_path: str, outpath: str | None = None) -> None:

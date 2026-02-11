@@ -2,12 +2,8 @@ from __future__ import annotations
 
 import datetime
 import logging
-import warnings
 from typing import Union
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
 import pandas as pd
 
 from napistu import identifiers, sbml_dfs_utils, utils
@@ -34,6 +30,7 @@ from napistu.ingestion.constants import (
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.sbml_dfs_core import SBML_dfs
 from napistu.source import Source
+from napistu.utils.path_utils import open_fs
 
 logger = logging.getLogger(__name__)
 

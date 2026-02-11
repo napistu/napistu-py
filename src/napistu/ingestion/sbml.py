@@ -3,15 +3,10 @@ from __future__ import annotations
 import logging
 import os
 import re
-import warnings
 from typing import Any
 
 import libsbml
 import pandas as pd
-
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
 from pydantic import RootModel, field_validator
 
 from napistu import consensus, identifiers, sbml_dfs_utils, source, utils
@@ -29,6 +24,7 @@ from napistu.ingestion.constants import (
     SBML_DEFS,
     VALID_COMPARTMENTS,
 )
+from napistu.utils.path_utils import open_fs
 
 logger = logging.getLogger(__name__)
 

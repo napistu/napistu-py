@@ -4,16 +4,11 @@ import datetime
 import logging
 import os
 import random
-import warnings
 from io import StringIO
 from typing import Iterable, Union
 
 import pandas as pd
 import requests
-
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
 
 from napistu import indices, sbml_dfs_core, utils
 from napistu.consensus import construct_consensus_model, construct_sbml_dfs_dict
@@ -30,6 +25,7 @@ from napistu.ingestion.constants import (
 )
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.source import Source
+from napistu.utils.path_utils import open_fs
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +55,9 @@ def reactome_sbml_download(output_dir_path: str, overwrite: bool = False) -> Non
     # create the pathway index
     pw_index = _build_reactome_pw_index(output_dir_path, file_ext="sbml")
 
-    # save as tsv
-    out_fs = open_fs(output_dir_path)
-    with out_fs.open(SOURCE_SPEC.PW_INDEX_FILE, "wb") as index_path:
-        pw_index.to_csv(index_path, sep="\t", index=False)
+    with open_fs(output_dir_path) as out_fs:
+        with out_fs.open(SOURCE_SPEC.PW_INDEX_FILE, "wb") as index_path:
+            pw_index.to_csv(index_path, sep="\t", index=False)
 
     return None
 
@@ -162,9 +157,9 @@ def _build_reactome_pw_index(
     pd.DataFrame
         pathway index
     """
-    # create the pathway index
-    out_fs = open_fs(output_dir)
-    all_files = [os.path.basename(f.path) for f in out_fs.glob(f"**/*.{file_ext}")]
+    with open_fs(output_dir) as out_fs:
+        all_paths = out_fs.glob(f"**/*.{file_ext}")
+    all_files = [os.path.basename(p) for p in all_paths]
 
     if len(all_files) == 0:
         raise ValueError(f"Zero files in {output_dir} have the {file_ext} extension")

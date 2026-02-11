@@ -4,16 +4,11 @@ from __future__ import annotations
 
 import os
 import pickle
-import warnings
 from typing import Sequence
 
 import click
 import igraph as ig
 import pandas as pd
-
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
 
 from napistu import consensus as napistu_consensus
 from napistu import utils
@@ -66,6 +61,7 @@ from napistu.ontologies import dogma
 from napistu.ontologies.genodexito import Genodexito
 from napistu.sbml_dfs_core import SBML_dfs
 from napistu.sbml_dfs_utils import display_post_consensus_checks
+from napistu.utils.path_utils import open_fs
 
 # Module-level logger and console - will be initialized when CLI is invoked
 logger = None

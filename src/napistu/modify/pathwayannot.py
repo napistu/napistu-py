@@ -4,11 +4,7 @@ import copy
 import logging
 import os
 import re
-import warnings
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
 import numpy as np
 import pandas as pd
 
@@ -26,6 +22,7 @@ from napistu.modify.constants import (
     NEO4_MEMBERS_SET,
     REACTOME_CROSSREF_SET,
 )
+from napistu.utils.path_utils import open_fs
 
 logger = logging.getLogger(__name__)
 
