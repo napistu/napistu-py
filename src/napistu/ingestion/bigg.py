@@ -2,11 +2,8 @@ from __future__ import annotations
 
 import logging
 import os
-import warnings
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
+import fsspec
 
 from napistu import indices, utils
 from napistu.constants import (
@@ -35,13 +32,16 @@ def bigg_sbml_download(bg_pathway_root: str, overwrite: bool = False) -> None:
 
     Download SBML models from BiGG. Currently just the human Recon3D model
 
-    Parameters:
-    bg_pathway_root (str): Paths to a directory where a \"sbml\" directory should be created.
-    overwrite (bool): Overwrite an existing output directory.
+    Parameters
+    ----------
+    bg_pathway_root : str
+        Paths to a directory where a \"sbml\" directory should be created.
+    overwrite : bool
+        Overwrite an existing output directory.
 
-    Returns:
+    Returns
+    -------
     None
-
     """
     utils.initialize_dir(bg_pathway_root, overwrite)
 
@@ -58,16 +58,14 @@ def bigg_sbml_download(bg_pathway_root: str, overwrite: bool = False) -> None:
         model_names=MODEL_SOURCE_DESCRIPTIONS,
     )
 
-    with open_fs(bg_pathway_root, create=True) as bg_fs:
-        for _, row in bigg_models_df.iterrows():
-            with bg_fs.open(row[SOURCE_SPEC.FILE], "wb") as f:
-                utils.download_wget(row[SOURCE_SPEC.URL], f)  # type: ignore
+    bg_base = bg_pathway_root.rstrip("/")
+    for _, row in bigg_models_df.iterrows():
+        with fsspec.open(f"{bg_base}/{row[SOURCE_SPEC.FILE]}", "wb") as f:
+            utils.download_wget(row[SOURCE_SPEC.URL], f)  # type: ignore
 
-        pw_index = bigg_models_df[[c for c in EXPECTED_PW_INDEX_COLUMNS]]
-
-        # save index to sbml dir
-        with bg_fs.open(SOURCE_SPEC.PW_INDEX_FILE, "wb") as f:
-            pw_index.to_csv(f, sep="\t", index=False)
+    pw_index = bigg_models_df[[c for c in EXPECTED_PW_INDEX_COLUMNS]]
+    with fsspec.open(f"{bg_base}/{SOURCE_SPEC.PW_INDEX_FILE}", "wb") as f:
+        pw_index.to_csv(f, sep="\t", index=False)
 
     return None
 

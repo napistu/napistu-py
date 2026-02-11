@@ -5,7 +5,6 @@ import tempfile
 import igraph as ig
 import pandas as pd
 import pytest
-from fs.errors import ResourceNotFound
 
 from napistu.constants import SBML_DFS, SBOTERM_NAMES
 from napistu.network import ng_utils
@@ -1339,7 +1338,7 @@ def test_from_pickle_nonexistent_file():
     # Create a temporary directory and use a path that definitely doesn't exist
     with tempfile.TemporaryDirectory() as temp_dir:
         nonexistent_path = os.path.join(temp_dir, "nonexistent_file.pkl")
-        with pytest.raises(ResourceNotFound):
+        with pytest.raises(FileNotFoundError):
             NapistuGraph.from_pickle(nonexistent_path)
 
 

@@ -1,13 +1,9 @@
 from __future__ import annotations
 
 import logging
-import warnings
 
+import fsspec
 import pandas as pd
-
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
 
 from napistu import utils
 from napistu.constants import ONTOLOGIES
@@ -81,11 +77,11 @@ def load_and_clean_gtex_data(gtex_data_path: str) -> pd.DataFrame:
     logger.info("Loading GTEx tissue specific expression data")
 
     # Read the TSV file using pandas, skipping first 2 lines
-    with open_fs(base_path) as base_fs:
-        with base_fs.open(file_name, "rb") as f:
-            gtex_expression_data = pd.read_csv(
-                f, sep="\t", skiprows=2, dtype=str, na_values=[""], keep_default_na=True
-            )
+    gtex_uri = f"{base_path.rstrip('/')}/{file_name}"
+    with fsspec.open(gtex_uri, "rb") as f:
+        gtex_expression_data = pd.read_csv(
+            f, sep="\t", skiprows=2, dtype=str, na_values=[""], keep_default_na=True
+        )
 
     # Create ensembl_gene_id by removing version numbers from Name column
     gtex_expression_data[ONTOLOGIES.ENSEMBL_GENE] = gtex_expression_data[

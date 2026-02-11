@@ -7,7 +7,6 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 import pytest
-from fs.errors import ResourceNotFound
 
 from napistu import sbml_dfs_utils
 from napistu.constants import (
@@ -841,7 +840,7 @@ def test_from_pickle_nonexistent_file():
     """Test that from_pickle raises appropriate error for nonexistent file."""
     with tempfile.TemporaryDirectory() as temp_dir:
         nonexistent_path = os.path.join(temp_dir, "nonexistent_file.pkl")
-        with pytest.raises(ResourceNotFound):
+        with pytest.raises(FileNotFoundError):
             SBML_dfs.from_pickle(nonexistent_path)
 
 

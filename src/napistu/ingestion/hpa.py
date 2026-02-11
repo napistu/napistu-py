@@ -1,17 +1,13 @@
 from __future__ import annotations
 
 import logging
-import warnings
 
+import fsspec
 import pandas as pd
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
-
-from napistu import utils
 from napistu.constants import ONTOLOGIES
 from napistu.ingestion.constants import PROTEINATLAS_DEFS, PROTEINATLAS_SUBCELL_LOC_URL
+from napistu.utils.io_utils import download_wget
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +45,7 @@ def download_hpa_data(target_uri: str, url: str = PROTEINATLAS_SUBCELL_LOC_URL) 
     target_filename = url.split("/")[-1].split(f".{file_ext}")[0]
     logger.info("Start downloading proteinatlas %s to %s", url, target_uri)
     # target_filename is the name of the file in the zip file which will be renamed to target_uri
-    utils.download_wget(url, target_uri, target_filename=target_filename)
+    download_wget(url, target_uri, target_filename=target_filename)
 
     return None
 
@@ -86,17 +82,12 @@ def load_and_clean_hpa_data(hpa_data_path: str) -> pd.DataFrame:
     ValueError
         If no gene-compartment associations are found in the data
     """
-    # Check file exists
-    base_path, file_name = utils.get_source_base_and_path(hpa_data_path)
-
     logger.info("Loading Human Protein Atlas subcellular localization data")
 
-    # Read the TSV file using pandas
-    with open_fs(base_path) as base_fs:
-        with base_fs.open(file_name, "rb") as f:
-            protein_subcellular_localizations = pd.read_csv(
-                f, sep="\t", dtype=str, na_values=[""], keep_default_na=True
-            )
+    with fsspec.open(hpa_data_path, "rb") as f:
+        protein_subcellular_localizations = pd.read_csv(
+            f, sep="\t", dtype=str, na_values=[""], keep_default_na=True
+        )
 
     # Rename Gene column to be more informative
     protein_subcellular_localizations = protein_subcellular_localizations.rename(

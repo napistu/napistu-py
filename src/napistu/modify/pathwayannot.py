@@ -2,13 +2,9 @@ from __future__ import annotations
 
 import copy
 import logging
-import os
 import re
-import warnings
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
+import fsspec
 import numpy as np
 import pandas as pd
 
@@ -958,37 +954,6 @@ def _add_complex_formation_compartmentalized_species(
     )
 
 
-def _read_neo4j_members(neo4j_members: str) -> pd.DataFrame:
-    """Read a table containing entity sets (members) derived from Reactome's Neo4J database."""
-
-    # load a list containing Reactome entity sets -> members
-    # entity sets are categories of molecular species that
-    # share a common property such as serving as ligands for a receptor
-    # these relationships are not represented in the Reactome .sbml
-    # so they are pulled out of the Neo4j database.
-    base, path = os.path.split(neo4j_members)
-    with open_fs(base) as bfs:
-        with bfs.open(path, "rb") as f:
-            reactome_members = pd.read_csv(f).assign(url="")
-
-    # check that the expected columns are present
-    utils.match_pd_vars(reactome_members, NEO4_MEMBERS_SET).assert_present()
-
-    reactome_members[IDENTIFIERS.ONTOLOGY] = reactome_members[
-        IDENTIFIERS.ONTOLOGY
-    ].str.lower()
-
-    # add an uncompartmentalized name
-    reactome_members["member_s_name"] = [
-        re.sub(" \\[[A-Za-z ]+\\]$", "", x) for x in reactome_members["member_name"]
-    ]
-    reactome_members[IDENTIFIERS.IDENTIFIER] = reactome_members[
-        IDENTIFIERS.IDENTIFIER
-    ].astype(str)
-
-    return reactome_members
-
-
 def _merge_reactome_crossref_ids(
     current_molecular_ids: pd.DataFrame,
     select_reactome_ids: pd.DataFrame,
@@ -998,8 +963,8 @@ def _merge_reactome_crossref_ids(
 
     Combine existing molecular IDs with Reactome crossref identifiers.
 
-    Params
-    ------
+    Parameters
+    ----------
     current_molecular_ids: pd.DataFrame
         Molecular features in the current pathway model
     select_reactome_ids: pd.DataFrame
@@ -1134,6 +1099,35 @@ def _merge_reactome_crossref_ids(
     return merged_crossrefs
 
 
+def _read_neo4j_members(neo4j_members: str) -> pd.DataFrame:
+    """Read a table containing entity sets (members) derived from Reactome's Neo4J database."""
+
+    # load a list containing Reactome entity sets -> members
+    # entity sets are categories of molecular species that
+    # share a common property such as serving as ligands for a receptor
+    # these relationships are not represented in the Reactome .sbml
+    # so they are pulled out of the Neo4j database.
+    with fsspec.open(neo4j_members, "rb") as f:
+        reactome_members = pd.read_csv(f).assign(url="")
+
+    # check that the expected columns are present
+    utils.match_pd_vars(reactome_members, NEO4_MEMBERS_SET).assert_present()
+
+    reactome_members[IDENTIFIERS.ONTOLOGY] = reactome_members[
+        IDENTIFIERS.ONTOLOGY
+    ].str.lower()
+
+    # add an uncompartmentalized name
+    reactome_members["member_s_name"] = [
+        re.sub(" \\[[A-Za-z ]+\\]$", "", x) for x in reactome_members["member_name"]
+    ]
+    reactome_members[IDENTIFIERS.IDENTIFIER] = reactome_members[
+        IDENTIFIERS.IDENTIFIER
+    ].astype(str)
+
+    return reactome_members
+
+
 def _read_reactome_crossref_ids(
     crossref_path: str,
 ) -> pd.DataFrame:
@@ -1142,8 +1136,8 @@ def _read_reactome_crossref_ids(
 
     Read and reformat Reactome's crossref identifiers
 
-    Params
-    ------
+    Parameters
+    ----------
     crossref_path: str
         Path to the cross ref file extracted from Reactome's Neo4j database
 
@@ -1153,11 +1147,8 @@ def _read_reactome_crossref_ids(
         Crossref identifiers
 
     """
-
-    base, path = os.path.split(crossref_path)
-    with open_fs(base) as bfs:
-        with bfs.open(path, "rb") as f:
-            reactome_ids = pd.read_csv(f)
+    with fsspec.open(crossref_path, "rb") as f:
+        reactome_ids = pd.read_csv(f)
 
     # check that the expected columns are present
     utils.match_pd_vars(reactome_ids, REACTOME_CROSSREF_SET).assert_present()

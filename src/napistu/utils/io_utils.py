@@ -21,8 +21,6 @@ load_pickle(path: str) -> Any:
     Load pickle object from path.
 pickle_cache(path: str, overwrite: bool = False) -> Callable:
     Decorator to cache a function call result to pickle.
-read_pickle(path: str) -> Any:
-    Alias for load_pickle.
 requests_retry_session(retries: int = 5, backoff_factor: float = 0.3, status_forcelist: tuple = (500, 502, 503, 504), session: requests.Session | None = None, **kwargs) -> requests.Session:
     Create a requests session with retry logic.
 save_json(uri: str, object: Any) -> None:
@@ -33,8 +31,6 @@ save_pickle(path: str, dat: object) -> None:
     Save object to path as pickle.
 write_file_contents_to_path(path: str, contents: Any) -> None:
     Helper function to write file contents to a path.
-write_pickle(path: str, dat: object) -> None:
-    Alias for save_pickle.
 """
 
 from __future__ import annotations
@@ -45,38 +41,28 @@ import json
 import logging
 import os
 import pickle
-import re
 import shutil
+import tarfile
+import tempfile
 import urllib.request as request
-import warnings
 import zipfile
 from contextlib import closing
 from pathlib import Path
 from typing import Any, Callable, Union
 
+import fsspec
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import requests
 from requests.adapters import HTTPAdapter, Retry
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
-    from fs.copy import copy_fs
-    from fs.errors import ResourceNotFound
-    from fs.tarfs import TarFS
-    from fs.tempfs import TempFS
-    from fs.zipfs import ZipFS
-
-from napistu.constants import FILE_EXT_GZ, FILE_EXT_ZIP
-from napistu.utils.constants import DOWNLOAD_METHODS, VALID_DOWNLOAD_METHODS
+from napistu.constants import FILE_EXT_ZIP
+from napistu.utils.constants import DOWNLOAD_METHODS
 
 # Import helper functions from path_utils
 from napistu.utils.path_utils import (
     get_extn_from_url,
-    get_source_base_and_path,
-    get_target_base_and_path,
     initialize_dir,
     path_exists,
 )
@@ -90,71 +76,68 @@ def download_and_extract(
     download_method: str = DOWNLOAD_METHODS.WGET,
     overwrite: bool = False,
 ) -> None:
-    """
-    Download and Unpack
+    """Download archive and extract to directory."""
 
-    Download an archive and then extract to a new folder
-
-    Parameters
-    ----------
-    url : str
-        Url of archive.
-    output_dir_path : str
-        Path to output directory.
-    download_method : str
-        Method to use to download the archive.
-    overwrite : bool
-        Overwrite an existing output directory.
-
-    Returns
-    -------
-    None
-        Files are downloaded and extracted to the specified directory
-    """
-
-    # initialize output directory
-    output_dir_path = str(output_dir_path)
     initialize_dir(output_dir_path, overwrite)
-
-    out_fs = open_fs(output_dir_path)
     extn = get_extn_from_url(url)
 
-    # download archive file
-    tmp_fs = TempFS()
-    tmp_file = os.path.join(tmp_fs.root_path, f"napistu_tmp{extn}")
+    # Download to temp file (AS-IS, no decompression)
+    with tempfile.NamedTemporaryFile(suffix=extn, delete=False) as tmp:
+        if download_method == DOWNLOAD_METHODS.WGET:
+            download_wget(url, tmp.name)
+        elif download_method == DOWNLOAD_METHODS.FTP:
+            download_ftp(url, tmp.name)
+        else:
+            raise ValueError(f"Unsupported method: {download_method}")
+        tmp_path = tmp.name
 
-    if download_method == DOWNLOAD_METHODS.WGET:
-        download_wget(url, tmp_file)
-    elif download_method == DOWNLOAD_METHODS.FTP:
-        download_ftp(url, tmp_file)
-    else:
-        raise ValueError(
-            f"Undefined download_method, defined methods are {VALID_DOWNLOAD_METHODS}"
-        )
+    try:
+        # Now extract (handles all decompression)
+        if extn.endswith((".tar.gz", ".tgz")):
+            _extract_tarball(tmp_path, output_dir_path)
+        elif extn.endswith(".zip"):
+            _extract_zip(tmp_path, output_dir_path)
+        elif extn.endswith(".gz"):
+            # Single file - extract directly
+            outfile = url.split("/")[-1].replace(".gz", "")
+            gunzip(tmp_path, f"{output_dir_path}/{outfile}")
+        else:
+            raise ValueError(f"Unsupported format: {extn}")
+    finally:
+        os.unlink(tmp_path)
 
-    if re.search(".tar\\.gz$", extn) or re.search("\\.tgz$", extn):
-        # untar .tar.gz into individual files
-        with TarFS(tmp_file) as tar_fs:
-            copy_fs(tar_fs, out_fs)
-            logger.info(f"Archive downloaded and untared to {output_dir_path}")
-    elif re.search("\\.zip$", extn):
-        with ZipFS(tmp_file) as zip_fs:
-            copy_fs(zip_fs, out_fs)
-            logger.info(f"Archive downloaded and unzipped to {output_dir_path}")
-    elif re.search("\\.gz$", extn):
-        outfile = url.split("/")[-1].replace(".gz", "")
-        # gunzip file
-        with gzip.open(tmp_file, "rb") as f_in:
-            with out_fs.open(outfile, "wb") as f_out:
-                f_out.write(f_in.read())
-    else:
-        raise ValueError(f"{extn} is not supported")
 
-    # Close fs
-    tmp_fs.close()
-    out_fs.close()
+def _extract_tarball(tar_path: str, output_uri: str) -> None:
+    """Extract tarball using standard library."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with tarfile.open(tar_path, "r:gz") as tar:
+            # Security: filter to prevent path traversal
+            tar.extractall(tmpdir, filter="data")  # Python 3.12+
+        _copy_tree(tmpdir, output_uri)
 
-    return None
+
+def _extract_zip(zip_path: str, output_uri: str) -> None:
+    """Extract zip using standard library."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with zipfile.ZipFile(zip_path) as z:
+            z.extractall(tmpdir)
+        _copy_tree(tmpdir, output_uri)
+
+
+def _copy_tree(source_dir: str, dest_uri: str) -> None:
+    """Copy directory tree to any fsspec destination."""
+    source_path = Path(source_dir)
+
+    for file_path in source_path.rglob("*"):
+        if file_path.is_file():
+            rel_path = file_path.relative_to(source_path)
+            dest_file_uri = f"{dest_uri}/{rel_path}".replace(
+                "\\", "/"
+            )  # Windows compat
+
+            with open(file_path, "rb") as src:
+                with fsspec.open(dest_file_uri, "wb") as dst:
+                    dst.write(src.read())
 
 
 def download_ftp(url: str, path: str) -> None:
@@ -187,7 +170,8 @@ def download_wget(
     timeout: int = 30,
     max_retries: int = 3,
 ) -> None:
-    """Downloads file / archive with wget
+    """
+    Downloads file / archive with wget
 
     Parameters
     ----------
@@ -225,155 +209,140 @@ def download_wget(
         logger.error(f"Failed to download {url} after {max_retries} retries: {str(e)}")
         raise
 
-    # check if the content is a ZIP file
-    if (
+    # Special case: ZIP with target_filename
+    if target_filename and (
         r.headers.get("Content-Type") == "application/zip"
         or url.endswith(f".{FILE_EXT_ZIP}")
-    ) and target_filename:
-        # load the ZIP file in memory
+    ):
+        # Extract specific file from ZIP
         with zipfile.ZipFile(io.BytesIO(r.content)) as z:
-            # check if the target file exists in the ZIP archive
             if target_filename in z.namelist():
                 with z.open(target_filename) as target_file:
-                    # apply the same logic as below to the target file
                     return write_file_contents_to_path(path, target_file.read())
             else:
                 raise FileNotFoundError(
                     f"{target_filename} not found in the ZIP archive"
                 )
-    # check if the content is a GZIP (single-file compression)
-    elif url.endswith(f".{FILE_EXT_GZ}"):
-        with gzip.GzipFile(fileobj=io.BytesIO(r.content)) as gz:
-            return write_file_contents_to_path(path, gz.read())
-    else:
-        # not an archive -> default case -> write file directly
-        return write_file_contents_to_path(path, r.content)
+
+    return write_file_contents_to_path(path, r.content)
 
 
-def extract(file: str):
+def extract(file_uri: str) -> None:
+    """Extract archive at file_uri to same directory.
+
+    Supports: .tar.gz, .tgz, .zip, .gz
     """
-    Untar, unzip and ungzip
+    extn = get_extn_from_url(file_uri)
 
-    Parameters
-    ----------
-    file : str
-        Path to compressed file
-
-    Returns
-    -------
-    None
-    """
-
-    extn = get_extn_from_url(file)
-    if re.search(".tar\\.gz$", extn) or re.search("\\.tgz$", extn):
-        output_dir_path = os.path.join(
-            os.path.join(
-                os.path.dirname(file), os.path.basename(file).replace(extn, "")
-            )
-        )
+    # Determine output directory
+    if extn.endswith((".tar.gz", ".tgz")):
+        output_uri = file_uri.replace(extn, "")
     else:
-        output_dir_path = os.path.dirname(file)
+        output_uri = os.path.dirname(file_uri)
 
     try:
-        initialize_dir(output_dir_path, overwrite=False)
+        initialize_dir(output_uri, overwrite=False)
     except FileExistsError:
-        pass
+        pass  # OK if exists
 
-    out_fs = open_fs(output_dir_path)
-
-    if re.search(".tar\\.gz$", extn) or re.search("\\.tgz$", extn):
-        # untar .tar.gz into individual files
-        with TarFS(file) as tar_fs:
-            copy_fs(tar_fs, out_fs)
-            logger.info(f"Archive downloaded and untared to {output_dir_path}")
-    elif re.search("\\.zip$", extn):
-        with ZipFS(file) as zip_fs:
-            copy_fs(zip_fs, out_fs)
-            logger.info(f"Archive downloaded and unzipped to {output_dir_path}")
-    elif re.search("\\.gz$", extn):
-        outfile = file.split("/")[-1].replace(".gz", "")
-        # gunzip file
-        with gzip.open(file, "rb") as f_in:
-            with out_fs.open(outfile, "wb") as f_out:
-                f_out.write(f_in.read())
+    # Download to temp if remote
+    if file_uri.startswith(("gs://", "s3://", "http://", "https://")):
+        with tempfile.NamedTemporaryFile(suffix=extn, delete=False) as tmp:
+            with fsspec.open(file_uri, "rb") as src:
+                with open(tmp.name, "wb") as dst:
+                    dst.write(src.read())
+            local_path = tmp.name
+        delete_after = True
     else:
-        raise ValueError(f"{extn} is not supported")
+        local_path = file_uri
+        delete_after = False
 
-    # Close fs
-    out_fs.close()
-
-    return None
+    try:
+        if extn.endswith((".tar.gz", ".tgz")):
+            _extract_tarball(local_path, output_uri)
+        elif extn.endswith(".zip"):
+            _extract_zip(local_path, output_uri)
+        elif extn.endswith(".gz"):
+            outfile = file_uri.split("/")[-1].replace(".gz", "")
+            gunzip(file_uri, f"{output_uri}/{outfile}")
+        else:
+            raise ValueError(f"Unsupported format: {extn}")
+    finally:
+        if delete_after:
+            os.unlink(local_path)
 
 
 def gunzip(gzipped_path: str, outpath: str | None = None) -> None:
-    """
-    Gunzip a file to an output path.
+    """Gunzip a file to an output path.
 
     Parameters
     ----------
     gzipped_path : str
-        Path to the gzipped file
-    outpath : str | None
-        Path to the output file
+        Path or URI to the gzipped file (e.g., '/local/file.gz', 'gs://bucket/file.gz').
+    outpath : str | None, optional
+        Path or URI to the output file. If None, automatically determined by removing
+        the .gz extension from gzipped_path.
 
     Returns
     -------
     None
-    """
 
-    if not os.path.exists(gzipped_path):
+    Raises
+    ------
+    FileNotFoundError
+        If gzipped_path does not exist.
+
+    Examples
+    --------
+    >>> gunzip('/tmp/data.txt.gz')  # Creates /tmp/data.txt
+    >>> gunzip('gs://bucket/data.txt.gz', 'gs://bucket/output.txt')
+    """
+    # Check if source exists
+    fs, path = fsspec.core.url_to_fs(gzipped_path)
+    if not fs.exists(path):
         raise FileNotFoundError(f"{gzipped_path} not found")
 
-    if not re.search("\\.gz$", gzipped_path):
-        logger.warning("{gzipped_path} does not have the .gz extension")
+    # Warn if doesn't have .gz extension
+    if not gzipped_path.endswith(".gz"):
+        logger.warning(f"{gzipped_path} does not have the .gz extension")
 
+    # Determine output path if not provided
     if outpath is None:
-        # determine outfile name automatically if not provided
-        outpath = os.path.join(
-            os.path.dirname(gzipped_path),
-            gzipped_path.split("/")[-1].replace(".gz", ""),
+        # Remove .gz extension
+        outpath = (
+            gzipped_path.rstrip(".gz")
+            if gzipped_path.endswith(".gz")
+            else gzipped_path + ".uncompressed"
         )
-    outfile = os.path.basename(outpath)
 
-    out_fs = open_fs(os.path.dirname(outpath))
-    # gunzip file
-    with gzip.open(gzipped_path, "rb") as f_in:
-        with out_fs.open(outfile, "wb") as f_out:
-            f_out.write(f_in.read())
-    out_fs.close()
-
-    return None
+    # Read gzipped file and write uncompressed
+    with fsspec.open(gzipped_path, "rb") as f_in:
+        with gzip.open(f_in, "rb") as gz:
+            with fsspec.open(outpath, "wb") as f_out:
+                f_out.write(gz.read())
 
 
 def load_json(uri: str) -> Any:
-    """Read json from uri
+    """Read JSON from a URI.
 
     Parameters
     ----------
     uri : str
-        Path to the json file
+        Path or URI to the JSON file (e.g., '/local/path.json', 'gs://bucket/file.json').
 
     Returns
     -------
-    object : Any
+    Any
+        The parsed JSON object (dict, list, etc.).
+
+    Examples
+    --------
+    >>> data = load_json('/tmp/config.json')
+    >>> data = load_json('gs://bucket/config.json')
     """
     logger.info("Read json from %s", uri)
-    source_base, source_path = get_source_base_and_path(uri)
-    with open_fs(source_base) as source_fs:
-        try:
-            txt = source_fs.readtext(source_path)
-        except ResourceNotFound as e:
-            if hasattr(source_fs, "fix_storage"):
-                logger.info(
-                    "File could not be opened. Trying to fix storage for FS-GCFS. "
-                    "This is required because of: https://fs-gcsfs.readthedocs.io/en/latest/#limitations "
-                    "and will add empty blobs to indicate directories."
-                )
-                source_fs.fix_storage()
-                txt = source_fs.readtext(source_path)
-            else:
-                raise (e)
-        return json.loads(txt)
+    with fsspec.open(uri, "r") as f:
+        return json.load(f)
 
 
 def load_parquet(uri: Union[str, Path]) -> pd.DataFrame:
@@ -383,59 +352,50 @@ def load_parquet(uri: Union[str, Path]) -> pd.DataFrame:
     Parameters
     ----------
     uri : Union[str, Path]
-        Path to the Parquet file to load
+        Path or URI to the Parquet file to load (e.g., '/local/data.parquet', 'gs://bucket/data.parquet').
 
     Returns
     -------
     pd.DataFrame
-        The DataFrame loaded from the Parquet file
+        The DataFrame loaded from the Parquet file.
 
     Raises
     ------
     FileNotFoundError
-        If the specified file does not exist
+        If the specified file does not exist.
+
+    Examples
+    --------
+    >>> df = load_parquet('/tmp/data.parquet')
+    >>> df = load_parquet('gs://bucket/data.parquet')
     """
     try:
-        target_base, target_path = get_target_base_and_path(str(uri))
-
-        with open_fs(target_base) as target_fs:
-            with target_fs.openbin(target_path, "r") as f:
-                return pd.read_parquet(f, engine="pyarrow")
-
-    except ResourceNotFound as e:
+        with fsspec.open(str(uri), "rb") as f:
+            return pd.read_parquet(f, engine="pyarrow")
+    except FileNotFoundError as e:
         raise FileNotFoundError(f"File not found: {uri}") from e
 
 
-def load_pickle(path: str):
-    """Loads pickle object to path
+def load_pickle(path: str) -> Any:
+    """Load a pickle object from a path or URI.
 
     Parameters
     ----------
     path : str
-        Path to the pickle file
+        Path or URI to the pickle file (e.g., '/local/file.pkl', 'gs://bucket/file.pkl').
 
     Returns
     -------
     Any
-        Object
+        The unpickled object.
+
+    Examples
+    --------
+    >>> obj = load_pickle('/tmp/data.pkl')
+    >>> obj = load_pickle('gs://bucket/data.pkl')
     """
-    dir, file = get_source_base_and_path(path)
-    with open_fs(dir) as source_fs:
-        try:
-            with source_fs.open(file, "rb") as f:
-                return pickle.load(f)
-        except ResourceNotFound as e:
-            if hasattr(source_fs, "fix_storage"):
-                logger.info(
-                    "File could not be opened. Trying to fix storage for FS-GCFS. "
-                    "This is required because of: https://fs-gcsfs.readthedocs.io/en/latest/#limitations "
-                    "and will add empty blobs to indicate directories."
-                )
-                source_fs.fix_storage()
-                with source_fs.open(file, "rb") as f:
-                    return pickle.load(f)
-            else:
-                raise e
+    with fsspec.open(path, "rb") as f:
+        return pickle.load(f)
 
 
 def pickle_cache(path: str, overwrite: bool = False) -> Callable:
@@ -531,23 +491,28 @@ def requests_retry_session(
     return session
 
 
-def save_json(uri: str, object: Any) -> None:
-    """Write object to json file at uri
+def save_json(uri: str, obj: Any) -> None:
+    """
+    Write object to JSON file at URI.
 
     Parameters
     ----------
     uri : str
-        Path to the json file
-    object : Any
-        Object to write
+        Path or URI to the JSON file (e.g., '/local/path.json', 'gs://bucket/file.json').
+    obj : Any
+        Object to serialize to JSON.
 
     Returns
     -------
     None
+
+    Examples
+    --------
+    >>> save_json('/tmp/config.json', {'key': 'value'})
+    >>> save_json('gs://bucket/config.json', {'key': 'value'})
     """
-    target_base, target_path = get_target_base_and_path(uri)
-    with open_fs(target_base, create=True) as target_fs:
-        target_fs.writetext(target_path, json.dumps(object))
+    with fsspec.open(uri, "w") as f:
+        json.dump(obj, f)
 
 
 def save_parquet(
@@ -559,19 +524,23 @@ def save_parquet(
     Parameters
     ----------
     df : pd.DataFrame
-        The DataFrame to save
+        The DataFrame to save.
     uri : Union[str, Path]
-        Path where to save the Parquet file. Can be a local path or a GCS URI.
+        Path or URI where to save the Parquet file (e.g., '/local/data.parquet', 'gs://bucket/data.parquet').
         Recommended extensions: .parquet or .pq
-    compression : str, default 'snappy'
-        Compression algorithm. Options: 'snappy', 'gzip', 'brotli', 'lz4', 'zstd'
+    compression : str, default='snappy'
+        Compression algorithm. Options: 'snappy', 'gzip', 'brotli', 'lz4', 'zstd'.
 
     Raises
     ------
     OSError
-        If the file cannot be written to (permission issues, etc.)
-    """
+        If the file cannot be written to (permission issues, etc.).
 
+    Examples
+    --------
+    >>> save_parquet(df, '/tmp/data.parquet')
+    >>> save_parquet(df, 'gs://bucket/data.parquet', compression='gzip')
+    """
     uri_str = str(uri)
 
     # Warn about non-standard extensions
@@ -580,59 +549,66 @@ def save_parquet(
             f"File '{uri_str}' doesn't have a standard Parquet extension (.parquet or .pq)"
         )
 
-    target_base, target_path = get_target_base_and_path(uri_str)
-
-    with open_fs(target_base, create=True) as target_fs:
-        with target_fs.openbin(target_path, "w") as f:
-            # Convert to Arrow table and write as single file
-            table = pa.Table.from_pandas(df)
-            pq.write_table(
-                table,
-                f,
-                compression=compression,
-                use_dictionary=True,  # Efficient for repeated values
-                write_statistics=True,  # Enables query optimization
-            )
+    with fsspec.open(uri_str, "wb") as f:
+        # Convert to Arrow table and write as single file
+        table = pa.Table.from_pandas(df)
+        pq.write_table(
+            table,
+            f,
+            compression=compression,
+            use_dictionary=True,  # Efficient for repeated values
+            write_statistics=True,  # Enables query optimization
+        )
 
 
-def save_pickle(path: str, dat: object):
-    """Saves object to path as pickle
-
-    Args:
-        path (str): target path
-        dat (object): object
+def save_pickle(path: str, dat: Any) -> None:
     """
-    dir, file = get_target_base_and_path(path)
-    with open_fs(dir, create=True) as f:
-        with f.open(file, "wb") as f:
-            pickle.dump(dat, f)
-
-
-def write_file_contents_to_path(path: str, contents) -> None:
-    """
-    Helper function to write file contents to the path.
+    Save object to path as pickle.
 
     Parameters
     ----------
     path : str
-        Destination
-    contents : Any
-        File contents
+        Path or URI where to save the pickle file (e.g., '/local/file.pkl', 'gs://bucket/file.pkl').
+    dat : Any
+        Object to pickle.
 
     Returns
     -------
     None
+
+    Examples
+    --------
+    >>> save_pickle('/tmp/data.pkl', my_object)
+    >>> save_pickle('gs://bucket/data.pkl', my_object)
+    """
+    with fsspec.open(path, "wb") as f:
+        pickle.dump(dat, f)
+
+
+def write_file_contents_to_path(path: str, contents: bytes) -> None:
+    """
+    Write file contents to a path or URI.
+
+    Handles both file-like objects with write() method and string paths/URIs.
+
+    Parameters
+    ----------
+    path : str
+        Destination path or URI, or a file-like object with write() method.
+    contents : bytes
+        File contents to write.
+
+    Returns
+    -------
+    None
+
+    Examples
+    --------
+    >>> write_file_contents_to_path('/tmp/file.txt', b'Hello')
+    >>> write_file_contents_to_path('gs://bucket/file.txt', b'Hello')
     """
     if hasattr(path, "write") and hasattr(path, "__iter__"):
         path.write(contents)  # type: ignore
     else:
-        base, filename = get_target_base_and_path(path)
-        with open_fs(base, create=True) as fs:
-            with fs.open(filename, "wb") as f:
-                f.write(contents)  # type: ignore
-
-    return None
-
-
-read_pickle = load_pickle
-write_pickle = save_pickle
+        with fsspec.open(path, "wb") as f:
+            f.write(contents)

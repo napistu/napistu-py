@@ -12,7 +12,6 @@ from __future__ import annotations
 import copy
 import logging
 import re
-import warnings
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -23,9 +22,7 @@ from typing import (
     Union,
 )
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
+import fsspec
 import pandas as pd
 
 from napistu import identifiers, sbml_dfs_utils, source, utils
@@ -397,54 +394,54 @@ class SBML_dfs:
                 f"Directory {outdir} already exists and overwrite is False. "
                 "Files will be added to the existing directory."
             )
-        with open_fs(outdir, writeable=True) as fs:
-            species_identifiers_path = (
-                model_prefix + NAPISTU_STANDARD_OUTPUTS.SPECIES_IDENTIFIERS
-            )
-            with fs.openbin(species_identifiers_path, "w") as f:
-                species_identifiers.to_csv(f, sep="\t", index=False)
+        out_base = outdir.rstrip("/")
 
-            # export reactions' source total counts
-            reactions_source_total_counts_path = (
-                model_prefix + NAPISTU_STANDARD_OUTPUTS.REACTIONS_SOURCE_TOTAL_COUNTS
-            )
-            with fs.openbin(reactions_source_total_counts_path, "w") as f:
-                reactions_source_total_counts.to_csv(f, sep="\t", index=True)
+        def _uri(rel: str) -> str:
+            return f"{out_base}/{rel.lstrip('/')}"
 
-            # export s_id to sc_id lookup table
-            sid_to_scids = self.compartmentalized_species.reset_index()[
-                [SBML_DFS.S_ID, SBML_DFS.SC_ID]
-            ]
-            sid_to_scids_path = model_prefix + NAPISTU_STANDARD_OUTPUTS.SID_TO_SCIDS
-            with fs.openbin(sid_to_scids_path, "w") as f:
-                sid_to_scids.to_csv(f, sep="\t", index=False)
+        species_identifiers_path = (
+            model_prefix + NAPISTU_STANDARD_OUTPUTS.SPECIES_IDENTIFIERS
+        )
+        with fsspec.open(_uri(species_identifiers_path), "wb") as f:
+            species_identifiers.to_csv(f, sep="\t", index=False)
 
-            # export jsons
-            species_path = model_prefix + NAPISTU_STANDARD_OUTPUTS.SPECIES
-            reactions_path = model_prefix + NAPISTU_STANDARD_OUTPUTS.REACTIONS
-            reation_species_path = (
-                model_prefix + NAPISTU_STANDARD_OUTPUTS.REACTION_SPECIES
-            )
-            compartments_path = model_prefix + NAPISTU_STANDARD_OUTPUTS.COMPARTMENTS
-            compartmentalized_species_path = (
-                model_prefix + NAPISTU_STANDARD_OUTPUTS.COMPARTMENTALIZED_SPECIES
-            )
-            with fs.openbin(species_path, "w") as f:
-                self.species[[SBML_DFS.S_NAME]].to_json(f)
+        # export reactions' source total counts
+        reactions_source_total_counts_path = (
+            model_prefix + NAPISTU_STANDARD_OUTPUTS.REACTIONS_SOURCE_TOTAL_COUNTS
+        )
+        with fsspec.open(_uri(reactions_source_total_counts_path), "wb") as f:
+            reactions_source_total_counts.to_csv(f, sep="\t", index=True)
 
-            with fs.openbin(reactions_path, "w") as f:
-                self.reactions[[SBML_DFS.R_NAME]].to_json(f)
+        # export s_id to sc_id lookup table
+        sid_to_scids = self.compartmentalized_species.reset_index()[
+            [SBML_DFS.S_ID, SBML_DFS.SC_ID]
+        ]
+        sid_to_scids_path = model_prefix + NAPISTU_STANDARD_OUTPUTS.SID_TO_SCIDS
+        with fsspec.open(_uri(sid_to_scids_path), "wb") as f:
+            sid_to_scids.to_csv(f, sep="\t", index=False)
 
-            with fs.openbin(reation_species_path, "w") as f:
-                self.reaction_species.to_json(f)
+        # export jsons
+        species_path = model_prefix + NAPISTU_STANDARD_OUTPUTS.SPECIES
+        reactions_path = model_prefix + NAPISTU_STANDARD_OUTPUTS.REACTIONS
+        reation_species_path = model_prefix + NAPISTU_STANDARD_OUTPUTS.REACTION_SPECIES
+        compartments_path = model_prefix + NAPISTU_STANDARD_OUTPUTS.COMPARTMENTS
+        compartmentalized_species_path = (
+            model_prefix + NAPISTU_STANDARD_OUTPUTS.COMPARTMENTALIZED_SPECIES
+        )
+        with fsspec.open(_uri(species_path), "wb") as f:
+            self.species[[SBML_DFS.S_NAME]].to_json(f)
 
-            with fs.openbin(compartments_path, "w") as f:
-                self.compartments[[SBML_DFS.C_NAME]].to_json(f)
+        with fsspec.open(_uri(reactions_path), "wb") as f:
+            self.reactions[[SBML_DFS.R_NAME]].to_json(f)
 
-            with fs.openbin(compartmentalized_species_path, "w") as f:
-                self.compartmentalized_species.drop(SBML_DFS.SC_SOURCE, axis=1).to_json(
-                    f
-                )
+        with fsspec.open(_uri(reation_species_path), "wb") as f:
+            self.reaction_species.to_json(f)
+
+        with fsspec.open(_uri(compartments_path), "wb") as f:
+            self.compartments[[SBML_DFS.C_NAME]].to_json(f)
+
+        with fsspec.open(_uri(compartmentalized_species_path), "wb") as f:
+            self.compartmentalized_species.drop(SBML_DFS.SC_SOURCE, axis=1).to_json(f)
 
         return None
 

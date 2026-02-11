@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import datetime
+import gzip
 import logging
-import warnings
 from typing import Union
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
+import fsspec
 import pandas as pd
 
 from napistu import identifiers, sbml_dfs_utils, utils
@@ -226,40 +224,51 @@ def convert_string_to_sbml_dfs(
 
 
 def _read_string(string_uri: str) -> pd.DataFrame:
-    """Reads string from uri
-
-    Args:
-        string_uri (str): string uri
-
-    Returns:
-        pd.DataFrame: string edgelist
     """
-    base_path, file_name = utils.get_source_base_and_path(string_uri)
-    # TODO: test on gz versus txt
-    with open_fs(base_path) as base_fs:
-        with base_fs.open(file_name, "rb") as f:
-            string_edges = pd.read_csv(f, sep=" ")
+    Reads STRING interactions from uri (supports plain text or .gz).
+
+    Parameters
+    ----------
+    string_uri : str
+        string uri
+
+    Returns
+    -------
+    pd.DataFrame
+        string edgelist
+    """
+    with fsspec.open(string_uri, "rb") as f:
+        if string_uri.endswith(".gz"):
+            with gzip.open(f, "rt", encoding="utf-8") as gz:
+                string_edges = pd.read_csv(gz, sep=" ")
+        else:
+            string_edges = pd.read_csv(f, sep=" ", encoding="utf-8")
     return string_edges
 
 
 def _read_string_aliases(string_aliases_uri: str) -> pd.DataFrame:
-    """Reads string from uri
-
-    Args:
-        string_aliases_uri (str): string aliases uri
-
-    Returns:
-        pd.DataFrame: string aliases
     """
-    base_path, file_name = utils.get_source_base_and_path(string_aliases_uri)
-    # TODO: test on gz versus txt
-    with open_fs(base_path) as base_fs:
-        with base_fs.open(file_name, "rb") as f:
-            string_aliases = (
-                pd.read_csv(f, sep="\t")
-                # Rename column with #
-                .rename(columns={STRING_PROTEIN_ID_RAW: STRING_PROTEIN_ID})
-            )
+    Reads STRING aliases from uri (supports plain text or .gz).
+
+    Parameters
+    ----------
+    string_aliases_uri : str
+        string aliases uri
+
+    Returns
+    -------
+    pd.DataFrame
+        string aliases
+    """
+    with fsspec.open(string_aliases_uri, "rb") as f:
+        if string_aliases_uri.endswith(".gz"):
+            with gzip.open(f, "rt", encoding="utf-8") as gz:
+                string_aliases = pd.read_csv(gz, sep="\t")
+        else:
+            string_aliases = pd.read_csv(f, sep="\t", encoding="utf-8")
+        string_aliases = string_aliases.rename(
+            columns={STRING_PROTEIN_ID_RAW: STRING_PROTEIN_ID}
+        )
     return string_aliases
 
 
@@ -268,17 +277,23 @@ def _get_identifiers(
     alias_to_identifier: dict[str, tuple[str, str]],
     dat_alias: pd.DataFrame,
 ) -> identifiers.Identifiers:
-    """Helper function to get identifiers from a row of the string alias file
+    """
+    Helper function to get identifiers from a row of the string alias file
 
-    Args:
-        row (pd.DataFrame): grouped dataframe
-        alias_to_identifier (dict[str, tuple[str, str]]):
-            map from an alias source to an ontology and a qualifier
-        dat_alias (pd.DataFrame): Helper dataframe with index=string_protein_id
-            and columns=source (the source name), alias (the identifier)
+    Parameters
+    ----------
+    row : pd.DataFrame
+        grouped dataframe
+    alias_to_identifier : dict[str, tuple[str, str]]
+        map from an alias source to an ontology and a qualifier
+    dat_alias : pd.DataFrame
+        Helper dataframe with index=string_protein_id
+        and columns=source (the source name), alias (the identifier)
 
-    Returns:
-        identifiers.Identifiers: An Identifiers object containing all identifiers
+    Returns
+    -------
+    identifiers.Identifiers
+        An Identifiers object containing all identifiers
     """
     if row.shape[0] == 0:
         return identifiers.Identifiers([])
@@ -309,16 +324,26 @@ def _build_species_df(
     source_col: str = STRING_SOURCE,
     target_col: str = STRING_TARGET,
 ) -> pd.DataFrame:
-    """Builds the species dataframe from the edgelist and aliases
+    """
+    Builds the species dataframe from the edgelist and aliases
 
-    Args:
-        edgelist (pd.DataFrame): edgelist
-        aliases (pd.DataFrame): aliases
-        alias_to_identifier (dict[str, tuple[str, str]]):
-            map from an alias source to an ontology and a qualifier
+    Parameters
+    ----------
+    edgelist : pd.DataFrame
+        edgelist
+    aliases : pd.DataFrame
+        aliases
+    alias_to_identifier : dict[str, tuple[str, str]]
+        map from an alias source to an ontology and a qualifier
+    source_col : str
+        source column name
+    target_col : str
+        target column name
 
-    Returns:
-        pd.DataFrame: species dataframe
+    Returns
+    -------
+    pd.DataFrame
+        species dataframe
     """
     species_df = (
         pd.Series(

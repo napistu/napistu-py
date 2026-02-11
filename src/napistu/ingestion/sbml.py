@@ -3,15 +3,11 @@ from __future__ import annotations
 import logging
 import os
 import re
-import warnings
 from typing import Any
 
+import fsspec
 import libsbml
 import pandas as pd
-
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
 from pydantic import RootModel, field_validator
 
 from napistu import consensus, identifiers, sbml_dfs_utils, source, utils
@@ -78,8 +74,8 @@ class SBML:
         if os.path.exists(sbml_path):
             self.document = reader.readSBML(sbml_path)
         else:
-            with open_fs(os.path.dirname(sbml_path)) as fs:
-                txt = fs.readtext(os.path.basename(sbml_path))
+            with fsspec.open(sbml_path, "rb") as f:
+                txt = f.readtext(os.path.basename(sbml_path))
                 self.document = reader.readSBMLFromString(txt)
 
         if self.document.getLevel() < 3:

@@ -1,14 +1,10 @@
 from __future__ import annotations
 
 import datetime
-import os
-import warnings
 from itertools import chain
 from typing import Union
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
+import fsspec
 import pandas as pd
 
 from napistu import identifiers, utils
@@ -343,13 +339,10 @@ def _read_trrust(trrust_uri: str) -> pd.DataFrame:
         Data Frame
     """
 
-    base_path = os.path.dirname(trrust_uri)
-    file_name = os.path.basename(trrust_uri)
-    with open_fs(base_path) as base_fs:
-        with base_fs.open(file_name) as f:
-            trrust_edgelist = pd.read_csv(
-                f, sep="\t", names=["from", "to", "sign", "reference"]
-            ).drop_duplicates()
+    with fsspec.open(trrust_uri, "rb") as f:
+        trrust_edgelist = pd.read_csv(
+            f, sep="\t", names=["from", "to", "sign", "reference"]
+        ).drop_duplicates()
     return trrust_edgelist
 
 
