@@ -47,6 +47,8 @@ def reactome_sbml_download(output_dir_path: str, overwrite: bool = False) -> Non
     -------
     None
     """
+
+    logger.info(f"Downloading Reactome SBML files and extracting to {output_dir_path}")
     utils.download_and_extract(
         REACTOME_SMBL_URL,
         output_dir_path=output_dir_path,
@@ -56,9 +58,9 @@ def reactome_sbml_download(output_dir_path: str, overwrite: bool = False) -> Non
     pw_index = _build_reactome_pw_index(output_dir_path, file_ext="sbml")
 
     # save as tsv
-    with fsspec.open(
-        os.path.join(output_dir_path, SOURCE_SPEC.PW_INDEX_FILE), "wb"
-    ) as f:
+    index_uri = f"{output_dir_path.rstrip('/')}/{SOURCE_SPEC.PW_INDEX_FILE}"
+    logger.info("Saving Reactome pathway index to %s", index_uri)
+    with fsspec.open(index_uri, "wb") as f:
         pw_index.to_csv(f, sep="\t", index=False)
 
     return None
@@ -160,8 +162,10 @@ def _build_reactome_pw_index(
         pathway index
     """
     # create the pathway index
-    out_fs = fsspec.open(output_dir)
-    all_files = [os.path.basename(f) for f in out_fs.glob(f"**/*.{file_ext}")]
+    fs, base_path = fsspec.core.url_to_fs(output_dir)
+    pattern = f"{base_path.rstrip('/')}/**/*.{file_ext}"
+    matched = fs.glob(pattern)
+    all_files = [os.path.basename(p) for p in matched]
 
     if len(all_files) == 0:
         raise ValueError(f"Zero files in {output_dir} have the {file_ext} extension")

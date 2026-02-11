@@ -157,6 +157,7 @@ def test_copy_uri_file_mock(mock_bucket_uri, mock_bucket_subdir_uri):
     assert utils.load_pickle(fn_out) == content
 
 
+@pytest.mark.skip_on_windows
 def test_copy_uri_fol_mock(mock_bucket_uri, mock_bucket_subdir_uri):
     basename = "test.txt"
     content = "test"
@@ -208,6 +209,7 @@ def test_copy_uri_file_cross_filesystem(source_fixture, dest_fixture, request):
     assert utils.load_pickle(dest_uri) == content
 
 
+@pytest.mark.skip_on_windows
 @pytest.mark.parametrize(
     "source_fixture,dest_fixture",
     [

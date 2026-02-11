@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import gzip
 import logging
 from typing import Union
 
@@ -224,7 +225,7 @@ def convert_string_to_sbml_dfs(
 
 def _read_string(string_uri: str) -> pd.DataFrame:
     """
-    Reads STRING interactions from uri
+    Reads STRING interactions from uri (supports plain text or .gz).
 
     Parameters
     ----------
@@ -237,13 +238,17 @@ def _read_string(string_uri: str) -> pd.DataFrame:
         string edgelist
     """
     with fsspec.open(string_uri, "rb") as f:
-        string_edges = pd.read_csv(f, sep=" ")
+        if string_uri.endswith(".gz"):
+            with gzip.open(f, "rt", encoding="utf-8") as gz:
+                string_edges = pd.read_csv(gz, sep=" ")
+        else:
+            string_edges = pd.read_csv(f, sep=" ", encoding="utf-8")
     return string_edges
 
 
 def _read_string_aliases(string_aliases_uri: str) -> pd.DataFrame:
     """
-    Reads STRING aliases from uri
+    Reads STRING aliases from uri (supports plain text or .gz).
 
     Parameters
     ----------
@@ -256,10 +261,13 @@ def _read_string_aliases(string_aliases_uri: str) -> pd.DataFrame:
         string aliases
     """
     with fsspec.open(string_aliases_uri, "rb") as f:
-        string_aliases = (
-            pd.read_csv(f, sep="\t")
-            # Rename column with #
-            .rename(columns={STRING_PROTEIN_ID_RAW: STRING_PROTEIN_ID})
+        if string_aliases_uri.endswith(".gz"):
+            with gzip.open(f, "rt", encoding="utf-8") as gz:
+                string_aliases = pd.read_csv(gz, sep="\t")
+        else:
+            string_aliases = pd.read_csv(f, sep="\t", encoding="utf-8")
+        string_aliases = string_aliases.rename(
+            columns={STRING_PROTEIN_ID_RAW: STRING_PROTEIN_ID}
         )
     return string_aliases
 
