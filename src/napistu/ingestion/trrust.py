@@ -197,9 +197,6 @@ def convert_trrust_to_sbml_dfs(
             NAPISTU_GRAPH_EDGES.TO: INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
         },
         axis=1,
-    ).assign(
-        upstream_compartment=TRRUST_COMPARTMENT_NUCLEOPLASM,
-        downstream_compartment=TRRUST_COMPARTMENT_NUCLEOPLASM,
     )
     gene_gene_identifier_edgelist[SBML_DFS.R_NAME] = [
         f"{x} {y} of {z}"
@@ -228,8 +225,6 @@ def convert_trrust_to_sbml_dfs(
         [
             INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
             INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
-            INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM,
-            INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM,
             SBML_DFS.R_NAME,
             INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM,
             SBML_DFS.R_IDENTIFIERS,
@@ -243,6 +238,10 @@ def convert_trrust_to_sbml_dfs(
         species_df=species_df,
         compartments_df=compartments_df,
         model_source=model_source,
+        interaction_edgelist_defaults={
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM: TRRUST_COMPARTMENT_NUCLEOPLASM,
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM: TRRUST_COMPARTMENT_NUCLEOPLASM,
+        },
     )
     sbml_dfs.validate()
     return sbml_dfs
