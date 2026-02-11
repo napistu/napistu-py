@@ -25,8 +25,40 @@ from typing import (
 import fsspec
 import pandas as pd
 
-from napistu import identifiers, sbml_dfs_utils, source, utils
+from napistu.identifiers import Identifiers
 from napistu.ontologies import id_tables
+from napistu.sbml_dfs_utils import (
+    _add_edgelist_defaults,
+    _dogmatic_to_defining_bqbs,
+    _edgelist_create_compartmentalized_species,
+    _edgelist_create_reactions_and_species,
+    _edgelist_identify_extra_columns,
+    _edgelist_process_compartments,
+    _edgelist_process_species,
+    _edgelist_validate_inputs,
+    _select_priority_pathway_sources,
+    _summarize_ontology_cooccurrence,
+    _summarize_ontology_occurrence,
+    _summarize_source_cooccurrence,
+    _summarize_source_occurrence,
+    _validate_matching_data,
+    add_missing_ids_column,
+    add_sbo_role,
+    create_reaction_formula_series,
+    filter_to_characteristic_species_ids,
+    find_underspecified_reactions,
+    find_unused_entities,
+    force_edgelist_consistency,
+    format_sbml_dfs_summary,
+    species_type_types,
+    unnest_identifiers,
+    validate_sbml_dfs_table,
+)
+from napistu.source import Source, unnest_sources
+from napistu.utils.display_utils import show
+from napistu.utils.io_utils import load_pickle, save_pickle
+from napistu.utils.path_utils import initialize_dir
+from napistu.utils.pd_utils import infer_entity_type
 
 if TYPE_CHECKING:
     from napistu.ingestion import sbml
@@ -43,7 +75,6 @@ from napistu.constants import (
     MINI_SBO_FROM_NAME,
     MINI_SBO_TO_NAME,
     NAPISTU_STANDARD_OUTPUTS,
-    ONTOLOGY_PRIORITIES,
     SBML_DFS,
     SBML_DFS_CLEANUP_ORDER,
     SBML_DFS_METADATA,
@@ -51,11 +82,13 @@ from napistu.constants import (
     SBML_DFS_SCHEMA,
     SBOTERM_NAMES,
     SCHEMA_DEFS,
+    SOURCE_SPEC,
 )
 from napistu.ingestion.constants import (
     DEFAULT_PRIORITIZED_PATHWAYS,
     INTERACTION_EDGELIST_DEFAULTS,
 )
+from napistu.ontologies.constants import ONTOLOGY_PRIORITIES
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +130,7 @@ class SBML_dfs:
         Export the SBML_dfs model and its tables to files in a specified directory.
     find_entity_references(entity_type, entity_ids, reference_type, reference_ids)
         Find entities that reference specified entities through a given reference type.
-    from_edgelist(interaction_edgelist, species_df, compartments_df, interaction_source=source.Source(init=True), interaction_edgelist_defaults=INTERACTION_EDGELIST_DEFAULTS, keep_species_data=False, keep_reactions_data=False)
+    from_edgelist(interaction_edgelist, species_df, compartments_df, interaction_source=Source(init=True), interaction_edgelist_defaults=INTERACTION_EDGELIST_DEFAULTS, keep_species_data=False, keep_reactions_data=False)
         Create SBML_dfs from interaction edgelist.
     from_pickle(path)
         Load an SBML_dfs from a pickle file.
@@ -209,7 +242,7 @@ class SBML_dfs:
         sbml_model: (
             sbml.SBML | MutableMapping[str, pd.DataFrame | dict[str, pd.DataFrame]]
         ),
-        model_source: source.Source,
+        model_source: Source,
         validate: bool = True,
         resolve: bool = True,
         verbose: bool = False,
@@ -251,9 +284,9 @@ class SBML_dfs:
         self.metadata = dict()
         # validate the model-level source data
 
-        if not isinstance(model_source, source.Source):
+        if not isinstance(model_source, Source):
             raise ValueError(
-                f"model_source was a {type(model_source)} and must be a source.Source"
+                f"model_source was a {type(model_source)} and must be a Source"
             )
 
         model_source.validate_single_source()
@@ -391,7 +424,7 @@ class SBML_dfs:
         reactions_source_total_counts = self.get_source_total_counts(SBML_DFS.REACTIONS)
 
         try:
-            utils.initialize_dir(outdir, overwrite=overwrite)
+            initialize_dir(outdir, overwrite=overwrite)
         except FileExistsError:
             logger.warning(
                 f"Directory {outdir} already exists and overwrite is False. "
@@ -542,11 +575,11 @@ class SBML_dfs:
         interaction_edgelist: pd.DataFrame,
         species_df: pd.DataFrame,
         compartments_df: pd.DataFrame,
-        model_source: source.Source,
+        model_source: Source,
         interaction_edgelist_defaults: dict[str, Any] = INTERACTION_EDGELIST_DEFAULTS,
         keep_species_data: bool | str = False,
         keep_reactions_data: bool | str = False,
-        force_edgelist_consistency: bool = False,
+        require_edgelist_consistency: bool = False,
     ) -> "SBML_dfs":
         """
         Create SBML_dfs from interaction edgelist.
@@ -561,7 +594,7 @@ class SBML_dfs:
             - name_upstream : str, matches "s_name" from species_df
             - name_downstream : str, matches "s_name" from species_df
             - r_name : str, name for the interaction
-            - r_Identifiers : identifiers.Identifiers, supporting identifiers
+            - r_Identifiers : Identifiers, supporting identifiers
             - compartment_upstream : str, matches "c_name" from compartments_df
             - compartment_downstream : str, matches "c_name" from compartments_df
             - sbo_term_name_upstream : str, SBO term defining interaction type
@@ -572,12 +605,12 @@ class SBML_dfs:
         species_df : pd.DataFrame
             Table defining molecular species with columns:
             - s_name : str, name of molecular species
-            - s_Identifiers : identifiers.Identifiers, species identifiers
+            - s_Identifiers : Identifiers, species identifiers
         compartments_df : pd.DataFrame
             Table defining compartments with columns:
             - c_name : str, name of compartment
-            - c_Identifiers : identifiers.Identifiers, compartment identifiers
-        model_source : source.Source
+            - c_Identifiers : Identifiers, compartment identifiers
+        model_source : Source
             Source annotations for the data source
         interaction_edgelist_defaults : dict[str, Any], default INTERACTION_EDGELIST_DEFAULTS
             Default values for interaction edgelist columns
@@ -587,7 +620,7 @@ class SBML_dfs:
         keep_reactions_data : bool or str, default False
             Whether to preserve extra reaction columns. If True, saves as 'source' label.
             If string, uses as custom label. If False, discards extra data.
-        force_edgelist_consistency : bool, default False
+        require_edgelist_consistency : bool, default False
             Whether to force the edgelist to be consistent with the species and compartments dataframes
             This is useful for cases where there may be reasonable departures between the edgelist and
             the species and compartments dataframes but the user wants to create an SBML_dfs model anyway
@@ -601,8 +634,8 @@ class SBML_dfs:
         """
 
         # organize source info
-        if not isinstance(model_source, source.Source):
-            raise ValueError("model_source must be a source.Source object")
+        if not isinstance(model_source, Source):
+            raise ValueError("model_source must be a Source object")
 
         # Validate that interaction_edgelist_defaults is a dictionary
         if not isinstance(interaction_edgelist_defaults, dict):
@@ -611,27 +644,27 @@ class SBML_dfs:
             )
 
         # set default entity-level source
-        interaction_source = source.Source.empty()
+        interaction_source = Source.empty()
 
         # 0. Add defaults to interaction edgelist
-        interaction_edgelist_with_defaults = sbml_dfs_utils._add_edgelist_defaults(
+        interaction_edgelist_with_defaults = _add_edgelist_defaults(
             interaction_edgelist, interaction_edgelist_defaults
         )
 
-        if force_edgelist_consistency:
+        if require_edgelist_consistency:
             interaction_edgelist_with_defaults, species_df, compartments_df = (
-                sbml_dfs_utils.force_edgelist_consistency(
+                force_edgelist_consistency(
                     interaction_edgelist_with_defaults, species_df, compartments_df
                 )
             )
 
         # 1. Validate inputs
-        sbml_dfs_utils._edgelist_validate_inputs(
+        _edgelist_validate_inputs(
             interaction_edgelist_with_defaults, species_df, compartments_df
         )
 
         # 2. Identify which extra columns to preserve
-        extra_columns = sbml_dfs_utils._edgelist_identify_extra_columns(
+        extra_columns = _edgelist_identify_extra_columns(
             interaction_edgelist_with_defaults,
             species_df,
             keep_reactions_data,
@@ -639,17 +672,17 @@ class SBML_dfs:
         )
 
         # 3. Process compartments and species tables
-        processed_compartments = sbml_dfs_utils._edgelist_process_compartments(
+        processed_compartments = _edgelist_process_compartments(
             compartments_df, interaction_source
         )
-        processed_species, species_data = sbml_dfs_utils._edgelist_process_species(
+        processed_species, species_data = _edgelist_process_species(
             species_df, interaction_source, extra_columns[SBML_DFS.SPECIES]
         )
 
         # drop extra species and compartments and warn
 
         # 4. Create compartmentalized species
-        comp_species = sbml_dfs_utils._edgelist_create_compartmentalized_species(
+        comp_species = _edgelist_create_compartmentalized_species(
             interaction_edgelist_with_defaults,
             processed_species,
             processed_compartments,
@@ -658,7 +691,7 @@ class SBML_dfs:
 
         # 5. Create reactions and reaction species
         reactions, reaction_species, reactions_data = (
-            sbml_dfs_utils._edgelist_create_reactions_and_species(
+            _edgelist_create_reactions_and_species(
                 interaction_edgelist_with_defaults,
                 comp_species,
                 processed_species,
@@ -701,7 +734,7 @@ class SBML_dfs:
         SBML_dfs
             The loaded SBML_dfs object
         """
-        sbml_dfs = utils.load_pickle(path)
+        sbml_dfs = load_pickle(path)
         if not isinstance(sbml_dfs, cls):
             raise ValueError(
                 f"Pickled input is not an SBML_dfs object but {type(sbml_dfs)}: {path}"
@@ -734,15 +767,13 @@ class SBML_dfs:
         """
 
         # select valid BQB attributes based on dogmatic flag
-        defining_biological_qualifiers = sbml_dfs_utils._dogmatic_to_defining_bqbs(
-            dogmatic
-        )
+        defining_biological_qualifiers = _dogmatic_to_defining_bqbs(dogmatic)
 
         # pre-summarize ontologies
         species_identifiers = self.get_identifiers(SBML_DFS.SPECIES)
 
         # drop some BQB_HAS_PART annotations
-        species_identifiers = sbml_dfs_utils.filter_to_characteristic_species_ids(
+        species_identifiers = filter_to_characteristic_species_ids(
             species_identifiers,
             defining_biological_qualifiers=defining_biological_qualifiers,
         )
@@ -849,14 +880,14 @@ class SBML_dfs:
         for sysid in selected_table.index:
             id_entry = selected_table[schema[id_type][SCHEMA_DEFS.ID]][sysid]
 
-            if isinstance(id_entry, identifiers.Identifiers):
+            if isinstance(id_entry, Identifiers):
                 identifiers_dict[sysid] = pd.DataFrame(id_entry.df)
             elif pd.isna(id_entry):
                 continue
             else:
                 raise ValueError(
                     f"id_entry was a {type(id_entry)} and must either be"
-                    " an identifiers.Identifiers object or a missing value (None, np.nan, pd.NA)"
+                    " an Identifiers object or a missing value (None, np.nan, pd.NA)"
                 )
         # Get the source column name if it exists for this entity type
         source_col = None
@@ -970,7 +1001,7 @@ class SBML_dfs:
             entity_type, characteristic_only, dogmatic
         )
 
-        return sbml_dfs_utils._summarize_ontology_cooccurrence(
+        return _summarize_ontology_cooccurrence(
             identifiers_table, stratify_by_bqb, allow_col_multindex
         )
 
@@ -1028,7 +1059,7 @@ class SBML_dfs:
             entity_type, characteristic_only, dogmatic
         )
 
-        result = sbml_dfs_utils._summarize_ontology_occurrence(
+        result = _summarize_ontology_occurrence(
             identifiers_table, stratify_by_bqb, allow_col_multindex, binarize
         )
 
@@ -1039,7 +1070,7 @@ class SBML_dfs:
             else:
                 reference_table = self.get_table(entity_type, {SCHEMA_DEFS.ID})
 
-            result = sbml_dfs_utils.add_missing_ids_column(result, reference_table)
+            result = add_missing_ids_column(result, reference_table)
 
         return result
 
@@ -1221,9 +1252,7 @@ class SBML_dfs:
             .reset_index(drop=False)
             .to_dict(orient="records")
         )
-        s_identifiers = sbml_dfs_utils.unnest_identifiers(
-            self.species, SBML_DFS.S_IDENTIFIERS
-        )
+        s_identifiers = unnest_identifiers(self.species, SBML_DFS.S_IDENTIFIERS)
         stats["species_ontology_counts"] = s_identifiers.value_counts(
             IDENTIFIERS.ONTOLOGY
         ).to_dict()
@@ -1378,11 +1407,11 @@ class SBML_dfs:
                 "Only sbml_dfs which have been merged with consensus should use this method."
             )
 
-        filtered_sources = sbml_dfs_utils._select_priority_pathway_sources(
+        filtered_sources = _select_priority_pathway_sources(
             source_table, priority_pathways
         )
 
-        return sbml_dfs_utils._summarize_source_cooccurrence(filtered_sources)
+        return _summarize_source_cooccurrence(filtered_sources)
 
     def get_source_occurrence(
         self,
@@ -1429,11 +1458,11 @@ class SBML_dfs:
                 "Only sbml_dfs which have been merged with consensus should use this method."
             )
 
-        filtered_sources = sbml_dfs_utils._select_priority_pathway_sources(
+        filtered_sources = _select_priority_pathway_sources(
             source_table, priority_pathways
         )
 
-        result = sbml_dfs_utils._summarize_source_occurrence(filtered_sources, binarize)
+        result = _summarize_source_occurrence(filtered_sources, binarize)
 
         if include_missing:
             # Get the reference table (all entities of this type)
@@ -1442,7 +1471,7 @@ class SBML_dfs:
             else:
                 reference_table = self.get_table(entity_type, {SCHEMA_DEFS.ID})
 
-            result = sbml_dfs_utils.add_missing_ids_column(result, reference_table)
+            result = add_missing_ids_column(result, reference_table)
 
         return result
 
@@ -1482,7 +1511,7 @@ class SBML_dfs:
         else:
             entity_table = self.get_table(entity_type)
 
-        all_sources_table = source.unnest_sources(entity_table)
+        all_sources_table = unnest_sources(entity_table)
 
         return all_sources_table
 
@@ -1514,7 +1543,7 @@ class SBML_dfs:
             return pd.Series([], name="total_counts")
 
         source_total_counts = all_sources_table.value_counts(
-            source.SOURCE_SPEC.PATHWAY_ID
+            SOURCE_SPEC.PATHWAY_ID
         ).rename("total_counts")
 
         return source_total_counts
@@ -1534,7 +1563,7 @@ class SBML_dfs:
             **{
                 SBML_DFS_METHOD_DEFS.SPECIES_TYPE: lambda d: d[
                     SBML_DFS.S_IDENTIFIERS
-                ].apply(sbml_dfs_utils.species_type_types)
+                ].apply(species_type_types)
             }
         )
 
@@ -1665,7 +1694,7 @@ class SBML_dfs:
 
         # create a dataframe of all identifiers for the select entities
         # Use unnest_identifiers for efficient vectorized operation
-        all_ids = sbml_dfs_utils.unnest_identifiers(
+        all_ids = unnest_identifiers(
             entity_table, schema[entity_type][SCHEMA_DEFS.ID]
         ).reset_index()
 
@@ -2004,7 +2033,7 @@ class SBML_dfs:
             matching_reaction_species[SBML_DFS.R_ID].isin(cross_compartment_rids)
         ]
 
-        rxn_eqtn_cross_compartment = sbml_dfs_utils.create_reaction_formula_series(
+        rxn_eqtn_cross_compartment = create_reaction_formula_series(
             cross_compartment_data,
             self.reactions,
             species_name_col=SBML_DFS.SC_NAME,
@@ -2028,7 +2057,7 @@ class SBML_dfs:
                 self.compartments, left_on=SBML_DFS.C_ID, right_index=True
             ).merge(self.species, left_on=SBML_DFS.S_ID, right_index=True)
 
-            rxn_eqtn_within_compartment = sbml_dfs_utils.create_reaction_formula_series(
+            rxn_eqtn_within_compartment = create_reaction_formula_series(
                 within_compartment_data,
                 self.reactions,
                 species_name_col=SBML_DFS.S_NAME,
@@ -2162,7 +2191,7 @@ class SBML_dfs:
             Modifies the SBML_dfs object in-place
         """
 
-        unused_entities = sbml_dfs_utils.find_unused_entities(self)
+        unused_entities = find_unused_entities(self)
 
         for k, v in unused_entities.items():
             self.remove_entities(k, v, remove_references=False)
@@ -2206,7 +2235,7 @@ class SBML_dfs:
         """
         # validate inputs
 
-        entity_type = utils.infer_entity_type(id_table)
+        entity_type = infer_entity_type(id_table)
         entity_table = self.get_table(entity_type, required_attributes={SCHEMA_DEFS.ID})
         entity_pk = self.schema[entity_type][SCHEMA_DEFS.PK]
 
@@ -2294,7 +2323,7 @@ class SBML_dfs:
         Display a formatted summary of the SBML_dfs model.
 
         This method chains together get_summary(), format_sbml_dfs_summary(),
-        and utils.show() to provide a convenient way to display network statistics.
+        and show() to provide a convenient way to display network statistics.
 
         Returns
         -------
@@ -2306,8 +2335,8 @@ class SBML_dfs:
         >>> sbml_dfs.show_network_summary()
         """
         summary_stats = self.get_summary()
-        summary_table = sbml_dfs_utils.format_sbml_dfs_summary(summary_stats)
-        utils.show(summary_table, max_rows=50)
+        summary_table = format_sbml_dfs_summary(summary_stats)
+        show(summary_table, max_rows=50)
 
     def species_status(self, s_id: str) -> pd.DataFrame:
         """
@@ -2400,7 +2429,7 @@ class SBML_dfs:
         path : str
             Path where to save the pickle file
         """
-        utils.save_pickle(path, self)
+        save_pickle(path, self)
 
     def validate(self):
         """
@@ -2540,7 +2569,7 @@ class SBML_dfs:
         keep_species_data: Union[bool, str],
         keep_reactions_data: Union[bool, str],
         extra_columns: dict[str, list[str]],
-        model_source: source.Source,
+        model_source: Source,
     ) -> "SBML_dfs":
         """
         Assemble the final SBML_dfs object.
@@ -2634,8 +2663,8 @@ class SBML_dfs:
         else:
             raise ValueError(f"Invalid reference type: {reference_type}")
 
-        updated_reaction_species = sbml_dfs_utils.add_sbo_role(updated_reaction_species)
-        underspecified_reactions = sbml_dfs_utils.find_underspecified_reactions(
+        updated_reaction_species = add_sbo_role(updated_reaction_species)
+        underspecified_reactions = find_underspecified_reactions(
             updated_reaction_species
         )
 
@@ -3093,7 +3122,7 @@ class SBML_dfs:
             r_id index contains duplicates
             r_id not in reactions table
         """
-        sbml_dfs_utils._validate_matching_data(reactions_data_table, self.reactions)
+        _validate_matching_data(reactions_data_table, self.reactions)
 
     def _validate_sources(self):
         """
@@ -3131,7 +3160,7 @@ class SBML_dfs:
             s_id index contains duplicates
             s_id not in species table
         """
-        sbml_dfs_utils._validate_matching_data(species_data_table, self.species)
+        _validate_matching_data(species_data_table, self.species)
 
     def _validate_table(self, table_name: str) -> None:
         """
@@ -3152,4 +3181,4 @@ class SBML_dfs:
         """
         table_data = getattr(self, table_name)
 
-        sbml_dfs_utils.validate_sbml_dfs_table(table_data, table_name)
+        validate_sbml_dfs_table(table_data, table_name)

@@ -2,10 +2,108 @@ import logging
 from types import SimpleNamespace
 from typing import Dict
 
-from napistu.constants import ONTOLOGIES
-from napistu.ontologies._validation import SpeciesTypeOntologyMapping
+from pandas import DataFrame
 
 logger = logging.getLogger(__name__)
+
+
+ONTOLOGIES = SimpleNamespace(
+    BIGG_METABOLITE="bigg_metabolite",
+    BIORXIV="biorxiv",
+    CHEBI="chebi",
+    CHEMSPIDER="chemspider",
+    CORUM="corum",  # protein complexes
+    DRUGBANK="drugbank",
+    DOI="doi",  # doi.org digital object identifiers
+    DX_DOI="dx_doi",  # dx.doi.org digital object identifiers
+    EC_CODE="ec-code",  # enzyme commission codes
+    EBI_REFSEQ="ebi_refseq",  # ebi DNA reference sequences
+    ENSEMBL_GENE="ensembl_gene",
+    ENSEMBL_GENE_VERSION="ensembl_gene_version",
+    ENSEMBL_TRANSCRIPT="ensembl_transcript",
+    ENSEMBL_TRANSCRIPT_VERSION="ensembl_transcript_version",
+    ENSEMBL_PROTEIN="ensembl_protein",
+    ENSEMBL_PROTEIN_VERSION="ensembl_protein_version",
+    ENVIPATH="envipath",  # microbial environmental transformation pathways
+    GENE_NAME="gene_name",
+    GENOME_NET="genome_net",
+    GO="go",  # gene ontology
+    GUIDETOPHARMACOLOGY="guidetopharmacology",
+    INCHIKEY="inchikey",  # hashed chemical structure
+    INTACT="intact",  # intact protein interactions
+    KEGG="kegg",
+    KEGG_DRUG="kegg.drug",
+    MIRBASE="mirbase",  # microRNAs
+    MATRIXDB_BIOMOLECULE="matrixdb_biomolecule",  # extracellular matrix molecules and interactions
+    MATRIXDB_MOLECULE_CLASS="matrixdb_molecule_class",  # extracellular matrix molecules and interactions
+    MDPI="mdpi",  # mdpi journal articles
+    NCBI_BOOKS="ncbi_books",
+    NCBI_ENTREZ_GENE="ncbi_entrez_gene",
+    NCBI_ENTREZ_PCCOMPOUND="ncbi_entrez_pccompound",  # pubchem inchikeys
+    NCBI_REFSEQ="ncbi_refseq",  # ncbi reference sequences
+    NCI_THESAURUS="nci_thesaurus",
+    OLS="ols",  # ontology of ontologies
+    PHAROS="pharos",  # pharos gene summaries
+    PHOSPHOSITE="phosphosite",  # phosphosite.org kinase and ligand interactions
+    PUBCHEM="pubchem",
+    PUBMED="pubmed",
+    REACTOME="reactome",
+    RHEA="rhea",  # curated metabolic reactions
+    RNACENTRAL="rnacentral",
+    SGC="sgc",  # structural genomics consortium
+    SGD="sgd",  # saccharomyces genome database
+    SIGNOR="signor",  # signaling pathways
+    SMILES="smiles",  # molecular structure
+    SYMBOL="symbol",
+    URL="url",
+    UNIPROT="uniprot",
+    WIKIPATHWAYS="wikipathways",
+)
+
+ONTOLOGIES_LIST = list(ONTOLOGIES.__dict__.values())
+
+ONTOLOGY_SPECIES_ALIASES = {
+    ONTOLOGIES.NCBI_ENTREZ_GENE: {"ncbigene", "ncbi_gene"},
+    ONTOLOGIES.ENSEMBL_GENE: {"ensembl_gene_id"},
+    ONTOLOGIES.UNIPROT: {"Uniprot"},
+    ONTOLOGIES.CORUM: {"CORUM"},
+    ONTOLOGIES.SIGNOR: {"SIGNOR"},
+}
+
+# rules for specific ontologies
+
+# refere to ontology by name rather than using the IDENTIFIERS namespace to avoid circular imports
+ONTOLOGY_PRIORITIES = DataFrame(
+    [
+        {"ontology": ONTOLOGIES.REACTOME, "ontology_rank": 1},
+        {"ontology": ONTOLOGIES.ENSEMBL_GENE, "ontology_rank": 2},
+        {"ontology": ONTOLOGIES.CHEBI, "ontology_rank": 3},
+        {"ontology": ONTOLOGIES.UNIPROT, "ontology_rank": 4},
+        {"ontology": ONTOLOGIES.GO, "ontology_rank": 5},
+    ]
+)
+
+ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY = {
+    "G": ONTOLOGIES.ENSEMBL_GENE,
+    "T": ONTOLOGIES.ENSEMBL_TRANSCRIPT,
+    "P": ONTOLOGIES.ENSEMBL_PROTEIN,
+}
+
+ENSEMBL_MOLECULE_TYPES_FROM_ONTOLOGY = {
+    ONTOLOGIES.ENSEMBL_GENE: "G",
+    ONTOLOGIES.ENSEMBL_TRANSCRIPT: "T",
+    ONTOLOGIES.ENSEMBL_PROTEIN: "P",
+}
+
+ENSEMBL_SPECIES_FROM_CODE = {"MUS": "Mus musculus"}
+ENSEMBL_SPECIES_TO_CODE = {"Mus musculus": "MUS"}
+
+ENSEMBL_PREFIX_TO_ONTOLOGY = {
+    "ENSG": ONTOLOGIES.ENSEMBL_GENE,
+    "ENST": ONTOLOGIES.ENSEMBL_TRANSCRIPT,
+    "ENSP": ONTOLOGIES.ENSEMBL_PROTEIN,
+}
+
 
 # Valid ontologies that can be interconverted
 INTERCONVERTIBLE_GENIC_ONTOLOGIES = {
@@ -215,6 +313,97 @@ SPECIES_TYPE_ONTOLOGIES = {
 # if the ontology's associated with these categories are seen then other categories are ignored
 PRIORITIZED_SPECIES_TYPES = {SPECIES_TYPES.DRUG, SPECIES_TYPES.COMPLEX}
 
-# Validate the mapping and create the flattened lookup at module load time
-validated_mapping = SpeciesTypeOntologyMapping(mappings=SPECIES_TYPE_ONTOLOGIES)
-ONTOLOGY_TO_SPECIES_TYPE = validated_mapping.create_ontology_to_species_type_mapping()
+# Ontology to URL map
+ONTOLOGY_MAP = SimpleNamespace(URL="url", ID_REGEX="id_regex")
+
+ONTOLOGY_TO_URL_MAP = {
+    ONTOLOGIES.BIGG_METABOLITE: {
+        ONTOLOGY_MAP.URL: "http://identifiers.org/bigg.metabolite/{identifier}",
+        ONTOLOGY_MAP.ID_REGEX: None,
+    },
+    ONTOLOGIES.CHEBI: {
+        ONTOLOGY_MAP.URL: "http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:{identifier}",
+        ONTOLOGY_MAP.ID_REGEX: "^[0-9]+$",
+    },
+    ONTOLOGIES.CHEMSPIDER: {
+        ONTOLOGY_MAP.URL: "https://www.chemspider.com/{identifier}",
+        ONTOLOGY_MAP.ID_REGEX: "^[0-9]+$",
+    },
+    ONTOLOGIES.DOI: {
+        ONTOLOGY_MAP.URL: "https://doi.org/{identifier}",
+        ONTOLOGY_MAP.ID_REGEX: None,
+    },
+    ONTOLOGIES.DX_DOI: {
+        ONTOLOGY_MAP.URL: "https://dx.doi.org/{identifier}",
+        ONTOLOGY_MAP.ID_REGEX: r"^[0-9]+\.[0-9]+$",
+    },
+    ONTOLOGIES.EC_CODE: {
+        ONTOLOGY_MAP.URL: "https://identifiers.org/ec-code/{identifier}",
+        ONTOLOGY_MAP.ID_REGEX: "^[0-9]+\\.[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+    },
+    ONTOLOGIES.ENVIPATH: {
+        ONTOLOGY_MAP.URL: "http://identifiers.org/envipath/{identifier}",
+        ONTOLOGY_MAP.ID_REGEX: None,
+    },
+    ONTOLOGIES.GO: {
+        ONTOLOGY_MAP.URL: "https://www.ebi.ac.uk/QuickGO/term/{identifier}",
+        ONTOLOGY_MAP.ID_REGEX: "^GO:[0-9]{7}$",
+    },
+    ONTOLOGIES.MATRIXDB_BIOMOLECULE: {
+        ONTOLOGY_MAP.URL: "http://matrixdb.univ-lyon1.fr/cgi-bin/current/newPort?type=biomolecule&value={identifier}",
+        ONTOLOGY_MAP.ID_REGEX: "^[0-9A-Za-z]+$",
+    },
+    ONTOLOGIES.MATRIXDB_MOLECULE_CLASS: {
+        ONTOLOGY_MAP.URL: "http://matrixdb.univ-lyon1.fr/cgi-bin/current/newPort?type=biomolecule&value={identifier}",
+        ONTOLOGY_MAP.ID_REGEX: "^[0-9A-Za-z]+$",
+    },
+    ONTOLOGIES.MDPI: {
+        ONTOLOGY_MAP.URL: "https://www.mdpi.com/{identifier}",
+        ONTOLOGY_MAP.ID_REGEX: None,
+    },
+    ONTOLOGIES.NCBI_BOOKS: {
+        ONTOLOGY_MAP.URL: "http://www.ncbi.nlm.nih.gov/books/{identifier}/",
+        ONTOLOGY_MAP.ID_REGEX: "^[0-9A-Z]+$",
+    },
+    ONTOLOGIES.NCBI_ENTREZ_GENE: {
+        ONTOLOGY_MAP.URL: "https://www.ncbi.nlm.nih.gov/gene/{identifier}",
+        ONTOLOGY_MAP.ID_REGEX: "^[0-9]+$",
+    },
+    ONTOLOGIES.NCBI_ENTREZ_PCCOMPOUND: {
+        ONTOLOGY_MAP.URL: "http://www.ncbi.nlm.nih.gov/sites/entrez?cmd=search&db=pccompound&term={identifier}",
+        ONTOLOGY_MAP.ID_REGEX: "^[A-Z]{14}\\-[A-Z]{10}\\-[A-Z]{1}$",
+    },
+    ONTOLOGIES.NCI_THESAURUS: {
+        ONTOLOGY_MAP.URL: "https://ncithesaurus.nci.nih.gov/ncitbrowser/ConceptReport.jsp?dictionary=NCI_Thesaurus&code={identifier}",
+        ONTOLOGY_MAP.ID_REGEX: "^[A-Z][0-9]+$",
+    },
+    ONTOLOGIES.PHOSPHOSITE: {
+        ONTOLOGY_MAP.URL: "https://www.phosphosite.org/siteAction.action?id={identifier}",
+        ONTOLOGY_MAP.ID_REGEX: "^[0-9]+$",
+    },
+    ONTOLOGIES.PUBCHEM: {
+        ONTOLOGY_MAP.URL: "http://pubchem.ncbi.nlm.nih.gov/compound/{identifier}",
+        ONTOLOGY_MAP.ID_REGEX: "^[0-9]+$",
+    },
+    ONTOLOGIES.PUBMED: {
+        ONTOLOGY_MAP.URL: "http://www.ncbi.nlm.nih.gov/pubmed/{identifier}",
+        ONTOLOGY_MAP.ID_REGEX: "^[0-9]+$",
+    },
+    ONTOLOGIES.REACTOME: {
+        ONTOLOGY_MAP.URL: "https://reactome.org/content/detail/{identifier}",
+        ONTOLOGY_MAP.ID_REGEX: "^R\\-[A-Z]{3}\\-[0-9]{7}$",
+    },
+    ONTOLOGIES.RNACENTRAL: {
+        ONTOLOGY_MAP.URL: "https://rnacentral.org/rna/{identifier}",
+        ONTOLOGY_MAP.ID_REGEX: None,
+    },
+    ONTOLOGIES.SGC: {
+        ONTOLOGY_MAP.URL: "https://www.thesgc.org/structures/structure_description/{identifier}/",
+        ONTOLOGY_MAP.ID_REGEX: "^[0-9A-Z]+$",
+    },
+    ONTOLOGIES.UNIPROT: {
+        ONTOLOGY_MAP.URL: "https://purl.uniprot.org/uniprot/{identifier}",
+        ONTOLOGY_MAP.ID_REGEX: "^[A-Z0-9]+$",
+    },
+    ONTOLOGIES.URL: {ONTOLOGY_MAP.URL: "{identifier}", ONTOLOGY_MAP.ID_REGEX: None},
+}

@@ -18,7 +18,6 @@ except ImportError:
         print(obj)
 
 
-from napistu import identifiers, utils
 from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS,
@@ -28,7 +27,6 @@ from napistu.constants import (
     MINI_SBO_FROM_NAME,
     MINI_SBO_NAME_TO_POLARITY,
     MINI_SBO_TO_NAME,
-    ONTOLOGIES,
     POLARITY_TO_SYMBOL,
     SBML_DFS,
     SBML_DFS_SCHEMA,
@@ -40,6 +38,7 @@ from napistu.constants import (
     VALID_SBO_TERM_NAMES,
     VALID_SBO_TERMS,
 )
+from napistu.identifiers import Identifiers
 from napistu.ingestion.constants import (
     COMPARTMENTS_GO_TERMS,
     DEFAULT_PRIORITIZED_PATHWAYS,
@@ -50,12 +49,17 @@ from napistu.ingestion.constants import (
     INTERACTION_EDGELIST_OPTIONAL_VARS,
     VALID_COMPARTMENTS,
 )
+from napistu.ontologies._validation import ONTOLOGY_TO_SPECIES_TYPE
 from napistu.ontologies.constants import (
-    ONTOLOGY_TO_SPECIES_TYPE,
+    ONTOLOGIES,
     PRIORITIZED_SPECIES_TYPES,
     SPECIES_TYPE_PLURAL,
     SPECIES_TYPES,
 )
+from napistu.ontologies.standardization import create_uri_url, format_uri
+from napistu.utils.display_utils import show
+from napistu.utils.pd_utils import infer_entity_type, match_pd_vars
+from napistu.utils.string_utils import extract_regex_match, safe_capitalize
 
 logger = logging.getLogger(__name__)
 
@@ -413,8 +417,8 @@ def display_post_consensus_checks(checks_results: dict) -> None:
     """
     for entity_type, entity_results in checks_results.items():
         for check_type, cooccurrences in entity_results.items():
-            utils.show(f"Entity type: {entity_type}, Check type: {check_type}")
-            utils.show(cooccurrences)
+            show(f"Entity type: {entity_type}, Check type: {check_type}")
+            show(cooccurrences)
 
 
 def find_underspecified_reactions(
@@ -716,7 +720,7 @@ def format_sbml_dfs_summary(data):
         pct = count / total_species * 100
         summary_data.append(
             [
-                f"- {utils.safe_capitalize(SPECIES_TYPE_PLURAL[species_type])}",
+                f"- {safe_capitalize(SPECIES_TYPE_PLURAL[species_type])}",
                 f"{count:,} ({pct:.1f}%)",
             ]
         )
@@ -805,7 +809,7 @@ def get_current_max_id(sbml_dfs_table: pd.DataFrame) -> int:
 
 
 def id_formatter(id_values: Iterable[Any], id_type: str, id_len: int = 8) -> list[str]:
-    id_prefix = utils.extract_regex_match("^([a-zA-Z]+)_id$", id_type).upper()
+    id_prefix = extract_regex_match("^([a-zA-Z]+)_id$", id_type).upper()
     return [id_prefix + format(x, f"0{id_len}d") for x in id_values]
 
 
@@ -894,7 +898,7 @@ def species_type_types(
 
     Parameters
     ----------
-    x : identifiers.Identifiers
+    x : Identifiers
         The identifiers object to assign a species type to
     ontology_to_species_type : dict
         The mapping of ontologies to species types
@@ -908,12 +912,12 @@ def species_type_types(
 
     Examples
     --------
-    >>> identifiers = identifiers.Identifiers([{'ontology': 'CHEBI', 'identifier': '123456', 'bqb': 'BQB.IS'}])
+    >>> identifiers = Identifiers([{'ontology': 'CHEBI', 'identifier': '123456', 'bqb': 'BQB.IS'}])
     >>> species_type_types(identifiers)
     'metabolite'
     """
 
-    if isinstance(x, identifiers.Identifiers):
+    if isinstance(x, Identifiers):
 
         # Check for HAS_PART first (indicates complex)
         bqbs = x.get_all_bqbs()
@@ -990,8 +994,8 @@ def stub_compartments(
 
     stubbed_compartment_id = COMPARTMENTS_GO_TERMS[stubbed_compartment]
 
-    formatted_uri = identifiers.format_uri(
-        uri=identifiers.create_uri_url(
+    formatted_uri = format_uri(
+        uri=create_uri_url(
             ontology=ONTOLOGIES.GO,
             identifier=stubbed_compartment_id,
         ),
@@ -1001,7 +1005,7 @@ def stub_compartments(
     compartments_df = pd.DataFrame(
         {
             SBML_DFS.C_NAME: [stubbed_compartment],
-            SBML_DFS.C_IDENTIFIERS: [identifiers.Identifiers([formatted_uri])],
+            SBML_DFS.C_IDENTIFIERS: [Identifiers([formatted_uri])],
         }
     )
     compartments_df.index = id_formatter([0], SBML_DFS.C_ID)  # type: ignore
@@ -1033,12 +1037,12 @@ def unnest_identifiers(id_table: pd.DataFrame, id_var: str) -> pd.DataFrame:
         DataFrame with one row per identifier, MultiIndex with original index + entry
     """
     # Validate inputs
-    utils.match_pd_vars(id_table, {id_var}).assert_present()
+    match_pd_vars(id_table, {id_var}).assert_present()
 
     N_invalid_ids = sum(id_table[id_var].isna())
     if N_invalid_ids != 0:
-        utils.show("Rows with missing identifiers:")
-        utils.show(id_table.loc[id_table[id_var].isna(), id_var])
+        show("Rows with missing identifiers:")
+        show(id_table.loc[id_table[id_var].isna(), id_var])
         raise ValueError(
             f'{N_invalid_ids} entries in "id_table" were missing identifiers'
         )
@@ -1089,11 +1093,6 @@ def validate_sbml_dfs_table(table_data: pd.DataFrame, table_name: str) -> None:
 
     table_schema = SBML_DFS_SCHEMA.SCHEMA[table_name]
     _perform_sbml_dfs_table_validation(table_data, table_schema, table_name)
-
-
-# =============================================================================
-# PRIVATE FUNCTIONS (ALPHABETICAL ORDER)
-# =============================================================================
 
 
 def _add_edgelist_defaults(
@@ -2062,13 +2061,11 @@ def _summarize_ontology_occurrence(
         a table with entities as rows and ontologies as columns
     """
 
-    entity_type = utils.infer_entity_type(df)
+    entity_type = infer_entity_type(df)
     pk = SBML_DFS_SCHEMA.SCHEMA[entity_type][SCHEMA_DEFS.PK]
 
     required_vars = {pk, SOURCE_SPEC.ENTRY} | IDENTIFIERS_REQUIRED_VARS
-    utils.match_pd_vars(
-        df, req_vars=set(required_vars), allow_series=False
-    ).assert_present()
+    match_pd_vars(df, req_vars=set(required_vars), allow_series=False).assert_present()
 
     if stratify_by_bqb:
         if allow_col_multindex:
@@ -2210,7 +2207,7 @@ def _summarize_source_occurrence(
 
     """
 
-    entity_type = utils.infer_entity_type(df)
+    entity_type = infer_entity_type(df)
     pk = SBML_DFS_SCHEMA.SCHEMA[entity_type][SCHEMA_DEFS.PK]
 
     expected_multindex = [pk, SOURCE_SPEC.ENTRY]
@@ -2342,5 +2339,5 @@ def _validate_sbo_values(sbo_series: pd.Series, validate: str = "names") -> None
         invalid_counts = invalid_sbo_terms.value_counts(sbo_series.name).to_frame("N")
         if not isinstance(invalid_counts, pd.DataFrame):
             raise TypeError("invalid_counts must be a pandas DataFrame")
-        utils.show(invalid_counts)
+        show(invalid_counts)
         raise ValueError("Some reaction species have unusable SBO terms")

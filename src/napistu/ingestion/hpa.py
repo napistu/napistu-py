@@ -5,8 +5,8 @@ import logging
 import fsspec
 import pandas as pd
 
-from napistu.constants import ONTOLOGIES
 from napistu.ingestion.constants import PROTEINATLAS_DEFS, PROTEINATLAS_SUBCELL_LOC_URL
+from napistu.ontologies.constants import ONTOLOGIES
 from napistu.utils.io_utils import download_wget
 
 logger = logging.getLogger(__name__)

@@ -9,7 +9,6 @@ from napistu import identifiers, sbml_dfs_core, sbml_dfs_utils, utils
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
-    ONTOLOGIES,
     SBML_DFS,
 )
 from napistu.ingestion.constants import (
@@ -23,6 +22,7 @@ from napistu.ontologies.constants import (
     GENODEXITO_DEFS,
     INTERCONVERTIBLE_GENIC_ONTOLOGIES,
     NAME_ONTOLOGIES,
+    ONTOLOGIES,
     PROTEIN_ONTOLOGIES,
 )
 from napistu.ontologies.genodexito import Genodexito

@@ -28,7 +28,6 @@ from napistu.constants import (
     MINI_SBO_NAME_TO_POLARITY,
     MINI_SBO_TO_NAME,
     NAPISTU_EDGELIST,
-    ONTOLOGIES,
     SBML_DFS,
 )
 from napistu.network import ng_utils, paths
@@ -43,6 +42,7 @@ from napistu.network.constants import (
     NET_POLARITY,
     VALID_NEIGHBORHOOD_NETWORK_TYPES,
 )
+from napistu.ontologies.constants import ONTOLOGIES
 
 logger = logging.getLogger(__name__)
 

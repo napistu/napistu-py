@@ -10,14 +10,14 @@ import libsbml
 import pandas as pd
 from pydantic import RootModel, field_validator
 
-from napistu import consensus, identifiers, sbml_dfs_utils, source, utils
 from napistu.constants import (
+    BIOLOGICAL_QUALIFIER_CODES,
     BQB,
-    ONTOLOGIES,
     SBML_DFS,
     SBML_DFS_SCHEMA,
     SCHEMA_DEFS,
 )
+from napistu.identifiers import Identifiers
 from napistu.ingestion.constants import (
     COMPARTMENT_ALIASES,
     COMPARTMENTS_GO_TERMS,
@@ -25,6 +25,16 @@ from napistu.ingestion.constants import (
     SBML_DEFS,
     VALID_COMPARTMENTS,
 )
+from napistu.ontologies.constants import ONTOLOGIES
+from napistu.ontologies.standardization import (
+    create_uri_url,
+    format_uri,
+    is_known_unsupported_uri,
+)
+from napistu.sbml_dfs_utils import id_formatter, stub_compartments
+from napistu.source import Source
+from napistu.utils.display_utils import show
+from napistu.utils.pd_utils import update_pathological_names
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +184,7 @@ class SBML:
                 ]
                 error_log = error_log[headers]
 
-            utils.show(error_log, headers=headers)
+            show(error_log, headers=headers)
 
             return None
 
@@ -205,7 +215,7 @@ class SBML:
 
         model_summaries_dat = pd.DataFrame(model_summaries, index=[0]).T
 
-        return utils.show(model_summaries_dat)  # type: ignore
+        return show(model_summaries_dat)  # type: ignore
 
     def _define_compartments(
         self, compartment_aliases_dict: dict | None = None
@@ -251,8 +261,8 @@ class SBML:
                     {
                         SBML_DFS.C_ID: comp.getId(),
                         SBML_DFS.C_NAME: comp.getName(),
-                        SBML_DFS.C_IDENTIFIERS: identifiers.cv_to_Identifiers(comp),
-                        SBML_DFS.C_SOURCE: source.Source.empty(),
+                        SBML_DFS.C_IDENTIFIERS: _cv_to_Identifiers(comp),
+                        SBML_DFS.C_SOURCE: Source.empty(),
                     }
                 )
 
@@ -260,7 +270,7 @@ class SBML:
             logger.warning(
                 "No compartments were found in the SBML model. using default compartment GO CELLULAR_COMPONENT"
             )
-            return sbml_dfs_utils.stub_compartments(with_source=True)
+            return stub_compartments(with_source=True)
 
         return pd.DataFrame(compartments).set_index(SBML_DFS.C_ID)
 
@@ -293,8 +303,8 @@ class SBML:
                 SBML_DFS.SC_ID: spec.getId(),
                 SBML_DFS.SC_NAME: spec.getName(),
                 SBML_DFS.C_ID: spec.getCompartment(),
-                SBML_DFS.S_IDENTIFIERS: identifiers.cv_to_Identifiers(spec),
-                SBML_DFS.SC_SOURCE: source.Source.empty(),
+                SBML_DFS.S_IDENTIFIERS: _cv_to_Identifiers(spec),
+                SBML_DFS.SC_SOURCE: Source.empty(),
             }
 
             comp_species.append(spec_dict)
@@ -304,7 +314,7 @@ class SBML:
         comp_species.extend(fbc_gene_products)
 
         comp_species_df = pd.DataFrame(comp_species).set_index(SBML_DFS.SC_ID)
-        comp_species_df[SBML_DFS.SC_NAME] = utils.update_pathological_names(
+        comp_species_df[SBML_DFS.SC_NAME] = update_pathological_names(
             comp_species_df[SBML_DFS.SC_NAME], "SC"
         )
 
@@ -315,7 +325,7 @@ class SBML:
 
         # if all entries are missing then c_id was likely stubbed with sbml_dfs_utils.stub_compartments()
         if all(comp_species_df[SBML_DFS.C_ID].isnull()):
-            default_cid = sbml_dfs_utils.stub_compartments().index[0]
+            default_cid = stub_compartments().index[0]
             comp_species_df[SBML_DFS.C_ID] = default_cid
 
         return comp_species_df
@@ -339,8 +349,8 @@ class SBML:
                     # use getLabel() to accomendate sbml model (e.g. HumanGEM.xml) with no fbc:name attribute
                     # Recon3D.xml has both fbc:label and fbc:name attributes, with gene name in fbc:nam
                     SBML_DFS.C_ID: None,
-                    SBML_DFS.S_IDENTIFIERS: identifiers.cv_to_Identifiers(gene_product),
-                    SBML_DFS.SC_SOURCE: source.Source.empty(),
+                    SBML_DFS.S_IDENTIFIERS: _cv_to_Identifiers(gene_product),
+                    SBML_DFS.SC_SOURCE: Source.empty(),
                 }
 
                 fbc_gene_products.append(gene_dict)
@@ -384,7 +394,7 @@ class SBML:
             reaction_species_df = (
                 reaction_species_df.reset_index(drop=True)
                 .assign(
-                    rsc_id=sbml_dfs_utils.id_formatter(
+                    rsc_id=id_formatter(
                         range(reaction_species_df.shape[0]), SBML_DFS.RSC_ID
                     )
                 )
@@ -415,6 +425,9 @@ class SBML:
             - The second DataFrame represents compartmentalized species.
         """
 
+        # local import to avoid circular imports
+        from napistu.consensus import _reduce_to_consensus_ids
+
         SPECIES_SCHEMA = SBML_DFS_SCHEMA.SCHEMA[SBML_DFS.SPECIES]
         CSPECIES_SCHEMA = SBML_DFS_SCHEMA.SCHEMA[SBML_DFS.COMPARTMENTALIZED_SPECIES]
         SPECIES_VARS = SPECIES_SCHEMA[SCHEMA_DEFS.VARS]
@@ -428,7 +441,7 @@ class SBML:
         # find unique species and create a table
         consensus_species_df = comp_species_df.copy()
         consensus_species_df.index.names = [SBML_DFS.S_ID]
-        consensus_species, species_lookup = consensus._reduce_to_consensus_ids(
+        consensus_species, species_lookup = _reduce_to_consensus_ids(
             consensus_species_df,
             # note that this is an incomplete schema because consensus_species_df isn't a
             # normal species table
@@ -449,7 +462,7 @@ class SBML:
             [SBML_DFS.SC_NAME, SBML_DFS.C_ID], axis=1
         )
         consensus_species[SBML_DFS.S_SOURCE] = [
-            source.Source.empty() for x in range(0, consensus_species.shape[0])
+            Source.empty() for x in range(0, consensus_species.shape[0])
         ]
 
         species = consensus_species[SPECIES_VARS]
@@ -557,8 +570,8 @@ class SBML_reaction:
         reaction_dict = {
             SBML_DFS.R_ID: sbml_reaction.getId(),
             SBML_DFS.R_NAME: sbml_reaction.getName(),
-            SBML_DFS.R_IDENTIFIERS: identifiers.cv_to_Identifiers(sbml_reaction),
-            SBML_DFS.R_SOURCE: source.Source.empty(),
+            SBML_DFS.R_IDENTIFIERS: _cv_to_Identifiers(sbml_reaction),
+            SBML_DFS.R_SOURCE: Source.empty(),
             SBML_DFS.R_ISREVERSIBLE: sbml_reaction.getReversible(),
         }
 
@@ -663,40 +676,151 @@ def sbml_dfs_from_sbml(
     return self
 
 
-def _validate_species_consistency(species_df, compartmentalized_species_df):
-    """Validate consistency between species and compartmentalized species tables.
+def _cv_to_Identifiers(
+    entity: libsbml.Species | libsbml.Reaction | libsbml.Compartment,
+    strict: bool = False,
+) -> Identifiers:
+    """
+    Convert an SBML controlled vocabulary element into a cpr Identifiers object.
 
     Parameters
     ----------
-    species_df : pd.DataFrame
-        DataFrame of species with s_id as index
-    compartmentalized_species_df : pd.DataFrame
-        DataFrame of compartmentalized species with s_id column
+    entity: libsbml.Species
+        An entity (species, reaction, compartment, ...) with attached CV terms
+    strict: bool, default True
+        If True, log full tracebacks for parsing failures.
+        If False, use simple warning messages.
 
-    Raises
-    ------
-    ValueError
-        If there are inconsistencies between the two tables
+    Returns
+    -------
+    Identifiers
+        An Identifiers object containing the CV terms
     """
-    species_ids_in_species = set(species_df.index)
-    species_ids_in_cspecies = set(compartmentalized_species_df[SBML_DFS.S_ID])
 
-    missing_in_species = species_ids_in_cspecies - species_ids_in_species
-    missing_in_cspecies = species_ids_in_species - species_ids_in_cspecies
+    cv_list = list()
+    for cv in entity.getCVTerms():
+        if cv.getQualifierType() != libsbml.BIOLOGICAL_QUALIFIER:
+            # only care about biological annotations
+            continue
 
-    if missing_in_species:
-        raise ValueError(
-            f"Species extraction validation error: {len(missing_in_species)} species IDs "
-            f"found in compartmentalized_species but missing from species table. "
-            f"Missing species: {sorted(list(missing_in_species))[:10]}"
+        biological_qualifier_type = BIOLOGICAL_QUALIFIER_CODES[
+            cv.getBiologicalQualifierType()
+        ]
+        out_list = list()
+        for i in range(cv.getNumResources()):
+            uri = cv.getResourceURI(i)
+
+            # Pre-check for known unsupported URIs
+            if is_known_unsupported_uri(uri):
+                logger.warning(f"Skipping known unsupported URI: {uri}")
+                continue
+
+            try:
+                out_list.append(
+                    format_uri(uri, biological_qualifier_type, strict=strict)
+                )
+            except NotImplementedError:
+                if strict:
+                    logger.warning("Not all identifiers resolved: ", exc_info=True)
+                else:
+                    logger.warning(f"Could not parse URI (not implemented): {uri}")
+
+        cv_list.extend(out_list)
+
+    return Identifiers([x for x in cv_list if x is not None])
+
+
+def _define_compartments_missing_cvterms(
+    comp: libsbml.Compartment, aliases: dict
+) -> dict[str, Any]:
+
+    comp_name = comp.getName()
+    mapped_compartment_key = [
+        compkey for compkey, mappednames in aliases.items() if comp_name in mappednames
+    ]
+
+    if len(mapped_compartment_key) == 0:
+        logger.warning(
+            f"No GO compartment for {comp_name} is mapped, use the generic cellular_component's GO id"
         )
 
-    if missing_in_cspecies:
-        raise ValueError(
-            f"Species extraction validation error: {len(missing_in_cspecies)} species IDs "
-            f"found in species table but missing from compartmentalized_species table. "
-            f"Missing from compartmentalized_species: {sorted(list(missing_in_cspecies))[:10]}"
-        )
+        compartment_entry = {
+            SBML_DFS.C_ID: comp.getId(),
+            SBML_DFS.C_NAME: comp.getName(),
+            SBML_DFS.C_IDENTIFIERS: Identifiers(
+                [
+                    format_uri(
+                        uri=create_uri_url(
+                            ontology=ONTOLOGIES.GO,
+                            identifier=COMPARTMENTS_GO_TERMS[GENERIC_COMPARTMENT],
+                        ),
+                        bqb=BQB.BQB_IS,
+                    )
+                ]
+            ),
+            SBML_DFS.C_SOURCE: Source.empty(),
+        }
+
+    if len(mapped_compartment_key) > 0:
+        if len(mapped_compartment_key) > 1:
+            logger.warning(
+                f"More than one GO compartments for {comp_name} are mapped, using the first one"
+            )
+
+        compartment_entry = {
+            SBML_DFS.C_ID: comp.getId(),
+            SBML_DFS.C_NAME: comp.getName(),
+            SBML_DFS.C_IDENTIFIERS: Identifiers(
+                [
+                    format_uri(
+                        uri=create_uri_url(
+                            ontology=ONTOLOGIES.GO,
+                            identifier=COMPARTMENTS_GO_TERMS[mapped_compartment_key[0]],
+                        ),
+                        bqb=BQB.IS,
+                    )
+                ]
+            ),
+            SBML_DFS.C_SOURCE: Source.empty(),
+        }
+
+    return compartment_entry
+
+
+def _extract_gene_products(association: libsbml.Association) -> list[dict]:
+    """Recursively extracts gene products from an association tree."""
+    gene_products = []
+
+    def _recursive_helper(assoc: libsbml.Association):
+        if hasattr(assoc, SBML_DEFS.REACTION_ATTR_GET_GENE_PRODUCT):
+            gene_products.append(_get_gene_product_dict(assoc))
+        elif hasattr(assoc, "getNumAssociations"):
+            for i in range(assoc.getNumAssociations()):
+                _recursive_helper(assoc.getAssociation(i))
+
+    _recursive_helper(association)
+    return gene_products
+
+
+def _get_gene_product_dict(gp):
+    """Extracts attributes of a gene product from an SBML reaction object.
+
+    Parameters
+    ----------
+    gp : libsbml.GeneProduct
+        A libsbml GeneProduct object.
+
+    Returns
+    -------
+    dict
+        A dictionary containing the gene product's ID, name, and identifiers.
+    """
+    return {
+        SBML_DFS.RSC_ID: gp.getId(),
+        SBML_DFS.SC_ID: gp.getGeneProduct(),
+        SBML_DFS.STOICHIOMETRY: 0,
+        SBML_DFS.SBO_TERM: gp.getSBOTermID(),
+    }
 
 
 def _refine_compartments(compartments_df, compartmentalized_species_df):
@@ -759,94 +883,37 @@ def _refine_compartments(compartments_df, compartmentalized_species_df):
     return used_compartments
 
 
-def _define_compartments_missing_cvterms(
-    comp: libsbml.Compartment, aliases: dict
-) -> dict[str, Any]:
-
-    comp_name = comp.getName()
-    mapped_compartment_key = [
-        compkey for compkey, mappednames in aliases.items() if comp_name in mappednames
-    ]
-
-    if len(mapped_compartment_key) == 0:
-        logger.warning(
-            f"No GO compartment for {comp_name} is mapped, use the generic cellular_component's GO id"
-        )
-
-        compartment_entry = {
-            SBML_DFS.C_ID: comp.getId(),
-            SBML_DFS.C_NAME: comp.getName(),
-            SBML_DFS.C_IDENTIFIERS: identifiers.Identifiers(
-                [
-                    identifiers.format_uri(
-                        uri=identifiers.create_uri_url(
-                            ontology=ONTOLOGIES.GO,
-                            identifier=COMPARTMENTS_GO_TERMS[GENERIC_COMPARTMENT],
-                        ),
-                        bqb=BQB.BQB_IS,
-                    )
-                ]
-            ),
-            SBML_DFS.C_SOURCE: source.Source.empty(),
-        }
-
-    if len(mapped_compartment_key) > 0:
-        if len(mapped_compartment_key) > 1:
-            logger.warning(
-                f"More than one GO compartments for {comp_name} are mapped, using the first one"
-            )
-
-        compartment_entry = {
-            SBML_DFS.C_ID: comp.getId(),
-            SBML_DFS.C_NAME: comp.getName(),
-            SBML_DFS.C_IDENTIFIERS: identifiers.Identifiers(
-                [
-                    identifiers.format_uri(
-                        uri=identifiers.create_uri_url(
-                            ontology=ONTOLOGIES.GO,
-                            identifier=COMPARTMENTS_GO_TERMS[mapped_compartment_key[0]],
-                        ),
-                        bqb=BQB.IS,
-                    )
-                ]
-            ),
-            SBML_DFS.C_SOURCE: source.Source.empty(),
-        }
-
-    return compartment_entry
-
-
-def _get_gene_product_dict(gp):
-    """Extracts attributes of a gene product from an SBML reaction object.
+def _validate_species_consistency(species_df, compartmentalized_species_df):
+    """Validate consistency between species and compartmentalized species tables.
 
     Parameters
     ----------
-    gp : libsbml.GeneProduct
-        A libsbml GeneProduct object.
+    species_df : pd.DataFrame
+        DataFrame of species with s_id as index
+    compartmentalized_species_df : pd.DataFrame
+        DataFrame of compartmentalized species with s_id column
 
-    Returns
-    -------
-    dict
-        A dictionary containing the gene product's ID, name, and identifiers.
+    Raises
+    ------
+    ValueError
+        If there are inconsistencies between the two tables
     """
-    return {
-        SBML_DFS.RSC_ID: gp.getId(),
-        SBML_DFS.SC_ID: gp.getGeneProduct(),
-        SBML_DFS.STOICHIOMETRY: 0,
-        SBML_DFS.SBO_TERM: gp.getSBOTermID(),
-    }
+    species_ids_in_species = set(species_df.index)
+    species_ids_in_cspecies = set(compartmentalized_species_df[SBML_DFS.S_ID])
 
+    missing_in_species = species_ids_in_cspecies - species_ids_in_species
+    missing_in_cspecies = species_ids_in_species - species_ids_in_cspecies
 
-def _extract_gene_products(association: libsbml.Association) -> list[dict]:
-    """Recursively extracts gene products from an association tree."""
-    gene_products = []
+    if missing_in_species:
+        raise ValueError(
+            f"Species extraction validation error: {len(missing_in_species)} species IDs "
+            f"found in compartmentalized_species but missing from species table. "
+            f"Missing species: {sorted(list(missing_in_species))[:10]}"
+        )
 
-    def _recursive_helper(assoc: libsbml.Association):
-        if hasattr(assoc, SBML_DEFS.REACTION_ATTR_GET_GENE_PRODUCT):
-            gene_products.append(_get_gene_product_dict(assoc))
-        elif hasattr(assoc, "getNumAssociations"):
-            for i in range(assoc.getNumAssociations()):
-                _recursive_helper(assoc.getAssociation(i))
-
-    _recursive_helper(association)
-    return gene_products
+    if missing_in_cspecies:
+        raise ValueError(
+            f"Species extraction validation error: {len(missing_in_cspecies)} species IDs "
+            f"found in species table but missing from compartmentalized_species table. "
+            f"Missing from compartmentalized_species: {sorted(list(missing_in_cspecies))[:10]}"
+        )

@@ -24,7 +24,7 @@ import pandas as pd
 from igraph import Graph
 from pydantic import BaseModel
 
-from napistu.constants import ONTOLOGIES, SBML_DFS
+from napistu.constants import SBML_DFS
 from napistu.genomics.constants import (
     GENESET_COLLECTION_DEFS,
     GENESET_COLLECTIONS,
@@ -41,6 +41,7 @@ from napistu.matching.species import features_to_pathway_species
 from napistu.network.constants import IGRAPH_DEFS, NAPISTU_GRAPH, NAPISTU_GRAPH_EDGES
 from napistu.network.edgelist import Edgelist
 from napistu.network.ig_utils import define_graph_universe
+from napistu.ontologies.constants import ONTOLOGIES
 from napistu.statistics.constants import ENRICHMENT_TESTS, VALID_ENRICHMENT_TESTS
 from napistu.statistics.hypothesis_testing import (
     binomial_test_vectorized,

@@ -11,7 +11,6 @@ from napistu import identifiers, utils
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
-    ONTOLOGIES,
     SBML_DFS,
     SBOTERM_NAMES,
 )
@@ -30,7 +29,10 @@ from napistu.ingestion.constants import (
 )
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.network.constants import NAPISTU_GRAPH_EDGES
-from napistu.ontologies.constants import GENODEXITO_DEFS
+from napistu.ontologies.constants import (
+    GENODEXITO_DEFS,
+    ONTOLOGIES,
+)
 from napistu.ontologies.genodexito import Genodexito
 from napistu.sbml_dfs_core import SBML_dfs
 from napistu.source import Source

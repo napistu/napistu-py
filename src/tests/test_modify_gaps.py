@@ -4,10 +4,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from napistu.constants import BQB, IDENTIFIERS, MINI_SBO_FROM_NAME, ONTOLOGIES, SBML_DFS
+from napistu.constants import BQB, IDENTIFIERS, MINI_SBO_FROM_NAME, SBML_DFS
 from napistu.identifiers import Identifiers
 from napistu.ingestion.constants import COMPARTMENTS, EXCHANGE_COMPARTMENT
 from napistu.modify import gaps
+from napistu.ontologies.constants import ONTOLOGIES
 from napistu.sbml_dfs_core import SBML_dfs
 from napistu.source import Source
 

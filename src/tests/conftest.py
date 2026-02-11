@@ -12,7 +12,7 @@ import pytest
 from igraph import Graph
 from pytest import fixture, skip
 
-from napistu import consensus, indices
+from napistu.consensus import construct_consensus_model, construct_sbml_dfs_dict
 from napistu.constants import (
     BQB,
     EXPECTED_PW_INDEX_COLUMNS,
@@ -23,6 +23,7 @@ from napistu.constants import (
     SOURCE_SPEC,
 )
 from napistu.identifiers import Identifiers
+from napistu.indices import PWIndex
 from napistu.ingestion.sbml import SBML
 from napistu.network.constants import (
     IGRAPH_DEFS,
@@ -36,6 +37,12 @@ from napistu.source import Source
 
 
 @fixture
+def test_data_path():
+    test_path = os.path.abspath(os.path.join(__file__, os.pardir))
+    return os.path.join(test_path, "test_data")
+
+
+@fixture
 def model_source_stub():
 
     source_dict = {k: "test" for k in EXPECTED_PW_INDEX_COLUMNS | {SOURCE_SPEC.MODEL}}
@@ -43,10 +50,8 @@ def model_source_stub():
 
 
 @fixture
-def sbml_path():
-    test_path = os.path.abspath(os.path.join(__file__, os.pardir))
-    sbml_path = os.path.join(test_path, "test_data", "R-HSA-1237044.sbml")
-
+def sbml_path(test_data_path):
+    sbml_path = os.path.join(test_data_path, "R-HSA-1237044.sbml")
     if not os.path.isfile(sbml_path):
         raise ValueError(f"{sbml_path} not found")
     return sbml_path
@@ -106,32 +111,26 @@ def sbml_dfs_w_data(sbml_dfs):
 
 
 @fixture
-def pw_index_metabolism():
+def pw_index_metabolism(test_data_path):
     """Create a pathway index for metabolism test data."""
-    test_path = os.path.abspath(os.path.join(__file__, os.pardir))
-    test_data = os.path.join(test_path, "test_data")
-    return indices.PWIndex(os.path.join(test_data, "pw_index_metabolism.tsv"))
+    return PWIndex(os.path.join(test_data_path, "pw_index_metabolism.tsv"))
 
 
 @fixture
 def sbml_dfs_dict_metabolism(pw_index_metabolism):
     """Create a dictionary of SBML_dfs objects from metabolism test data."""
-    return consensus.construct_sbml_dfs_dict(pw_index_metabolism)
+    return construct_sbml_dfs_dict(pw_index_metabolism)
 
 
 @fixture
 def sbml_dfs_metabolism(sbml_dfs_dict_metabolism, pw_index_metabolism):
     """Create a consensus SBML_dfs model from metabolism test data."""
-    return consensus.construct_consensus_model(
-        sbml_dfs_dict_metabolism, pw_index_metabolism
-    )
+    return construct_consensus_model(sbml_dfs_dict_metabolism, pw_index_metabolism)
 
 
 @fixture
-def sbml_dfs_glucose_metabolism(model_source_stub):
-    test_path = os.path.abspath(os.path.join(__file__, os.pardir))
-    test_data = os.path.join(test_path, "test_data")
-    sbml_path = os.path.join(test_data, "reactome_glucose_metabolism.sbml")
+def sbml_dfs_glucose_metabolism(test_data_path, model_source_stub):
+    sbml_path = os.path.join(test_data_path, "reactome_glucose_metabolism.sbml")
 
     sbml_model = SBML(sbml_path)
     sbml_dfs = SBML_dfs(sbml_model, model_source_stub)

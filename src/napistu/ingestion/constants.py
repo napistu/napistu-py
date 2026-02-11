@@ -5,11 +5,11 @@ from types import SimpleNamespace
 from typing import Dict
 
 from napistu.constants import (
-    ONTOLOGIES,
     SBML_DFS,
     SBOTERM_NAMES,
     SOURCE_SPEC,
 )
+from napistu.ontologies.constants import ONTOLOGIES
 
 # aliases and descriptions for major data sources
 

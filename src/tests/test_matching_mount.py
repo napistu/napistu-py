@@ -4,12 +4,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from napistu.constants import IDENTIFIERS, ONTOLOGIES, SBML_DFS
+from napistu.constants import IDENTIFIERS, SBML_DFS
 from napistu.matching import mount
 from napistu.matching.constants import (
     FEATURE_ID_VAR_DEFAULT,
     RESOLVE_MATCHES_AGGREGATORS,
 )
+from napistu.ontologies.constants import ONTOLOGIES
 
 
 def test_bind_wide_results(sbml_dfs_glucose_metabolism):

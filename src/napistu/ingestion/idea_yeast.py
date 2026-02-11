@@ -5,12 +5,12 @@ import logging
 
 import pandas as pd
 
-from napistu import identifiers, sbml_dfs_core, sbml_dfs_utils, utils
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
     SBML_DFS,
 )
+from napistu.identifiers import Identifiers
 from napistu.ingestion.constants import (
     DATA_SOURCE_DESCRIPTIONS,
     DATA_SOURCES,
@@ -18,7 +18,11 @@ from napistu.ingestion.constants import (
     INTERACTION_EDGELIST_DEFS,
     LATIN_SPECIES_NAMES,
 )
+from napistu.ontologies.standardization import _format_Identifiers_pubmed
+from napistu.sbml_dfs_core import SBML_dfs, sbml_dfs_from_edgelist
+from napistu.sbml_dfs_utils import stub_compartments
 from napistu.source import Source
+from napistu.utils.io_utils import download_wget
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +59,7 @@ def download_idea(target_uri: str) -> None:
     )
 
     # Use download_wget with target_filename to extract the specific file from the ZIP
-    utils.download_wget(
+    download_wget(
         IDEA_YEAST.KINETICS_URL, target_uri, target_filename=IDEA_YEAST.KINETICS_FILE
     )
 
@@ -64,7 +68,7 @@ def download_idea(target_uri: str) -> None:
 
 def convert_idea_kinetics_to_sbml_dfs(
     idea_kinetics: pd.DataFrame,
-) -> sbml_dfs_core.SBML_dfs:
+) -> SBML_dfs:
     """
     Convert IDEA Kinetics to SBML DFs
 
@@ -104,7 +108,7 @@ def convert_idea_kinetics_to_sbml_dfs(
         axis=1,
     ).assign(
         # tag reactions with the IDEA publication
-        r_Identifiers=identifiers._format_Identifiers_pubmed(IDEA_YEAST.PUBMED_ID),
+        r_Identifiers=_format_Identifiers_pubmed(IDEA_YEAST.PUBMED_ID),
     )
 
     # create some nice interaction names before we rename the roles as SBO terms
@@ -131,7 +135,7 @@ def convert_idea_kinetics_to_sbml_dfs(
 
     # create Identifiers objects for each species
     species_df[SBML_DFS.S_IDENTIFIERS] = [
-        identifiers.Identifiers(
+        Identifiers(
             [
                 {
                     IDENTIFIERS.ONTOLOGY: "gene_name",
@@ -146,7 +150,7 @@ def convert_idea_kinetics_to_sbml_dfs(
     # Constant fields (for this data source)
 
     # setup compartments (just treat this as uncompartmentalized for now)
-    compartments_df = sbml_dfs_utils.stub_compartments()
+    compartments_df = stub_compartments()
 
     # define model-level metadata
     model_source = Source.single_entry(
@@ -158,7 +162,7 @@ def convert_idea_kinetics_to_sbml_dfs(
         date=datetime.date.today().strftime("%Y%m%d"),
     )
 
-    sbml_dfs = sbml_dfs_core.sbml_dfs_from_edgelist(
+    sbml_dfs = sbml_dfs_from_edgelist(
         interaction_edgelist=interaction_edgelist,
         species_df=species_df,
         compartments_df=compartments_df,

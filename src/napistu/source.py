@@ -1,20 +1,35 @@
+"""
+The Source class for tracking the model(s) an entity (i.e., a compartment, species, reaction) came from.
+
+Classes
+-------
+Source
+    A class for tracking the model(s) an entity (i.e., a compartment, species, reaction) came from.
+"""
+
 from __future__ import annotations
 
 import logging
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
 import pandas as pd
 
-from napistu import indices, sbml_dfs_core, utils
 from napistu.constants import (
     SBML_DFS_SCHEMA,
     SCHEMA_DEFS,
     SOURCE_SPEC,
     SOURCE_STANDARD_COLUMNS,
 )
+from napistu.indices import PWIndex
 from napistu.statistics import hypothesis_testing
 from napistu.statistics.constants import CONTINGENCY_TABLE
+from napistu.utils.pd_utils import infer_entity_type
+from napistu.utils.string_utils import safe_join_set
+
+if TYPE_CHECKING:
+    from napistu.sbml_dfs_core import SBML_dfs
+
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +65,7 @@ class Source:
     def __init__(
         self,
         source_df: pd.DataFrame,
-        pw_index: indices.PWIndex | None = None,
+        pw_index: PWIndex | None = None,
     ) -> None:
         """
         Tracks the model(s) an entity (i.e., a compartment, species, reaction) came from.
@@ -64,7 +79,7 @@ class Source:
         ----------
         source_df : pd.DataFrame
             A dataframe containing the model source and other optional variables
-        pw_index : indices.PWIndex, optional
+        pw_index : PWIndex, optional
             A pathway index object containing the pathway_id and other metadata
 
         Returns
@@ -74,7 +89,7 @@ class Source:
         Raises
         ------
         ValueError:
-            If pw_index is not a indices.PWIndex
+            If pw_index is not a PWIndex
         ValueError:
             If required columns are not present in source_df
         TypeError:
@@ -222,12 +237,12 @@ class Source:
             )
 
     def _validate_pathway_index(
-        self, pw_index: indices.PWIndex, source_df: pd.DataFrame
+        self, pw_index: PWIndex, source_df: pd.DataFrame
     ) -> None:
         """Validate pathway index and check for missing pathways."""
-        if not isinstance(pw_index, indices.PWIndex):
+        if not isinstance(pw_index, PWIndex):
             raise ValueError(
-                f"pw_index must be a indices.PWIndex or None and was {type(pw_index).__name__}"
+                f"pw_index must be a PWIndex or None and was {type(pw_index).__name__}"
             )
 
         # Check that all models are present in the pathway index
@@ -242,7 +257,7 @@ class Source:
             )
 
     def _process_source_df(
-        self, source_df: pd.DataFrame, pw_index: indices.PWIndex | None
+        self, source_df: pd.DataFrame, pw_index: PWIndex | None
     ) -> pd.DataFrame:
         """Process source DataFrame by merging with pathway index if provided."""
         if pw_index is None:
@@ -265,7 +280,7 @@ class Source:
 
 
 def create_source_table(
-    lookup_table: pd.Series, table_schema: dict, pw_index: indices.PWIndex | None
+    lookup_table: pd.Series, table_schema: dict, pw_index: PWIndex | None
 ) -> pd.DataFrame:
     """
     Create Source Table
@@ -278,7 +293,7 @@ def create_source_table(
         a pd.Series containing the index of the table to create a source table for
     table_schema: dict
         a dictionary containing the schema of the table to create a source table for
-    pw_index: indices.PWIndex
+    pw_index: PWIndex
         a pathway index object containing the pathway_id and other metadata
 
     Returns
@@ -385,7 +400,7 @@ def unnest_sources(source_table: pd.DataFrame) -> pd.DataFrame:
     to include one row per source
     """
 
-    table_type = utils.infer_entity_type(source_table)
+    table_type = infer_entity_type(source_table)
     source_table_schema = SBML_DFS_SCHEMA.SCHEMA[table_type]
 
     if SCHEMA_DEFS.SOURCE not in source_table_schema.keys():
@@ -425,7 +440,7 @@ def unnest_sources(source_table: pd.DataFrame) -> pd.DataFrame:
 def source_set_coverage(
     select_sources_df: pd.DataFrame,
     source_total_counts: Optional[pd.Series | pd.DataFrame] = None,
-    sbml_dfs: Optional[sbml_dfs_core.SBML_dfs] = None,
+    sbml_dfs: Optional[SBML_dfs] = None,
     min_pw_size: int = 3,
     verbose: bool = False,
 ) -> pd.DataFrame:
@@ -446,7 +461,7 @@ def source_set_coverage(
         pd.Series containing the total counts of each source. As produced by
         source.get_source_total_counts() or a pd.DataFrame with two columns:
         pathway_id and total_counts.
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    sbml_dfs: SBML_dfs
         if `source_total_counts` is provided then `sbml_dfs` must be provided
         to calculate the total number of entities in the table.
     min_pw_size: int
@@ -461,7 +476,7 @@ def source_set_coverage(
 
     """
 
-    table_type = utils.infer_entity_type(select_sources_df)
+    table_type = infer_entity_type(select_sources_df)
     pk = SBML_DFS_SCHEMA.SCHEMA[table_type][SCHEMA_DEFS.PK]
 
     if source_total_counts is not None:
@@ -537,7 +552,7 @@ def source_set_coverage(
 def _deduplicate_source_df(source_df: pd.DataFrame) -> pd.DataFrame:
     """Combine entries in a source table when multiple models have the same members."""
 
-    table_type = utils.infer_entity_type(source_df)
+    table_type = infer_entity_type(source_df)
     source_table_schema = SBML_DFS_SCHEMA.SCHEMA[table_type]
 
     # drop entries which are missing required attributes and throw an error if none are left
@@ -665,22 +680,22 @@ def _collapse_source_df(source_df: Union[pd.DataFrame, pd.Series]) -> pd.Series:
 
         collapsed_source_series = pd.Series(
             {
-                SOURCE_SPEC.PATHWAY_ID: utils.safe_join_set(
+                SOURCE_SPEC.PATHWAY_ID: safe_join_set(
                     source_df[SOURCE_SPEC.PATHWAY_ID]
                 ),
-                SOURCE_SPEC.MODEL: utils.safe_join_set(source_df[SOURCE_SPEC.MODEL]),
+                SOURCE_SPEC.MODEL: safe_join_set(source_df[SOURCE_SPEC.MODEL]),
                 SOURCE_SPEC.DATA_SOURCE: (
-                    utils.safe_join_set(source_df[SOURCE_SPEC.DATA_SOURCE])
+                    safe_join_set(source_df[SOURCE_SPEC.DATA_SOURCE])
                     if SOURCE_SPEC.DATA_SOURCE in source_df.columns
                     else None
                 ),
                 SOURCE_SPEC.ORGANISMAL_SPECIES: (
-                    utils.safe_join_set(source_df[SOURCE_SPEC.ORGANISMAL_SPECIES])
+                    safe_join_set(source_df[SOURCE_SPEC.ORGANISMAL_SPECIES])
                     if SOURCE_SPEC.ORGANISMAL_SPECIES in source_df.columns
                     else None
                 ),
                 SOURCE_SPEC.NAME: (
-                    utils.safe_join_set(source_df[SOURCE_SPEC.NAME])
+                    safe_join_set(source_df[SOURCE_SPEC.NAME])
                     if SOURCE_SPEC.NAME in source_df.columns
                     else None
                 ),
@@ -809,7 +824,7 @@ def _update_unaccounted_for_members(
         the dataframe of unaccounted for members with the top pathway removed
     """
 
-    table_type = utils.infer_entity_type(unaccounted_for_members)
+    table_type = infer_entity_type(unaccounted_for_members)
     pk = SBML_DFS_SCHEMA.SCHEMA[table_type][SCHEMA_DEFS.PK]
 
     members_captured = (

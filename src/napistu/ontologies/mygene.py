@@ -6,7 +6,6 @@ from typing import Dict, List, Set, Union
 import mygene
 import pandas as pd
 
-from napistu.constants import ONTOLOGIES
 from napistu.ontologies.constants import (
     INTERCONVERTIBLE_GENIC_ONTOLOGIES,
     MYGENE_DEFAULT_QUERIES,
@@ -14,6 +13,7 @@ from napistu.ontologies.constants import (
     MYGENE_QUERY_DEFS_LIST,
     NAPISTU_FROM_MYGENE_FIELDS,
     NAPISTU_TO_MYGENE_FIELDS,
+    ONTOLOGIES,
     SPECIES_TO_TAXID,
 )
 

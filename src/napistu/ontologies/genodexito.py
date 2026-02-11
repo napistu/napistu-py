@@ -4,11 +4,12 @@ from typing import Dict, List, Optional, Set
 import pandas as pd
 
 from napistu import identifiers, sbml_dfs_core
-from napistu.constants import IDENTIFIERS, ONTOLOGIES, SBML_DFS, SBML_DFS_SCHEMA
+from napistu.constants import IDENTIFIERS, SBML_DFS, SBML_DFS_SCHEMA
 from napistu.ontologies._validation import GenodexitoConfig
 from napistu.ontologies.constants import (
     GENODEXITO_DEFS,
     INTERCONVERTIBLE_GENIC_ONTOLOGIES,
+    ONTOLOGIES,
 )
 from napistu.ontologies.mygene import create_python_mapping_tables
 

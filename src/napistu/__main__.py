@@ -25,7 +25,7 @@ from napistu._cli import (
     target_uri_output,
     verbosity_option,
 )
-from napistu.constants import ONTOLOGIES, RESOLVE_MATCHES_AGGREGATORS
+from napistu.constants import RESOLVE_MATCHES_AGGREGATORS
 from napistu.context import filtering
 from napistu.ingestion import (
     bigg,
@@ -58,6 +58,7 @@ from napistu.network.ng_utils import read_graph_attrs_spec
 from napistu.network.ng_utils import validate_assets as validate_assets_func
 from napistu.network.precompute import precompute_distances
 from napistu.ontologies import dogma
+from napistu.ontologies.constants import ONTOLOGIES
 from napistu.ontologies.genodexito import Genodexito
 from napistu.sbml_dfs_core import SBML_dfs
 from napistu.sbml_dfs_utils import display_post_consensus_checks

@@ -4,13 +4,7 @@ import logging
 import pandas as pd
 
 from napistu import identifiers, sbml_dfs_core, sbml_dfs_utils, utils
-from napistu.constants import (
-    BQB,
-    IDENTIFIERS,
-    ONTOLOGIES,
-    SBML_DFS,
-    SBOTERM_NAMES,
-)
+from napistu.constants import BQB, IDENTIFIERS, SBML_DFS, SBOTERM_NAMES
 from napistu.ingestion.constants import (
     DATA_SOURCE_DESCRIPTIONS,
     DATA_SOURCES,
@@ -22,7 +16,7 @@ from napistu.ingestion.constants import (
     REACTOME_FI_URL,
     VALID_REACTOME_FI_DIRECTIONS,
 )
-from napistu.ontologies.constants import GENODEXITO_DEFS
+from napistu.ontologies.constants import GENODEXITO_DEFS, ONTOLOGIES
 from napistu.ontologies.genodexito import Genodexito
 from napistu.source import Source
 

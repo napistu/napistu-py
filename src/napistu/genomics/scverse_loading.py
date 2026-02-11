@@ -26,7 +26,6 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field, RootModel, field_validator
 
-from napistu.constants import ONTOLOGIES_LIST
 from napistu.genomics.constants import (
     ADATA,
     ADATA_ARRAY_ATTRS,
@@ -39,6 +38,7 @@ from napistu.genomics.constants import (
     VALID_MUDATA_LEVELS,
 )
 from napistu.matching import species
+from napistu.ontologies.constants import ONTOLOGIES_LIST
 from napistu.utils.optional import (
     import_anndata,
     import_mudata,

@@ -4,7 +4,7 @@ import logging
 
 import pandas as pd
 
-from napistu.constants import ONTOLOGIES
+from napistu.ontologies.constants import ONTOLOGIES
 from napistu.rpy2 import (
     report_r_exceptions,
     require_rpy2,

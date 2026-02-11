@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from napistu.constants import BQB, IDENTIFIERS, ONTOLOGIES, SBML_DFS
+from napistu.constants import BQB, IDENTIFIERS, SBML_DFS
 from napistu.genomics.gsea import (
     GENESET_DEFAULT_BY_SPECIES,
     GENESET_DEFAULT_CONFIGS,
@@ -19,6 +19,7 @@ from napistu.genomics.gsea import (
 from napistu.identifiers import Identifiers, construct_cspecies_identifiers
 from napistu.ingestion.constants import COMPARTMENTS
 from napistu.network.constants import IGRAPH_DEFS, NAPISTU_GRAPH_EDGES
+from napistu.ontologies.constants import ONTOLOGIES
 from napistu.source import Source
 from napistu.utils.optional import import_gseapy, import_statsmodels_multitest
 

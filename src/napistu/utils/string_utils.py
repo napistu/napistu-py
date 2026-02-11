@@ -28,8 +28,6 @@ import re
 from textwrap import fill
 from typing import Any, Dict, Optional
 
-import pandas as pd
-
 logger = logging.getLogger(__name__)
 
 
@@ -175,17 +173,6 @@ def safe_join_set(values: Any) -> str | None:
         unique_values = set([values]) - {None}
 
     return " OR ".join(sorted(str(v) for v in unique_values)) if unique_values else None
-
-
-def safe_series_tolist(x):
-    """Convert either a list or str to a list."""
-
-    if isinstance(x, str):
-        return [x]
-    elif isinstance(x, pd.Series):
-        return x.tolist()
-    else:
-        raise TypeError(f"x was a {type(x)} but only str and pd.Series are supported")
 
 
 def score_nameness(string: str):

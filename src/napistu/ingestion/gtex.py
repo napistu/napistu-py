@@ -6,8 +6,8 @@ import fsspec
 import pandas as pd
 
 from napistu import utils
-from napistu.constants import ONTOLOGIES
 from napistu.ingestion.constants import GTEX_DEFS, GTEX_RNASEQ_EXPRESSION_URL
+from napistu.ontologies.constants import ONTOLOGIES
 
 logger = logging.getLogger(__name__)
 

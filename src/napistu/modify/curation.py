@@ -7,7 +7,6 @@ import fsspec
 import numpy as np
 import pandas as pd
 
-from napistu import identifiers, sbml_dfs_core, sbml_dfs_utils, source
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
@@ -17,15 +16,20 @@ from napistu.constants import (
     SBOTERM_NAMES,
     SCHEMA_DEFS,
 )
+from napistu.identifiers import Identifiers
 from napistu.modify.constants import CURATION_DEFS, VALID_ANNOTATION_TYPES
+from napistu.ontologies.standardization import format_uri
+from napistu.sbml_dfs_core import SBML_dfs
+from napistu.sbml_dfs_utils import id_formatter, id_formatter_inv
+from napistu.source import Source
 from napistu.utils.path_utils import path_exists
 
 # Public functions (alphabetical order)
 
 
 def curate_sbml_dfs(
-    curation_dir: str, sbml_dfs: sbml_dfs_core.SBML_dfs, verbose: bool = True
-) -> sbml_dfs_core.SBML_dfs:
+    curation_dir: str, sbml_dfs: SBML_dfs, verbose: bool = True
+) -> SBML_dfs:
     """
     Curate SBML_dfs
 
@@ -40,14 +44,14 @@ def curate_sbml_dfs(
     ------
     curation_dir: str
         Directory containing annotations generated using parse_manual_annotation.Rmd
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    sbml_dfs: SBML_dfs
         A pathway model
     verbose: bool
         Extra reporting
 
     Returns
     -------
-    sbml_df: sbml_dfs_core.SBML_dfs
+    sbml_df: SBML_dfs
         A curated pathway model
 
     """
@@ -55,10 +59,8 @@ def curate_sbml_dfs(
     if not path_exists(curation_dir):
         raise FileNotFoundError(f"{curation_dir} does not exist")
 
-    if not isinstance(sbml_dfs, sbml_dfs_core.SBML_dfs):
-        raise TypeError(
-            f"sbml_dfs was a {type(sbml_dfs)} and must be an sbml_dfs_core.SBML_dfs"
-        )
+    if not isinstance(sbml_dfs, SBML_dfs):
+        raise TypeError(f"sbml_dfs was a {type(sbml_dfs)} and must be an SBML_dfs")
     if not isinstance(verbose, bool):
         raise TypeError(f"verbose was a {type(verbose)} and must be a bool")
 
@@ -101,7 +103,7 @@ def format_curated_entities(
     entity_type: str,
     new_curated_entities: dict[Any, pd.DataFrame],
     new_entities: dict[str, pd.DataFrame],
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    sbml_dfs: SBML_dfs,
     curation_id: str = "Calico curations",
 ) -> pd.DataFrame:
     """
@@ -116,11 +118,11 @@ def format_curated_entities(
     new_curated_entities: dict
         Curation pd.DataFrames generated using read_pathway_curations
     new_entities: dict
-        Curations formatted as sbml_dfs_core.SBML_dfs tables
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+        Curations formatted as SBML_dfs tables
+    sbml_dfs: SBML_dfs
         A pathway model
     curation_id: str
-        Name to use as a pathway id in source.Source objects
+        Name to use as a pathway id in Source objects
 
     Returns
     -------
@@ -154,7 +156,7 @@ def format_curated_entities(
 
 
 def format_curations(
-    curation_dict: dict[str, pd.DataFrame], sbml_dfs: sbml_dfs_core.SBML_dfs
+    curation_dict: dict[str, pd.DataFrame], sbml_dfs: SBML_dfs
 ) -> dict[str, pd.DataFrame]:
     """
     Format Curations
@@ -171,7 +173,7 @@ def format_curations(
     Returns
     -------
     new_entities: dict
-        Curations formatted as sbml_dfs_core.SBML_dfs tables
+        Curations formatted as SBML_dfs tables
 
     """
 
@@ -269,7 +271,7 @@ def _add_entity_foreign_keys(
     entity_type: str,
     type_schema: dict[str, Any],
     new_entities: dict[str, pd.DataFrame],
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    sbml_dfs: SBML_dfs,
 ) -> pd.DataFrame:
     """Add foreign key columns to curated entities."""
     if SCHEMA_DEFS.FK not in type_schema:
@@ -325,9 +327,7 @@ def _add_entity_identifiers(
 
         is_identified = not new_entity_series.isna()[CURATION_DEFS.URI]
         if is_identified:
-            id = [
-                identifiers.format_uri(new_entity_series[CURATION_DEFS.URI], bqb=BQB.IS)
-            ]
+            id = [format_uri(new_entity_series[CURATION_DEFS.URI], bqb=BQB.IS)]
         else:
             id = [
                 {
@@ -339,7 +339,7 @@ def _add_entity_identifiers(
                 }
             ]
         # stub the id using the entity pk
-        ids.append(identifiers.Identifiers(id))
+        ids.append(Identifiers(id))
 
     new_curated_entities[type_schema[SCHEMA_DEFS.ID]] = ids
     return new_curated_entities
@@ -368,17 +368,15 @@ def _add_entity_primary_keys(
     new_curated_entities: pd.DataFrame,
     entity_type: str,
     type_schema: dict[str, Any],
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    sbml_dfs: SBML_dfs,
 ) -> pd.DataFrame:
     """Add primary key column to curated entities."""
-    max_pk = max(
-        sbml_dfs_utils.id_formatter_inv(getattr(sbml_dfs, entity_type).index.tolist())
-    )
+    max_pk = max(id_formatter_inv(getattr(sbml_dfs, entity_type).index.tolist()))
     if max_pk is np.nan:
         max_pk = int(-1)
 
     pk_attr = type_schema[SCHEMA_DEFS.PK]
-    new_curated_entities[pk_attr] = sbml_dfs_utils.id_formatter(
+    new_curated_entities[pk_attr] = id_formatter(
         range(
             max_pk + 1,
             max_pk + new_curated_entities.shape[0] + 1,
@@ -400,7 +398,7 @@ def _add_entity_sources(
         ].fillna(CURATION_DEFS.UNKNOWN)
         # convert curator entries to Sources
         new_curated_entities[type_schema[SCHEMA_DEFS.SOURCE]] = [
-            source.Source(
+            Source(
                 pd.DataFrame(
                     {"model": x, "name": "custom - " + x, "pathway_id": curation_id},
                     index=[0],
@@ -411,7 +409,7 @@ def _add_entity_sources(
     return new_curated_entities
 
 
-def _expand_entities_by_fks(sbml_dfs: sbml_dfs_core.SBML_dfs, pk_dict: dict) -> dict:
+def _expand_entities_by_fks(sbml_dfs: SBML_dfs, pk_dict: dict) -> dict:
     """
     Expand Entities By Foreign Keys
 
@@ -419,7 +417,7 @@ def _expand_entities_by_fks(sbml_dfs: sbml_dfs_core.SBML_dfs, pk_dict: dict) -> 
 
     Params
     ------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    sbml_dfs: SBML_dfs
         A pathway model
     pk_dict: dict
         Dictionary where keys are types of primary keys in sbml_dfs
@@ -451,7 +449,7 @@ def _expand_entities_by_fks(sbml_dfs: sbml_dfs_core.SBML_dfs, pk_dict: dict) -> 
 
 
 def _find_invalid_entities(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, invalid_entities: pd.DataFrame
+    sbml_dfs: SBML_dfs, invalid_entities: pd.DataFrame
 ) -> dict[str, set]:
     """
     Find Invalid Entities
@@ -461,7 +459,7 @@ def _find_invalid_entities(
 
     Params
     ------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    sbml_dfs: SBML_dfs
         A pathway model
     invalid_entities: pd.DataFrame
         A table containing entities to be removed ("remove"),
@@ -666,9 +664,7 @@ def _format_implicit_reaction_species(
     return pd.concat(reaction_species)
 
 
-def _remove_entities(
-    sbml_dfs: sbml_dfs_core.SBML_dfs, pk_dict: dict
-) -> sbml_dfs_core.SBML_dfs:
+def _remove_entities(sbml_dfs: SBML_dfs, pk_dict: dict) -> SBML_dfs:
     """
     Remove Entities
 
@@ -676,14 +672,14 @@ def _remove_entities(
 
     Params
     ------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    sbml_dfs: SBML_dfs
         A pathway model
     pk_dict: dict
         Dictionary where keys are types of primary keys in sbml_dfs
 
     Returns
     -------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    sbml_dfs: SBML_dfs
         Input with some entities removed
 
     """
@@ -704,7 +700,7 @@ def _validate_format_curated_entities_inputs(
     entity_type: str,
     new_curated_entities: pd.DataFrame,
     new_entities: dict[str, pd.DataFrame],
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    sbml_dfs: SBML_dfs,
     curation_id: str,
 ) -> None:
     """Validate inputs for format_curated_entities."""
@@ -716,9 +712,7 @@ def _validate_format_curated_entities_inputs(
         )
     if not isinstance(new_entities, dict):
         raise TypeError(f"new_entities was a {type(new_entities)} and must be a dict")
-    if not isinstance(sbml_dfs, sbml_dfs_core.SBML_dfs):
-        raise TypeError(
-            f"sbml_dfs was a {type(sbml_dfs)} and must be an sbml_dfs_core.SBML_dfs"
-        )
+    if not isinstance(sbml_dfs, SBML_dfs):
+        raise TypeError(f"sbml_dfs was a {type(sbml_dfs)} and must be an SBML_dfs")
     if not isinstance(curation_id, str):
         raise TypeError(f"curation_id was a {type(curation_id)} and must be a str")

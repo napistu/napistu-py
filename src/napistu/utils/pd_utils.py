@@ -20,6 +20,8 @@ infer_entity_type(df: pd.DataFrame) -> str:
     Infer the entity type of a DataFrame based on its structure and schema.
 matrix_to_edgelist(matrix: np.ndarray, row_labels: Optional[List] = None, col_labels: Optional[List] = None) -> pd.DataFrame:
     Convert a matrix to an edgelist format.
+safe_series_tolist(x: str | pd.Series) -> list:
+    Convert either a list or str to a list.
 style_df(df: pd.DataFrame, headers: Union[str, list[str], None] = "keys", hide_index: bool = False) -> Styler:
     Style a pandas DataFrame with simple formatting options.
 update_pathological_names(names: pd.Series, prefix: str) -> pd.Series:
@@ -356,6 +358,17 @@ def matrix_to_edgelist(matrix, row_labels=None, col_labels=None):
     )
 
     return edgelist
+
+
+def safe_series_tolist(x):
+    """Convert either a list or str to a list."""
+
+    if isinstance(x, str):
+        return [x]
+    elif isinstance(x, pd.Series):
+        return x.tolist()
+    else:
+        raise TypeError(f"x was a {type(x)} but only str and pd.Series are supported")
 
 
 def style_df(

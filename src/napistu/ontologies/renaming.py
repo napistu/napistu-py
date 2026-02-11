@@ -10,10 +10,10 @@ import pandas as pd
 from napistu import identifiers, sbml_dfs_core
 from napistu.constants import (
     IDENTIFIERS,
-    ONTOLOGY_SPECIES_ALIASES,
     SBML_DFS,
 )
 from napistu.ontologies._validation import OntologySet
+from napistu.ontologies.constants import ONTOLOGY_SPECIES_ALIASES
 
 logger = logging.getLogger(__name__)
 
