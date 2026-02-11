@@ -56,6 +56,7 @@ from napistu.constants import (
     IDENTIFIERS,
     IDENTIFIERS_REQUIRED_VARS,
     ONTOLOGIES,
+    ONTOLOGIES_LIST,
     SBML_DFS,
     SBML_DFS_SCHEMA,
     SCHEMA_DEFS,
@@ -64,6 +65,7 @@ from napistu.constants import (
 from napistu.ingestion.constants import LATIN_SPECIES_NAMES
 from napistu.ontologies.standardization import ONTOLOGY_TO_URL_MAP
 from napistu.utils.pd_utils import match_pd_vars
+from napistu.utils.string_utils import extract_regex_match, extract_regex_search
 
 logger = logging.getLogger(__name__)
 
@@ -644,6 +646,217 @@ def is_known_unsupported_uri(uri: str) -> bool:
     return False
 
 
+def _netloc_w_url_suffix_to_identifiers_ensembl_adaptor(result, ontology: str):
+    identifier, id_ontology, _ = parse_ensembl_id(result.query)  # type: ignore
+    if ontology != id_ontology:
+        raise ValueError(f"Ontology mismatch: expected {ontology}, got {id_ontology}")
+    return ontology, identifier
+
+
+def _netloc_w_url_suffix_to_identifiers_ncbi_adaptor(result, uri):
+    ontology = "ncbi_entrez_" + extract_regex_search(
+        "db=([A-Za-z0-9]+)\\&", result.query, 1
+    )
+
+    if ontology not in ONTOLOGIES_LIST:
+        logger.warning(
+            f"Ontology {ontology} is not a recognized ontology. Extracted from {uri}"
+        )
+        return None
+
+    identifier = extract_regex_search(r"term=([A-Za-z0-9\-]+)$", result.query, 1)
+
+    return ontology, identifier
+
+
+def _netloc_to_identifiers_mirbase_adaptor(split_path, result):
+    ontology = ONTOLOGIES.MIRBASE
+    if re.search("MI[0-9]+", split_path[-1]):
+        identifier = extract_regex_search("MI[0-9]+", split_path[-1])
+    elif re.search("MIMAT[0-9]+", split_path[-1]):
+        identifier = extract_regex_search("MIMAT[0-9]+", split_path[-1])
+    elif re.search("MI[0-9]+", result.query):
+        identifier = extract_regex_search("MI[0-9]+", result.query)
+    elif re.search("MIMAT[0-9]+", result.query):
+        identifier = extract_regex_search("MIMAT[0-9]+", result.query)
+    else:
+        raise TypeError(f"{result.query} does not appear to match MiRBase identifiers")
+    return ontology, identifier
+
+
+def _netloc_to_identifiers_pubchem_adaptor(split_path, result):
+    ontology = ONTOLOGIES.PUBCHEM
+    if result.query != "":
+        identifier = extract_regex_search("[0-9]+$", result.query)
+    else:
+        identifier = extract_regex_search("[0-9]+$", split_path[-1])
+    return ontology, identifier
+
+
+def _netloc_to_identifiers_matrixdb_adaptor(uri, class_regex, id_regex):
+    molecule_class = extract_regex_match(class_regex, uri).lower()
+    ontology = f"matrixdb_{molecule_class}"
+    if ontology not in ONTOLOGIES_LIST:
+        logger.warning(
+            f"Ontology {ontology} is not a recognized ontology. Extracted from {uri}"
+        )
+        return None
+    identifier = extract_regex_match(id_regex, uri)
+    return ontology, identifier
+
+
+# netloc + split_path[1] -> extraction function
+NETLOC_TO_IDENTIFIERS_MAP = {
+    "www.biorxiv.org": lambda split_path, result, uri: (
+        ONTOLOGIES.BIORXIV,
+        split_path[-1],
+    ),
+    "chemspider.com": lambda split_path, result, uri: (
+        ONTOLOGIES.CHEMSPIDER,
+        split_path[-1],
+    ),
+    "www.chemspider.com": lambda split_path, result, uri: (
+        ONTOLOGIES.CHEMSPIDER,
+        split_path[-1],
+    ),
+    "dx.doi.org": lambda split_path, result, uri: (
+        ONTOLOGIES.DX_DOI,
+        "/".join(split_path[1:]),
+    ),
+    "doi.org": lambda split_path, result, uri: (
+        ONTOLOGIES.DOI,
+        "/".join(split_path[1:]),
+    ),
+    "ec-code": lambda split_path, result, uri: (ONTOLOGIES.EC_CODE, split_path[-1]),
+    "www.genome.ad.jp": lambda split_path, result, uri: (
+        ONTOLOGIES.GENOME_NET,
+        extract_regex_search("[A-Za-z]+:[0-9]+$", uri),
+    ),
+    "identifiers.org": lambda split_path, result, uri: format_uri_url_identifiers_dot_org(
+        split_path
+    ),
+    "matrixdb.ibcp.fr": lambda split_path, result, uri: _netloc_to_identifiers_matrixdb_adaptor(
+        uri, ".*class=([a-zA-Z]+).*", ".*name=([0-9A-Za-z]+).*"
+    ),
+    "matrixdb.univ-lyon1.fr": lambda split_path, result, uri: _netloc_to_identifiers_matrixdb_adaptor(
+        uri, ".*type=([a-zA-Z]+).*", ".*value=([0-9A-Za-z]+).*"
+    ),
+    "www.mdpi.com": lambda split_path, result, uri: (
+        ONTOLOGIES.MDPI,
+        "/".join([i for i in split_path[1:] if i != ""]),
+    ),
+    "mirbase.org": lambda split_path, result, uri: _netloc_to_identifiers_mirbase_adaptor(
+        split_path, result
+    ),
+    "www.mirbase.org": lambda split_path, result, uri: _netloc_to_identifiers_mirbase_adaptor(
+        split_path, result
+    ),
+    "ncithesaurus.nci.nih.gov": lambda split_path, result, uri: (
+        ONTOLOGIES.NCI_THESAURUS,
+        extract_regex_match(".*code=([0-9A-Z]+).*", uri),
+    ),
+    "ols": lambda split_path, result, uri: (ONTOLOGIES.OLS, split_path[-1]),
+    "reactome.org": lambda split_path, result, uri: (
+        ONTOLOGIES.REACTOME,
+        split_path[-1],
+    ),
+    "rhea-db.org": lambda split_path, result, uri: (
+        ONTOLOGIES.RHEA,
+        extract_regex_search("[0-9]+$", result.query),
+    ),
+    "rnacentral.org": lambda split_path, result, uri: (
+        ONTOLOGIES.RNACENTRAL,
+        split_path[-1],
+    ),
+    "www.phosphosite.org": lambda split_path, result, uri: (
+        ONTOLOGIES.PHOSPHOSITE,
+        extract_regex_search("[0-9]+$", result.query),
+    ),
+    "pubchem.ncbi.nlm.nih.gov": lambda split_path, result, uri: _netloc_to_identifiers_pubchem_adaptor(
+        split_path, result
+    ),
+    "purl.uniprot.org": lambda split_path, result, uri: (
+        ONTOLOGIES.UNIPROT,
+        split_path[-1],
+    ),
+    "users.rcn.com": lambda split_path, result, uri: (ONTOLOGIES.URL, uri),
+}
+
+NETLOC_W_URL_SUFFIX_TO_IDENTIFIERS_MAP = {
+    (
+        "www.ensembl.org",
+        "geneview",
+    ): lambda split_path, result: _netloc_w_url_suffix_to_identifiers_ensembl_adaptor(
+        result, ONTOLOGIES.ENSEMBL_GENE
+    ),
+    (
+        "www.ensembl.org",
+        "ProteinSummary",
+    ): lambda split_path, result: _netloc_w_url_suffix_to_identifiers_ensembl_adaptor(
+        result, ONTOLOGIES.ENSEMBL_PROTEIN
+    ),
+    (
+        "www.ensembl.org",
+        "transview",
+    ): lambda split_path, result: _netloc_w_url_suffix_to_identifiers_ensembl_adaptor(
+        result, ONTOLOGIES.ENSEMBL_TRANSCRIPT
+    ),
+    (
+        "www.ensembl.org",
+        "Transcript",
+    ): lambda split_path, result: _netloc_w_url_suffix_to_identifiers_ensembl_adaptor(
+        result, ONTOLOGIES.ENSEMBL_TRANSCRIPT
+    ),
+    (
+        "www.guidetopharmacology.org",
+        "LigandDisplayForward",
+    ): lambda split_path, result: (
+        ONTOLOGIES.GUIDETOPHARMACOLOGY,
+        extract_regex_search("[0-9]+$", result.query),
+    ),
+}
+
+NETLOC_W_URL_ONE_TO_IDENTIFIERS_MAP = {
+    ("www.ncbi.nlm.nih.gov", "nuccore"): lambda split_path, result, uri: (
+        ONTOLOGIES.NCBI_REFSEQ,
+        split_path[-1],
+    ),
+    (
+        "www.ncbi.nlm.nih.gov",
+        "sites",
+    ): lambda split_path, result, uri: _netloc_w_url_suffix_to_identifiers_ncbi_adaptor(
+        result, uri
+    ),
+    ("www.ncbi.nlm.nih.gov", "books"): lambda split_path, result, uri: (
+        ONTOLOGIES.NCBI_BOOKS,
+        split_path[2],
+    ),
+    ("www.ncbi.nlm.nih.gov", "gene"): lambda split_path, result, uri: (
+        ONTOLOGIES.NCBI_ENTREZ_GENE,
+        split_path[2],
+    ),
+    ("www.ebi.ac.uk", "ena"): lambda split_path, result, uri: (
+        ONTOLOGIES.EBI_REFSEQ,
+        split_path[-1],
+    ),
+    ("www.thesgc.org", "structures"): lambda split_path, result, uri: (
+        ONTOLOGIES.SGC,
+        split_path[-2],
+    ),
+}
+
+
+SPLIT_ONE_TO_IDENTIFIERS_MAP = {
+    "chebi": lambda split_path, result: (
+        ONTOLOGIES.CHEBI,
+        extract_regex_search("[0-9]+$", result.query),
+    ),
+    "ols": lambda split_path, result: (ONTOLOGIES.OLS, split_path[-1]),
+    "pubmed": lambda split_path, result: (ONTOLOGIES.PUBMED, split_path[-1]),
+    "QuickGO": lambda split_path, result: (ONTOLOGIES.GO, split_path[-1]),
+}
+
+
 def format_uri_url(uri: str, strict: bool = True) -> dict:
     """
     Convert a URI into an identifier dictionary
@@ -679,161 +892,36 @@ def format_uri_url(uri: str, strict: bool = True) -> dict:
 
     netloc = result.netloc
     split_path = result.path.split("/")
+    split_one = split_path[1]  # used for ontology identification
+    url_suffix = split_path[-1]  # used for ontology identification
 
     try:
-        if netloc == "identifiers.org":
-            ontology, identifier = format_uri_url_identifiers_dot_org(split_path)
-        elif netloc == "reactome.org":
-            ontology = ONTOLOGIES.REACTOME
-            identifier = split_path[-1]
-        # genes and gene products
-        elif netloc == "www.ensembl.org" and split_path[-1] == "geneview":
-            ontology = ONTOLOGIES.ENSEMBL_GENE
-            identifier, id_ontology, _ = parse_ensembl_id(result.query)  # type: ignore
-            if ontology != id_ontology:
-                raise ValueError(
-                    f"Ontology mismatch: expected {ontology}, got {id_ontology}"
-                )
-        elif netloc == "www.ensembl.org" and split_path[-1] in [
-            "transview",
-            "Transcript",
-        ]:
-            ontology = ONTOLOGIES.ENSEMBL_TRANSCRIPT
-            identifier, id_ontology, _ = parse_ensembl_id(result.query)  # type: ignore
-            if ontology != id_ontology:
-                raise ValueError(
-                    f"Ontology mismatch: expected {ontology}, got {id_ontology}"
-                )
-        elif netloc == "www.ensembl.org" and split_path[-1] == "ProteinSummary":
-            ontology = ONTOLOGIES.ENSEMBL_PROTEIN
-            identifier, id_ontology, _ = parse_ensembl_id(result.query)  # type: ignore
-            if ontology != id_ontology:
-                raise ValueError(
-                    f"Ontology mismatch: expected {ontology}, got {id_ontology}"
-                )
+        # identifiers define by just netloc
+        if netloc in NETLOC_TO_IDENTIFIERS_MAP:
+            ontology, identifier = NETLOC_TO_IDENTIFIERS_MAP[netloc](
+                split_path, result, uri
+            )
+        # identifiers define by netloc + url_suffix
+        elif (netloc, url_suffix) in NETLOC_W_URL_SUFFIX_TO_IDENTIFIERS_MAP:
+            ontology, identifier = NETLOC_W_URL_SUFFIX_TO_IDENTIFIERS_MAP[
+                (netloc, url_suffix)
+            ](split_path, result)
+        # identifiers define by split_one
+        elif split_one in SPLIT_ONE_TO_IDENTIFIERS_MAP:
+            ontology, identifier = SPLIT_ONE_TO_IDENTIFIERS_MAP[split_one](
+                split_path, result
+            )
+        # identifiers define by netloc + split_one
+        elif (netloc, split_one) in NETLOC_W_URL_ONE_TO_IDENTIFIERS_MAP:
+            ontology, identifier = NETLOC_W_URL_ONE_TO_IDENTIFIERS_MAP[
+                (netloc, split_one)
+            ](split_path, result, uri)
         elif netloc == "www.ensembl.org" and (
             re.search("ENS[GTP]", split_path[-1])
             or re.search("ENS[A-Z]{3}[GTP]", split_path[-1])
         ):
             # format ensembl IDs which lack gene/transview
             identifier, ontology, _ = parse_ensembl_id(split_path[-1])
-
-        elif netloc == "www.mirbase.org" or netloc == "mirbase.org":
-            ontology = ONTOLOGIES.MIRBASE
-            if re.search("MI[0-9]+", split_path[-1]):
-                identifier = utils.extract_regex_search("MI[0-9]+", split_path[-1])
-            elif re.search("MIMAT[0-9]+", split_path[-1]):
-                identifier = utils.extract_regex_search("MIMAT[0-9]+", split_path[-1])
-            elif re.search("MI[0-9]+", result.query):
-                identifier = utils.extract_regex_search("MI[0-9]+", result.query)
-            elif re.search("MIMAT[0-9]+", result.query):
-                identifier = utils.extract_regex_search("MIMAT[0-9]+", result.query)
-            else:
-                raise TypeError(
-                    f"{result.query} does not appear to match MiRBase identifiers"
-                )
-        elif netloc == "purl.uniprot.org":
-            ontology = ONTOLOGIES.UNIPROT
-            identifier = split_path[-1]
-        elif netloc == "rnacentral.org":
-            ontology = ONTOLOGIES.RNACENTRAL
-            identifier = split_path[-1]
-        # chemicals
-        elif split_path[1] == "chebi":
-            ontology = ONTOLOGIES.CHEBI
-            identifier = utils.extract_regex_search("[0-9]+$", result.query)
-        elif netloc == "pubchem.ncbi.nlm.nih.gov":
-            ontology = ONTOLOGIES.PUBCHEM
-            if result.query != "":
-                identifier = utils.extract_regex_search("[0-9]+$", result.query)
-            else:
-                identifier = utils.extract_regex_search("[0-9]+$", split_path[-1])
-        elif netloc == "www.genome.ad.jp":
-            ontology = "genome_net"
-            identifier = utils.extract_regex_search("[A-Za-z]+:[0-9]+$", uri)
-        elif (
-            netloc == "www.guidetopharmacology.org"
-            and split_path[-1] == "LigandDisplayForward"
-        ):
-            ontology = "grac"
-            identifier = utils.extract_regex_search("[0-9]+$", result.query)
-        elif netloc == "www.chemspider.com" or netloc == "chemspider.com":
-            ontology = ONTOLOGIES.CHEMSPIDER
-            identifier = split_path[-1]
-        # reactions
-        elif split_path[1] == "ec-code":
-            ontology = ONTOLOGIES.EC_CODE
-            identifier = split_path[-1]
-        elif netloc == "www.rhea-db.org":
-            ontology = "rhea"
-            identifier = utils.extract_regex_search("[0-9]+$", result.query)
-        # misc
-        elif split_path[1] == "ols":
-            ontology = "ols"
-            identifier = split_path[-1]
-        elif split_path[1] == "QuickGO":
-            ontology = ONTOLOGIES.GO
-            identifier = split_path[-1]
-        elif split_path[1] == "pubmed":
-            ontology = ONTOLOGIES.PUBMED
-            identifier = split_path[-1]
-        # DNA sequences
-        elif netloc == "www.ncbi.nlm.nih.gov" and split_path[1] == "nuccore":
-            ontology = "ncbi_refseq"
-            identifier = split_path[-1]
-        elif netloc == "www.ncbi.nlm.nih.gov" and split_path[1] == "sites":
-            ontology = "ncbi_entrez_" + utils.extract_regex_search(
-                "db=([A-Za-z0-9]+)\\&", result.query, 1
-            )
-            identifier = utils.extract_regex_search(
-                r"term=([A-Za-z0-9\-]+)$", result.query, 1
-            )
-        elif netloc == "www.ebi.ac.uk" and split_path[1] == "ena":
-            ontology = "ebi_refseq"
-            identifier = split_path[-1]
-        elif netloc == "www.thesgc.org" and split_path[1] == "structures":
-            ontology = ONTOLOGIES.SGC
-            identifier = split_path[-2]
-        elif netloc == "www.mdpi.com":
-            ontology = ONTOLOGIES.MDPI
-            identifier = "/".join([i for i in split_path[1:] if i != ""])
-        elif netloc == "dx.doi.org":
-            ontology = "dx_doi"
-            identifier = "/".join(split_path[1:])
-        elif netloc == "doi.org":
-            ontology = ONTOLOGIES.DOI
-            identifier = "/".join(split_path[1:])
-        elif netloc == "www.ncbi.nlm.nih.gov" and split_path[1] == "books":
-            ontology = ONTOLOGIES.NCBI_BOOKS
-            identifier = split_path[2]
-        elif netloc == "www.ncbi.nlm.nih.gov" and split_path[1] == "gene":
-            ontology = ONTOLOGIES.NCBI_ENTREZ_GENE
-            identifier = split_path[2]
-        elif netloc == "www.phosphosite.org":
-            ontology = ONTOLOGIES.PHOSPHOSITE
-            identifier = utils.extract_regex_match(".*id=([0-9]+).*", uri)
-        elif netloc == "ncithesaurus.nci.nih.gov":
-            ontology = ONTOLOGIES.NCI_THESAURUS
-            identifier = utils.extract_regex_match(".*code=([0-9A-Z]+).*", uri)
-        elif netloc == "matrixdb.ibcp.fr":
-            molecule_class = utils.extract_regex_match(
-                ".*class=([a-zA-Z]+).*", uri
-            ).lower()
-            ontology = f"matrixdb_{molecule_class}"
-            identifier = utils.extract_regex_match(".*name=([0-9A-Za-z]+).*", uri)
-        elif netloc == "matrixdb.univ-lyon1.fr":
-            molecule_class = utils.extract_regex_match(
-                ".*type=([a-zA-Z]+).*", uri
-            ).lower()
-            ontology = f"matrixdb_{molecule_class}"
-            identifier = utils.extract_regex_match(".*value=([0-9A-Za-z]+).*", uri)
-        elif netloc == "users.rcn.com":
-            # Handle users.rcn.com URLs as generic web references
-            ontology = ONTOLOGIES.URL
-            identifier = uri  # Use the full URI as the identifier
-        elif netloc == "www.biorxiv.org":
-            ontology = ONTOLOGIES.BIORXIV
-            identifier = split_path[-1]
         else:
             error_msg = f"{netloc} in the {uri} url has not been associated with a known ontology"
             if strict:
@@ -843,8 +931,9 @@ def format_uri_url(uri: str, strict: bool = True) -> dict:
                 return None
     except (TypeError, AttributeError, ValueError):
         if strict:
+            print(split_path)
             logger.warning(
-                f"An identifier could not be found using the specified regex for {uri} based on the {ontology} ontology"
+                f"An identifier could not be found using the specified regex for {uri} based on the ontology"
             )
             logger.warning(result)
             logger.warning("ERROR")
@@ -953,20 +1042,22 @@ def parse_ensembl_id(input_str: str) -> tuple[str, str, str]:
     # extract the species code (three letters after ENS if non-human)
     species_code_search = re.compile("ENS([A-Z]{3})?[GTP]").search(input_str)
 
-    if species_code_search.group(1) is None:  # type: ignore
+    if species_code_search.group(1) is None:
         organismal_species = LATIN_SPECIES_NAMES.HOMO_SAPIENS
         molecule_type_regex = "ENS([GTP])"
         id_regex = "ENS[GTP][0-9]+"
     else:
-        species_code = species_code_search.group(1)  # type: ignore
+        species_code = species_code_search.group(1)
 
-        if species_code not in ENSEMBL_SPECIES_FROM_CODE.keys():
-            raise ValueError(
+        if species_code in ENSEMBL_SPECIES_FROM_CODE.keys():
+            organismal_species = ENSEMBL_SPECIES_FROM_CODE[species_code]
+        else:
+            logger.warning(
                 f"The species code for {input_str}: {species_code} did not "
-                "match any of the entries in ENSEMBL_SPECIES_CODE_LOOKUPS."
+                "match any of the entries in ENSEMBL_SPECIES_CODE_LOOKUPS. Replacing with 'unknown'."
             )
+            organismal_species = "unknown"
 
-        organismal_species = ENSEMBL_SPECIES_FROM_CODE[species_code]
         molecule_type_regex = "ENS[A-Z]{3}([GTP])"
         id_regex = "ENS[A-Z]{3}[GTP][0-9]+"
 
@@ -977,7 +1068,7 @@ def parse_ensembl_id(input_str: str) -> tuple[str, str, str]:
             "The ensembl molecule code (i.e., G, T or P) could not be extracted from {input_str}"
         )
     else:
-        molecule_type_code = molecule_type_code_search.group(1)  # type: str
+        molecule_type_code = molecule_type_code_search.group(1)
 
     if molecule_type_code not in ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY.keys():
         raise ValueError(
@@ -985,9 +1076,9 @@ def parse_ensembl_id(input_str: str) -> tuple[str, str, str]:
             "match ensembl genes (G), transcripts (T), or proteins (P)."
         )
 
-    molecule_type = ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY[molecule_type_code]  # type: str
+    molecule_type = ENSEMBL_MOLECULE_TYPES_TO_ONTOLOGY[molecule_type_code]
 
-    identifier = utils.extract_regex_search(id_regex, input_str)  # type: str
+    identifier = extract_regex_search(id_regex, input_str)
 
     return identifier, molecule_type, organismal_species
 
