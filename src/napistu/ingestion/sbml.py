@@ -264,7 +264,7 @@ class SBML:
 
         return pd.DataFrame(compartments).set_index(SBML_DFS.C_ID)
 
-    def _define_cspecies(self) -> pd.DataFrame:
+    def _define_cspecies(self, verbose: bool = False) -> pd.DataFrame:
         """Creates a DataFrame of compartmentalized species from an SBML model.
 
         This function extracts all species from the model and creates a
@@ -272,11 +272,19 @@ class SBML:
         species (`sc_id`), along with species and compartment IDs, and their
         corresponding identifiers.
 
+        Parameters
+        ----------
+        verbose : bool
+            extra reporting, defaults to False
+
         Returns
         -------
         pd.DataFrame
             A DataFrame containing information about each compartmentalized species.
         """
+        if verbose:
+            logger.info("Defining compartmentalized species")
+
         comp_species = list()
         for i in range(self.model.getNumSpecies()):
             spec = self.model.getSpecies(i)
@@ -385,12 +393,19 @@ class SBML:
 
         return reactions, reaction_species_df
 
-    def _define_species(self) -> tuple[pd.DataFrame, pd.DataFrame]:
+    def _define_species(
+        self, verbose: bool = False
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Extracts and defines species and compartmentalized species.
 
         This function creates two DataFrames: one for unique molecular species
         (un-compartmentalized) and another for compartmentalized species, which
         represent a species within a specific compartment.
+
+        Parameters
+        ----------
+        verbose : bool
+            extra reporting, defaults to False
 
         Returns
         -------
@@ -405,7 +420,10 @@ class SBML:
         SPECIES_VARS = SPECIES_SCHEMA[SCHEMA_DEFS.VARS]
         CSPECIES_VARS = CSPECIES_SCHEMA[SCHEMA_DEFS.VARS]
 
-        comp_species_df = self._define_cspecies()
+        comp_species_df = self._define_cspecies(verbose=verbose)
+
+        if verbose:
+            logger.info("Defining consensus species and species lookup table")
 
         # find unique species and create a table
         consensus_species_df = comp_species_df.copy()
@@ -595,7 +613,12 @@ class SBML_reaction:
         self.species = pd.DataFrame(reaction_species).set_index(SBML_DFS.RSC_ID)
 
 
-def sbml_dfs_from_sbml(self, sbml_model: SBML, compartment_aliases: dict | None = None):
+def sbml_dfs_from_sbml(
+    self,
+    sbml_model: SBML,
+    compartment_aliases: dict | None = None,
+    verbose: bool = False,
+):
     """Parses an SBML model into a set of standardized DataFrames.
 
     This function serves as the main entry point for converting an SBML model
@@ -612,6 +635,8 @@ def sbml_dfs_from_sbml(self, sbml_model: SBML, compartment_aliases: dict | None 
         A dictionary to map custom compartment names to the napistu controlled
         vocabulary. If None, the default mapping (COMPARTMENT_ALIASES) is used.
         Defaults to None.
+    verbose : bool
+        extra reporting, defaults to False
 
     Returns
     -------
@@ -623,7 +648,9 @@ def sbml_dfs_from_sbml(self, sbml_model: SBML, compartment_aliases: dict | None 
     self.compartments = sbml_model._define_compartments(compartment_aliases)
 
     # 2. Process species and compartmentalized species
-    self.species, self.compartmentalized_species = sbml_model._define_species()
+    self.species, self.compartmentalized_species = sbml_model._define_species(
+        verbose=verbose
+    )
 
     # Refine compartments to only those actually used by species
     self.compartments = _refine_compartments(

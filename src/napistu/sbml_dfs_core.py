@@ -212,6 +212,7 @@ class SBML_dfs:
         model_source: source.Source,
         validate: bool = True,
         resolve: bool = True,
+        verbose: bool = False,
     ) -> None:
         """
         Initialize a SBML_dfs object from a SBML model or dictionary of tables.
@@ -225,6 +226,8 @@ class SBML_dfs:
             Whether to validate the model structure and relationships, by default True
         resolve : bool, optional
             Whether to attempt automatic resolution of common issues, by default True
+        verbose : bool
+            extra reporting, defaults to False
 
         Raises
         ------
@@ -266,7 +269,7 @@ class SBML_dfs:
         else:
             from napistu.ingestion import sbml
 
-            self = sbml.sbml_dfs_from_sbml(self, sbml_model)
+            self = sbml.sbml_dfs_from_sbml(self, sbml_model, verbose=verbose)
 
         for ent in SBML_DFS_SCHEMA.OPTIONAL_ENTITIES:
             # Initialize optional entities if not set

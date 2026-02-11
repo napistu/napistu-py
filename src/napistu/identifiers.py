@@ -73,10 +73,8 @@ class Identifiers:
 
     Attributes
     ----------
-    ids : list
-        a list of identifiers which are each a dict containing an ontology and identifier
-    verbose : bool
-        extra reporting, defaults to False
+    df : pd.DataFrame
+        a DataFrame of identifiers with columns ontology, identifier, url, bqb
 
     Properties
     ----------
@@ -105,6 +103,8 @@ class Identifiers:
         ----------
         id_list : list
             a list of identifier dictionaries containing ontology, identifier, and optionally url
+        verbose : bool
+            extra reporting, defaults to False
 
         Returns
         -------
@@ -535,7 +535,8 @@ def cv_to_Identifiers(entity, strict: bool = False):
                     logger.warning(f"Could not parse URI (not implemented): {uri}")
 
         cv_list.extend(out_list)
-    return Identifiers(cv_list)
+
+    return Identifiers([x for x in cv_list if x is not None])
 
 
 def df_to_identifiers(df: pd.DataFrame) -> pd.Series:
@@ -630,7 +631,7 @@ def ensembl_id_to_url_regex(identifier: str, ontology: str) -> tuple[str, str]:
     return id_regex, url
 
 
-def format_uri(uri: str, bqb: str, strict: bool = True) -> list[dict]:
+def format_uri(uri: str, bqb: str, strict: bool = True) -> Optional[list[dict]]:
     """
     Convert a RDF URI into an identifier list
 
@@ -645,8 +646,8 @@ def format_uri(uri: str, bqb: str, strict: bool = True) -> list[dict]:
 
     Returns
     -------
-    list[dict]
-        The identifier list
+    Optional[list[dict]]
+        The identifier list or None if the URI is not valid
     """
 
     identifier = format_uri_url(uri, strict=strict)
@@ -656,7 +657,7 @@ def format_uri(uri: str, bqb: str, strict: bool = True) -> list[dict]:
             raise NotImplementedError(f"{uri} is not a valid way of specifying a uri")
         else:
             # Return empty list for non-strict mode
-            return list()
+            return None
 
     _validate_bqb(bqb)
     identifier[IDENTIFIERS.BQB] = bqb
@@ -898,7 +899,7 @@ def format_uri_url(uri: str, strict: bool = True) -> dict:
             else:
                 logger.warning(error_msg)
                 return None
-    except (TypeError, AttributeError):
+    except (TypeError, AttributeError, ValueError):
         if strict:
             logger.warning(
                 f"An identifier could not be found using the specified regex for {uri} based on the {ontology} ontology"

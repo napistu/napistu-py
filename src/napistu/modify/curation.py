@@ -7,7 +7,7 @@ import fsspec
 import numpy as np
 import pandas as pd
 
-from napistu import identifiers, sbml_dfs_core, sbml_dfs_utils, source, utils
+from napistu import identifiers, sbml_dfs_core, sbml_dfs_utils, source
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
@@ -18,6 +18,7 @@ from napistu.constants import (
     SCHEMA_DEFS,
 )
 from napistu.modify.constants import CURATION_DEFS, VALID_ANNOTATION_TYPES
+from napistu.utils.path_utils import path_exists
 
 # Public functions (alphabetical order)
 
@@ -51,7 +52,7 @@ def curate_sbml_dfs(
 
     """
 
-    if not utils.path_exists(curation_dir):
+    if not path_exists(curation_dir):
         raise FileNotFoundError(f"{curation_dir} does not exist")
 
     if not isinstance(sbml_dfs, sbml_dfs_core.SBML_dfs):

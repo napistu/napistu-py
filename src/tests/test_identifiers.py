@@ -20,6 +20,20 @@ identifier_examples = pd.read_csv(
 )
 
 
+def test_identifiers_empty_list_has_df():
+    """Identifiers([]) has a df attribute with expected schema and zero rows."""
+    obj = identifiers.Identifiers([])
+    assert hasattr(obj, "df")
+    assert obj.df is not None
+    assert list(obj.df.columns) == [
+        IDENTIFIERS.ONTOLOGY,
+        IDENTIFIERS.IDENTIFIER,
+        IDENTIFIERS.URL,
+        IDENTIFIERS.BQB,
+    ]
+    assert len(obj.df) == 0
+
+
 def test_identifiers():
     assert (
         identifiers.Identifiers(
