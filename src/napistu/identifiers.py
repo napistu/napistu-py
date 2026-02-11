@@ -62,6 +62,7 @@ from napistu.constants import (
     SPECIES_IDENTIFIERS_REQUIRED_VARS,
 )
 from napistu.ingestion.constants import LATIN_SPECIES_NAMES
+from napistu.ontologies.standardization import ONTOLOGY_TO_URL_MAP
 from napistu.utils.pd_utils import match_pd_vars
 
 logger = logging.getLogger(__name__)
@@ -394,45 +395,13 @@ def create_uri_url(ontology: str, identifier: str, strict: bool = True) -> str:
     # default to no id_regex
     id_regex = None
 
-    if ontology in ["ensembl_gene", "ensembl_transcript", "ensembl_protein"]:
+    if ontology in [
+        ONTOLOGIES.ENSEMBL_GENE,
+        ONTOLOGIES.ENSEMBL_TRANSCRIPT,
+        ONTOLOGIES.ENSEMBL_PROTEIN,
+    ]:
         id_regex, url = ensembl_id_to_url_regex(identifier, ontology)
-    elif ontology == "bigg.metabolite":
-        url = f"http://identifiers.org/bigg.metabolite/{identifier}"
-    elif ontology == "chebi":
-        id_regex = "^[0-9]+$"
-        url = f"http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:{identifier}"
-    elif ontology == "ec-code":
-        id_regex = "^[0-9]+\\.[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
-        url = f"https://identifiers.org/ec-code/{identifier}"
-    elif ontology == "envipath":
-        url = f"http://identifiers.org/envipath/{identifier}"
-    elif ontology == "go":
-        id_regex = "^GO:[0-9]{7}$"
-        url = f"https://www.ebi.ac.uk/QuickGO/term/{identifier}"
-    elif ontology == "ncbi_entrez_gene":
-        url = f"https://www.ncbi.nlm.nih.gov/gene/{identifier}"
-    elif ontology == "ncbi_entrez_pccompound":
-        id_regex = "^[A-Z]{14}\\-[A-Z]{10}\\-[A-Z]{1}$"
-        url = f"http://www.ncbi.nlm.nih.gov/sites/entrez?cmd=search&db=pccompound&term={identifier}"
-    elif ontology == "pubchem":
-        id_regex = "^[0-9]+$"
-        url = f"http://pubchem.ncbi.nlm.nih.gov/compound/{identifier}"
-    elif ontology == "pubmed":
-        id_regex = "^[0-9]+$"
-        url = f"http://www.ncbi.nlm.nih.gov/pubmed/{identifier}"
-    elif ontology == "reactome":
-        id_regex = "^R\\-[A-Z]{3}\\-[0-9]{7}$"
-        url = f"https://reactome.org/content/detail/{identifier}"
-    elif ontology == "uniprot":
-        id_regex = "^[A-Z0-9]+$"
-        url = f"https://purl.uniprot.org/uniprot/{identifier}"
-    elif ontology == "sgc":
-        id_regex = "^[0-9A-Z]+$"
-        url = f"https://www.thesgc.org/structures/structure_description/{identifier}/"
-    elif ontology == "mdpi":
-        id_regex = None
-        url = f"https://www.mdpi.com/{identifier}"
-    elif ontology == "mirbase":
+    elif ontology == ONTOLOGIES.MIRBASE:
         id_regex = None
         if re.match("MIMAT[0-9]", identifier):
             url = f"https://www.mirbase.org/mature/{identifier}"
@@ -440,36 +409,9 @@ def create_uri_url(ontology: str, identifier: str, strict: bool = True) -> str:
             url = f"https://www.mirbase.org/hairpin/{identifier}"
         else:
             raise NotImplementedError(f"url not defined for this MiRBase {identifier}")
-    elif ontology == "rnacentral":
-        id_regex = None
-        url = f"https://rnacentral.org/rna/{identifier}"
-    elif ontology == "chemspider":
-        id_regex = "^[0-9]+$"
-        url = f"https://www.chemspider.com/{identifier}"
-
-    elif ontology == "dx_doi":
-        id_regex = r"^[0-9]+\.[0-9]+$"
-        url = f"https://dx.doi.org/{identifier}"
-    elif ontology == "doi":
-        id_regex = None
-        url = f"https://doi.org/{identifier}"
-
-    elif ontology == "ncbi_books":
-        id_regex = "^[0-9A-Z]+$"
-        url = f"http://www.ncbi.nlm.nih.gov/books/{identifier}/"
-
-    elif ontology == "ncbi_entrez_gene":
-        id_regex = "^[0-9]+$"
-        url = f"https://www.ncbi.nlm.nih.gov/gene/{identifier}"
-    elif ontology == "phosphosite":
-        id_regex = "^[0-9]+$"
-        url = f"https://www.phosphosite.org/siteAction.action?id={identifier}"
-    elif ontology == "NCI_Thesaurus":
-        id_regex = "^[A-Z][0-9]+$"
-        url = f"https://ncithesaurus.nci.nih.gov/ncitbrowser/ConceptReport.jsp?dictionary=NCI_Thesaurus&code={identifier}"
-    elif ontology == "matrixdb_biomolecule":
-        id_regex = "^[0-9A-Za-z]+$"
-        url = f"http://matrixdb.univ-lyon1.fr/cgi-bin/current/newPort?type=biomolecule&value={identifier}"
+    elif ontology in ONTOLOGY_TO_URL_MAP.keys():
+        id_regex = ONTOLOGY_TO_URL_MAP[ontology]["id_regex"]
+        url = ONTOLOGY_TO_URL_MAP[ontology]["url"].format(identifier=identifier)
     else:
         raise NotImplementedError(
             f"No identifier -> url logic exists for the {ontology} ontology in create_uri_url()"
@@ -608,7 +550,7 @@ def ensembl_id_to_url_regex(identifier: str, ontology: str) -> tuple[str, str]:
     # this provides testing for other identifiers even if it is redundant with other
     # validation of ensembl ids
 
-    if species == "Homo sapiens":
+    if species == LATIN_SPECIES_NAMES.HOMO_SAPIENS:
         species_code = ""
     else:
         species_code = ENSEMBL_SPECIES_TO_CODE[species]
@@ -619,11 +561,11 @@ def ensembl_id_to_url_regex(identifier: str, ontology: str) -> tuple[str, str]:
     # convert to species format in ensembl urls
     species_url_field = re.sub(" ", "_", species)
 
-    if ontology == "ensembl_gene":
+    if ontology == ONTOLOGIES.ENSEMBL_GENE:
         url = f"http://www.ensembl.org/{species_url_field}/geneview?gene={identifier}"
-    elif ontology == "ensembl_transcript":
+    elif ontology == ONTOLOGIES.ENSEMBL_TRANSCRIPT:
         url = f"http://www.ensembl.org/{species_url_field}/Transcript?t={identifier}"
-    elif ontology == "ensembl_protein":
+    elif ontology == ONTOLOGIES.ENSEMBL_PROTEIN:
         url = f"https://www.ensembl.org/{species_url_field}/Transcript/ProteinSummary?t={identifier}"
     else:
         ValueError(f"{ontology} not defined")
@@ -816,7 +758,7 @@ def format_uri_url(uri: str, strict: bool = True) -> dict:
             ontology = "grac"
             identifier = utils.extract_regex_search("[0-9]+$", result.query)
         elif netloc == "www.chemspider.com" or netloc == "chemspider.com":
-            ontology = "chemspider"
+            ontology = ONTOLOGIES.CHEMSPIDER
             identifier = split_path[-1]
         # reactions
         elif split_path[1] == "ec-code":
@@ -850,28 +792,28 @@ def format_uri_url(uri: str, strict: bool = True) -> dict:
             ontology = "ebi_refseq"
             identifier = split_path[-1]
         elif netloc == "www.thesgc.org" and split_path[1] == "structures":
-            ontology = "sgc"
+            ontology = ONTOLOGIES.SGC
             identifier = split_path[-2]
         elif netloc == "www.mdpi.com":
-            ontology = "mdpi"
+            ontology = ONTOLOGIES.MDPI
             identifier = "/".join([i for i in split_path[1:] if i != ""])
         elif netloc == "dx.doi.org":
             ontology = "dx_doi"
             identifier = "/".join(split_path[1:])
         elif netloc == "doi.org":
-            ontology = "doi"
+            ontology = ONTOLOGIES.DOI
             identifier = "/".join(split_path[1:])
         elif netloc == "www.ncbi.nlm.nih.gov" and split_path[1] == "books":
-            ontology = "ncbi_books"
+            ontology = ONTOLOGIES.NCBI_BOOKS
             identifier = split_path[2]
         elif netloc == "www.ncbi.nlm.nih.gov" and split_path[1] == "gene":
-            ontology = "ncbi_gene"
+            ontology = ONTOLOGIES.NCBI_ENTREZ_GENE
             identifier = split_path[2]
         elif netloc == "www.phosphosite.org":
-            ontology = "phosphosite"
+            ontology = ONTOLOGIES.PHOSPHOSITE
             identifier = utils.extract_regex_match(".*id=([0-9]+).*", uri)
         elif netloc == "ncithesaurus.nci.nih.gov":
-            ontology = "NCI_Thesaurus"
+            ontology = ONTOLOGIES.NCI_THESAURUS
             identifier = utils.extract_regex_match(".*code=([0-9A-Z]+).*", uri)
         elif netloc == "matrixdb.ibcp.fr":
             molecule_class = utils.extract_regex_match(
@@ -914,6 +856,7 @@ def format_uri_url(uri: str, strict: bool = True) -> dict:
     # rename some entries
 
     if ontology == "ncbi_gene":
+        logger.warning("Renaming ncbi_gene to ncbi_entrez_gene")
         ontology = ONTOLOGIES.NCBI_ENTREZ_GENE
 
     id_dict = {"ontology": ontology, "identifier": identifier, "url": uri}
@@ -965,6 +908,10 @@ def format_uri_url_identifiers_dot_org(split_path: list[str]):
             identifier = "/".join(split_path[2:])
         else:
             identifier = split_path[-1]
+
+    # rename some entires
+    if ontology == "bigg.metabolite":
+        ontology = ONTOLOGIES.BIGG_METABOLITE
 
     return ontology, identifier
 

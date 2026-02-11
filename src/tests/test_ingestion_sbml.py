@@ -26,7 +26,7 @@ def test_sbml_dfs_reactome_sce(model_source_stub):
         pytest.skip(f"Test data not found: {sbml_path}")
 
     sbml_model = sbml.SBML(sbml_path)
-    result = sbml_dfs_core.SBML_dfs(sbml_model, model_source_stub, verbose=True)
+    result = sbml_dfs_core.SBML_dfs(sbml_model, model_source_stub)
 
     assert result is not None
     assert isinstance(result, sbml_dfs_core.SBML_dfs)

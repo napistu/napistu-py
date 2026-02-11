@@ -2,8 +2,8 @@ test	url	ontology	identifier	canonical_url
 ChEBI	http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:37136	chebi	37136	NA
 PubChemID	http://pubchem.ncbi.nlm.nih.gov/compound/71496460	pubchem	71496460	NA
 PubChemInchiKey	http://www.ncbi.nlm.nih.gov/sites/entrez?cmd=search&db=pccompound&term=XDFCIPNJCBUZJN-UHFFFAOYSA-N	ncbi_entrez_pccompound	XDFCIPNJCBUZJN-UHFFFAOYSA-N	NA
-BiGG_metabolite	http://identifiers.org/bigg.metabolite/10fthf	bigg.metabolite	10fthf	NA
-BiGG_metabolite2	http://identifiers.org/bigg.metabolite:10fthf	bigg.metabolite	10fthf	http://identifiers.org/bigg.metabolite/10fthf
+BiGG_metabolite	http://identifiers.org/bigg.metabolite/10fthf	bigg_metabolite	10fthf	NA
+BiGG_metabolite2	http://identifiers.org/bigg.metabolite:10fthf	bigg_metabolite	10fthf	http://identifiers.org/bigg.metabolite/10fthf
 identifiersChEBI	http://identifiers.org/chebi/CHEBI:57746	chebi	57746	http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:57746
 identifiersChEBI2	http://identifiers.org/CHEBI:57746	chebi	57746	http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:57746
 identifiersEnviPath	http://identifiers.org/envipath/650babc9-9d68-4b73-9332-11972ca26f7b/compound/db5219ee-60cb-4370-b066-340c9faf069c	envipath	650babc9-9d68-4b73-9332-11972ca26f7b/compound/db5219ee-60cb-4370-b066-340c9faf069c	NA
@@ -15,7 +15,7 @@ dx_doi	https://dx.doi.org/10.1128	dx_doi	10.1128	NA
 ncbi_entrez_gene	https://www.ncbi.nlm.nih.gov/gene/497672	ncbi_entrez_gene	497672	NA
 ncbi_books	http://www.ncbi.nlm.nih.gov/books/NBK54588/	ncbi_books	NBK54588	NA
 phosphosite	https://www.phosphosite.org/siteAction.action?id=27345	phosphosite	27345	NA
-NCI_Thesaurus	https://ncithesaurus.nci.nih.gov/ncitbrowser/ConceptReport.jsp?dictionary=NCI_Thesaurus&version=22.10e&ns=ncit&code=C17756&key=1830992426&b=1&n=null	NCI_Thesaurus	C17756	https://ncithesaurus.nci.nih.gov/ncitbrowser/ConceptReport.jsp?dictionary=NCI_Thesaurus&code=C17756
+NCI_Thesaurus	https://ncithesaurus.nci.nih.gov/ncitbrowser/ConceptReport.jsp?dictionary=NCI_Thesaurus&version=22.10e&ns=ncit&code=C17756&key=1830992426&b=1&n=null	nci_thesaurus	C17756	https://ncithesaurus.nci.nih.gov/ncitbrowser/ConceptReport.jsp?dictionary=NCI_Thesaurus&code=C17756
 matrixdb.ibcp.fr	http://matrixdb.ibcp.fr/cgi-bin/model/report/default?name=P98160&class=BioMolecule	matrixdb_biomolecule	P98160	http://matrixdb.univ-lyon1.fr/cgi-bin/current/newPort?type=biomolecule&value=P98160
 matrixdb.univ-lyon1	http://matrixdb.univ-lyon1.fr/cgi-bin/current/newPort?type=biomolecule&value=O15264	matrixdb_biomolecule	O15264	NA
 ncbi_gene	https://www.ncbi.nlm.nih.gov/gene/13229470	ncbi_entrez_gene	13229470	NA
