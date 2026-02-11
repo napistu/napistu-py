@@ -7,6 +7,7 @@ import random
 from io import StringIO
 from typing import Iterable, Union
 
+import fsspec
 import pandas as pd
 import requests
 
@@ -25,7 +26,6 @@ from napistu.ingestion.constants import (
 )
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.source import Source
-from napistu.utils.path_utils import open_fs
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +55,11 @@ def reactome_sbml_download(output_dir_path: str, overwrite: bool = False) -> Non
     # create the pathway index
     pw_index = _build_reactome_pw_index(output_dir_path, file_ext="sbml")
 
-    with open_fs(output_dir_path) as out_fs:
-        with out_fs.open(SOURCE_SPEC.PW_INDEX_FILE, "wb") as index_path:
-            pw_index.to_csv(index_path, sep="\t", index=False)
+    # save as tsv
+    with fsspec.open(
+        os.path.join(output_dir_path, SOURCE_SPEC.PW_INDEX_FILE), "wb"
+    ) as f:
+        pw_index.to_csv(f, sep="\t", index=False)
 
     return None
 
@@ -157,9 +159,9 @@ def _build_reactome_pw_index(
     pd.DataFrame
         pathway index
     """
-    with open_fs(output_dir) as out_fs:
-        all_paths = out_fs.glob(f"**/*.{file_ext}")
-    all_files = [os.path.basename(p) for p in all_paths]
+    # create the pathway index
+    out_fs = fsspec.open(output_dir)
+    all_files = [os.path.basename(f) for f in out_fs.glob(f"**/*.{file_ext}")]
 
     if len(all_files) == 0:
         raise ValueError(f"Zero files in {output_dir} have the {file_ext} extension")

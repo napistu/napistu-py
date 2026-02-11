@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 import os
-import warnings
 from typing import Any
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
+import fsspec
 import numpy as np
 import pandas as pd
 
-from napistu import identifiers, sbml_dfs_core, sbml_dfs_utils, source
+from napistu import identifiers, sbml_dfs_core, sbml_dfs_utils, source, utils
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
@@ -54,10 +51,8 @@ def curate_sbml_dfs(
 
     """
 
-    try:
-        open_fs(curation_dir)
-    except Exception as e:
-        raise FileNotFoundError(f"{curation_dir} does not exist") from e
+    if not utils.path_exists(curation_dir):
+        raise FileNotFoundError(f"{curation_dir} does not exist")
 
     if not isinstance(sbml_dfs, sbml_dfs_core.SBML_dfs):
         raise TypeError(
@@ -247,20 +242,22 @@ def read_pathway_curations(curation_dir: str) -> dict[str, pd.DataFrame]:
     curations: dict
         Dictionary containing different types of annoations
     """
-    with open_fs(curation_dir) as curation_fs:
-        curation_files = curation_fs.listdir(".")
+    fs, base_path = fsspec.core.url_to_fs(curation_dir)
+    curation_entries = fs.ls(base_path)
+    curation_files = [os.path.basename(p) for p in curation_entries]
 
-        annotations_types = set(curation_files).intersection(
-            {x + ".tsv" for x in VALID_ANNOTATION_TYPES}
-        )
+    annotations_types = set(curation_files).intersection(
+        {x + ".tsv" for x in VALID_ANNOTATION_TYPES}
+    )
 
-        curation_dict = {}
-        for annotation_file in annotations_types:
-            with curation_fs.open(annotation_file) as f:
-                key = os.path.splitext(annotation_file)[0]
-                curation_dict[key] = pd.read_csv(f, sep="\t")
+    curation_dict = {}
+    base_uri = curation_dir.rstrip("/")
+    for annotation_file in annotations_types:
+        with fsspec.open(f"{base_uri}/{annotation_file}", "r") as f:
+            key = os.path.splitext(annotation_file)[0]
+            curation_dict[key] = pd.read_csv(f, sep="\t")
 
-        return curation_dict
+    return curation_dict
 
 
 # Private functions (alphabetical order)

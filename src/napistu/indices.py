@@ -4,13 +4,10 @@ import copy
 import datetime
 import os
 import re
-import warnings
 from os import PathLike
 from typing import Iterable, Optional
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-    from fs import open_fs
+import fsspec
 import pandas as pd
 
 from napistu.constants import (
@@ -138,11 +135,8 @@ class PWIndex:
         if isinstance(pw_index, pd.DataFrame):
             self.index = pw_index
         elif isinstance(pw_index, PathLike) or isinstance(pw_index, str):
-            base_path = os.path.dirname(pw_index)
-            file_name = os.path.basename(pw_index)
-            with open_fs(base_path) as base_fs:
-                with base_fs.open(file_name) as f:
-                    self.index = pd.read_table(f)
+            with fsspec.open(pw_index, "r") as f:
+                self.index = pd.read_table(f)
         else:
             raise ValueError(
                 f"pw_index needs to be of type PathLike[str] | str | pd.DataFrame but was {type(pw_index).__name__}"
@@ -233,15 +227,15 @@ class PWIndex:
         >>> pw_index = PWIndex("path/to/pw_index.tsv", validate_paths=True)
         >>> # If any files are missing, FileNotFoundError will be raised
         """
-        with open_fs(self.base_path) as base_fs:
-            # verify that pathway files exist
-            files = base_fs.listdir(".")
-            missing_pathway_files = set(self.index[SOURCE_SPEC.FILE]) - set(files)
-            if len(missing_pathway_files) != 0:
-                file_str = "\n".join(missing_pathway_files)
-                raise FileNotFoundError(
-                    f"{len(missing_pathway_files)} were missing:\n{file_str}"
-                )
+        fs, fs_base = fsspec.core.url_to_fs(self.base_path)
+        entries = fs.ls(fs_base)
+        files = [os.path.basename(p) for p in entries]
+        missing_pathway_files = set(self.index[SOURCE_SPEC.FILE]) - set(files)
+        if len(missing_pathway_files) != 0:
+            file_str = "\n".join(missing_pathway_files)
+            raise FileNotFoundError(
+                f"{len(missing_pathway_files)} were missing:\n{file_str}"
+            )
 
     def filter(
         self,
@@ -396,9 +390,9 @@ def adapt_pw_index(
     pw_index.filter(organismal_species=organismal_species)
 
     if outdir is not None and update_index:
-        with open_fs(outdir, create=True) as fs:
-            with fs.open(SOURCE_SPEC.PW_INDEX_FILE, "w") as f:
-                pw_index.index.to_csv(f, sep="\t")
+        index_uri = f"{outdir.rstrip('/')}/{SOURCE_SPEC.PW_INDEX_FILE}"
+        with fsspec.open(index_uri, "w") as f:
+            pw_index.index.to_csv(f, sep="\t")
 
     return pw_index
 

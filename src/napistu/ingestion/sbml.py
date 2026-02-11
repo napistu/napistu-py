@@ -5,6 +5,7 @@ import os
 import re
 from typing import Any
 
+import fsspec
 import libsbml
 import pandas as pd
 from pydantic import RootModel, field_validator
@@ -24,7 +25,6 @@ from napistu.ingestion.constants import (
     SBML_DEFS,
     VALID_COMPARTMENTS,
 )
-from napistu.utils.path_utils import open_fs
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +74,8 @@ class SBML:
         if os.path.exists(sbml_path):
             self.document = reader.readSBML(sbml_path)
         else:
-            with open_fs(os.path.dirname(sbml_path)) as fs:
-                txt = fs.readtext(os.path.basename(sbml_path))
+            with fsspec.open(sbml_path, "rb") as f:
+                txt = f.readtext(os.path.basename(sbml_path))
                 self.document = reader.readSBMLFromString(txt)
 
         if self.document.getLevel() < 3:

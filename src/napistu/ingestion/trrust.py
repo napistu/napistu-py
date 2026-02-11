@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import datetime
-import os
 from itertools import chain
 from typing import Union
 
+import fsspec
 import pandas as pd
 
 from napistu import identifiers, utils
@@ -34,7 +34,6 @@ from napistu.ontologies.constants import GENODEXITO_DEFS
 from napistu.ontologies.genodexito import Genodexito
 from napistu.sbml_dfs_core import SBML_dfs
 from napistu.source import Source
-from napistu.utils.path_utils import open_fs
 
 
 def download_trrust(target_uri: str) -> None:
@@ -340,13 +339,10 @@ def _read_trrust(trrust_uri: str) -> pd.DataFrame:
         Data Frame
     """
 
-    base_path = os.path.dirname(trrust_uri)
-    file_name = os.path.basename(trrust_uri)
-    with open_fs(base_path) as base_fs:
-        with base_fs.open(file_name) as f:
-            trrust_edgelist = pd.read_csv(
-                f, sep="\t", names=["from", "to", "sign", "reference"]
-            ).drop_duplicates()
+    with fsspec.open(trrust_uri, "rb") as f:
+        trrust_edgelist = pd.read_csv(
+            f, sep="\t", names=["from", "to", "sign", "reference"]
+        ).drop_duplicates()
     return trrust_edgelist
 
 

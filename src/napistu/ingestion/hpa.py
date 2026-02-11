@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import logging
 
+import fsspec
 import pandas as pd
 
 from napistu import utils
 from napistu.constants import ONTOLOGIES
 from napistu.ingestion.constants import PROTEINATLAS_DEFS, PROTEINATLAS_SUBCELL_LOC_URL
-from napistu.utils.path_utils import open_fs
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ def load_and_clean_hpa_data(hpa_data_path: str) -> pd.DataFrame:
     logger.info("Loading Human Protein Atlas subcellular localization data")
 
     # Read the TSV file using pandas
-    with open_fs(base_path) as base_fs:
+    with fsspec.open(base_path) as base_fs:
         with base_fs.open(file_name, "rb") as f:
             protein_subcellular_localizations = pd.read_csv(
                 f, sep="\t", dtype=str, na_values=[""], keep_default_na=True

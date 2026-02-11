@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import os
 import pickle
 from typing import Sequence
 
 import click
+import fsspec
 import igraph as ig
 import pandas as pd
 
@@ -61,7 +61,6 @@ from napistu.ontologies import dogma
 from napistu.ontologies.genodexito import Genodexito
 from napistu.sbml_dfs_core import SBML_dfs
 from napistu.sbml_dfs_utils import display_post_consensus_checks
-from napistu.utils.path_utils import open_fs
 
 # Module-level logger and console - will be initialized when CLI is invoked
 logger = None
@@ -875,17 +874,15 @@ def export_napistu_graph(
     if reverse:
         napistu_graph.reverse_edges()
 
-    base, path = os.path.split(output_uri)
-    with open_fs(base, create=True, writeable=True) as fs:
-        with fs.openbin(path, "wb") as f:
-            if format == "gml":
-                napistu_graph.write_gml(f)
-            elif format == "edgelist":
-                napistu_graph.write_edgelist(f)
-            elif format == "pickle":
-                pickle.dump(napistu_graph, f)
-            else:
-                raise ValueError("Unknown format: %s" % format)
+    with fsspec.open(output_uri, "wb") as f:
+        if format == "gml":
+            napistu_graph.write_gml(f)
+        elif format == "edgelist":
+            napistu_graph.write_edgelist(f)
+        elif format == "pickle":
+            pickle.dump(napistu_graph, f)
+        else:
+            raise ValueError("Unknown format: %s" % format)
 
 
 @exporter.command(name="export_precomputed_distances")
@@ -937,17 +934,15 @@ def export_precomputed_distances(
 ):
     """Export precomputed distances for the igraph object"""
 
-    base, path = os.path.split(graph_uri)
-    with open_fs(base) as fs:
-        with fs.openbin(path) as f:
-            if format == "gml":
-                napistu_graph = ig.Graph.Read_GML(f)
-            elif format == "edgelist":
-                napistu_graph = ig.Graph.Read_Edgelist(f)
-            elif format == "pickle":
-                napistu_graph = ig.Graph.Read_Pickle(f)
-            else:
-                raise ValueError("Unknown format: %s" % format)
+    with fsspec.open(graph_uri, "rb") as f:
+        if format == "gml":
+            napistu_graph = ig.Graph.Read_GML(f)
+        elif format == "edgelist":
+            napistu_graph = ig.Graph.Read_Edgelist(f)
+        elif format == "pickle":
+            napistu_graph = ig.Graph.Read_Pickle(f)
+        else:
+            raise ValueError("Unknown format: %s" % format)
 
     # convert weight vars from a str to list
     weight_vars_list = click_str_to_list(weight_vars)
