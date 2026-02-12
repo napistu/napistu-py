@@ -272,8 +272,14 @@ IDENTIFIERS_ETL_YEAST_FIELDS = (
 )
 
 # OBO
-OBO_GO_BASIC_URL = "http://purl.obolibrary.org/obo/go/go-basic.obo"
-OBO_GO_BASIC_LOCAL_TMP = "/tmp/go-basic.obo"
+GO_OBO_DEFS = SimpleNamespace(
+    N_PARENTS_EXPECTED_MIN=4496,
+    N_PARENTS_EXPECTED_MAX=5000,
+    N_ANCESTORS_EXPECTED_MIN=4600,
+    N_ANCESTORS_EXPECTED_MAX=5000,
+    GO_BASIC_URL="http://purl.obolibrary.org/obo/go/go-basic.obo",
+    GO_BASIC_LOCAL_TMP="/tmp/go-basic.obo",
+)
 
 # PSI MI
 PSI_MI_INTACT_FTP_URL = (
