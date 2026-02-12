@@ -6,11 +6,11 @@ import pytest
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
-    ONTOLOGIES,
     SBML_DFS,
     VALID_BQB_TERMS,
 )
 from napistu.ontologies import id_tables
+from napistu.ontologies.constants import ONTOLOGIES
 
 
 @pytest.fixture

@@ -9,7 +9,6 @@ import igraph as ig
 import pandas as pd
 from tqdm import tqdm
 
-from napistu import indices, sbml_dfs_utils, source, utils
 from napistu.constants import (
     BQB,
     BQB_DEFINING_ATTRS,
@@ -24,18 +23,28 @@ from napistu.constants import (
     VALID_BQB_TERMS,
 )
 from napistu.identifiers import Identifiers
+from napistu.indices import PWIndex
 from napistu.ingestion import sbml
 from napistu.ingestion.constants import NO_RXN_PATHWAY_IDS_DEFAULTS
 from napistu.matching.mount import resolve_matches
 from napistu.sbml_dfs_core import SBML_dfs
+from napistu.sbml_dfs_utils import (
+    _dogmatic_to_defining_bqbs,
+    id_formatter,
+    unnest_identifiers,
+)
+from napistu.source import Source, create_source_table, merge_sources
+from napistu.utils.ig_utils import find_weakly_connected_subgraphs
+from napistu.utils.pd_utils import ensure_pd_df, format_identifiers_as_edgelist
+from napistu.utils.string_utils import _add_nameness_score_wrapper
 
 logger = logging.getLogger(__name__)
 
 
 def construct_consensus_model(
     sbml_dfs_dict: dict[str, SBML_dfs],
-    pw_index: indices.PWIndex,
-    model_source: Optional[source.Source] = None,
+    pw_index: PWIndex,
+    model_source: Source | None = None,
     dogmatic: bool = True,
     check_mergeability: bool = True,
     no_rxn_pathway_ids: Optional[list[str]] = None,
@@ -50,9 +59,9 @@ def construct_consensus_model(
     ----------
     sbml_dfs_dict : dict[str, SBML_dfs]
         A dictionary of SBML_dfs objects from different models, keyed by model name.
-    pw_index : indices.PWIndex
+    pw_index : PWIndex
         An index of all tables being aggregated, used for cross-referencing entities.
-    model_source : source.Source
+    model_source : Source
         A source object for the consensus model.
     dogmatic : bool, default=True
         If True, preserve genes, transcripts, and proteins as separate species. If False, merge them when possible.
@@ -69,17 +78,17 @@ def construct_consensus_model(
     """
     # Validate inputs
     logger.info("Reporting possible issues in component models")
-    assert isinstance(pw_index, indices.PWIndex)
+    assert isinstance(pw_index, PWIndex)
     _check_sbml_dfs_dict(sbml_dfs_dict, pw_index, check_mergeability)
 
     if model_source is None:
         model_source = _create_default_consensus_source(sbml_dfs_dict)
     else:
-        if not isinstance(model_source, source.Source):
+        if not isinstance(model_source, Source):
             raise TypeError("model_source must be a Source object or None")
 
     # Select valid BQB attributes based on dogmatic flag
-    defining_biological_qualifiers = sbml_dfs_utils._dogmatic_to_defining_bqbs(dogmatic)
+    defining_biological_qualifiers = _dogmatic_to_defining_bqbs(dogmatic)
 
     # Step 1: Create consensus entities for all primary tables
     consensus_entities, lookup_tables = _create_consensus_entities(
@@ -118,7 +127,7 @@ def construct_meta_entities_fk(
     ----------
     sbml_df_dict: dict{"model": SBML_dfs}
         A dictionary of cpr.SBML_dfs
-    pw_index: indices.PWIndex
+    pw_index: PWIndex
         An index of all tables being aggregated
     table:
         A table/entity set from the sbml_dfs to work-with
@@ -152,9 +161,7 @@ def construct_meta_entities_fk(
 
     # add nameness_score as a measure of how-readable a possible name would be
     # (this will help to select names which are more human readable after the merge)
-    agg_tbl = utils._add_nameness_score_wrapper(
-        agg_tbl, SCHEMA_DEFS.LABEL, table_schema
-    )
+    agg_tbl = _add_nameness_score_wrapper(agg_tbl, SCHEMA_DEFS.LABEL, table_schema)
 
     # reduce to unique elements
     induced_entities = (
@@ -164,7 +171,7 @@ def construct_meta_entities_fk(
         .first()
         .drop("nameness_score", axis=1)
     )
-    induced_entities["new_id"] = sbml_dfs_utils.id_formatter(
+    induced_entities["new_id"] = id_formatter(
         range(induced_entities.shape[0]), table_schema[SCHEMA_DEFS.PK]
     )
 
@@ -204,7 +211,7 @@ def construct_meta_entities_fk(
 
 def construct_meta_entities_identifiers(
     sbml_dfs_dict: dict[str, SBML_dfs],
-    pw_index: indices.PWIndex,
+    pw_index: PWIndex,
     table: str,
     fk_lookup_tables: dict = {},
     defining_biological_qualifiers: list[str] = BQB_DEFINING_ATTRS,
@@ -219,7 +226,7 @@ def construct_meta_entities_identifiers(
     ----------
     sbml_dfs_dict : dict[str, SBML_dfs]
         A dictionary of SBML_dfs objects from different models, keyed by model name.
-    pw_index : indices.PWIndex
+    pw_index : PWIndex
         An index of all tables being aggregated.
     table : str
         The name of the table/entity set to aggregate (e.g., 'species', 'compartments').
@@ -263,7 +270,7 @@ def construct_meta_entities_identifiers(
 
 def construct_meta_entities_members(
     sbml_dfs_dict: dict[str, SBML_dfs],
-    pw_index: indices.PWIndex | None,
+    pw_index: PWIndex | None,
     table: str = SBML_DFS.REACTIONS,
     defined_by: str = SBML_DFS.REACTION_SPECIES,
     defined_lookup_tables: dict = {},
@@ -278,7 +285,7 @@ def construct_meta_entities_members(
     ----------
     sbml_df_dict: dict{"model": SBML_dfs}
         A dictionary of SBML_dfs
-    pw_index: indices.PWIndex
+    pw_index: PWIndex
         An index of all tables being aggregated
     table: str
         A table/entity set from the sbml_dfs to work-with
@@ -391,7 +398,7 @@ def construct_sbml_dfs_dict(
         sbml_path = os.path.join(pw_index.base_path, pw_entry[SOURCE_SPEC.FILE])
 
         # create the sbml file's model-level Source metadata
-        model_source = source.Source(
+        model_source = Source(
             (
                 pw_entry.to_frame().T.assign(
                     **{SOURCE_SPEC.MODEL: pw_entry[SOURCE_SPEC.PATHWAY_ID]}
@@ -416,7 +423,7 @@ def construct_sbml_dfs_dict(
 
 def prepare_consensus_model(
     sbml_dfs_list: list[SBML_dfs],
-) -> tuple[dict[str, SBML_dfs], indices.PWIndex]:
+) -> tuple[dict[str, SBML_dfs], PWIndex]:
     """
     Prepare for creating a consensus model using a list of to-be-consolidated sbml_dfs objects.
 
@@ -432,7 +439,7 @@ def prepare_consensus_model(
     -------
     sbml_dfs_dict : dict[str, SBML_dfs]
         Dictionary of sbml_dfs objects indexed by pathway_id.
-    pw_index : indices.PWIndex
+    pw_index : PWIndex
         Pathway index object.
 
     Raises
@@ -472,9 +479,7 @@ def prepare_consensus_model(
         )
 
     # convert to pathway index object which will perform validations like ensuring that all pathway_ids are unique
-    pw_index = indices.PWIndex(
-        source_df[list(EXPECTED_PW_INDEX_COLUMNS)], validate_paths=False
-    )
+    pw_index = PWIndex(source_df[list(EXPECTED_PW_INDEX_COLUMNS)], validate_paths=False)
 
     sbml_dfs_dict = {
         x: y
@@ -492,7 +497,7 @@ def _add_consensus_sources(
     agg_table_harmonized: pd.DataFrame,
     lookup_table: pd.Series,
     table_schema: dict,
-    pw_index: indices.PWIndex | None,
+    pw_index: PWIndex,
 ) -> pd.DataFrame:
     """
     Add source information to the consensus table.
@@ -507,7 +512,7 @@ def _add_consensus_sources(
         Maps old IDs to new consensus IDs
     table_schema: dict
         Schema for the table
-    pw_index: indices.PWIndex | None
+    pw_index: PWIndex
         An index of all tables being aggregated
 
     Returns:
@@ -515,9 +520,9 @@ def _add_consensus_sources(
     pd.DataFrame
         Consensus table with source information added
     """
-    if type(pw_index) is not indices.PWIndex:
+    if type(pw_index) is not PWIndex:
         raise ValueError(
-            f"pw_index must be provided as a indices.PWIndex if there is a source but was type {type(pw_index)}"
+            f"pw_index must be provided as a PWIndex if there is a source but was type {type(pw_index)}"
         )
 
     # Track the model(s) that each entity came from
@@ -607,9 +612,7 @@ def _build_consensus_identifiers(
     """
     # Step 1: Extract and validate identifiers
     logger.debug("unnesting identifiers")
-    meta_identifiers = sbml_dfs_utils.unnest_identifiers(
-        sbml_df, table_schema[SCHEMA_DEFS.ID]
-    )
+    meta_identifiers = unnest_identifiers(sbml_df, table_schema[SCHEMA_DEFS.ID])
     _validate_meta_identifiers(meta_identifiers)
 
     # Step 2: Filter identifiers by biological qualifier type
@@ -628,7 +631,7 @@ def _build_consensus_identifiers(
 
     # Step 5: Cluster entities based on shared identifiers
     logger.debug("clustering entities based on shared identifiers")
-    ind_clusters = utils.find_weakly_connected_subgraphs(id_edgelist)
+    ind_clusters = find_weakly_connected_subgraphs(id_edgelist)
 
     # Step 6: Map entity indices to clusters
     valid_identifiers_with_clusters = valid_identifiers.reset_index().merge(
@@ -673,7 +676,7 @@ def _check_sbml_dfs(
         degen_defining_id_list = list()
         for k in degenerate_defining_identities.index.unique():
             n_degen = degenerate_defining_identities.loc[k].shape[0]
-            example_duplicates = utils.ensure_pd_df(
+            example_duplicates = ensure_pd_df(
                 degenerate_defining_identities.loc[k].sample(min([n_degen, N_examples]))
             )
 
@@ -697,7 +700,7 @@ def _check_sbml_dfs(
 
 def _check_sbml_dfs_dict(
     sbml_dfs_dict: dict[str, SBML_dfs],
-    pw_index: indices.PWIndex,
+    pw_index: PWIndex,
     check_mergeability: bool = True,
 ) -> None:
     """Check models in SBML_dfs for problems which can be reported up-front
@@ -729,7 +732,7 @@ def _check_sbml_dfs_dict(
 
 def _check_sbml_dfs_mergeability(
     sbml_dfs_dict: dict[str, SBML_dfs],
-    pw_index: indices.PWIndex,
+    pw_index: PWIndex,
 ) -> None:
     """Check SBML_dfs for obvious issues which will prevent merging across models.
 
@@ -835,7 +838,7 @@ def _create_consensus_sources(
     agg_tbl: pd.DataFrame,
     lookup_table: pd.Series,
     table_schema: dict,
-    pw_index: indices.PWIndex | None,
+    pw_index: PWIndex,
 ) -> pd.Series:
     """
     Create Consensus Sources
@@ -845,29 +848,29 @@ def _create_consensus_sources(
     Parameters:
     ----------
     agg_tbl: pd.DataFrame
-        A table containing existing source.Source objects and a many-1
+        A table containing existing Source objects and a many-1
         "new_id" of their post-aggregation consensus entity
     lookup_table: pd.Series
         A series where the index are old identifiers and the values are
         post-aggregation new identifiers
     table_schema: dict
         Summary of the schema for the operant entitye type
-    pw_index: indices.PWIndex
+    pw_index: PWIndex
         An index of all tables being aggregated
 
     Returns:
     ----------
     new_sources: pd.DataFrame
-        Mapping where the index is new identifiers and values are aggregated source.Source objects
+        Mapping where the index is new identifiers and values are aggregated Source objects
 
     """
 
     logger.info("Creating source table")
     # Sources for all new entries
-    new_sources = source.create_source_table(lookup_table, table_schema, pw_index)
+    new_sources = create_source_table(lookup_table, table_schema, pw_index)
 
     # create a pd.Series with an index of all new_ids (which will be rewritten as the entity primary keys)
-    # and values of source.Source objects (where multiple Sources may match an index value).
+    # and values of Source objects (where multiple Sources may match an index value).
     logger.info("Aggregating old sources")
     indexed_old_sources = (
         agg_tbl.reset_index(drop=True)
@@ -875,8 +878,8 @@ def _create_consensus_sources(
         .groupby(table_schema[SCHEMA_DEFS.PK])[table_schema[SCHEMA_DEFS.SOURCE]]
     )
 
-    # combine old sources into a single source.Source object per index value
-    aggregated_old_sources = indexed_old_sources.agg(source.merge_sources)
+    # combine old sources into a single Source object per index value
+    aggregated_old_sources = indexed_old_sources.agg(merge_sources)
 
     aligned_sources = new_sources.merge(
         aggregated_old_sources, left_index=True, right_index=True
@@ -884,7 +887,7 @@ def _create_consensus_sources(
     assert isinstance(aligned_sources, pd.DataFrame)
 
     logger.info("Returning new source table")
-    new_sources = aligned_sources.apply(source.merge_sources, axis=1).rename(table_schema[SCHEMA_DEFS.SOURCE])  # type: ignore
+    new_sources = aligned_sources.apply(merge_sources, axis=1).rename(table_schema[SCHEMA_DEFS.SOURCE])  # type: ignore
     assert isinstance(new_sources, pd.Series)
 
     return new_sources
@@ -892,7 +895,7 @@ def _create_consensus_sources(
 
 def _create_consensus_entities(
     sbml_dfs_dict: dict[str, SBML_dfs],
-    pw_index: indices.PWIndex,
+    pw_index: PWIndex,
     defining_biological_qualifiers: list[str],
     no_rxn_pathway_ids: Optional[list[str]] = None,
 ) -> tuple[dict, dict]:
@@ -906,7 +909,7 @@ def _create_consensus_entities(
     ----------
     sbml_dfs_dict: dict{SBML_dfs}
         A dictionary of SBML_dfs from different models
-    pw_index: indices.PWIndex
+    pw_index: PWIndex
         An index of all tables being aggregated
     defining_biological_qualifiers: list[str]
         Biological qualifier terms that define distinct entities
@@ -1056,7 +1059,7 @@ def _create_consensus_table(
         Consensus table with one row per unique entity
     """
     # Add nameness scores to help select representative names
-    agg_primary_table_scored = utils._add_nameness_score_wrapper(
+    agg_primary_table_scored = _add_nameness_score_wrapper(
         agg_primary_table, "label", table_schema
     )
 
@@ -1080,7 +1083,7 @@ def _create_consensus_table(
 
 def _create_default_consensus_source(
     sbml_dfs_dict: dict[str, SBML_dfs],
-) -> source.Source:
+) -> Source:
     """
     A default consensus source is created when no model source object is provided.
 
@@ -1091,11 +1094,11 @@ def _create_default_consensus_source(
 
     Returns
     -------
-    source.Source
+    Source
         A default consensus source object.
     """
 
-    return source.Source.single_entry(
+    return Source.single_entry(
         model="consensus_model",
         name=f"Consensus model merging {len(sbml_dfs_dict)} sources",
     )
@@ -1124,7 +1127,7 @@ def _create_entity_consensus(
     consensus_entities = membership_lookup.groupby("member_string").first()
 
     # Create new IDs for the consensus entities
-    consensus_entities["new_id"] = sbml_dfs_utils.id_formatter(
+    consensus_entities["new_id"] = id_formatter(
         range(consensus_entities.shape[0]), table_schema["pk"]
     )
 
@@ -1155,7 +1158,7 @@ def _create_entity_lookup_table(
         Lookup table mapping old entity IDs to new consensus IDs
     """
     # Create a new ID based on cluster number and entity type
-    agg_table_harmonized["new_id"] = sbml_dfs_utils.id_formatter(
+    agg_table_harmonized["new_id"] = id_formatter(
         agg_table_harmonized["cluster"], table_schema["pk"]
     )
 
@@ -1248,7 +1251,9 @@ def _filter_identifiers_by_qualifier(
     ]
 
 
-def _get_no_rxn_pathway_ids(pw_index, no_rxn_pathway_ids=None):
+def _get_no_rxn_pathway_ids(
+    pw_index: PWIndex, no_rxn_pathway_ids: Optional[list[str]] = None
+) -> list[str]:
     """
     Get the pathway ids for models which should not have reactions.
 
@@ -1603,7 +1608,7 @@ def _merge_entity_identifiers(
 
 
 def _pre_consensus_compartment_check(
-    sbml_dfs_dict: dict[str, SBML_dfs], pw_index: indices.PWIndex
+    sbml_dfs_dict: dict[str, SBML_dfs], pw_index: PWIndex
 ) -> None:
     """
     Check for compartment compatibility across models before consensus building.
@@ -1866,7 +1871,7 @@ def _prepare_identifier_edgelist(
         Edgelist connecting entities to their identifiers
     """
     # Format identifiers as edgelist
-    formatted_identifiers = utils.format_identifiers_as_edgelist(
+    formatted_identifiers = format_identifiers_as_edgelist(
         valid_identifiers, [IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER]
     )
 
@@ -1979,7 +1984,7 @@ def _prepare_member_table(
 def _reduce_to_consensus_ids(
     sbml_df: pd.DataFrame,
     table_schema: dict,
-    pw_index: indices.PWIndex | None = None,
+    pw_index: Optional[PWIndex] = None,
     defining_biological_qualifiers: list[str] = BQB_DEFINING_ATTRS,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """
@@ -1994,9 +1999,9 @@ def _reduce_to_consensus_ids(
         Table of entities from multiple models, with model in the index (as produced by _unnest_SBML_df).
     table_schema : dict
         Schema for the table being reduced.
-    pw_index : indices.PWIndex, optional
-        An index of all tables being aggregated (default: None).
-    defining_biological_qualifiers : list[str], optional
+    pw_index : PWIndex
+        An index of all tables being aggregated. Optional if no source information is required.
+    defining_biological_qualifiers : list[str]
         List of biological qualifier types which define distinct entities. Defaults to BQB_DEFINING_ATTRS.
 
     Returns
@@ -2021,7 +2026,7 @@ def _reduce_to_consensus_ids(
     lookup_table = _create_entity_lookup_table(agg_table_harmonized, table_schema)
 
     # Step 4: Add nameness scores to help select representative names
-    agg_table_harmonized = utils._add_nameness_score_wrapper(
+    agg_table_harmonized = _add_nameness_score_wrapper(
         agg_table_harmonized, SCHEMA_DEFS.LABEL, table_schema
     )
 
@@ -2060,7 +2065,9 @@ def _reduce_to_consensus_ids(
 
 
 def _remove_no_rxn_pathways(
-    no_rxn_pathway_ids, sbml_dfs_dict, compspec_lookup_table
+    no_rxn_pathway_ids: list[str],
+    sbml_dfs_dict: dict[str, SBML_dfs],
+    compspec_lookup_table: pd.DataFrame,
 ) -> None:
     """
     Remove pathways which don't contribute reactions from the pw_index.

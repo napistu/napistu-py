@@ -95,7 +95,6 @@ from napistu.utils.string_utils import (
     safe_capitalize,
     safe_fill,
     safe_join_set,
-    safe_series_tolist,
     score_nameness,
 )
 
@@ -140,7 +139,6 @@ __all__ = [
     "safe_capitalize",
     "safe_fill",
     "safe_join_set",
-    "safe_series_tolist",
     "score_nameness",
     # Graph utilities
     "find_weakly_connected_subgraphs",

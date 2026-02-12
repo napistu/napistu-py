@@ -7,6 +7,12 @@ from typing import Dict, List, Optional, Set
 
 from pydantic import BaseModel, Field, field_validator
 
+from napistu.ontologies.constants import (
+    ONTOLOGIES,
+    ONTOLOGIES_LIST,
+    SPECIES_TYPE_ONTOLOGIES,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,8 +55,6 @@ class OntologySet(BaseModel):
             If any values overlap between different ontologies
             If any values are also used as ontology keys
         """
-        from napistu.constants import ONTOLOGIES_LIST
-
         # Check that all keys are valid ontologies
         invalid_ontologies = set(v.keys()) - set(ONTOLOGIES_LIST)
         if invalid_ontologies:
@@ -172,8 +176,6 @@ class SpeciesTypeOntologyMapping(BaseModel):
             If any ontologies are invalid or duplicated across species types
         """
         # Get all valid ontologies from the ONTOLOGIES constants
-        from napistu.constants import ONTOLOGIES
-
         valid_ontologies = {
             getattr(ONTOLOGIES, attr)
             for attr in dir(ONTOLOGIES)
@@ -235,3 +237,8 @@ class SpeciesTypeOntologyMapping(BaseModel):
             for ontology in ontologies:
                 ontology_to_species_type[ontology] = species_type
         return ontology_to_species_type
+
+
+# Validate the mapping and create the flattened lookup at module load time
+validated_mapping = SpeciesTypeOntologyMapping(mappings=SPECIES_TYPE_ONTOLOGIES)
+ONTOLOGY_TO_SPECIES_TYPE = validated_mapping.create_ontology_to_species_type_mapping()

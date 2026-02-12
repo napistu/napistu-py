@@ -6,8 +6,9 @@ import pandas as pd
 import pytest
 
 from napistu import identifiers
-from napistu.constants import IDENTIFIERS, ONTOLOGIES, SBML_DFS
+from napistu.constants import IDENTIFIERS, SBML_DFS
 from napistu.ontologies import renaming
+from napistu.ontologies.constants import ONTOLOGIES
 
 
 @pytest.fixture

@@ -17,7 +17,6 @@ from napistu.constants import (
     IDENTIFIERS,
     MINI_SBO_FROM_NAME,
     NAPISTU_STANDARD_OUTPUTS,
-    ONTOLOGIES,
     SBML_DFS,
     SBML_DFS_SCHEMA,
     SBOTERM_NAMES,
@@ -33,6 +32,7 @@ from napistu.ingestion.constants import (
     INTERACTION_EDGELIST_DEFAULTS,
     INTERACTION_EDGELIST_DEFS,
 )
+from napistu.ontologies.constants import ONTOLOGIES
 from napistu.sbml_dfs_core import SBML_dfs
 from napistu.source import Source
 
@@ -1392,7 +1392,7 @@ def test_force_edgelist_consistency(model_source_stub):
             species_df=species_df,
             compartments_df=compartments_df,
             model_source=model_source_stub,
-            force_edgelist_consistency=False,
+            require_edgelist_consistency=False,
         )
 
     # Test WITH force_edgelist_consistency - should succeed with warnings
@@ -1403,7 +1403,7 @@ def test_force_edgelist_consistency(model_source_stub):
             species_df=species_df,
             compartments_df=compartments_df,
             model_source=model_source_stub,
-            force_edgelist_consistency=True,
+            require_edgelist_consistency=True,
         )
 
         # Should have logged warnings about missing species and filtering
@@ -1472,7 +1472,7 @@ def test_force_edgelist_consistency_with_valid_data(model_source_stub):
             species_df=species_df,
             compartments_df=compartments_df,
             model_source=model_source_stub,
-            force_edgelist_consistency=force_consistency,
+            require_edgelist_consistency=force_consistency,
         )
 
         assert sbml_dfs.reactions.shape[0] == 1
@@ -1526,7 +1526,7 @@ def test_force_edgelist_consistency_invalid_compartments(model_source_stub):
             species_df=species_df,
             compartments_df=compartments_df,
             model_source=model_source_stub,
-            force_edgelist_consistency=True,
+            require_edgelist_consistency=True,
         )
 
 

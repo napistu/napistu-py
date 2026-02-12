@@ -11,7 +11,6 @@ from napistu.constants import (
     IDENTIFIERS,
     MINI_SBO_FROM_NAME,
     MINI_SBO_TO_NAME,
-    ONTOLOGIES,
     POLARITIES,
     POLARITY_TO_SYMBOL,
     SBML_DFS,
@@ -28,7 +27,7 @@ from napistu.ingestion.constants import (
     INTERACTION_EDGELIST_DEFS,
     INTERACTION_EDGELIST_OPTIONAL_VARS,
 )
-from napistu.ontologies.constants import SPECIES_TYPES
+from napistu.ontologies.constants import ONTOLOGIES, SPECIES_TYPES
 
 
 def test_id_formatter():

@@ -8,14 +8,8 @@ from typing import Union
 import fsspec
 import pandas as pd
 
-from napistu import identifiers, sbml_dfs_utils, utils
-from napistu.constants import (
-    BQB,
-    IDENTIFIERS,
-    ONTOLOGIES,
-    SBML_DFS,
-    SBOTERM_NAMES,
-)
+from napistu.constants import BQB, IDENTIFIERS, SBML_DFS, SBOTERM_NAMES
+from napistu.identifiers import Identifiers
 from napistu.ingestion import napistu_edgelist
 from napistu.ingestion.constants import (
     DATA_SOURCE_DESCRIPTIONS,
@@ -30,8 +24,12 @@ from napistu.ingestion.constants import (
     STRING_VERSION,
 )
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
+from napistu.ontologies.constants import ONTOLOGIES
+from napistu.ontologies.standardization import create_uri_url
 from napistu.sbml_dfs_core import SBML_dfs
+from napistu.sbml_dfs_utils import stub_compartments
 from napistu.source import Source
+from napistu.utils.io_utils import download_wget
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +94,7 @@ def download_string(
     )
     logger.info("Start downloading string db %s to %s", string_url, target_uri)
 
-    utils.download_wget(string_url, target_uri)
+    download_wget(string_url, target_uri)
 
     return None
 
@@ -123,7 +121,7 @@ def download_string_aliases(
     logger.info(
         "Start downloading string aliases %s to %s", string_aliases_url, target_uri
     )
-    utils.download_wget(string_aliases_url, target_uri)
+    download_wget(string_aliases_url, target_uri)
 
     return None
 
@@ -200,7 +198,7 @@ def convert_string_to_sbml_dfs(
     # Define compartments
     # Currently we are mapping everything to the `CELLULAR_COMPONENT`
     # which is a catch-all go: for unknown localisation
-    compartments_df = sbml_dfs_utils.stub_compartments()
+    compartments_df = stub_compartments()
 
     # define interactions
     interaction_edgelist = _build_interactor_edgelist(uq_string_edgelist)
@@ -276,7 +274,7 @@ def _get_identifiers(
     row: pd.DataFrame,
     alias_to_identifier: dict[str, tuple[str, str]],
     dat_alias: pd.DataFrame,
-) -> identifiers.Identifiers:
+) -> Identifiers:
     """
     Helper function to get identifiers from a row of the string alias file
 
@@ -292,18 +290,18 @@ def _get_identifiers(
 
     Returns
     -------
-    identifiers.Identifiers
+    Identifiers
         An Identifiers object containing all identifiers
     """
     if row.shape[0] == 0:
-        return identifiers.Identifiers([])
+        return Identifiers([])
     d = dat_alias.loc[row.s_name]
     ids = []
     for source_name, (ontology, qualifier) in alias_to_identifier.items():
         for identifier in d.query(f"source == '{source_name}'")["alias"]:
             # Here we creating an uri
-            uri = identifiers.create_uri_url(ontology=ontology, identifier=identifier)
-            # This is exactly the output format from: identifiers.format_uri
+            uri = create_uri_url(ontology=ontology, identifier=identifier)
+            # This is exactly the output format from: format_uri
             # We are doing it manually here to avoid the overhead of parsing
             # the uri again
             id_dict = {
@@ -313,7 +311,7 @@ def _get_identifiers(
                 IDENTIFIERS.URL: uri,
             }
             ids.append(id_dict)
-    identifier = identifiers.Identifiers(ids)
+    identifier = Identifiers(ids)
     return identifier
 
 
@@ -379,7 +377,7 @@ def _build_interactor_edgelist(
         }
     ).assign(
         **{
-            SBML_DFS.R_IDENTIFIERS: lambda x: identifiers.Identifiers([]),
+            SBML_DFS.R_IDENTIFIERS: lambda x: Identifiers([]),
         }
     )
     if add_reverse_interactions:

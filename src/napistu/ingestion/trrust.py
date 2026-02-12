@@ -7,14 +7,13 @@ from typing import Union
 import fsspec
 import pandas as pd
 
-from napistu import identifiers, utils
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
-    ONTOLOGIES,
     SBML_DFS,
     SBOTERM_NAMES,
 )
+from napistu.identifiers import Identifiers
 from napistu.ingestion.constants import (
     DATA_SOURCE_DESCRIPTIONS,
     DATA_SOURCES,
@@ -30,10 +29,15 @@ from napistu.ingestion.constants import (
 )
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.network.constants import NAPISTU_GRAPH_EDGES
-from napistu.ontologies.constants import GENODEXITO_DEFS
+from napistu.ontologies.constants import (
+    GENODEXITO_DEFS,
+    ONTOLOGIES,
+)
 from napistu.ontologies.genodexito import Genodexito
+from napistu.ontologies.standardization import create_uri_url, format_uri
 from napistu.sbml_dfs_core import SBML_dfs
 from napistu.source import Source
+from napistu.utils.io_utils import download_wget
 
 
 def download_trrust(target_uri: str) -> None:
@@ -48,7 +52,7 @@ def download_trrust(target_uri: str) -> None:
     -------
     None
     """
-    utils.download_wget(TTRUST_URL_RAW_DATA_HUMAN, target_uri)
+    download_wget(TTRUST_URL_RAW_DATA_HUMAN, target_uri)
 
     return None
 
@@ -134,7 +138,7 @@ def convert_trrust_to_sbml_dfs(
     species_w_ids = species_df[~species_df[TRRUST_UNIPROT_ID].isnull()].sort_index()
 
     species_w_ids[IDENTIFIERS.URL] = [
-        identifiers.create_uri_url(ontology=TRRUST_UNIPROT, identifier=x)
+        create_uri_url(ontology=TRRUST_UNIPROT, identifier=x)
         for x in species_w_ids[TRRUST_UNIPROT_ID]
     ]
 
@@ -142,9 +146,9 @@ def convert_trrust_to_sbml_dfs(
     # identifiers objects with all uniprot ids
     species_w_ids_series = pd.Series(
         [
-            identifiers.Identifiers(
+            Identifiers(
                 [
-                    identifiers.format_uri(uri=x, bqb=BQB.IS)
+                    format_uri(uri=x, bqb=BQB.IS)
                     for x in species_w_ids.loc[[ind]][IDENTIFIERS.URL].tolist()
                 ]
             )
@@ -169,17 +173,17 @@ def convert_trrust_to_sbml_dfs(
     )
     # stub genes with missing IDs
     species_df[SBML_DFS.S_IDENTIFIERS] = species_df[SBML_DFS.S_IDENTIFIERS].fillna(  # type: ignore
-        value=identifiers.Identifiers([])
+        value=Identifiers([])
     )
 
     # define distinct compartments
     compartments_df = pd.DataFrame(
         {
             SBML_DFS.C_NAME: TRRUST_COMPARTMENT_NUCLEOPLASM,
-            SBML_DFS.C_IDENTIFIERS: identifiers.Identifiers(
+            SBML_DFS.C_IDENTIFIERS: Identifiers(
                 [
-                    identifiers.format_uri(
-                        uri=identifiers.create_uri_url(
+                    format_uri(
+                        uri=create_uri_url(
                             ontology=ONTOLOGIES.GO,
                             identifier=TRRUST_COMPARTMENT_NUCLEOPLASM_GO_ID,
                         ),
@@ -197,9 +201,6 @@ def convert_trrust_to_sbml_dfs(
             NAPISTU_GRAPH_EDGES.TO: INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
         },
         axis=1,
-    ).assign(
-        upstream_compartment=TRRUST_COMPARTMENT_NUCLEOPLASM,
-        downstream_compartment=TRRUST_COMPARTMENT_NUCLEOPLASM,
     )
     gene_gene_identifier_edgelist[SBML_DFS.R_NAME] = [
         f"{x} {y} of {z}"
@@ -228,8 +229,6 @@ def convert_trrust_to_sbml_dfs(
         [
             INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM,
             INTERACTION_EDGELIST_DEFS.NAME_DOWNSTREAM,
-            INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM,
-            INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM,
             SBML_DFS.R_NAME,
             INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM,
             SBML_DFS.R_IDENTIFIERS,
@@ -243,6 +242,10 @@ def convert_trrust_to_sbml_dfs(
         species_df=species_df,
         compartments_df=compartments_df,
         model_source=model_source,
+        interaction_edgelist_defaults={
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_UPSTREAM: TRRUST_COMPARTMENT_NUCLEOPLASM,
+            INTERACTION_EDGELIST_DEFS.COMPARTMENT_DOWNSTREAM: TRRUST_COMPARTMENT_NUCLEOPLASM,
+        },
     )
     sbml_dfs.validate()
     return sbml_dfs
@@ -257,15 +260,13 @@ def _format_pubmed_for_interactions(pubmed_set):
     ids = list()
     for p in pubmed_set:
         # some pubmed IDs are bogus
-        url = identifiers.create_uri_url(
-            ontology=ONTOLOGIES.PUBMED, identifier=p, strict=False
-        )
+        url = create_uri_url(ontology=ONTOLOGIES.PUBMED, identifier=p, strict=False)
         if url is not None:
-            valid_url = identifiers.format_uri(uri=url, bqb=BQB.IS_DESCRIBED_BY)
+            valid_url = format_uri(uri=url, bqb=BQB.IS_DESCRIBED_BY)
 
             ids.append(valid_url)
 
-    return identifiers.Identifiers(ids)
+    return Identifiers(ids)
 
 
 def _get_uniprot_2_symbol_mapping(

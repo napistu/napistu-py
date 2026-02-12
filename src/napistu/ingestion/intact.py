@@ -10,16 +10,13 @@ import numpy as np
 import pandas as pd
 import requests
 
-from napistu import sbml_dfs_utils, utils
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
-    ONTOLOGIES,
-    ONTOLOGIES_LIST,
     SBML_DFS,
     SBOTERM_NAMES,
 )
-from napistu.identifiers import Identifiers, parse_ensembl_id
+from napistu.identifiers import Identifiers
 from napistu.ingestion.constants import (
     DATA_SOURCE_DESCRIPTIONS,
     DATA_SOURCES,
@@ -43,8 +40,15 @@ from napistu.ingestion.constants import (
 )
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.ontologies import renaming
+from napistu.ontologies.constants import (
+    ONTOLOGIES,
+    ONTOLOGIES_LIST,
+)
+from napistu.ontologies.standardization import parse_ensembl_id
 from napistu.sbml_dfs_core import SBML_dfs
+from napistu.sbml_dfs_utils import stub_compartments
 from napistu.source import Source
+from napistu.utils.io_utils import download_and_extract
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +89,7 @@ def download_intact_xmls(
 
     logger.info(f"Downloading and unzipping {intact_species_url}")
 
-    utils.download_and_extract(
+    download_and_extract(
         intact_species_url,
         output_dir_path=output_dir_path,
         download_method="ftp",
@@ -254,7 +258,7 @@ def intact_to_sbml_dfs(
     sbml_dfs = SBML_dfs.from_edgelist(
         interactions_edgelist,
         species_df,
-        compartments_df=sbml_dfs_utils.stub_compartments(),
+        compartments_df=stub_compartments(),
         model_source=model_source,
         interaction_edgelist_defaults={
             INTERACTION_EDGELIST_DEFS.SBO_TERM_NAME_UPSTREAM: SBOTERM_NAMES.INTERACTOR,
@@ -262,7 +266,7 @@ def intact_to_sbml_dfs(
             SBML_DFS.R_ISREVERSIBLE: True,
         },
         keep_reactions_data=DATA_SOURCES.INTACT,
-        force_edgelist_consistency=True,
+        require_edgelist_consistency=True,
     )
 
     return sbml_dfs

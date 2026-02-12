@@ -9,7 +9,6 @@ from typing import Callable, Dict, List, Optional, Union
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from napistu.constants import ONTOLOGIES
 from napistu.ingestion.constants import (
     HARMONIZOME_DATASET_DEFS,
     HARMONIZOME_DATASET_FILES,
@@ -18,6 +17,7 @@ from napistu.ingestion.constants import (
     HARMONIZOME_DEFS,
     HARMONIZOME_URL_TEMPLATES,
 )
+from napistu.ontologies.constants import ONTOLOGIES
 from napistu.utils import download_wget, initialize_dir
 
 logger = logging.getLogger(__name__)

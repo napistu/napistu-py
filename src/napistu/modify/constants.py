@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from napistu.constants import IDENTIFIERS, ONTOLOGIES
+from napistu.constants import IDENTIFIERS
+from napistu.ontologies.constants import ONTOLOGIES
 
 # if_all defines reactions species which must all be present for a filter to occur
 # except_any defines reaction species which will override "if_all"

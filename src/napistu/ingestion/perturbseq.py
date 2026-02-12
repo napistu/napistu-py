@@ -7,12 +7,7 @@ from typing import Callable, Dict, Optional, Union
 import numpy as np
 import pandas as pd
 
-from napistu.constants import (
-    BQB,
-    IDENTIFIERS,
-    ONTOLOGIES,
-    SBML_DFS,
-)
+from napistu.constants import BQB, IDENTIFIERS, SBML_DFS
 from napistu.ingestion.constants import (
     GOF_PERTURBATION_TYPES,
     HARMONIZOME_DATASET_FILES,
@@ -30,6 +25,7 @@ from napistu.ingestion.harmonizome import (
 )
 from napistu.matching.constants import FEATURE_ID_VAR_DEFAULT
 from napistu.matching.species import features_to_pathway_species
+from napistu.ontologies.constants import ONTOLOGIES
 from napistu.utils import download_wget
 
 logger = logging.getLogger(__name__)

@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from napistu.constants import MINI_SBO_FROM_NAME, ONTOLOGIES
+from napistu.constants import MINI_SBO_FROM_NAME
+from napistu.ontologies.constants import ONTOLOGIES
 
 # available ontologies for mapping via bioconductor "org" packages as part of rpy2.rids
 # ontologies which are valid to map to and/or from when adding annotations to an SBML_dfs model.

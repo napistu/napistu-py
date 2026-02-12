@@ -7,8 +7,9 @@ import numpy as np
 import pandas as pd
 
 from napistu import identifiers
-from napistu.constants import IDENTIFIERS, ONTOLOGIES_LIST, SBML_DFS
+from napistu.constants import IDENTIFIERS, SBML_DFS
 from napistu.matching.constants import FEATURE_ID_VAR_DEFAULT
+from napistu.ontologies.constants import ONTOLOGIES_LIST
 
 logger = logging.getLogger(__name__)
 

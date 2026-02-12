@@ -8,26 +8,31 @@ import fsspec
 import numpy as np
 import pandas as pd
 
-from napistu import identifiers, sbml_dfs_core, sbml_dfs_utils, source, utils
 from napistu.constants import (
     BQB,
-    ENSEMBL_PREFIX_TO_ONTOLOGY,
     IDENTIFIERS,
     MINI_SBO_FROM_NAME,
-    ONTOLOGIES,
     SBML_DFS,
     SBOTERM_NAMES,
 )
+from napistu.identifiers import Identifiers
 from napistu.modify.constants import (
     NEO4_MEMBERS_SET,
     REACTOME_CROSSREF_SET,
 )
+from napistu.ontologies.constants import ENSEMBL_PREFIX_TO_ONTOLOGY, ONTOLOGIES
+from napistu.ontologies.standardization import check_reactome_identifier_compatibility
+from napistu.sbml_dfs_core import SBML_dfs
+from napistu.sbml_dfs_utils import id_formatter, id_formatter_inv
+from napistu.source import _safe_source_merge, merge_sources
+from napistu.utils.display_utils import show
+from napistu.utils.pd_utils import check_unique_index, match_pd_vars, safe_series_tolist
 
 logger = logging.getLogger(__name__)
 
 
 def add_complex_formation_species(
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    sbml_dfs: SBML_dfs,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Add Complex Formation - Species
@@ -36,7 +41,7 @@ def add_complex_formation_species(
 
     Parameters
     ----------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    sbml_dfs: SBML_dfs
         A relational mechanistic network
 
     Returns
@@ -80,7 +85,7 @@ def add_complex_formation_species(
 
     # turn unnlisted identifiers back into identifier format
     complex_component_species[SBML_DFS.S_IDENTIFIERS] = [
-        identifiers.Identifiers(
+        Identifiers(
             [
                 {
                     IDENTIFIERS.ONTOLOGY: complex_component_species[
@@ -102,7 +107,7 @@ def add_complex_formation_species(
         [IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER, IDENTIFIERS.URL]
     ).sort_index()
     collapsed_sources = [
-        source.merge_sources(indexed_members.loc[ind][SBML_DFS.S_SOURCE].tolist())
+        merge_sources(indexed_members.loc[ind][SBML_DFS.S_SOURCE].tolist())
         for ind in indexed_members.index.unique()
     ]
     collapsed_sources = pd.Series(
@@ -117,9 +122,7 @@ def add_complex_formation_species(
     )
 
     # define the maximum current id so that we can make new ids without collisions
-    max_existing_sid = max(
-        sbml_dfs_utils.id_formatter_inv(sbml_dfs.species.index.tolist())
-    )
+    max_existing_sid = max(id_formatter_inv(sbml_dfs.species.index.tolist()))
     # if s_ids used an alternative convention then they'll be nans here; which is fine
     if max_existing_sid is np.nan:
         max_existing_sid = int(-1)
@@ -127,7 +130,7 @@ def add_complex_formation_species(
     new_species = complex_component_species[
         complex_component_species["component_s_id"].isna()
     ]
-    new_species["component_s_id"] = sbml_dfs_utils.id_formatter(
+    new_species["component_s_id"] = id_formatter(
         range(max_existing_sid + 1, max_existing_sid + new_species.shape[0] + 1),
         SBML_DFS.S_ID,
     )
@@ -160,7 +163,7 @@ def add_complex_formation_species(
     return merged_membership, new_species_for_sbml_dfs, complex_component_species_ids
 
 
-def add_complex_formation(sbml_dfs: sbml_dfs_core.SBML_dfs):
+def add_complex_formation(sbml_dfs: SBML_dfs):
     """
     Add Complex Formation
 
@@ -169,7 +172,7 @@ def add_complex_formation(sbml_dfs: sbml_dfs_core.SBML_dfs):
     add explicit complex formation reactions.
 
     Reactome represents complexers using BQB_HAS_PART
-    annotations, which are extracted into identifiers.Identifiers
+    annotations, which are extracted into Identifiers
     objects. This is sufficient to define membership but does
     not include stoichiometry. Also, in this approach components
     are defined by their identifiers (URIs) rather than internal
@@ -258,9 +261,9 @@ def add_complex_formation(sbml_dfs: sbml_dfs_core.SBML_dfs):
 
 
 def add_entity_sets(
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    sbml_dfs: SBML_dfs,
     neo4j_members: str,
-) -> sbml_dfs_core.SBML_dfs:
+) -> SBML_dfs:
     """
     Add Entity Sets
 
@@ -270,7 +273,7 @@ def add_entity_sets(
 
     Parameters
     ----------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    sbml_dfs: SBML_dfs
         A relational mechanistic network
     neo4j_members: str
         Path to a table containing Reactome entity sets and corresponding members.
@@ -278,7 +281,7 @@ def add_entity_sets(
 
     Returns
     -------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    sbml_dfs: SBML_dfs
         An updated database which includes entity set species and formation reactions
 
     """
@@ -338,9 +341,9 @@ def add_entity_sets(
 
 
 def add_reactome_identifiers(
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    sbml_dfs: SBML_dfs,
     crossref_path: str,
-) -> sbml_dfs_core.SBML_dfs:
+) -> SBML_dfs:
     """
     Add Reactome Identifiers
 
@@ -348,14 +351,14 @@ def add_reactome_identifiers(
 
     Params
     ------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    sbml_dfs: SBML_dfs
         A pathway model
     crossref_path:
         Path to the cross ref file extracted from Reactome's Neo4j database
 
     Returns
     -------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    sbml_dfs: SBML_dfs
         A pathway model with updated species' identifiers
 
     """
@@ -408,7 +411,7 @@ def add_reactome_identifiers(
     )
 
     updated_identifiers = {
-        k: identifiers.Identifiers(
+        k: Identifiers(
             list(
                 v[
                     [
@@ -470,7 +473,7 @@ def add_reactome_identifiers(
 
 
 def _add_entity_sets_species(
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    sbml_dfs: SBML_dfs,
     reactome_members: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
@@ -480,7 +483,7 @@ def _add_entity_sets_species(
 
     Parameters
     ----------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    sbml_dfs: SBML_dfs
         A relational mechanistic network
     reactome_members: pd.DataFrame
         A table of all Reactome entity sets members - obtained using a Neo4j query
@@ -503,7 +506,7 @@ def _add_entity_sets_species(
 
     # compare Reactome ids in sbml_dfs and reactome_members to make sure
     # they are for the same species
-    identifiers.check_reactome_identifier_compatibility(
+    check_reactome_identifier_compatibility(
         reactome_members["member_id"], reactome_ids[IDENTIFIERS.IDENTIFIER]
     )
 
@@ -533,7 +536,7 @@ def _add_entity_sets_species(
     # to determine distinct species, but then add reactome IDs as well
     distinct_members = pd.Series(
         [
-            identifiers.Identifiers(
+            Identifiers(
                 [
                     {
                         IDENTIFIERS.ONTOLOGY: ind[0],
@@ -549,9 +552,7 @@ def _add_entity_sets_species(
                         IDENTIFIERS.URL: "",
                         IDENTIFIERS.BQB: BQB.IS,
                     }
-                    for x in utils.safe_series_tolist(
-                        distinct_members.loc[ind, "member_id"]
-                    )
+                    for x in safe_series_tolist(distinct_members.loc[ind, "member_id"])
                 ]
             )
             for ind in distinct_members.index.unique()
@@ -560,7 +561,7 @@ def _add_entity_sets_species(
         name=SBML_DFS.S_IDENTIFIERS,
     )
 
-    utils.check_unique_index(distinct_members, "distinct_members")
+    check_unique_index(distinct_members, "distinct_members")
 
     # combine identical species' sources
     indexed_members = merged_membership.set_index(
@@ -568,7 +569,7 @@ def _add_entity_sets_species(
     ).sort_index()
 
     collapsed_sources = [
-        source._safe_source_merge(indexed_members.loc[ind][SBML_DFS.S_SOURCE])
+        _safe_source_merge(indexed_members.loc[ind][SBML_DFS.S_SOURCE])
         for ind in indexed_members.index.unique()
     ]
     collapsed_sources = pd.Series(
@@ -578,7 +579,7 @@ def _add_entity_sets_species(
     # add sources to unique set components
     distinct_members = distinct_members.to_frame().join(collapsed_sources.to_frame())
 
-    utils.check_unique_index(distinct_members, "distinct_members (with sources)")
+    check_unique_index(distinct_members, "distinct_members (with sources)")
 
     # define set members which already exist as species versus those that must be added
     set_component_species["is_already_included"] = set_component_species[
@@ -586,9 +587,7 @@ def _add_entity_sets_species(
     ].isin(reactome_ids[IDENTIFIERS.IDENTIFIER])
 
     # define the maximum current id so that we can make new ids without collisions
-    max_existing_sid = max(
-        sbml_dfs_utils.id_formatter_inv(sbml_dfs.species.index.tolist())
-    )
+    max_existing_sid = max(id_formatter_inv(sbml_dfs.species.index.tolist()))
     # if s_ids used an alternative convention then they'll be nans here; which is fine
     if max_existing_sid is np.nan:
         max_existing_sid = int(-1)
@@ -596,7 +595,7 @@ def _add_entity_sets_species(
     new_species = set_component_species[
         ~set_component_species["is_already_included"]
     ].copy()
-    new_species["component_s_id"] = sbml_dfs_utils.id_formatter(
+    new_species["component_s_id"] = id_formatter(
         range(max_existing_sid + 1, max_existing_sid + new_species.shape[0] + 1),
         SBML_DFS.S_ID,
     )
@@ -627,7 +626,7 @@ def _add_entity_sets_species(
         .sort_index()
     )
 
-    utils.check_unique_index(new_species_for_sbml_dfs, "new_species_for_sbml_dfs")
+    check_unique_index(new_species_for_sbml_dfs, "new_species_for_sbml_dfs")
 
     # combine existing and newly defined set components
     set_component_species_ids = pd.concat(
@@ -649,7 +648,7 @@ def _add_entity_sets_species(
 
 
 def _add_entity_sets_reactions(
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    sbml_dfs: SBML_dfs,
     new_compartmentalized_species_for_sbml_dfs: pd.DataFrame,
     updated_compartmentalized_membership: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -660,7 +659,7 @@ def _add_entity_sets_reactions(
 
     Parameters
     ----------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    sbml_dfs: SBML_dfs
         A relational mechanistic network
     new_compartmentalized_species_for_sbml_dfs: pd.DataFrame
         New entries to add to sbml_dfs.compartmentalized_species
@@ -696,9 +695,7 @@ def _add_entity_sets_reactions(
         raise ValueError("Some components could not be merged")
 
     # define newly added reactions
-    max_existing_rid = max(
-        sbml_dfs_utils.id_formatter_inv(sbml_dfs.reactions.index.tolist())
-    )
+    max_existing_rid = max(id_formatter_inv(sbml_dfs.reactions.index.tolist()))
     # if s_ids used an alternative convention then they'll be nans here; which is fine
     if max_existing_rid is np.nan:
         max_existing_rid = int(-1)
@@ -711,7 +708,7 @@ def _add_entity_sets_reactions(
         )
     ]
 
-    named_set_components[SBML_DFS.R_ID] = sbml_dfs_utils.id_formatter(
+    named_set_components[SBML_DFS.R_ID] = id_formatter(
         range(
             max_existing_rid + 1,
             max_existing_rid + named_set_components.shape[0] + 1,
@@ -721,7 +718,7 @@ def _add_entity_sets_reactions(
 
     named_set_components[SBML_DFS.R_SOURCE] = named_set_components[SBML_DFS.SC_SOURCE]
     named_set_components[SBML_DFS.R_IDENTIFIERS] = [
-        identifiers.Identifiers([]) for i in range(0, named_set_components.shape[0])
+        Identifiers([]) for i in range(0, named_set_components.shape[0])
     ]
 
     new_reactions_for_sbml_dfs = (
@@ -735,9 +732,7 @@ def _add_entity_sets_reactions(
 
     # define newly added reactions' species
 
-    max_existing_rscid = max(
-        sbml_dfs_utils.id_formatter_inv(sbml_dfs.reaction_species.index.tolist())
-    )
+    max_existing_rscid = max(id_formatter_inv(sbml_dfs.reaction_species.index.tolist()))
     if max_existing_rscid is np.nan:
         max_existing_rscid = int(-1)
 
@@ -753,7 +748,7 @@ def _add_entity_sets_reactions(
         ]
     ).sort_values([SBML_DFS.R_ID, SBML_DFS.STOICHIOMETRY])
 
-    new_reaction_species_for_sbml_dfs[SBML_DFS.RSC_ID] = sbml_dfs_utils.id_formatter(
+    new_reaction_species_for_sbml_dfs[SBML_DFS.RSC_ID] = id_formatter(
         range(
             max_existing_rscid + 1,
             max_existing_rscid + new_reaction_species_for_sbml_dfs.shape[0] + 1,
@@ -769,7 +764,7 @@ def _add_entity_sets_reactions(
 
 
 def _add_complex_formation_compartmentalized_species(
-    sbml_dfs: sbml_dfs_core.SBML_dfs,
+    sbml_dfs: SBML_dfs,
     merged_membership: pd.DataFrame,
     new_species_for_sbml_dfs: pd.DataFrame,
     complex_component_species_ids: pd.DataFrame,
@@ -781,7 +776,7 @@ def _add_complex_formation_compartmentalized_species(
 
     Parameters
     ----------
-    sbml_dfs: sbml_dfs_core.SBML_dfs
+    sbml_dfs: SBML_dfs
         A relational mechanistic network
     merged_membership: pd.DataFrame
         A table of complexes and their component members
@@ -837,14 +832,12 @@ def _add_complex_formation_compartmentalized_species(
 
     # add new identifiers
     max_existing_scid = max(
-        sbml_dfs_utils.id_formatter_inv(
-            sbml_dfs.compartmentalized_species.index.tolist()
-        )
+        id_formatter_inv(sbml_dfs.compartmentalized_species.index.tolist())
     )
     if max_existing_scid is np.nan:
         max_existing_scid = int(-1)
 
-    new_compartmentalized_species[SBML_DFS.SC_ID] = sbml_dfs_utils.id_formatter(
+    new_compartmentalized_species[SBML_DFS.SC_ID] = id_formatter(
         range(
             max_existing_scid + 1,
             max_existing_scid + new_compartmentalized_species.shape[0] + 1,
@@ -892,7 +885,7 @@ def _add_complex_formation_compartmentalized_species(
 
     collapsed_csources = [
         (
-            source.merge_sources(indexed_cmembers.loc[ind][SBML_DFS.SC_SOURCE].tolist())
+            merge_sources(indexed_cmembers.loc[ind][SBML_DFS.SC_SOURCE].tolist())
             if len(ind) == 1
             else indexed_cmembers.loc[ind][SBML_DFS.SC_SOURCE]
         )
@@ -922,7 +915,7 @@ def _add_complex_formation_compartmentalized_species(
         .set_index(SBML_DFS.SC_ID)
     )
 
-    utils.check_unique_index(
+    check_unique_index(
         new_compartmentalized_species_for_sbml_dfs,
         "new_compartmentalized_species_for_sbml_dfs",
     )
@@ -977,7 +970,7 @@ def _merge_reactome_crossref_ids(
 
     """
 
-    # reactome IDs to identifiers.Identifiers
+    # reactome IDs to Identifiers
     id_indices = current_molecular_ids.index.unique()
     # ind = id_indices[1]
 
@@ -1046,7 +1039,7 @@ def _merge_reactome_crossref_ids(
             f"{failed_joins.shape[0]} network uniprot IDs were not matched to the Reactome Crossref IDs"
         )
 
-        utils.show(logged_join_fails, headers="keys", hide_index=True)
+        show(logged_join_fails, headers="keys", hide_index=True)
 
     # entries without reactome IDs join just by uniprot
     # outer join back to uni_rct_with_crossrefs so we won't consider a uniprot-only match
@@ -1094,7 +1087,7 @@ def _merge_reactome_crossref_ids(
             f"A gene ID could not be found for {species_with_protein_and_no_gene.shape[0]} "
             "(species, bqb) pairs with a protein ID"
         )
-        utils.show(logged_join_fails, headers="keys", hide_index=True)
+        show(logged_join_fails, headers="keys", hide_index=True)
 
     return merged_crossrefs
 
@@ -1111,7 +1104,7 @@ def _read_neo4j_members(neo4j_members: str) -> pd.DataFrame:
         reactome_members = pd.read_csv(f).assign(url="")
 
     # check that the expected columns are present
-    utils.match_pd_vars(reactome_members, NEO4_MEMBERS_SET).assert_present()
+    match_pd_vars(reactome_members, NEO4_MEMBERS_SET).assert_present()
 
     reactome_members[IDENTIFIERS.ONTOLOGY] = reactome_members[
         IDENTIFIERS.ONTOLOGY
@@ -1151,7 +1144,7 @@ def _read_reactome_crossref_ids(
         reactome_ids = pd.read_csv(f)
 
     # check that the expected columns are present
-    utils.match_pd_vars(reactome_ids, REACTOME_CROSSREF_SET).assert_present()
+    match_pd_vars(reactome_ids, REACTOME_CROSSREF_SET).assert_present()
 
     # only use ensembl and pharos for now
 
@@ -1161,7 +1154,7 @@ def _read_reactome_crossref_ids(
     ].copy()
     pharos_ids[IDENTIFIERS.ONTOLOGY] = ONTOLOGIES.PHAROS
 
-    # format ensembl ids using conventions in identifiers.Identifiers
+    # format ensembl ids using conventions in Identifiers
     ensembl_ids = reactome_ids[reactome_ids[IDENTIFIERS.ONTOLOGY] == "Ensembl"].copy()
     # distinguish ensembl genes/transcripts/proteins
     ensembl_ids["ontology_prefix"] = ensembl_ids[IDENTIFIERS.IDENTIFIER].str.slice(

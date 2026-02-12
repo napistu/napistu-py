@@ -6,14 +6,7 @@ from typing import Any, Dict, List, Tuple, Union
 import pandas as pd
 
 from napistu import sbml_dfs_core, sbml_dfs_utils
-from napistu.constants import (
-    BQB,
-    IDENTIFIERS,
-    ONTOLOGIES,
-    ONTOLOGIES_LIST,  # noqa: F401
-    SBML_DFS,
-    SBOTERM_NAMES,
-)
+from napistu.constants import BQB, IDENTIFIERS, SBML_DFS, SBOTERM_NAMES
 from napistu.identifiers import Identifiers
 from napistu.ingestion.constants import (
     DATA_SOURCE_DESCRIPTIONS,
@@ -28,7 +21,12 @@ from napistu.ingestion.constants import (
 )
 from napistu.ingestion.organismal_species import OrganismalSpeciesValidator
 from napistu.ontologies import renaming
-from napistu.ontologies.constants import GENODEXITO_DEFS, MIRBASE_TABLES, PUBCHEM_DEFS
+from napistu.ontologies.constants import (
+    GENODEXITO_DEFS,
+    MIRBASE_TABLES,
+    ONTOLOGIES,
+    PUBCHEM_DEFS,
+)
 from napistu.ontologies.genodexito import Genodexito
 from napistu.ontologies.mirbase import load_mirbase_xrefs
 from napistu.ontologies.pubchem import map_pubchem_ids
@@ -213,7 +211,7 @@ def format_omnipath_as_sbml_dfs(
         model_source=model_source,
         keep_reactions_data=DATA_SOURCES.OMNIPATH,
         keep_species_data=DATA_SOURCES.OMNIPATH,
-        force_edgelist_consistency=True,
+        require_edgelist_consistency=True,
     )
 
     return sbml_dfs

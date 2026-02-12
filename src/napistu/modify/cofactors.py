@@ -1,4 +1,13 @@
-"""Module to detect and remove cofactors from a pathway model"""
+"""
+Module to detect and remove cofactors from a pathway model
+
+Public Functions
+----------------
+drop_cofactors
+    Remove reaction species when they are acting as cofactors
+identify_cofactors
+    Identify reaction species that are acting as cofactors
+"""
 
 import logging
 from typing import Dict, List, Set
@@ -7,17 +16,13 @@ import pandas as pd
 from pydantic import BaseModel, Field, field_validator
 
 from napistu import utils
-from napistu.constants import (
-    BQB,
-    IDENTIFIERS,
-    ONTOLOGIES,
-    SBML_DFS,
-)
+from napistu.constants import BQB, IDENTIFIERS, SBML_DFS
 from napistu.modify.constants import (
     COFACTOR_CHEBI_IDS,
     COFACTOR_DEFS,
     COFACTOR_SCHEMA,
 )
+from napistu.ontologies.constants import ONTOLOGIES
 from napistu.sbml_dfs_core import SBML_dfs
 
 logger = logging.getLogger(__name__)
