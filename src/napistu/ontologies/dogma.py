@@ -5,12 +5,12 @@ import logging
 
 import pandas as pd
 
-from napistu import identifiers, sbml_dfs_core, sbml_dfs_utils, utils
 from napistu.constants import (
     BQB,
     IDENTIFIERS,
     SBML_DFS,
 )
+from napistu.identifiers import Identifiers
 from napistu.ingestion.constants import (
     DATA_SOURCE_DESCRIPTIONS,
     DATA_SOURCES,
@@ -26,7 +26,13 @@ from napistu.ontologies.constants import (
     PROTEIN_ONTOLOGIES,
 )
 from napistu.ontologies.genodexito import Genodexito
+from napistu.ontologies.standardization import create_uri_url
+from napistu.sbml_dfs_core import SBML_dfs
+from napistu.sbml_dfs_utils import stub_compartments
 from napistu.source import Source
+from napistu.utils.ig_utils import find_weakly_connected_subgraphs
+from napistu.utils.pd_utils import format_identifiers_as_edgelist
+from napistu.utils.string_utils import _add_nameness_score
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +42,7 @@ def create_dogmatic_sbml_dfs(
     preferred_method: str = GENODEXITO_DEFS.BIOCONDUCTOR,
     allow_fallback: bool = True,
     r_paths: str | None = None,
-) -> sbml_dfs_core.SBML_dfs:
+) -> SBML_dfs:
     """
     Create Dogmatic SMBL_DFs
 
@@ -71,7 +77,7 @@ def create_dogmatic_sbml_dfs(
     )
 
     # stub required but invariant variables
-    compartments_df = sbml_dfs_utils.stub_compartments()
+    compartments_df = stub_compartments()
 
     model_source = Source.single_entry(
         model=DATA_SOURCES.DOGMA,
@@ -96,7 +102,7 @@ def create_dogmatic_sbml_dfs(
         INTERACTION_EDGELIST_DEFS.NAME_UPSTREAM
     ]
 
-    dogmatic_sbml_dfs = sbml_dfs_core.SBML_dfs.from_edgelist(
+    dogmatic_sbml_dfs = SBML_dfs.from_edgelist(
         interaction_edgelist=interaction_edgelist,
         species_df=species_df,
         compartments_df=compartments_df,
@@ -152,12 +158,10 @@ def _connect_dogmatic_mappings(
     protein_mappings = genodexito.stacked_mappings
 
     # apply greedy graph-based clustering to connect proteins with a common mapping to entrez
-    edgelist_df = utils.format_identifiers_as_edgelist(
+    edgelist_df = format_identifiers_as_edgelist(
         protein_mappings, [IDENTIFIERS.ONTOLOGY, IDENTIFIERS.IDENTIFIER]
     )
-    connected_indices = utils.find_weakly_connected_subgraphs(
-        edgelist_df[["ind", "id"]]
-    )
+    connected_indices = find_weakly_connected_subgraphs(edgelist_df[["ind", "id"]])
 
     # add clusters to proteins. Each cluster will be a distinct molecular species
     protein_mappings_w_clusters = protein_mappings.reset_index().merge(
@@ -206,7 +210,7 @@ def _connect_dogmatic_mappings(
     ]
 
     s_name_series = (
-        utils._add_nameness_score(possible_names, IDENTIFIERS.IDENTIFIER)
+        _add_nameness_score(possible_names, IDENTIFIERS.IDENTIFIER)
         .sort_values(["ontology_preference", "nameness_score"])
         .groupby("cluster")
         .first()
@@ -228,13 +232,13 @@ def _connect_dogmatic_mappings(
     # combine all ids to setup a single cluster-level Identifiers
     all_ids = pd.concat([protein_ids, gene_ids, entrez_ids])
     all_ids.loc[:, IDENTIFIERS.URL] = [
-        identifiers.create_uri_url(x, y)
+        create_uri_url(x, y)
         for x, y in zip(all_ids[IDENTIFIERS.ONTOLOGY], all_ids[IDENTIFIERS.IDENTIFIER])
     ]
 
     # create one Identifiers object for each new species
     cluster_consensus_identifiers = {
-        k: identifiers.Identifiers(
+        k: Identifiers(
             list(
                 v[
                     [

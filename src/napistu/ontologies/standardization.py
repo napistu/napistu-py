@@ -631,13 +631,11 @@ def _netloc_to_identifiers_matrixdb_adaptor(uri, class_regex, id_regex):
 
 
 def _netloc_w_url_suffix_to_identifiers_phosphosite_adaptor(split_path, result):
-    print(result.query)
-    print(split_path[-1])
-    print(split_path[1])
-    # phsophosite
+    # phosphosite ligands (i.e., sites)
     if split_path[1] == "siteAction.action":
         ontology = ONTOLOGIES.PHOSPHOSITE
         identifier = extract_regex_match("id=([0-9]+)", result.query)
+    # phosphosite kinases
     elif split_path[1] == "proteinAction.do":
         ontology = ONTOLOGIES.PHOSPHOSITE_KINASE
         identifier = extract_regex_match("id=([0-9]+)", result.query)
