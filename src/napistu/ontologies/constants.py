@@ -219,7 +219,9 @@ NAME_ONTOLOGIES = {
 # PubChem constants
 PUBCHEM_ID_ENTRYPOINT = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cids_str}/property/IUPACName,Title,IsomericSMILES,SMILES/JSON"
 
-PUBCHEM_DEFS = SimpleNamespace(NAME="name", SMILES="smiles", PUBCHEM_ID="pubchem_id")
+PUBCHEM_DEFS = SimpleNamespace(
+    NAME="name", SMILES="smiles", PUBCHEM_ID="pubchem_id", MAPPED="mapped"
+)
 
 PUBCHEM_PROPERTIES = SimpleNamespace(
     CID="CID",
