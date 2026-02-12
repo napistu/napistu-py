@@ -23,12 +23,3 @@ def test_formatting_go_isa_attributes():
 
     for val_list, expected in go_parents_test_entries:
         assert obo._isa_str_list_to_dict_list(val_list) == expected
-
-
-################################################
-# __main__
-################################################
-
-if __name__ == "__main__":
-    test_formatting_obo_attributes()
-    test_formatting_go_isa_attributes()
