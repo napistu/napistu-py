@@ -44,7 +44,8 @@ ONTOLOGIES = SimpleNamespace(
     NCI_THESAURUS="nci_thesaurus",
     OLS="ols",  # ontology of ontologies
     PHAROS="pharos",  # pharos gene summaries
-    PHOSPHOSITE="phosphosite",  # phosphosite.org kinase and ligand interactions
+    PHOSPHOSITE="phosphosite",  # phosphosite.org ligands
+    PHOSPHOSITE_KINASE="phosphosite_kinase",  # phosphosite.org kinases
     PUBCHEM="pubchem",
     PUBMED="pubmed",
     REACTOME="reactome",
@@ -379,6 +380,10 @@ ONTOLOGY_TO_URL_MAP = {
     },
     ONTOLOGIES.PHOSPHOSITE: {
         ONTOLOGY_MAP.URL: "https://www.phosphosite.org/siteAction.action?id={identifier}",
+        ONTOLOGY_MAP.ID_REGEX: "^[0-9]+$",
+    },
+    ONTOLOGIES.PHOSPHOSITE_KINASE: {
+        ONTOLOGY_MAP.URL: "https://www.phosphosite.org/proteinAction.do?id={identifier}&showAllSites=true",
         ONTOLOGY_MAP.ID_REGEX: "^[0-9]+$",
     },
     ONTOLOGIES.PUBCHEM: {
