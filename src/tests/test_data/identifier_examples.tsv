@@ -1,11 +1,12 @@
 test	url	ontology	identifier	canonical_url
-ChEBI	http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:37136	chebi	37136	NA
+ChEBI	http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:37136	chebi	37136	https://www.ebi.ac.uk/chebi/CHEBI:37136
+ChEBI2	https://www.ebi.ac.uk/chebi/CHEBI:43474	chebi	43474	NA
 PubChemID	http://pubchem.ncbi.nlm.nih.gov/compound/71496460	pubchem	71496460	NA
 PubChemInchiKey	http://www.ncbi.nlm.nih.gov/sites/entrez?cmd=search&db=pccompound&term=XDFCIPNJCBUZJN-UHFFFAOYSA-N	ncbi_entrez_pccompound	XDFCIPNJCBUZJN-UHFFFAOYSA-N	NA
 BiGG_metabolite	http://identifiers.org/bigg.metabolite/10fthf	bigg_metabolite	10fthf	NA
 BiGG_metabolite2	http://identifiers.org/bigg.metabolite:10fthf	bigg_metabolite	10fthf	http://identifiers.org/bigg.metabolite/10fthf
-identifiersChEBI	http://identifiers.org/chebi/CHEBI:57746	chebi	57746	http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:57746
-identifiersChEBI2	http://identifiers.org/CHEBI:57746	chebi	57746	http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:57746
+identifiersChEBI	http://identifiers.org/chebi/CHEBI:57746	chebi	57746	https://www.ebi.ac.uk/chebi/CHEBI:57746
+identifiersChEBI2	http://identifiers.org/CHEBI:57746	chebi	57746	https://www.ebi.ac.uk/chebi/CHEBI:57746
 identifiersEnviPath	http://identifiers.org/envipath/650babc9-9d68-4b73-9332-11972ca26f7b/compound/db5219ee-60cb-4370-b066-340c9faf069c	envipath	650babc9-9d68-4b73-9332-11972ca26f7b/compound/db5219ee-60cb-4370-b066-340c9faf069c	NA
 identifiersEnviPath	http://identifiers.org/envipath:650babc9-9d68-4b73-9332-11972ca26f7b/compound/db5219ee-60cb-4370-b066-340c9faf069c	envipath	650babc9-9d68-4b73-9332-11972ca26f7b/compound/db5219ee-60cb-4370-b066-340c9faf069c	http://identifiers.org/envipath/650babc9-9d68-4b73-9332-11972ca26f7b/compound/db5219ee-60cb-4370-b066-340c9faf069c
 IdentifiersReactome	http://identifiers.org/reactome:R-HSA-5215981	reactome	R-HSA-5215981	https://reactome.org/content/detail/R-HSA-5215981

@@ -223,6 +223,11 @@ def format_uri(uri: str, bqb: str, strict: bool = True) -> Optional[list[dict]]:
         The identifier list or None if the URI is not valid
     """
 
+    if not isinstance(uri, str):
+        raise TypeError(f"uri must be a string, got {type(uri)}")
+    if not isinstance(bqb, str):
+        raise TypeError(f"bqb must be a string, got {type(bqb)}")
+
     identifier = format_uri_url(uri, strict=strict)
 
     if identifier is None:
@@ -326,7 +331,11 @@ def format_uri_url(uri: str, strict: bool = True) -> dict:
         logger.warning("Renaming ncbi_gene to ncbi_entrez_gene")
         ontology = ONTOLOGIES.NCBI_ENTREZ_GENE
 
-    id_dict = {"ontology": ontology, "identifier": identifier, "url": uri}
+    id_dict = {
+        IDENTIFIERS.ONTOLOGY: ontology,
+        IDENTIFIERS.IDENTIFIER: identifier,
+        IDENTIFIERS.URL: uri,
+    }
 
     return id_dict
 
@@ -585,29 +594,6 @@ def _validate_bqb(bqb: str) -> None:
 # ID mapping adapters and lambda functions
 
 
-def _netloc_w_url_suffix_to_identifiers_ensembl_adaptor(result, ontology: str):
-    identifier, id_ontology, _ = parse_ensembl_id(result.query)  # type: ignore
-    if ontology != id_ontology:
-        raise ValueError(f"Ontology mismatch: expected {ontology}, got {id_ontology}")
-    return ontology, identifier
-
-
-def _netloc_w_url_suffix_to_identifiers_ncbi_adaptor(result, uri):
-    ontology = "ncbi_entrez_" + extract_regex_search(
-        "db=([A-Za-z0-9]+)\\&", result.query, 1
-    )
-
-    if ontology not in ONTOLOGIES_LIST:
-        logger.warning(
-            f"Ontology {ontology} is not a recognized ontology. Extracted from {uri}"
-        )
-        return None
-
-    identifier = extract_regex_search(r"term=([A-Za-z0-9\-]+)$", result.query, 1)
-
-    return ontology, identifier
-
-
 def _netloc_to_identifiers_mirbase_adaptor(split_path, result):
     ontology = ONTOLOGIES.MIRBASE
     if re.search("MI[0-9]+", split_path[-1]):
@@ -721,6 +707,14 @@ NETLOC_TO_IDENTIFIERS_MAP = {
     "users.rcn.com": lambda split_path, result, uri: (ONTOLOGIES.URL, uri),
 }
 
+
+def _netloc_w_url_suffix_to_identifiers_ensembl_adaptor(result, ontology: str):
+    identifier, id_ontology, _ = parse_ensembl_id(result.query)  # type: ignore
+    if ontology != id_ontology:
+        raise ValueError(f"Ontology mismatch: expected {ontology}, got {id_ontology}")
+    return ontology, identifier
+
+
 NETLOC_W_URL_SUFFIX_TO_IDENTIFIERS_MAP = {
     (
         "www.ensembl.org",
@@ -755,6 +749,23 @@ NETLOC_W_URL_SUFFIX_TO_IDENTIFIERS_MAP = {
     ),
 }
 
+
+def _netloc_w_url_prefix_to_identifiers_ncbi_adaptor(result, uri):
+    ontology = "ncbi_entrez_" + extract_regex_search(
+        "db=([A-Za-z0-9]+)\\&", result.query, 1
+    )
+
+    if ontology not in ONTOLOGIES_LIST:
+        logger.warning(
+            f"Ontology {ontology} is not a recognized ontology. Extracted from {uri}"
+        )
+        return None
+
+    identifier = extract_regex_search(r"term=([A-Za-z0-9\-]+)$", result.query, 1)
+
+    return ontology, identifier
+
+
 NETLOC_W_URL_ONE_TO_IDENTIFIERS_MAP = {
     ("www.ncbi.nlm.nih.gov", "nuccore"): lambda split_path, result, uri: (
         ONTOLOGIES.NCBI_REFSEQ,
@@ -763,7 +774,7 @@ NETLOC_W_URL_ONE_TO_IDENTIFIERS_MAP = {
     (
         "www.ncbi.nlm.nih.gov",
         "sites",
-    ): lambda split_path, result, uri: _netloc_w_url_suffix_to_identifiers_ncbi_adaptor(
+    ): lambda split_path, result, uri: _netloc_w_url_prefix_to_identifiers_ncbi_adaptor(
         result, uri
     ),
     ("www.ncbi.nlm.nih.gov", "books"): lambda split_path, result, uri: (
@@ -785,10 +796,18 @@ NETLOC_W_URL_ONE_TO_IDENTIFIERS_MAP = {
 }
 
 
+def _split_one_to_identifiers_chebi_adaptor(split_path, result):
+    if re.match("CHEBI:[0-9]+", split_path[-1]):
+        identifier = extract_regex_search("[0-9]+$", split_path[-1])
+    else:
+        identifier = extract_regex_search("[0-9]+$", result.query)
+
+    return ONTOLOGIES.CHEBI, identifier
+
+
 SPLIT_ONE_TO_IDENTIFIERS_MAP = {
-    "chebi": lambda split_path, result: (
-        ONTOLOGIES.CHEBI,
-        extract_regex_search("[0-9]+$", result.query),
+    "chebi": lambda split_path, result: _split_one_to_identifiers_chebi_adaptor(
+        split_path, result
     ),
     "ols": lambda split_path, result: (ONTOLOGIES.OLS, split_path[-1]),
     "pubmed": lambda split_path, result: (ONTOLOGIES.PUBMED, split_path[-1]),

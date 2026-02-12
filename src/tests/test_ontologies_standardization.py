@@ -51,9 +51,10 @@ def test_parsing_ensembl_ids():
 
 def test_identifiers_from_urls(test_data_path):
     identifier_examples = get_identifier_examples(test_data_path)
+    print(identifier_examples)
 
     for i in range(0, identifier_examples.shape[0]):
-        # print(identifier_examples["url"][i])
+        print(identifier_examples["url"][i])
         testIdentifiers = Identifiers(
             [format_uri(identifier_examples[IDENTIFIERS.URL][i], bqb=BQB.IS)]
         )

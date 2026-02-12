@@ -322,7 +322,7 @@ ONTOLOGY_TO_URL_MAP = {
         ONTOLOGY_MAP.ID_REGEX: None,
     },
     ONTOLOGIES.CHEBI: {
-        ONTOLOGY_MAP.URL: "http://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:{identifier}",
+        ONTOLOGY_MAP.URL: "https://www.ebi.ac.uk/chebi/CHEBI:{identifier}",
         ONTOLOGY_MAP.ID_REGEX: "^[0-9]+$",
     },
     ONTOLOGIES.CHEMSPIDER: {
