@@ -48,8 +48,9 @@ def map_pubchem_ids(
 
     Returns
     -------
-    Dict[str, Dict[str, str]]
-        Maps CID to {"name": str, "smiles": str}. Missing data returns empty strings.
+    Dict[str, Dict[str, Any]]
+        Maps CID to {"name": str, "smiles": str, "mapped": bool}.
+        ``mapped=False`` indicates fallback data (API failure or CID not in database).
 
     Examples
     --------
@@ -130,9 +131,13 @@ def map_pubchem_ids(
         else:
             failed_cids.extend(batch)
 
-    # Handle completely failed CIDs
+    # Handle completely failed CIDs (API error, fallback)
     for cid in failed_cids:
-        results[cid] = {PUBCHEM_DEFS.NAME: cid, PUBCHEM_DEFS.SMILES: ""}
+        results[cid] = {
+            PUBCHEM_DEFS.NAME: cid,
+            PUBCHEM_DEFS.SMILES: "",
+            PUBCHEM_DEFS.MAPPED: False,
+        }
 
     # Final stats
     successful = sum(
@@ -223,12 +228,20 @@ def _process_batch_response(
             PUBCHEM_PROPERTIES.ISOMERIC_SMILES, prop.get(PUBCHEM_PROPERTIES.SMILES, "")
         )
 
-        batch_results[cid] = {PUBCHEM_DEFS.NAME: name, PUBCHEM_DEFS.SMILES: smiles}
+        batch_results[cid] = {
+            PUBCHEM_DEFS.NAME: name,
+            PUBCHEM_DEFS.SMILES: smiles,
+            PUBCHEM_DEFS.MAPPED: True,
+        }
 
-    # Handle missing CIDs
+    # Handle missing CIDs (not in API response - invalid or API returned partial)
     for cid in batch:
         if cid not in found_cids:
-            batch_results[cid] = {PUBCHEM_DEFS.NAME: cid, PUBCHEM_DEFS.SMILES: ""}
+            batch_results[cid] = {
+                PUBCHEM_DEFS.NAME: cid,
+                PUBCHEM_DEFS.SMILES: "",
+                PUBCHEM_DEFS.MAPPED: False,
+            }
 
     return batch_results
 
@@ -260,7 +273,11 @@ def _fetch_batch(
                 else:
                     logger.warning(f"Invalid CID: {batch[0]}")
                     return {
-                        batch[0]: {PUBCHEM_DEFS.NAME: batch[0], PUBCHEM_DEFS.SMILES: ""}
+                        batch[0]: {
+                            PUBCHEM_DEFS.NAME: batch[0],
+                            PUBCHEM_DEFS.SMILES: "",
+                            PUBCHEM_DEFS.MAPPED: False,
+                        }
                     }, True
 
             else:
@@ -303,7 +320,11 @@ def _fetch_individual_cids(
         if success:
             results.update(individual_result)
         else:
-            results[cid] = {PUBCHEM_DEFS.NAME: cid, PUBCHEM_DEFS.SMILES: ""}
+            results[cid] = {
+                PUBCHEM_DEFS.NAME: cid,
+                PUBCHEM_DEFS.SMILES: "",
+                PUBCHEM_DEFS.MAPPED: False,
+            }
         time.sleep(delay * 0.5)  # Shorter delay for individual requests
 
     return results, True
