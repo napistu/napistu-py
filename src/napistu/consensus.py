@@ -1,3 +1,22 @@
+"""
+Creating a consensus model by merging shared entities across pathway models.
+
+Public Functions
+----------------
+construct_consensus_model(sbml_dfs_dict, pw_index, model_source=None, dogmatic=True, check_mergeability=True, no_rxn_pathway_ids=None) -> SBML_dfs:
+    Construct a Consensus Model by merging shared entities across pathway models.
+construct_meta_entities_fk(sbml_dfs_dict, pw_index, table="compartmentalized_species", fk_lookup_tables={}, extra_defining_attrs=[]) -> tuple[pd.DataFrame, pd.Series]:
+    Construct Meta Entities Defined by Foreign Keys
+construct_meta_entities_identifiers(sbml_dfs_dict, pw_index, table, fk_lookup_tables={}, defining_biological_qualifiers=BQB_DEFINING_ATTRS) -> tuple[pd.DataFrame, pd.Series]:
+    Construct meta-entities by merging entities across models that share identifiers.
+construct_meta_entities_members(sbml_dfs_dict, pw_index=None, table="reactions", defined_by="reaction_species", defined_lookup_tables={}, defining_attrs=[SC_ID, STOICHIOMETRY]) -> tuple[pd.DataFrame, pd.Series]:
+    Construct Meta Entities Defined by Membership
+construct_sbml_dfs_dict(pw_index, strict=True, verbose=False) -> dict[str, SBML_dfs]:
+    Construct a dictionary of SBML_dfs objects from a pathway index.
+prepare_consensus_model(sbml_dfs_list) -> tuple[dict[str, SBML_dfs], PWIndex]:
+    Prepare for creating a consensus model using a list of to-be-consolidated sbml_dfs objects.
+"""
+
 from __future__ import annotations
 
 import logging

@@ -1,3 +1,30 @@
+"""
+Network propagation with null distribution testing.
+
+This module provides functions for propagating vertex attributes over a network
+(e.g. personalized PageRank) and testing observed scores against null distributions.
+Supported null strategies include vertex permutation, edge permutation, parametric,
+and uniform, enabling network-based significance testing for gene prioritization
+and related analyses.
+
+Public Functions
+----------------
+network_propagation_with_null(graph, attributes, null_strategy, ...)
+    Apply network propagation and compare observed scores to a null distribution.
+net_propagate_attributes(graph, attributes, propagation_method, ...)
+    Propagate multiple attributes over a network using a propagation method.
+uniform_null(graph, attributes, propagation_method, ...)
+    Generate uniform null distribution over masked nodes.
+parametric_null(graph, attributes, propagation_method, n_samples, ...)
+    Generate null by sampling from a fitted parametric distribution.
+vertex_permutation_null(graph, attributes, propagation_method, n_samples, ...)
+    Generate null by permuting vertex labels while preserving topology.
+edge_permutation_null(graph, attributes, propagation_method, n_samples, ...)
+    Generate null by rewiring edges while preserving degree distribution.
+get_null_generator(strategy)
+    Return the null generator function for a given strategy name.
+"""
+
 import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
