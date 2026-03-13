@@ -294,10 +294,11 @@ NET_PROPAGATION_DEFS = SimpleNamespace(PERSONALIZED_PAGERANK="personalized_pager
 
 # null distributions
 NULL_STRATEGIES = SimpleNamespace(
-    UNIFORM="uniform",
-    PARAMETRIC="parametric",
-    VERTEX_PERMUTATION="vertex_permutation",
     EDGE_PERMUTATION="edge_permutation",
+    PARAMETRIC="parametric",
+    POOLED_VERTEX_PERMUTATION="pooled_vertex_permutation",
+    UNIFORM="uniform",
+    VERTEX_PERMUTATION="vertex_permutation",
 )
 
 VALID_NULL_STRATEGIES = NULL_STRATEGIES.__dict__.values()

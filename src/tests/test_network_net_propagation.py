@@ -9,12 +9,12 @@ from napistu.network.constants import (
 )
 from napistu.network.net_propagation import (
     NULL_GENERATORS,
-    edge_permutation_null,
+    _edge_permutation_null,
+    _parametric_null,
+    _uniform_null,
+    _vertex_permutation_null,
     net_propagate_attributes,
     network_propagation_with_null,
-    parametric_null,
-    uniform_null,
-    vertex_permutation_null,
 )
 
 
@@ -123,7 +123,34 @@ def test_network_propagation_with_null():
     assert isinstance(result_masked, pd.DataFrame)
     assert result_masked.shape == (5, 1)
 
-    # Test 7: Error handling - invalid null strategy
+    # Test 7: Pooled vertex permutation PPR null (requires shared mask, multiple attributes)
+    graph_pooled = ig.Graph(5)
+    graph_pooled.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C", "D", "E"]
+    graph_pooled.vs["attr1"] = [1.0, 0.0, 2.0, 0.0, 1.5]
+    graph_pooled.vs["attr2"] = [
+        0.5,
+        0.0,
+        1.0,
+        0.0,
+        2.0,
+    ]  # Same mask pattern (nonzero where attr1 nonzero)
+    graph_pooled.add_edges([(0, 1), (1, 2), (2, 3), (3, 4)])
+    shared_mask = np.array([True, False, True, False, True])
+    result_pooled = network_propagation_with_null(
+        graph_pooled,
+        ["attr1", "attr2"],
+        null_strategy=NULL_STRATEGIES.POOLED_VERTEX_PERMUTATION,
+        n_samples=10,
+        mask=shared_mask,
+    )
+    assert isinstance(result_pooled, pd.DataFrame)
+    assert result_pooled.shape == (5, 2)
+    assert list(result_pooled.columns) == ["attr1", "attr2"]
+    pooled_values = result_pooled.values[~np.isnan(result_pooled.values)]
+    assert (pooled_values >= 0).all(), "Quantiles should be >= 0"
+    assert (pooled_values <= 1).all(), "Quantiles should be <= 1"
+
+    # Test 8: Error handling - invalid null strategy
     with pytest.raises(ValueError, match="Unknown null strategy"):
         network_propagation_with_null(
             graph, attributes, null_strategy="invalid_strategy"
@@ -204,6 +231,10 @@ def test_all_null_generators_structure():
     n_samples = 3  # Small for testing
 
     for generator_name, generator_func in NULL_GENERATORS.items():
+
+        if generator_name == NULL_STRATEGIES.POOLED_VERTEX_PERMUTATION:
+            continue  # not supported because the attributes have different masks
+
         print(f"Testing {generator_name}")
 
         if generator_name == NULL_STRATEGIES.UNIFORM:
@@ -321,32 +352,32 @@ def test_edge_cases_and_errors():
 
     # Test 1: All zero attribute should raise error for all generators
     with pytest.raises(ValueError):
-        uniform_null(graph, ["bad_attr"])
+        _uniform_null(graph, ["bad_attr"])
 
     with pytest.raises(ValueError):
-        parametric_null(graph, ["bad_attr"])
+        _parametric_null(graph, ["bad_attr"])
 
     with pytest.raises(ValueError):
-        vertex_permutation_null(graph, ["bad_attr"])
+        _vertex_permutation_null(graph, ["bad_attr"])
 
     with pytest.raises(ValueError):
-        edge_permutation_null(graph, ["bad_attr"])
+        _edge_permutation_null(graph, ["bad_attr"])
 
     # Test 2: Empty mask should raise error
     empty_mask = np.array([False, False, False])
     with pytest.raises(ValueError, match="No nodes in mask"):
-        uniform_null(graph, ["attr1"], mask=empty_mask)
+        _uniform_null(graph, ["attr1"], mask=empty_mask)
 
     # Test 3: Single node mask (edge case)
     single_mask = np.array([True, False, False])
-    result = uniform_null(graph, ["attr1"], mask=single_mask)
+    result = _uniform_null(graph, ["attr1"], mask=single_mask)
     assert result.shape == (3, 1)  # Should work
 
     # Test 4: Replace parameter in node permutation
-    result_no_replace = vertex_permutation_null(
+    result_no_replace = _vertex_permutation_null(
         graph, ["attr1"], replace=False, n_samples=2
     )
-    result_replace = vertex_permutation_null(
+    result_replace = _vertex_permutation_null(
         graph, ["attr1"], replace=True, n_samples=2
     )
 
@@ -362,8 +393,8 @@ def test_propagation_method_parameters():
     graph.add_edges([(0, 1), (1, 2), (2, 3)])
 
     # Test different damping parameters produce different results
-    result_default = uniform_null(graph, ["attr1"])
-    result_damped = uniform_null(
+    result_default = _uniform_null(graph, ["attr1"])
+    result_damped = _uniform_null(
         graph, ["attr1"], additional_propagation_args={"damping": 0.5}
     )
 
