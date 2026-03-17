@@ -9,6 +9,7 @@ from napistu.network.constants import (
 )
 from napistu.network.net_propagation import (
     NULL_GENERATORS,
+    _compute_log2_enrichment,
     _edge_permutation_null,
     _parametric_null,
     _uniform_null,
@@ -420,3 +421,77 @@ def test_propagation_method_parameters():
         # Should produce valid results
         assert isinstance(result, pd.DataFrame)
         assert not result.empty
+
+
+def test_compute_log2_enrichment():
+    """Tests for _compute_log2_enrichment."""
+    np.random.seed(42)
+    features = ["A", "B", "C"]
+    attributes = ["attr1", "attr2"]
+    n_samples = 10
+
+    observed = pd.DataFrame(
+        np.abs(np.random.randn(len(features), len(attributes))),
+        index=features,
+        columns=attributes,
+    )
+
+    # Null is stacked: n_samples rows per feature
+    null_index = np.repeat(features, n_samples)
+    null_data = np.abs(np.random.randn(len(features) * n_samples, len(attributes)))
+    null_df = pd.DataFrame(null_data, index=null_index, columns=attributes)
+
+    result = _compute_log2_enrichment(observed, null_df)
+
+    # Output shape and structure
+    assert result.shape == observed.shape
+    assert list(result.index) == features
+    assert list(result.columns) == attributes
+    assert not result.isna().any().any()
+
+    # Validate values manually for one feature
+    null_mean_A = null_df.loc["A"].mean()
+    expected_A = np.log2(observed.loc["A"] / (null_mean_A + 1e-10))
+    pd.testing.assert_series_equal(result.loc["A"], expected_A.rename("A"))
+
+    # Observed == null mean should give log2(1) == 0
+    flat_null_index = np.repeat(features, n_samples)
+    flat_null_data = np.vstack([
+        np.tile(observed.loc[f].values, (n_samples, 1)) for f in features
+    ])
+    flat_null_df = pd.DataFrame(flat_null_data, index=flat_null_index, columns=attributes)
+    flat_result = _compute_log2_enrichment(observed, flat_null_df)
+    np.testing.assert_allclose(flat_result.values, 0.0, atol=1e-6)
+
+    # Observed 2x null mean should give log2(2) == 1
+    double_null_data = np.vstack([
+        np.tile(observed.loc[f].values / 2, (n_samples, 1)) for f in features
+    ])
+    double_null_df = pd.DataFrame(double_null_data, index=flat_null_index, columns=attributes)
+    double_result = _compute_log2_enrichment(observed, double_null_df)
+    np.testing.assert_allclose(double_result.values, 1.0, atol=1e-6)
+
+    # Shuffled null index order should give same result as unshuffled
+    shuffled_null_df = null_df.sample(frac=1, random_state=42)
+    shuffled_result = _compute_log2_enrichment(observed, shuffled_null_df)
+    pd.testing.assert_frame_equal(result, shuffled_result)
+
+    # Mismatched columns raises
+    with pytest.raises(ValueError, match="Column names must match"):
+        _compute_log2_enrichment(observed, null_df.rename(columns={"attr1": "wrong"}))
+
+    # Missing features in null raises
+    with pytest.raises(ValueError, match="Missing features"):
+        _compute_log2_enrichment(observed, null_df.drop("A"))
+
+    # NaN in observed raises
+    observed_with_nan = observed.copy()
+    observed_with_nan.iloc[0, 0] = np.nan
+    with pytest.raises(ValueError, match="NaN values found in observed"):
+        _compute_log2_enrichment(observed_with_nan, null_df)
+
+    # NaN in null raises
+    null_with_nan = null_df.copy()
+    null_with_nan.iloc[0, 0] = np.nan
+    with pytest.raises(ValueError, match="NaN values found in null"):
+        _compute_log2_enrichment(observed, null_with_nan)

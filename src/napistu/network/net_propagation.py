@@ -302,6 +302,63 @@ def _build_pooled_universe(
     return universe
 
 
+def _compute_log2_enrichment(
+    observed: pd.DataFrame,
+    null_df: pd.DataFrame,
+    epsilon: float = 1e-10,
+) -> pd.DataFrame:
+    """
+    Compute log2 enrichment of observed scores relative to the mean null distribution.
+
+    Parameters
+    ----------
+    observed : pd.DataFrame
+        DataFrame with features as index and attributes as columns containing
+        observed propagated scores.
+    null_df : pd.DataFrame
+        Stacked null samples with features as index (multiple rows per feature)
+        and attributes as columns. Same format as output of null generator functions.
+    epsilon : float
+        Small value added to null mean to avoid division by zero. Default 1e-10.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with same structure as observed containing log2(observed / mean_null).
+        Positive values indicate observed score exceeds the mean null; negative values
+        indicate observed score is below mean null.
+
+    Notes
+    -----
+    The interpretation of log2_enrichment depends on the null strategy used:
+    - Vertex permutation null: enrichment relative to topology-matched baseline;
+        a value of 1.0 means the observed score is 2x the mean null score for a
+        vertex with the same network position but randomized signal assignment.
+    - Uniform null: enrichment relative to a flat baseline; more sensitive to
+        topological biases since the null does not account for network structure.
+    """
+    if not observed.columns.equals(null_df.columns):
+        raise ValueError("Column names must match between observed and null data")
+
+    missing_features = set(observed.index) - set(null_df.index)
+    if missing_features:
+        raise ValueError(f"Missing features in null data: {missing_features}")
+
+    if observed.isna().any().any():
+        raise ValueError("NaN values found in observed data")
+    if null_df.isna().any().any():
+        raise ValueError("NaN values found in null data")
+
+    null_mean = null_df.groupby(level=0).mean()
+
+    # Align to observed index order since groupby may sort differently
+    null_mean = null_mean.reindex(observed.index)
+
+    log2_enrichment = np.log2(observed / (null_mean + epsilon))
+
+    return pd.DataFrame(log2_enrichment, index=observed.index, columns=observed.columns)
+
+
 def _edge_permutation_null(
     graph: ig.Graph,
     attributes: List[str],
