@@ -1,3 +1,19 @@
+"""
+Pathway Index for organizing metadata and paths of pathway representations.
+
+Classes
+-------
+PWIndex
+    Pathway Index for organizing metadata and paths of pathway representations.
+
+Public Functions
+----------------
+adapt_pw_index(source, organismal_species, outdir=None, update_index=False) -> PWIndex:
+    Adapt a pathway index by filtering for specific organismal species.
+create_pathway_index_df(model_keys, model_urls, model_organismal_species, base_path, data_source, model_names=None, file_extension=".sbml") -> pd.DataFrame:
+    Create a pathway index DataFrame from model definitions.
+"""
+
 from __future__ import annotations
 
 import copy

@@ -1,3 +1,48 @@
+"""
+Utilities supporting creation and manipulation of SBML_dfs instances.
+
+Public Functions
+----------------
+add_missing_ids_column(contingency_table, reference_table, other_column_name="other") -> pd.DataFrame:
+    Add an 'other' column to a contingency table for IDs that exist in a reference table but are missing from the contingency table.
+add_sbo_role(reaction_species) -> pd.DataFrame:
+    Add an sbo_role column to the reaction_species table.
+check_entity_data_index_matching(sbml_dfs, table) -> sbml_dfs:
+    Update the input smbl_dfs's entity_data (dict) index with match_entitydata_index_to_entity, so that index for dataframe(s) in entity_data (dict) matches the sbml_dfs' corresponding entity, and then passes sbml_dfs.validate()
+construct_formula_string(reaction_species_df, reactions_df, name_var) -> str:
+    Construct Formula String
+create_reaction_formula_series(reaction_data, reactions_df, species_name_col, sort_cols, group_cols=None, add_compartment_prefix=False, r_id_col=SBML_DFS.R_ID, c_name_col=SBML_DFS.C_NAME) -> pd.Series:
+    Create a pd.Series of reaction formula strings.
+display_post_consensus_checks(checks_results) -> None:
+    Display post-consensus checks results.
+find_underspecified_reactions(reaction_species_w_roles) -> pd.DataFrame:
+    Find underspecified reactions in a reaction_species table.
+find_unused_entities(sbml_dfs_or_dict) -> dict[str, set[str]]:
+    Find unused entities in a SBML_dfs or dict of SBML_dfs instances.
+filter_to_characteristic_species_ids(species_ids, max_complex_size=4, max_promiscuity=20, defining_biological_qualifiers=BQB_DEFINING_ATTRS) -> pd.DataFrame:
+    Filter to characteristic species IDs.
+force_edgelist_consistency(interaction_edgelist, species_df, compartments_df) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    Force edgelist consistency.
+format_sbml_dfs_summary(data) -> str:
+    Format a summary of a SBML_dfs instance.
+get_current_max_id(sbml_dfs_table) -> int:
+    Get the current maximum ID for a given SBML_dfs table.
+id_formatter(input_vals, id_type, id_len=8) -> pd.Series:
+    Format a list of input values as a series of identifiers.
+id_formatter_inv(ids) -> list:
+    Invert the id_formatter function.
+match_entitydata_index_to_entity(entity_data_dict, an_entity_data_type, consensus_entity_df, entity_schema, table) -> pd.DataFrame:
+    Match the index of an entity data dictionary to the index of a consensus entity DataFrame.
+species_type_types(x, ontology_to_species_type=ONTOLOGY_TO_SPECIES_TYPE, prioritized_species_types=PRIORITIZED_SPECIES_TYPES) -> str:
+    Determine the species type of a given entity.
+stub_compartments(stubbed_compartment=GENERIC_COMPARTMENT, with_source=False) -> pd.DataFrame:
+    Stub compartments in a SBML_dfs instance.
+unnest_identifiers(id_table, id_var) -> pd.DataFrame:
+    Unnest identifiers from a table.
+validate_sbml_dfs_table(df, table) -> None:
+    Validate that a DataFrame is a valid SBML_dfs table.
+"""
+
 from __future__ import annotations
 
 import logging

@@ -769,7 +769,13 @@ def test_transform_edges_basic_functionality(test_graph, minimal_valid_sbml_dfs)
 
     # Check transformation was applied (string_inv: 1/(x/1000))
     transformed_values = test_graph.es["raw_scores"]
-    assert transformed_values != original_values
+    for i, (t, o) in enumerate(zip(transformed_values, original_values)):
+        if o is None:
+            assert t is None, f"edge {i}: original was None but transformed is {t}"
+        else:
+            assert (
+                t != o
+            ), f"edge {i}: expected transformation to change {o} but got {t}"
 
     # Check metadata was updated
     assert (
@@ -864,7 +870,10 @@ def test_transform_edges_retransformation_behavior(test_graph, minimal_valid_sbm
     second_transform = test_graph.es["scores"][:]
 
     # Values should be different after re-transformation
-    assert first_transform != second_transform
+    for i, (first, second) in enumerate(zip(first_transform, second_transform)):
+        if first is None and second is None:
+            continue  # unmatched edge, skip
+        assert first != second, f"edge {i} was not retransformed: both are {first}"
     assert (
         test_graph.get_metadata("transformations_applied")["reactions"]["scores"]
         == "string_inv"
@@ -1632,6 +1641,87 @@ def test_add_attributes_to_graph_inplace_vertices(test_graph):
         assert vertex_expressions[i] == vertex_data["vertex_expression"].iloc[i]
         assert vertex_confidences[i] == vertex_data["vertex_confidence"].iloc[i]
         assert vertex_locations[i] == vertex_data["vertex_location"].iloc[i]
+
+
+def test_add_attributes_df_entities_not_in_df_get_none(test_graph):
+    """Test that vertices and edges not in entity_data are assigned None (not np.nan)."""
+    # Vertices: test_graph has A, B, C - only provide data for A and B
+    partial_vertex_data = pd.DataFrame(
+        {"sparse_attr": [10.0, 20.0]},
+        index=pd.Index(["A", "B"], name=IGRAPH_DEFS.NAME),
+    )
+    test_graph._add_attributes_df(
+        entity_data=partial_vertex_data,
+        target_entity=IGRAPH_DEFS.VERTICES,
+        overwrite=False,
+    )
+    assert test_graph.vs[2]["sparse_attr"] is None  # C not in entity_data
+    assert test_graph.vs[0]["sparse_attr"] == 10.0
+    assert test_graph.vs[1]["sparse_attr"] == 20.0
+
+    # None is actually None, not nan — confirm it's not just falsy
+    assert not isinstance(test_graph.vs[2]["sparse_attr"], float)
+
+    # String attributes: unmatched vertices should also get None, not "nan" or ""
+    partial_string_data = pd.DataFrame(
+        {"label_attr": ["foo", "bar"]},
+        index=pd.Index(["A", "B"], name=IGRAPH_DEFS.NAME),
+    )
+    test_graph._add_attributes_df(
+        entity_data=partial_string_data,
+        target_entity=IGRAPH_DEFS.VERTICES,
+        overwrite=False,
+    )
+    assert test_graph.vs[2]["label_attr"] is None
+    assert test_graph.vs[0]["label_attr"] == "foo"
+
+    # Integer attributes: unmatched vertices should get None, not 0
+    partial_int_data = pd.DataFrame(
+        {"int_attr": [1, 2]},
+        index=pd.Index(["A", "B"], name=IGRAPH_DEFS.NAME),
+    )
+    test_graph._add_attributes_df(
+        entity_data=partial_int_data,
+        target_entity=IGRAPH_DEFS.VERTICES,
+        overwrite=False,
+    )
+    assert test_graph.vs[2]["int_attr"] is None
+    assert test_graph.vs[0]["int_attr"] == 1
+
+    # Edges: test_graph has (A,B), (B,C) - only provide data for first edge
+    edge_df = test_graph.get_edge_dataframe()
+    first_edge = (
+        edge_df[NAPISTU_GRAPH_EDGES.FROM].iloc[0],
+        edge_df[NAPISTU_GRAPH_EDGES.TO].iloc[0],
+    )
+    partial_edge_data = pd.DataFrame(
+        {"sparse_edge_attr": [99.0]},
+        index=pd.MultiIndex.from_tuples(
+            [first_edge],
+            names=[NAPISTU_GRAPH_EDGES.FROM, NAPISTU_GRAPH_EDGES.TO],
+        ),
+    )
+    test_graph._add_attributes_df(
+        entity_data=partial_edge_data,
+        target_entity=IGRAPH_DEFS.EDGES,
+        overwrite=False,
+    )
+    assert (
+        test_graph.es[1]["sparse_edge_attr"] is None
+    )  # second edge not in entity_data
+    assert test_graph.es[0]["sparse_edge_attr"] == 99.0
+
+    # Fully matched data should have no Nones anywhere
+    full_vertex_data = pd.DataFrame(
+        {"full_attr": [1.0, 2.0, 3.0]},
+        index=pd.Index(["A", "B", "C"], name=IGRAPH_DEFS.NAME),
+    )
+    test_graph._add_attributes_df(
+        entity_data=full_vertex_data,
+        target_entity=IGRAPH_DEFS.VERTICES,
+        overwrite=False,
+    )
+    assert all(v["full_attr"] is not None for v in test_graph.vs)
 
 
 def test_add_attributes_to_graph_inplace_overwrite(test_graph):

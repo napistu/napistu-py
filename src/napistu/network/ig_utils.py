@@ -672,8 +672,11 @@ def _get_attribute_masks(
         if mask_spec is None:
             masks[attr] = np.ones(n_nodes, dtype=bool)
         elif isinstance(mask_spec, str):
-            attr_values = np.array(graph.vs[mask_spec])
-            masks[attr] = attr_values > 0
+            attr_values = graph.vs[mask_spec]
+            masks[attr] = np.array(
+                [v is not None and v == v and v > 0 for v in attr_values],
+                dtype=bool,
+            )
         elif isinstance(mask_spec, np.ndarray):
             masks[attr] = mask_spec.astype(bool)
         elif isinstance(mask_spec, list):

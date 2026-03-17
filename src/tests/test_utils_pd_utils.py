@@ -13,6 +13,7 @@ from napistu.utils.pd_utils import (
     infer_entity_type,
     match_pd_vars,
     matrix_to_edgelist,
+    series_to_none_filled_list,
     style_df,
     update_pathological_names,
     validate_merge,
@@ -523,3 +524,42 @@ def test_validate_merge():
     validate_merge(
         left_multi, right_multi_dup, ["key1", "key2"], ["key1", "key2"], "1:m"
     )
+
+
+def test_series_to_none_filled_list():
+    """Test that series_to_none_filled_list correctly replaces all NA-like values with None."""
+
+    # float Series: np.nan should become None
+    float_series = pd.Series([1.0, np.nan, 3.0])
+    result = series_to_none_filled_list(float_series)
+    assert result == [1.0, None, 3.0]
+    assert result[1] is None  # not just falsy — must be exactly None
+    assert not isinstance(result[1], float)  # np.nan is a float; None is not
+
+    # integer Series: no missing values, should pass through unchanged
+    int_series = pd.Series([1, 2, 3])
+    result = series_to_none_filled_list(int_series)
+    assert result == [1, 2, 3]
+    assert all(v is not None for v in result)
+
+    # object Series with None: None should stay None
+    obj_series = pd.Series(["a", None, "c"], dtype=object)
+    result = series_to_none_filled_list(obj_series)
+    assert result == ["a", None, "c"]
+    assert result[1] is None
+
+    # pd.NA (nullable integer dtype): should become None
+    na_series = pd.array([1, pd.NA, 3], dtype="Int64")
+    result = series_to_none_filled_list(pd.Series(na_series))
+    assert result[1] is None
+    assert result[0] == 1
+
+    # all missing: every value should be None
+    all_nan = pd.Series([np.nan, np.nan])
+    result = series_to_none_filled_list(all_nan)
+    assert all(v is None for v in result)
+
+    # no missing: no Nones introduced
+    no_nan = pd.Series([1.0, 2.0, 3.0])
+    result = series_to_none_filled_list(no_nan)
+    assert all(v is not None for v in result)

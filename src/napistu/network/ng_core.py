@@ -1,14 +1,19 @@
+"""Core graph class for molecular network analysis.
+
+Classes
+-------
+NapistuGraph
+    Core graph class for molecular network analysis.
+"""
+
 from __future__ import annotations
 
 import copy
 import logging
-from typing import TYPE_CHECKING, Any, List, Mapping, MutableMapping, Optional, Union
+from typing import Any, List, Mapping, MutableMapping, Optional, Union
 
 import igraph as ig
 import pandas as pd
-
-if TYPE_CHECKING:
-    pass
 
 from napistu import utils
 from napistu.constants import (
@@ -42,6 +47,7 @@ from napistu.network.constants import (
     WEIGHTING_SPEC,
 )
 from napistu.sbml_dfs_core import SBML_dfs
+from napistu.utils.pd_utils import series_to_none_filled_list
 
 logger = logging.getLogger(__name__)
 
@@ -2212,12 +2218,18 @@ class NapistuGraph(ig.Graph):
             )
 
         # Remove overlapping attributes from graph_df if overwrite=True to avoid _x/_y suffixes
-        if overwrite:
-            overlapping_in_graph = [
-                attr for attr in attrs_to_add if attr in graph_df.columns
-            ]
-            if overlapping_in_graph:
+        overlapping_in_graph = [
+            attr for attr in attrs_to_add if attr in graph_df.columns
+        ]
+        if overlapping_in_graph:
+            if overwrite:
                 graph_df = graph_df.drop(columns=overlapping_in_graph)
+            else:
+                raise ValueError(
+                    f"Cannot add entity data: attributes {overlapping_in_graph} already exist "
+                    f"on graph {target_entity}. Use overwrite=True to replace them, or exclude "
+                    f"these attributes from entity_data."
+                )
 
         # Merge entity data with graph data
         graph_with_attrs = graph_df.merge(
@@ -2234,9 +2246,13 @@ class NapistuGraph(ig.Graph):
         added_count = 0
         for attr_name in attrs_to_add:
             if target_entity == NAPISTU_GRAPH.EDGES:
-                self.es[attr_name] = graph_with_attrs[attr_name].values
+                self.es[attr_name] = series_to_none_filled_list(
+                    graph_with_attrs[attr_name]
+                )
             else:  # vertices
-                self.vs[attr_name] = graph_with_attrs[attr_name].values
+                self.vs[attr_name] = series_to_none_filled_list(
+                    graph_with_attrs[attr_name]
+                )
             added_count += 1
 
         # Log the results

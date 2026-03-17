@@ -22,6 +22,8 @@ matrix_to_edgelist(matrix: np.ndarray, row_labels: Optional[List] = None, col_la
     Convert a matrix to an edgelist format.
 safe_series_tolist(x: str | pd.Series) -> list:
     Convert either a list or str to a list.
+series_to_none_filled_list(series: pd.Series) -> list:
+    Convert a pandas Series to a Python list, replacing all NA-like values with None.
 style_df(df: pd.DataFrame, headers: Union[str, list[str], None] = "keys", hide_index: bool = False) -> Styler:
     Style a pandas DataFrame with simple formatting options.
 update_pathological_names(names: pd.Series, prefix: str) -> pd.Series:
@@ -369,6 +371,27 @@ def safe_series_tolist(x):
         return x.tolist()
     else:
         raise TypeError(f"x was a {type(x)} but only str and pd.Series are supported")
+
+
+def series_to_none_filled_list(series: pd.Series) -> list:
+    """
+    Convert a pandas Series to a Python list, replacing all NA-like values with None.
+
+    Pandas represents missing values as NaN (a float) in numeric Series, but many
+    downstream consumers (e.g. igraph, JSON serialization) expect None for missing
+    values. This function normalizes missing values consistently across all dtypes.
+
+    Parameters
+    ----------
+    series : pd.Series
+        The Series to convert. May be any dtype.
+
+    Returns
+    -------
+    list
+        Python list with NaN, pd.NA, and other NA-like values replaced by None.
+    """
+    return series.astype(object).where(series.notna(), other=None).tolist()
 
 
 def style_df(
