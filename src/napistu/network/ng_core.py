@@ -2218,12 +2218,18 @@ class NapistuGraph(ig.Graph):
             )
 
         # Remove overlapping attributes from graph_df if overwrite=True to avoid _x/_y suffixes
-        if overwrite:
-            overlapping_in_graph = [
-                attr for attr in attrs_to_add if attr in graph_df.columns
-            ]
-            if overlapping_in_graph:
+        overlapping_in_graph = [
+            attr for attr in attrs_to_add if attr in graph_df.columns
+        ]
+        if overlapping_in_graph:
+            if overwrite:
                 graph_df = graph_df.drop(columns=overlapping_in_graph)
+            else:
+                raise ValueError(
+                    f"Cannot add entity data: attributes {overlapping_in_graph} already exist "
+                    f"on graph {target_entity}. Use overwrite=True to replace them, or exclude "
+                    f"these attributes from entity_data."
+                )
 
         # Merge entity data with graph data
         graph_with_attrs = graph_df.merge(
