@@ -28,6 +28,7 @@ from napistu.network.constants import (
     MASK_KEYWORDS,
     NAPISTU_GRAPH_VERTICES,
     NET_PROPAGATION_DEFS,
+    NET_PROPAGATION_METRICS,
     NULL_STRATEGIES,
     PARAMETRIC_NULL_DEFAULT_DISTRIBUTION,
     VALID_NULL_STRATEGIES,
@@ -66,7 +67,7 @@ def network_propagation_with_null(
     This is the main orchestrator function that:
     1. Calculates observed propagated scores
     2. Generates null distribution using specified strategy
-    3. Compares observed vs null using quantiles (for sampled nulls) or ratios (for uniform)
+    3. Returns a MultiIndex DataFrame with observed scores, quantiles, and log2 enrichment
 
     Null Strategy Selection
     ----------------------
@@ -132,9 +133,19 @@ def network_propagation_with_null(
     Returns
     -------
     pd.DataFrame
-        DataFrame with same structure as observed scores containing:
-        - For uniform null: observed/uniform ratios
-        - For other nulls: quantiles (proportion of null values <= observed values)
+        DataFrame with a 2-level MultiIndex on columns (metric, attribute) where
+        metric is one of ['observed', 'quantile', 'log2_enrichment'].
+
+        - 'observed': raw propagated scores for each attribute
+        - 'quantile': proportion of null values <= observed values (NaN for uniform null)
+        - 'log2_enrichment': log2(observed / mean_null). For vertex permutation null this
+            is enrichment relative to a topology-matched baseline; for uniform null this is
+            enrichment relative to a flat baseline.
+
+        Example access:
+            result["observed"]["gene_score"]
+            result["quantile"]["gene_score"]
+            result["log2_enrichment"]["gene_score"]
 
     Examples
     --------
@@ -165,7 +176,6 @@ def network_propagation_with_null(
 
     # 3. Generate null distribution
     if null_strategy == NULL_STRATEGIES.UNIFORM:
-        # Uniform null doesn't take n_samples
         null_distribution = null_generator(
             graph=graph,
             attributes=attributes,
@@ -174,14 +184,13 @@ def network_propagation_with_null(
             **null_kwargs,
         )
 
-        # 4a. For uniform null: calculate observed/uniform ratios
-        # Avoid division by zero by adding small epsilon
-        epsilon = 1e-10
-        ratios = observed_scores / (null_distribution + epsilon)
-        return ratios
+        # 4a. Uniform null: log2 enrichment vs flat baseline; quantile is not defined
+        quantiles = pd.DataFrame(
+            np.nan, index=observed_scores.index, columns=observed_scores.columns
+        )
+        log2_enrichment = _compute_log2_enrichment(observed_scores, null_distribution)
 
     else:
-        # Other nulls take n_samples
         null_distribution = null_generator(
             graph=graph,
             attributes=attributes,
@@ -192,8 +201,26 @@ def network_propagation_with_null(
             **null_kwargs,
         )
 
-        # 4b. For sampled nulls: calculate quantiles
-        return calculate_quantiles(observed_scores, null_distribution)
+        # 4b. Sampled nulls: both quantile and log2 enrichment vs topology-matched baseline
+        quantiles = calculate_quantiles(observed_scores, null_distribution)
+        log2_enrichment = _compute_log2_enrichment(observed_scores, null_distribution)
+
+    # 5. Combine into MultiIndex DataFrame with metric as outer level
+    results = {
+        NET_PROPAGATION_METRICS.OBSERVED: observed_scores,
+        NET_PROPAGATION_METRICS.LOG2_ENRICHMENT: log2_enrichment,
+    }
+    if null_strategy != NULL_STRATEGIES.UNIFORM:
+        results[NET_PROPAGATION_METRICS.QUANTILE] = quantiles
+
+    key_order = [
+        NET_PROPAGATION_METRICS.OBSERVED,
+        NET_PROPAGATION_METRICS.QUANTILE,
+        NET_PROPAGATION_METRICS.LOG2_ENRICHMENT,
+    ]
+    return pd.concat(results, axis=1).reindex(
+        [k for k in key_order if k in results], axis=1, level=0
+    )
 
 
 def net_propagate_attributes(

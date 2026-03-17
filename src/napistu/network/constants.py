@@ -292,6 +292,12 @@ SOURCE_VARS_DICT = {"string_wt": 10}
 # network propagation
 NET_PROPAGATION_DEFS = SimpleNamespace(PERSONALIZED_PAGERANK="personalized_pagerank")
 
+NET_PROPAGATION_METRICS = SimpleNamespace(
+    OBSERVED="observed",
+    QUANTILE="quantile",
+    LOG2_ENRICHMENT="log2_enrichment",
+)
+
 # null distributions
 NULL_STRATEGIES = SimpleNamespace(
     EDGE_PERMUTATION="edge_permutation",
