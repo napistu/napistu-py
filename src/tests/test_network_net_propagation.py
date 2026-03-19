@@ -5,6 +5,7 @@ import pytest
 
 from napistu.network.constants import (
     NAPISTU_GRAPH_VERTICES,
+    NET_PROPAGATION_METRICS,
     NULL_STRATEGIES,
 )
 from napistu.network.net_propagation import (
@@ -14,9 +15,46 @@ from napistu.network.net_propagation import (
     _parametric_null,
     _uniform_null,
     _vertex_permutation_null,
+    melt_propagation_results,
     net_propagate_attributes,
     network_propagation_with_null,
 )
+
+
+def test_melt_propagation_results():
+    """Melt propagation results into tall format."""
+    index = pd.Index(["A", "B", "C"], name="vertex_id")
+    columns = pd.MultiIndex.from_tuples(
+        [
+            (NET_PROPAGATION_METRICS.OBSERVED, "attr1"),
+            (NET_PROPAGATION_METRICS.LOG2_ENRICHMENT, "attr1"),
+            (NET_PROPAGATION_METRICS.QUANTILE, "attr1"),
+        ],
+        names=[None, "attribute"],
+    )
+    data = np.array([[0.1, 1.2, 0.7], [0.2, 0.8, 0.4], [0.3, 1.0, 0.6]])
+    propagation_results = pd.DataFrame(data, index=index, columns=columns)
+
+    tall = melt_propagation_results(
+        propagation_results, index_name="vertex_id", attribute_name="attribute"
+    )
+
+    assert tall.shape == (3, 5)
+    assert list(tall.columns) == [
+        "vertex_id",
+        "attribute",
+        NET_PROPAGATION_METRICS.OBSERVED,
+        NET_PROPAGATION_METRICS.LOG2_ENRICHMENT,
+        NET_PROPAGATION_METRICS.QUANTILE,
+    ]
+    assert list(tall["vertex_id"]) == ["A", "B", "C"]
+    assert list(tall["attribute"]) == ["attr1", "attr1", "attr1"]
+    np.testing.assert_array_almost_equal(
+        tall[NET_PROPAGATION_METRICS.OBSERVED], [0.1, 0.2, 0.3]
+    )
+    np.testing.assert_array_almost_equal(
+        tall[NET_PROPAGATION_METRICS.QUANTILE], [0.7, 0.4, 0.6]
+    )
 
 
 def test_network_propagation_with_null():
@@ -44,11 +82,16 @@ def test_network_propagation_with_null():
     )
 
     assert_multiindex_structure(
-        result_uniform, attributes, ["observed", "log2_enrichment"]
+        result_uniform,
+        attributes,
+        [NET_PROPAGATION_METRICS.OBSERVED, NET_PROPAGATION_METRICS.LOG2_ENRICHMENT],
     )
-    assert "quantile" not in result_uniform.columns.get_level_values(0)
-    assert (result_uniform["observed"].values > 0).all()
-    assert (result_uniform["log2_enrichment"].values > 0).any()
+    assert (
+        NET_PROPAGATION_METRICS.QUANTILE
+        not in result_uniform.columns.get_level_values(0)
+    )
+    assert (result_uniform[NET_PROPAGATION_METRICS.OBSERVED].values > 0).all()
+    assert (result_uniform[NET_PROPAGATION_METRICS.LOG2_ENRICHMENT].values > 0).any()
 
     # Test 2: Vertex permutation null — includes quantile level
     result_permutation = network_propagation_with_null(
@@ -59,9 +102,15 @@ def test_network_propagation_with_null():
     )
 
     assert_multiindex_structure(
-        result_permutation, attributes, ["observed", "quantile", "log2_enrichment"]
+        result_permutation,
+        attributes,
+        [
+            NET_PROPAGATION_METRICS.OBSERVED,
+            NET_PROPAGATION_METRICS.QUANTILE,
+            NET_PROPAGATION_METRICS.LOG2_ENRICHMENT,
+        ],
     )
-    permutation_quantiles = result_permutation["quantile"].values
+    permutation_quantiles = result_permutation[NET_PROPAGATION_METRICS.QUANTILE].values
     permutation_quantiles = permutation_quantiles[~np.isnan(permutation_quantiles)]
     assert (permutation_quantiles >= 0).all()
     assert (permutation_quantiles <= 1).all()
@@ -77,9 +126,15 @@ def test_network_propagation_with_null():
     )
 
     assert_multiindex_structure(
-        result_edge, attributes, ["observed", "quantile", "log2_enrichment"]
+        result_edge,
+        attributes,
+        [
+            NET_PROPAGATION_METRICS.OBSERVED,
+            NET_PROPAGATION_METRICS.QUANTILE,
+            NET_PROPAGATION_METRICS.LOG2_ENRICHMENT,
+        ],
     )
-    edge_quantiles = result_edge["quantile"].values
+    edge_quantiles = result_edge[NET_PROPAGATION_METRICS.QUANTILE].values
     edge_quantiles = edge_quantiles[~np.isnan(edge_quantiles)]
     assert (edge_quantiles >= 0).all()
     assert (edge_quantiles <= 1).all()
@@ -90,9 +145,15 @@ def test_network_propagation_with_null():
     )
 
     assert_multiindex_structure(
-        result_parametric, attributes, ["observed", "quantile", "log2_enrichment"]
+        result_parametric,
+        attributes,
+        [
+            NET_PROPAGATION_METRICS.OBSERVED,
+            NET_PROPAGATION_METRICS.QUANTILE,
+            NET_PROPAGATION_METRICS.LOG2_ENRICHMENT,
+        ],
     )
-    parametric_quantiles = result_parametric["quantile"].values
+    parametric_quantiles = result_parametric[NET_PROPAGATION_METRICS.QUANTILE].values
     assert (parametric_quantiles >= 0).all()
     assert (parametric_quantiles <= 1).all()
 
@@ -105,7 +166,8 @@ def test_network_propagation_with_null():
     )
 
     assert not np.allclose(
-        result_uniform["observed"].values, result_custom["observed"].values
+        result_uniform[NET_PROPAGATION_METRICS.OBSERVED].values,
+        result_custom[NET_PROPAGATION_METRICS.OBSERVED].values,
     ), "Different propagation parameters should give different results"
 
     # Test 6: Masked vertex permutation
@@ -119,7 +181,13 @@ def test_network_propagation_with_null():
     )
 
     assert_multiindex_structure(
-        result_masked, attributes, ["observed", "quantile", "log2_enrichment"]
+        result_masked,
+        attributes,
+        [
+            NET_PROPAGATION_METRICS.OBSERVED,
+            NET_PROPAGATION_METRICS.QUANTILE,
+            NET_PROPAGATION_METRICS.LOG2_ENRICHMENT,
+        ],
     )
 
     # Test 7: Pooled vertex permutation — includes quantile level
@@ -138,9 +206,15 @@ def test_network_propagation_with_null():
     )
 
     assert_multiindex_structure(
-        result_pooled, ["attr1", "attr2"], ["observed", "quantile", "log2_enrichment"]
+        result_pooled,
+        ["attr1", "attr2"],
+        [
+            NET_PROPAGATION_METRICS.OBSERVED,
+            NET_PROPAGATION_METRICS.QUANTILE,
+            NET_PROPAGATION_METRICS.LOG2_ENRICHMENT,
+        ],
     )
-    pooled_quantiles = result_pooled["quantile"].values
+    pooled_quantiles = result_pooled[NET_PROPAGATION_METRICS.QUANTILE].values
     pooled_quantiles = pooled_quantiles[~np.isnan(pooled_quantiles)]
     assert (pooled_quantiles >= 0).all()
     assert (pooled_quantiles <= 1).all()
@@ -514,7 +588,7 @@ def test_log2_enrichment_reflects_signal_concentration():
     )
 
     # F receives signal from all paths — should have highest log2_enrichment
-    enrichment = result["log2_enrichment"]["attr1"]
+    enrichment = result[NET_PROPAGATION_METRICS.LOG2_ENRICHMENT]["attr1"]
     assert (
         enrichment["F"] > enrichment["E"]
     ), "Convergence point should be more enriched than conduit"
@@ -538,7 +612,7 @@ def test_observed_scores_invariant_to_null_strategy():
     )
 
     np.testing.assert_array_equal(
-        result_uniform["observed"].values,
-        result_perm["observed"].values,
+        result_uniform[NET_PROPAGATION_METRICS.OBSERVED].values,
+        result_perm[NET_PROPAGATION_METRICS.OBSERVED].values,
         err_msg="Observed scores should be identical across null strategies",
     )

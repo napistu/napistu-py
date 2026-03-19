@@ -9,6 +9,8 @@ and related analyses.
 
 Public Functions
 ----------------
+melt_propagation_results(propagation_results, index_name, attribute_name)
+    Melt results from network_propagation_with_null into a tall format.
 network_propagation_with_null(graph, attributes, null_strategy, ...)
     Apply network propagation and compare observed scores to a null distribution.
 net_propagate_attributes(graph, attributes, propagation_method, ...)
@@ -47,6 +49,83 @@ logger = logging.getLogger(__name__)
 class PropagationMethod:
     method: callable
     non_negative: bool
+
+
+def melt_propagation_results(
+    propagation_results: pd.DataFrame,
+    index_name: Optional[str] = None,
+    attribute_name: Optional[str] = None,
+) -> pd.DataFrame:
+    """
+    Melt results from network_propagation_with_null into a tall format.
+
+    Parameters
+    ----------
+    propagation_results : pd.DataFrame
+        DataFrame with a 2-level MultiIndex on columns (metric, attribute) as
+        returned by network_propagation_with_null.
+    index_name : str, optional
+        Name of the index to use for the feature_id column. If None, the existing index name
+        will be used and an error will be raised if propagation_results does not have an index name.
+    attribute_name : str, optional
+        Name of the attribute column. If None, the existing attribute column will be used.
+
+    Returns
+    -------
+    pd.DataFrame
+        Tall DataFrame with columns:
+        - feature_id: node identifier (from index)
+        - attribute: attribute name
+        - observed: raw propagated score
+        - log2_enrichment: log2(observed / mean_null)
+        - quantile: proportion of null values <= observed (only present if in input)
+    """
+
+    if not isinstance(propagation_results.columns, pd.MultiIndex):
+        raise ValueError(
+            "Input must have a MultiIndex column structure as returned by network_propagation_with_null"
+        )
+    if index_name is None:
+        if propagation_results.index.name is None:
+            raise ValueError(
+                "Input must have an index name as returned by network_propagation_with_null"
+            )
+        index_name = propagation_results.index.name
+    if attribute_name is None:
+        if propagation_results.columns.names[1] is None:
+            raise ValueError(
+                "Input must have an attribute name as returned by network_propagation_with_null"
+            )
+        attribute_name = propagation_results.columns.names[1]
+
+    metrics = propagation_results.columns.get_level_values(0).unique().tolist()
+    expected_metrics = {
+        NET_PROPAGATION_METRICS.OBSERVED,
+        NET_PROPAGATION_METRICS.QUANTILE,
+        NET_PROPAGATION_METRICS.LOG2_ENRICHMENT,
+    }
+    unexpected = set(metrics) - expected_metrics
+    if unexpected:
+        raise ValueError(f"Unexpected metrics in columns: {unexpected}")
+
+    # Stack attribute level into rows, reset index to get feature_id
+    tall = (
+        propagation_results.stack(level=1, future_stack=True)
+        .rename_axis(index=[index_name, attribute_name])
+        .reset_index()
+    )
+
+    # Enforce column order with quantile conditional on presence
+    col_order = [
+        index_name,
+        attribute_name,
+        NET_PROPAGATION_METRICS.OBSERVED,
+        NET_PROPAGATION_METRICS.LOG2_ENRICHMENT,
+    ]
+    if NET_PROPAGATION_METRICS.QUANTILE in metrics:
+        col_order.append(NET_PROPAGATION_METRICS.QUANTILE)
+
+    return tall[col_order]
 
 
 def network_propagation_with_null(
