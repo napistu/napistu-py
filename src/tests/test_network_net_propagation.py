@@ -9,6 +9,7 @@ from napistu.network.constants import (
 )
 from napistu.network.net_propagation import (
     NULL_GENERATORS,
+    _compute_log2_enrichment,
     _edge_permutation_null,
     _parametric_null,
     _uniform_null,
@@ -23,80 +24,79 @@ def test_network_propagation_with_null():
     # Create test graph
     graph = ig.Graph(5)
     graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C", "D", "E"]
-    graph.vs["attr1"] = [1.0, 0.0, 2.0, 0.0, 1.5]  # Non-negative, not all zero
+    graph.vs["attr1"] = [1.0, 0.0, 2.0, 0.0, 1.5]
     graph.add_edges([(0, 1), (1, 2), (2, 3), (3, 4)])
 
     attributes = ["attr1"]
 
-    # Test 1: Uniform null (should return ratios)
+    def assert_multiindex_structure(result, attributes, expected_metrics):
+        """Helper to validate MultiIndex column structure."""
+        assert isinstance(result, pd.DataFrame)
+        assert isinstance(result.columns, pd.MultiIndex)
+        assert list(result.columns.get_level_values(0).unique()) == expected_metrics
+        for metric in expected_metrics:
+            assert list(result[metric].columns) == attributes
+        assert list(result.index) == ["A", "B", "C", "D", "E"]
+
+    # Test 1: Uniform null — no quantile level
     result_uniform = network_propagation_with_null(
         graph, attributes, null_strategy=NULL_STRATEGIES.UNIFORM
     )
 
-    # Check structure
-    assert isinstance(result_uniform, pd.DataFrame)
-    assert result_uniform.shape == (5, 1)
-    assert list(result_uniform.columns) == attributes
-    assert list(result_uniform.index) == ["A", "B", "C", "D", "E"]
+    assert_multiindex_structure(
+        result_uniform, attributes, ["observed", "log2_enrichment"]
+    )
+    assert "quantile" not in result_uniform.columns.get_level_values(0)
+    assert (result_uniform["observed"].values > 0).all()
+    assert (result_uniform["log2_enrichment"].values > 0).any()
 
-    # Should be ratios (can be > 1)
-    assert (result_uniform.values > 0).all(), "Ratios should be positive"
-    # Some ratios should be > 1 since observed scores concentrate on fewer nodes
-    assert (result_uniform.values > 1).any(), "Some ratios should be > 1"
-
-    # Test 2: Node permutation null (should return quantiles)
+    # Test 2: Vertex permutation null — includes quantile level
     result_permutation = network_propagation_with_null(
         graph,
         attributes,
         null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
-        n_samples=10,  # Small for testing
+        n_samples=10,
     )
 
-    # Check structure
-    assert isinstance(result_permutation, pd.DataFrame)
-    assert result_permutation.shape == (5, 1)
-    assert list(result_permutation.columns) == attributes
+    assert_multiindex_structure(
+        result_permutation, attributes, ["observed", "quantile", "log2_enrichment"]
+    )
+    permutation_quantiles = result_permutation["quantile"].values
+    permutation_quantiles = permutation_quantiles[~np.isnan(permutation_quantiles)]
+    assert (permutation_quantiles >= 0).all()
+    assert (permutation_quantiles <= 1).all()
 
-    # Should be quantiles (0 to 1)
-    # Drop NaNs before checking value range. NaNs can be introduced if a
-    # nodes PPR values with and without the null are all a constant which
-    # can come up in a small sample # testing situation
-    permutation_values = result_permutation.values[~np.isnan(result_permutation.values)]
-    assert (permutation_values >= 0).all(), "Quantiles should be >= 0"
-    assert (permutation_values <= 1).all(), "Quantiles should be <= 1"
-
-    # Test 3: Edge permutation null
+    # Test 3: Edge permutation null — includes quantile level
     result_edge = network_propagation_with_null(
         graph,
         attributes,
         null_strategy=NULL_STRATEGIES.EDGE_PERMUTATION,
         n_samples=5,
-        burn_in_ratio=2,  # Small for testing
+        burn_in_ratio=2,
         sampling_ratio=0.2,
     )
 
-    # Check structure
-    assert isinstance(result_edge, pd.DataFrame)
-    assert result_edge.shape == (5, 1)
-    # Drop NaNs before checking value range. NaNs can be introduced if a
-    # nodes PPR values with and without the null are all a constant which
-    # can come up in a small sample # testing situation
-    edge_values = result_edge.values[~np.isnan(result_edge.values)]
-    assert (edge_values >= 0).all()
-    assert (edge_values <= 1).all()
+    assert_multiindex_structure(
+        result_edge, attributes, ["observed", "quantile", "log2_enrichment"]
+    )
+    edge_quantiles = result_edge["quantile"].values
+    edge_quantiles = edge_quantiles[~np.isnan(edge_quantiles)]
+    assert (edge_quantiles >= 0).all()
+    assert (edge_quantiles <= 1).all()
 
-    # Test 4: Gaussian null
+    # Test 4: Parametric null — includes quantile level
     result_parametric = network_propagation_with_null(
         graph, attributes, null_strategy=NULL_STRATEGIES.PARAMETRIC, n_samples=8
     )
 
-    # Check structure
-    assert isinstance(result_parametric, pd.DataFrame)
-    assert result_parametric.shape == (5, 1)
-    assert (result_parametric.values >= 0).all()
-    assert (result_parametric.values <= 1).all()
+    assert_multiindex_structure(
+        result_parametric, attributes, ["observed", "quantile", "log2_enrichment"]
+    )
+    parametric_quantiles = result_parametric["quantile"].values
+    assert (parametric_quantiles >= 0).all()
+    assert (parametric_quantiles <= 1).all()
 
-    # Test 5: Custom propagation parameters
+    # Test 5: Custom propagation parameters — different observed scores
     result_custom = network_propagation_with_null(
         graph,
         attributes,
@@ -104,12 +104,11 @@ def test_network_propagation_with_null():
         additional_propagation_args={"damping": 0.7},
     )
 
-    # Should be different from default
     assert not np.allclose(
-        result_uniform.values, result_custom.values
+        result_uniform["observed"].values, result_custom["observed"].values
     ), "Different propagation parameters should give different results"
 
-    # Test 6: Custom null parameters (mask)
+    # Test 6: Masked vertex permutation
     mask_array = np.array([True, False, True, False, True])
     result_masked = network_propagation_with_null(
         graph,
@@ -119,21 +118,15 @@ def test_network_propagation_with_null():
         mask=mask_array,
     )
 
-    # Should work without error
-    assert isinstance(result_masked, pd.DataFrame)
-    assert result_masked.shape == (5, 1)
+    assert_multiindex_structure(
+        result_masked, attributes, ["observed", "quantile", "log2_enrichment"]
+    )
 
-    # Test 7: Pooled vertex permutation PPR null (requires shared mask, multiple attributes)
+    # Test 7: Pooled vertex permutation — includes quantile level
     graph_pooled = ig.Graph(5)
     graph_pooled.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C", "D", "E"]
     graph_pooled.vs["attr1"] = [1.0, 0.0, 2.0, 0.0, 1.5]
-    graph_pooled.vs["attr2"] = [
-        0.5,
-        0.0,
-        1.0,
-        0.0,
-        2.0,
-    ]  # Same mask pattern (nonzero where attr1 nonzero)
+    graph_pooled.vs["attr2"] = [0.5, 0.0, 1.0, 0.0, 2.0]
     graph_pooled.add_edges([(0, 1), (1, 2), (2, 3), (3, 4)])
     shared_mask = np.array([True, False, True, False, True])
     result_pooled = network_propagation_with_null(
@@ -143,12 +136,14 @@ def test_network_propagation_with_null():
         n_samples=10,
         mask=shared_mask,
     )
-    assert isinstance(result_pooled, pd.DataFrame)
-    assert result_pooled.shape == (5, 2)
-    assert list(result_pooled.columns) == ["attr1", "attr2"]
-    pooled_values = result_pooled.values[~np.isnan(result_pooled.values)]
-    assert (pooled_values >= 0).all(), "Quantiles should be >= 0"
-    assert (pooled_values <= 1).all(), "Quantiles should be <= 1"
+
+    assert_multiindex_structure(
+        result_pooled, ["attr1", "attr2"], ["observed", "quantile", "log2_enrichment"]
+    )
+    pooled_quantiles = result_pooled["quantile"].values
+    pooled_quantiles = pooled_quantiles[~np.isnan(pooled_quantiles)]
+    assert (pooled_quantiles >= 0).all()
+    assert (pooled_quantiles <= 1).all()
 
     # Test 8: Error handling - invalid null strategy
     with pytest.raises(ValueError, match="Unknown null strategy"):
@@ -420,3 +415,130 @@ def test_propagation_method_parameters():
         # Should produce valid results
         assert isinstance(result, pd.DataFrame)
         assert not result.empty
+
+
+def test_compute_log2_enrichment():
+    """Tests for _compute_log2_enrichment."""
+    np.random.seed(42)
+    features = ["A", "B", "C"]
+    attributes = ["attr1", "attr2"]
+    n_samples = 10
+
+    observed = pd.DataFrame(
+        np.abs(np.random.randn(len(features), len(attributes))),
+        index=features,
+        columns=attributes,
+    )
+
+    # Null is stacked: n_samples rows per feature
+    null_index = np.repeat(features, n_samples)
+    null_data = np.abs(np.random.randn(len(features) * n_samples, len(attributes)))
+    null_df = pd.DataFrame(null_data, index=null_index, columns=attributes)
+
+    result = _compute_log2_enrichment(observed, null_df)
+
+    # Output shape and structure
+    assert result.shape == observed.shape
+    assert list(result.index) == features
+    assert list(result.columns) == attributes
+    assert not result.isna().any().any()
+
+    # Validate values manually for one feature
+    null_mean_A = null_df.loc["A"].mean()
+    expected_A = np.log2(observed.loc["A"] / (null_mean_A + 1e-10))
+    pd.testing.assert_series_equal(result.loc["A"], expected_A.rename("A"))
+
+    # Observed == null mean should give log2(1) == 0
+    flat_null_index = np.repeat(features, n_samples)
+    flat_null_data = np.vstack(
+        [np.tile(observed.loc[f].values, (n_samples, 1)) for f in features]
+    )
+    flat_null_df = pd.DataFrame(
+        flat_null_data, index=flat_null_index, columns=attributes
+    )
+    flat_result = _compute_log2_enrichment(observed, flat_null_df)
+    np.testing.assert_allclose(flat_result.values, 0.0, atol=1e-6)
+
+    # Observed 2x null mean should give log2(2) == 1
+    double_null_data = np.vstack(
+        [np.tile(observed.loc[f].values / 2, (n_samples, 1)) for f in features]
+    )
+    double_null_df = pd.DataFrame(
+        double_null_data, index=flat_null_index, columns=attributes
+    )
+    double_result = _compute_log2_enrichment(observed, double_null_df)
+    np.testing.assert_allclose(double_result.values, 1.0, atol=1e-6)
+
+    # Shuffled null index order should give same result as unshuffled
+    shuffled_null_df = null_df.sample(frac=1, random_state=42)
+    shuffled_result = _compute_log2_enrichment(observed, shuffled_null_df)
+    pd.testing.assert_frame_equal(result, shuffled_result)
+
+    # Mismatched columns raises
+    with pytest.raises(ValueError, match="Column names must match"):
+        _compute_log2_enrichment(observed, null_df.rename(columns={"attr1": "wrong"}))
+
+    # Missing features in null raises
+    with pytest.raises(ValueError, match="Missing features"):
+        _compute_log2_enrichment(observed, null_df.drop("A"))
+
+    # NaN in observed raises
+    observed_with_nan = observed.copy()
+    observed_with_nan.iloc[0, 0] = np.nan
+    with pytest.raises(ValueError, match="NaN values found in observed"):
+        _compute_log2_enrichment(observed_with_nan, null_df)
+
+    # NaN in null raises
+    null_with_nan = null_df.copy()
+    null_with_nan.iloc[0, 0] = np.nan
+    with pytest.raises(ValueError, match="NaN values found in null"):
+        _compute_log2_enrichment(observed, null_with_nan)
+
+
+def test_log2_enrichment_reflects_signal_concentration():
+    """Vertices receiving concentrated signal should have higher log2_enrichment."""
+    graph = ig.Graph(6, directed=True)
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C", "D", "E", "F"]
+    graph.add_edges(
+        [(0, 5), (1, 5), (2, 5), (3, 4), (4, 5)]
+    )  # E is a hub, F receives everything
+
+    # All signal on A, B, C, D — E is a pure conduit, F is the convergence point
+    graph.vs["attr1"] = [1.0, 1.0, 1.0, 1.0, 0.0, 0.0]
+
+    result = network_propagation_with_null(
+        graph,
+        ["attr1"],
+        null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
+        n_samples=100,
+    )
+
+    # F receives signal from all paths — should have highest log2_enrichment
+    enrichment = result["log2_enrichment"]["attr1"]
+    assert (
+        enrichment["F"] > enrichment["E"]
+    ), "Convergence point should be more enriched than conduit"
+
+
+def test_observed_scores_invariant_to_null_strategy():
+    """Observed scores should be identical regardless of null strategy."""
+    graph = ig.Graph(5)
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C", "D", "E"]
+    graph.vs["attr1"] = [1.0, 0.0, 2.0, 0.0, 1.5]
+    graph.add_edges([(0, 1), (1, 2), (2, 3), (3, 4)])
+
+    result_uniform = network_propagation_with_null(
+        graph, ["attr1"], null_strategy=NULL_STRATEGIES.UNIFORM
+    )
+    result_perm = network_propagation_with_null(
+        graph,
+        ["attr1"],
+        null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
+        n_samples=10,
+    )
+
+    np.testing.assert_array_equal(
+        result_uniform["observed"].values,
+        result_perm["observed"].values,
+        err_msg="Observed scores should be identical across null strategies",
+    )
