@@ -1434,6 +1434,64 @@ def test_add_sbml_dfs_summaries(napistu_graph_metabolism, sbml_dfs_metabolism):
     assert expected_columns.issubset(new_vertex_attrs)
 
 
+def test_filter_by_species_type(
+    napistu_graph_metabolism, sbml_dfs_metabolism
+):
+    """Test filter_by_species_type including negate and inplace args."""
+    graph_with_types = napistu_graph_metabolism.add_sbml_dfs_summaries(
+        sbml_dfs_metabolism, inplace=False
+    )
+    species_types = graph_with_types.vs[NAPISTU_GRAPH_VERTICES.SPECIES_TYPE]
+    n_metabolites_before = sum(
+        1 for st in species_types if st == SPECIES_TYPES.METABOLITE
+    )
+    assert n_metabolites_before > 0, "Fixture should contain metabolites to filter"
+
+    # Default: keep protein and complex, exclude metabolites
+    filtered = graph_with_types.filter_by_species_type(
+        species_types=[SPECIES_TYPES.PROTEIN, SPECIES_TYPES.COMPLEX]
+    )
+    assert filtered is not graph_with_types
+    species_types_after = filtered.vs[NAPISTU_GRAPH_VERTICES.SPECIES_TYPE]
+    n_metabolites_after = sum(
+        1 for st in species_types_after if st == SPECIES_TYPES.METABOLITE
+    )
+    assert n_metabolites_after == 0
+    assert filtered.vcount() < graph_with_types.vcount()
+
+    # negate=True: keep types NOT in list (exclude metabolites)
+    graph_for_negate = napistu_graph_metabolism.add_sbml_dfs_summaries(
+        sbml_dfs_metabolism, inplace=False
+    )
+    filtered_negate = graph_for_negate.filter_by_species_type(
+        species_types=[SPECIES_TYPES.METABOLITE], negate=True
+    )
+    n_metabolites_negate = sum(
+        1
+        for st in filtered_negate.vs[NAPISTU_GRAPH_VERTICES.SPECIES_TYPE]
+        if st == SPECIES_TYPES.METABOLITE
+    )
+    assert n_metabolites_negate == 0
+
+    # inplace=True: modifies graph, returns None
+    graph_for_inplace = napistu_graph_metabolism.add_sbml_dfs_summaries(
+        sbml_dfs_metabolism, inplace=False
+    )
+    vcount_before = graph_for_inplace.vcount()
+    result = graph_for_inplace.filter_by_species_type(
+        species_types=[SPECIES_TYPES.PROTEIN, SPECIES_TYPES.COMPLEX],
+        inplace=True,
+    )
+    assert result is None
+    assert graph_for_inplace.vcount() < vcount_before
+    n_metabolites_inplace = sum(
+        1
+        for st in graph_for_inplace.vs[NAPISTU_GRAPH_VERTICES.SPECIES_TYPE]
+        if st == SPECIES_TYPES.METABOLITE
+    )
+    assert n_metabolites_inplace == 0
+
+
 def test_add_vertex_data_basic_functionality(test_graph, minimal_valid_sbml_dfs):
     """Test basic add_vertex_data functionality - mirrors add_edge_data but for vertices."""
     # Set up species data similar to edge data test

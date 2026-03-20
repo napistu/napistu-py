@@ -1,4 +1,4 @@
-"""Tests for gene set enrichment analysis (GSEA) functionality."""
+"""Tests for over-representation analysis (ORA) functionality."""
 
 from types import SimpleNamespace
 
@@ -14,7 +14,7 @@ from napistu.genomics.gsea import (
     GmtsConfig,
     _calculate_geneset_edge_counts,
     _filter_genesets_to_universe,
-    edgelist_gsea,
+    edgelist_ora,
 )
 from napistu.identifiers import Identifiers, construct_cspecies_identifiers
 from napistu.ingestion.constants import COMPARTMENTS
@@ -35,11 +35,8 @@ except ImportError:
 
 
 @pytest.fixture
-def sbml_dfs_w_entrez_ids(model_source_stub):
-    """Create a minimal sbml_dfs with Entrez IDs extracted from a gene set collection."""
-    from napistu.sbml_dfs_core import SBML_dfs
-
-    # Create a gene set collection and extract some Entrez IDs
+def geneset_collection_h_all():
+    """GenesetCollection with h.all gene set from MSigDB."""
     collection = GenesetCollection(organismal_species="Homo sapiens")
     config = GmtsConfig(
         engine=gp.msigdb.Msigdb,
@@ -47,6 +44,15 @@ def sbml_dfs_w_entrez_ids(model_source_stub):
         dbver="2023.2.Hs",
     )
     collection.add_gmts(gmts_config=config)
+    return collection
+
+
+@pytest.fixture
+def sbml_dfs_w_entrez_ids(model_source_stub, geneset_collection_h_all):
+    """Create a minimal sbml_dfs with Entrez IDs extracted from a gene set collection."""
+    from napistu.sbml_dfs_core import SBML_dfs
+
+    collection = geneset_collection_h_all
 
     # Extract a sample of Entrez IDs from the collection
     # Get the first gene set and take first 5-10 Entrez IDs
@@ -161,17 +167,11 @@ def test_add_gmts_h_all():
     assert len(collection.gmts["h.all"]) > 0
 
 
-def test_get_gmt_w_napistu_ids_species_and_cspecies(sbml_dfs_w_entrez_ids):
+def test_get_gmt_w_napistu_ids_species_and_cspecies(
+    sbml_dfs_w_entrez_ids, geneset_collection_h_all
+):
     """Test get_gmt_w_napistu_ids with both species_identifiers and cspecies_identifiers."""
-    # Create a gene set collection
-    collection = GenesetCollection(organismal_species="Homo sapiens")
-
-    config = GmtsConfig(
-        engine=gp.msigdb.Msigdb,
-        categories=["h.all"],
-        dbver="2023.2.Hs",
-    )
-    collection.add_gmts(gmts_config=config)
+    collection = geneset_collection_h_all
 
     # Get species identifiers from sbml_dfs_w_entrez_ids
     species_identifiers = sbml_dfs_w_entrez_ids.get_characteristic_species_ids(
@@ -227,18 +227,17 @@ def test_get_gmt_w_napistu_ids_species_and_cspecies(sbml_dfs_w_entrez_ids):
             f"since one s_id can map to multiple sc_ids"
         )
 
+    # test with bad BQB terms
+    with pytest.raises(ValueError, match="Invalid bqb_terms: {'INVALID_BQB'}. Must be one of"):
+        collection.get_gmt_w_napistu_ids(
+            species_identifiers=species_identifiers,
+            id_type=SBML_DFS.S_ID,
+            bqb_terms="INVALID_BQB",
+        )
 
-def test_prerank_with_napistu_genesets(sbml_dfs_w_entrez_ids):
+def test_prerank_with_napistu_genesets(sbml_dfs_w_entrez_ids, geneset_collection_h_all):
     """Test that napistu-centric geneset formats can be used with gseapy.prerank."""
-    # Create a gene set collection
-    collection = GenesetCollection(organismal_species="Homo sapiens")
-
-    config = GmtsConfig(
-        engine=gp.msigdb.Msigdb,
-        categories=["h.all"],
-        dbver="2023.2.Hs",
-    )
-    collection.add_gmts(gmts_config=config)
+    collection = geneset_collection_h_all
 
     # Get species identifiers from sbml_dfs_w_entrez_ids
     species_identifiers = sbml_dfs_w_entrez_ids.get_characteristic_species_ids(
@@ -330,8 +329,8 @@ def test_geneset_default_by_species_are_gmts_config():
         )
 
 
-def test_edgelist_gsea(napistu_graph):
-    """Test the edgelist_gsea function with a simple geneset and edgelist."""
+def test_edgelist_ora(napistu_graph):
+    """Test the edgelist_ora function with a simple geneset and edgelist."""
     # Sample edges from the graph to create observed edgelist
 
     # Sample up to 20 edges from the graph
@@ -371,8 +370,8 @@ def test_edgelist_gsea(napistu_graph):
 
     edgelist_df = pd.DataFrame(observed_edges)
 
-    # Run edgelist_gsea
-    results = edgelist_gsea(
+    # Run edgelist_ora
+    results = edgelist_ora(
         edgelist=edgelist_df,
         genesets=genesets,
         graph=napistu_graph,
@@ -408,7 +407,7 @@ def test_edgelist_gsea(napistu_graph):
     assert (results["odds_ratio"] >= 0).all()
 
 
-def test_edgelist_gsea_universe_observed_only_validation(napistu_graph):
+def test_edgelist_ora_universe_observed_only_validation(napistu_graph):
     """Test edgelist validation with universe_observed_only flag."""
     vertex_names = napistu_graph.vs[IGRAPH_DEFS.NAME]
     if len(vertex_names) < 4:
@@ -452,7 +451,7 @@ def test_edgelist_gsea_universe_observed_only_validation(napistu_graph):
         }
     )
     with pytest.raises(ValueError, match="edge.*not in graph"):
-        edgelist_gsea(
+        edgelist_ora(
             edgelist=invalid_edgelist,
             genesets=genesets,
             graph=napistu_graph,
@@ -463,7 +462,7 @@ def test_edgelist_gsea_universe_observed_only_validation(napistu_graph):
         )
 
     # Test 2: universe_observed_only=False should allow non-existent edges
-    results = edgelist_gsea(
+    results = edgelist_ora(
         edgelist=invalid_edgelist,
         genesets=genesets,
         graph=napistu_graph,
@@ -475,3 +474,62 @@ def test_edgelist_gsea_universe_observed_only_validation(napistu_graph):
     )
     assert isinstance(results, pd.DataFrame)
     assert len(results) > 0
+
+
+def test_vertex_ora(geneset_collection_h_all):
+    """Test vertex_ora with real MSigDB Hallmarks gene sets and Entrez IDs."""
+    from napistu.genomics.gsea import vertex_ora
+
+    gmt = geneset_collection_h_all.gmt
+
+    # Use all Entrez IDs across the collection as universe
+    universe = list({gene for members in gmt.values() for gene in members})
+
+    # Query = members of the first gene set — should be the top hit
+    first_term = next(iter(gmt))
+    gene_list = gmt[first_term]
+
+    results = vertex_ora(
+        gene_list=gene_list,
+        genesets=gmt,
+        universe=universe,
+        min_set_size=5,
+    )
+
+    # Shape and columns
+    assert isinstance(results, pd.DataFrame)
+    assert len(results) > 0
+    for col in ["term", "overlap", "odds_ratio", "p_value", "q_value"]:
+        assert col in results.columns
+
+    # Value ranges
+    assert (results["p_value"].between(0, 1)).all()
+    assert (results["q_value"].between(0, 1)).all()
+    assert (results["odds_ratio"] >= 0).all()
+
+    # Sorted ascending by p_value
+    assert (results["p_value"].diff().dropna() >= 0).all()
+
+    # first_term should be the top hit — its members are exactly the query
+    assert results.iloc[0]["term"] == first_term
+    assert results.iloc[0]["p_value"] < 0.05
+
+    # Overlap format is "k/M"
+    k, M = results.iloc[0]["overlap"].split("/")
+    assert int(k) == len(set(gene_list) & set(universe))
+    assert int(M) == len(set(gmt[first_term]) & set(universe))
+
+
+def test_vertex_ora_no_universe_overlap_raises(geneset_collection_h_all):
+    """Test that vertex_ora raises when gene_list has no overlap with universe."""
+    from napistu.genomics.gsea import vertex_ora
+
+    universe = list(next(iter(geneset_collection_h_all.gmt.values())))
+
+    with pytest.raises(ValueError, match="No genes in gene_list found in universe"):
+        vertex_ora(
+            gene_list=["NOT_AN_ENTREZ_ID"],
+            genesets=geneset_collection_h_all.gmt,
+            universe=universe,
+            min_set_size=1,
+        )

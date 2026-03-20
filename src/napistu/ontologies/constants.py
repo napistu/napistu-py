@@ -281,6 +281,8 @@ SPECIES_TYPES = SimpleNamespace(
     UNKNOWN="unknown",
 )
 
+VALID_SPECIES_TYPES = list(SPECIES_TYPES.__dict__.values())
+
 SPECIES_TYPE_PLURAL = {
     SPECIES_TYPES.COMPLEX: "complexes",
     SPECIES_TYPES.DRUG: "drugs",

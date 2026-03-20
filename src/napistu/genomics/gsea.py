@@ -8,9 +8,12 @@ GenesetCollection:
 
 Public Functions
 ----------------
+edgelist_ora:
+    Test an edgelist for enrichment between source pathways and target pathways.
 get_default_collection_config:
     Get the default collection configuration for a given organismal species.
-
+vertex_ora:
+    Test a vertex for enrichment between a gene list and a geneset collection.
 """
 
 from __future__ import annotations
@@ -24,7 +27,11 @@ import pandas as pd
 from igraph import Graph
 from pydantic import BaseModel
 
-from napistu.constants import SBML_DFS
+from napistu.constants import (
+    BQB_DEFINING_ATTRS_LOOSE,
+    SBML_DFS,
+    VALID_BQB_TERMS,
+)
 from napistu.genomics.constants import (
     GENESET_COLLECTION_DEFS,
     GENESET_COLLECTIONS,
@@ -204,6 +211,7 @@ class GenesetCollection:
         self,
         species_identifiers: pd.DataFrame,
         id_type: str = SBML_DFS.S_ID,
+        bqb_terms: Union[str, List[str]] = BQB_DEFINING_ATTRS_LOOSE,
     ) -> pd.DataFrame:
         """
         Get the gene set collection with Napistu molecular species IDs.
@@ -217,6 +225,8 @@ class GenesetCollection:
         id_type: str
             The type of identifier to use. Must be one of {SBML_DFS.S_ID, SBML_DFS.SC_ID}. If using sc_id, then
             the species_identifiers table must be update to add the sc_id column.
+        bqb_terms: Union[str, List[str]]
+            The BQB terms to use to filter the species identifiers. Defaults to BQB_DEFINING_ATTRS_LOOSE (BQB.IS, BQB.IS_HOMOLOG_TO, BQB.IS_ENCODED_BY, BQB.ENCODES)
 
         Returns
         -------
@@ -233,12 +243,20 @@ class GenesetCollection:
             raise ValueError(
                 f"id_type {id_type} not found in species_identifiers columns: {species_identifiers.columns}"
             )
+        if isinstance(bqb_terms, str):
+            bqb_terms = [bqb_terms]
+
+        invalid_terms = set(bqb_terms) - set(VALID_BQB_TERMS)
+        if invalid_terms:
+            raise ValueError(
+                f"Invalid bqb_terms: {invalid_terms}. Must be one of {VALID_BQB_TERMS}"
+            )
 
         gmt_df = self.get_gmt_as_df()
 
         gmt_df_w_napistu_ids = features_to_pathway_species(
             gmt_df.assign(feature_id=lambda x: x.identifier.astype(str)),
-            species_identifiers,
+            species_identifiers.query("bqb in @bqb_terms"),
             ontologies={ONTOLOGIES.NCBI_ENTREZ_GENE},
         )
 
@@ -396,7 +414,7 @@ class GenesetCollection:
 
 
 @require_statsmodels
-def edgelist_gsea(
+def edgelist_ora(
     edgelist: Union[pd.DataFrame, Edgelist],
     genesets: Union[GenesetCollection, Dict[str, List[str]]],
     graph: Graph,
@@ -421,7 +439,7 @@ def edgelist_gsea(
     Parameters
     ----------
     edgelist : Union[pd.DataFrame, Edgelist]
-        Edgelist with 'source' and 'target' columns containing vertex names.
+        Edgelist with 'from' and 'to' columns containing vertex names.
         These are the edges to test for enrichment.
     genesets : GenesetCollection or Dict[str, List[str]]
         Gene sets to test. Either a GenesetCollection object or a dictionary
@@ -474,19 +492,19 @@ def edgelist_gsea(
     ...     'source': ['A', 'B', 'C'],
     ...     'target': ['B', 'C', 'D']
     ... })
-    >>> results = edgelist_gsea(
+    >>> results = edgelist_ora(
     ...     observed, genesets, graph
     ... )
 
     >>> # Test with gene-only universe
     >>> gene_names = [v['name'] for v in graph.vs if v.get('biotype') == 'gene']
-    >>> results = edgelist_gsea(
+    >>> results = edgelist_ora(
     ...     observed, genesets, graph,
     ...     universe_vertex_names=gene_names
     ... )
 
     >>> # Test with observed edges only in universe
-    >>> results = edgelist_gsea(
+    >>> results = edgelist_ora(
     ...     observed, genesets, graph,
     ...     universe_observed_only=True
     ... )
@@ -516,7 +534,7 @@ def edgelist_gsea(
             f"Invalid enrichment test: {enrichment_test}. Must be one of {VALID_ENRICHMENT_TESTS}"
         )
 
-    _log_edgelist_gsea_input(verbose, graph, edgelist, genesets_dict)
+    _log_edgelist_ora_input(verbose, graph, edgelist, genesets_dict)
 
     # Step 2: Create universe graph
 
@@ -542,7 +560,7 @@ def edgelist_gsea(
     # verify that the edgelist is a subset of the universe
     _validate_edgelist_universe(edgelist, universe)
 
-    _log_edgelist_gsea_universe(verbose, universe)
+    _log_edgelist_ora_universe(verbose, universe)
 
     # Step 3: Calculate edges in the observed edgelist and universe between all geneset pairs
 
@@ -588,7 +606,7 @@ def edgelist_gsea(
     # Step 6: Sort by significance
     edge_counts_df = edge_counts_df.sort_values("p_value").reset_index(drop=True)
 
-    _log_edgelist_gsea_paired_results(verbose, edge_counts_df)
+    _log_edgelist_ora_paired_results(verbose, edge_counts_df)
 
     return edge_counts_df
 
@@ -609,6 +627,136 @@ def get_default_collection_config(
     return GENESET_DEFAULT_BY_SPECIES[organismal_species_str]
 
 
+@require_statsmodels
+def vertex_ora(
+    gene_list: Union[List[str], pd.Series],
+    genesets: Union[GenesetCollection, Dict[str, List[str]]],
+    universe: Optional[Union[List[str], pd.Series]] = None,
+    min_set_size: int = 20,
+    max_set_size: Optional[int] = None,
+) -> pd.DataFrame:
+    """
+    Over-representation analysis (ORA) for an unranked gene list.
+
+    Tests whether each gene set is over-represented in the query gene list
+    relative to a background universe, using the same vectorized Fisher exact
+    test as edgelist_ora. Appropriate for labeling clusters or any unranked
+    membership question; for ranked lists (e.g. DE results) use a rank-based
+    method instead.
+
+    Parameters
+    ----------
+    gene_list : list or pd.Series
+        Genes of interest (e.g. members of one cluster). Must be in the same
+        ID space as the gene sets (Entrez IDs by default, or Napistu s_ids if
+        using GenesetCollection.get_gmt_w_napistu_ids()).
+    genesets : GenesetCollection or Dict[str, List[str]]
+        Gene sets to test. Either a GenesetCollection object (uses .gmt) or a
+        dict mapping gene set names to lists of member IDs.
+    universe : list or pd.Series, optional
+        All testable genes (e.g. all vertices in your graph). The query
+        gene_list is intersected with this universe before testing. If None,
+        defaults to the union of all gene set members in genesets.
+    min_set_size : int
+        Minimum gene set size after intersection with universe. Default 20.
+    max_set_size : int, optional
+        Maximum gene set size after intersection with universe. Default None.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per gene set passing size filters, columns:
+        - term: gene set name
+        - overlap: "k/M" string (overlap count / set size in universe)
+        - odds_ratio: odds ratio
+        - p_value: one-tailed Fisher exact p-value (upper tail, enrichment)
+        - q_value: BH-corrected FDR
+        Sorted by p_value ascending.
+
+    Examples
+    --------
+    >>> gc = GenesetCollection("Homo sapiens")
+    >>> gc.add_gmts("bp_kegg_hallmarks")
+    >>> universe = vertex_df["entrez_id"].astype(str).tolist()
+    >>> results = vertex_ora(
+    ...     gene_list=cluster_df["entrez_id"].astype(str).tolist(),
+    ...     genesets=gc,
+    ...     universe=universe,
+    ... )
+
+    >>> # Using Napistu s_ids instead of Entrez
+    >>> gmt_sids = gc.get_gmt_w_napistu_ids(species_identifiers)
+    >>> results = vertex_ora(
+    ...     gene_list=cluster_df["s_id"].tolist(),
+    ...     genesets=gmt_sids,
+    ...     universe=vertex_df["s_id"].tolist(),
+    ... )
+    """
+    multipletests_module = import_statsmodels_multitest()
+
+    if isinstance(genesets, GenesetCollection):
+        genesets_dict = genesets.gmt
+    else:
+        genesets_dict = genesets
+
+    if universe is None:
+        universe_set = set(chain.from_iterable(genesets_dict.values()))
+    else:
+        universe_set = set(universe)
+
+    universe_set = set(universe)
+    query_set = set(gene_list) & universe_set
+    N = len(universe_set)
+    K = len(query_set)
+
+    if K == 0:
+        raise ValueError(
+            "No genes in gene_list found in universe. "
+            "Check that gene_list and universe use the same ID space."
+        )
+
+    rows = []
+    for term, members in genesets_dict.items():
+        M = len(set(members) & universe_set)
+        if M < min_set_size:
+            continue
+        if max_set_size is not None and M > max_set_size:
+            continue
+        k = len(set(members) & query_set)
+        rows.append({"term": term, "k": k, "M": M})
+
+    if len(rows) == 0:
+        raise ValueError(
+            f"No gene sets passed size filters (min_set_size={min_set_size}, "
+            f"max_set_size={max_set_size}) after intersection with universe."
+        )
+
+    df = pd.DataFrame(rows)
+
+    odds_ratios, p_values = fisher_exact_vectorized(
+        observed_members      =  df["k"].values,
+        missing_members       = (df["M"] - df["k"]).values,
+        observed_nonmembers   = (K - df["k"]).values,
+        nonobserved_nonmembers= (N - df["M"] - K + df["k"]).values,
+    )
+
+    _, q_values, _, _ = multipletests_module.multipletests(p_values, method="fdr_bh")
+
+    return (
+        df
+        .assign(
+            overlap=df["k"].astype(str) + "/" + df["M"].astype(str),
+            odds_ratio=odds_ratios,
+            p_value=p_values,
+            q_value=q_values,
+        )
+        .drop(columns=["k", "M"])
+        .sort_values("p_value")
+        .reset_index(drop=True)
+        [["term", "overlap", "odds_ratio", "p_value", "q_value"]]
+    )
+
+
 def _calculate_geneset_edge_counts(
     edgelist: pd.DataFrame,
     genesets: Dict[str, List[str]],
@@ -623,7 +771,7 @@ def _calculate_geneset_edge_counts(
     Parameters
     ----------
     edgelist : pd.DataFrame
-        Edgelist with 'source' and 'target' columns containing vertex names.
+        Edgelist with 'from' and 'to' columns containing vertex names.
         These are the actual edges to count.
     genesets : Dict[str, List[str]]
         Dictionary mapping geneset names to lists of vertex names
@@ -873,7 +1021,7 @@ def _filter_genesets_to_universe(
     return filtered_genesets, geneset_df
 
 
-def _log_edgelist_gsea_input(
+def _log_edgelist_ora_input(
     verbose: bool, graph: Graph, edgelist: Edgelist, genesets_dict: Dict[str, List[str]]
 ):
 
@@ -885,7 +1033,7 @@ def _log_edgelist_gsea_input(
         logger.info("Creating enrichment universe...")
 
 
-def _log_edgelist_gsea_universe(verbose: bool, universe: Graph):
+def _log_edgelist_ora_universe(verbose: bool, universe: Graph):
     if verbose:
         logger.info(
             f"  Universe: {universe.vcount()} vertices, {universe.ecount()} edges"
@@ -894,7 +1042,7 @@ def _log_edgelist_gsea_universe(verbose: bool, universe: Graph):
         logger.info("Calculating observed edge counts between geneset pairs...")
 
 
-def _log_edgelist_gsea_paired_counts(
+def _log_edgelist_ora_paired_counts(
     verbose: bool,
     edge_counts_df: pd.DataFrame,
     min_set_size: int,
@@ -920,7 +1068,7 @@ def _log_edgelist_gsea_paired_counts(
         logger.info("Computing NEAT enrichment statistics...")
 
 
-def _log_edgelist_gsea_paired_results(verbose: bool, results_df: pd.DataFrame):
+def _log_edgelist_ora_paired_results(verbose: bool, results_df: pd.DataFrame):
 
     if verbose:
         # Summary of results

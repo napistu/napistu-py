@@ -342,3 +342,18 @@ DISTANCES = SimpleNamespace(
     FINAL_FROM="final_from",
     FINAL_TO="final_to",
 )
+
+CLUSTERING_DEFS = SimpleNamespace(
+    MODULE_ID="module_id",
+)
+
+INFOMAP_ARGS = SimpleNamespace(
+    EDGES="edges",
+    N_VERTICES="n_vertices",
+    DIRECTED="directed",
+    TWO_LEVEL="two_level",
+    NUM_TRIALS="num_trials",
+    SEED="seed",
+    TELEPORTATION_PROBABILITY="teleportation_probability",
+    MARKOV_TIME="markov_time",
+)
