@@ -21,6 +21,7 @@ from napistu.constants import (
     ENTITIES_W_DATA,
     MINI_SBO_TO_NAME,
     SBML_DFS,
+    SBML_DFS_METHOD_DEFS,
 )
 from napistu.ingestion.constants import DEFAULT_PRIORITIZED_PATHWAYS
 from napistu.network import data_handling, ig_utils, ng_utils
@@ -46,6 +47,7 @@ from napistu.network.constants import (
     WEIGHT_TRANSFORMATIONS,
     WEIGHTING_SPEC,
 )
+from napistu.ontologies.constants import VALID_SPECIES_TYPES
 from napistu.sbml_dfs_core import SBML_dfs
 from napistu.utils.pd_utils import series_to_none_filled_list
 
@@ -904,6 +906,92 @@ class NapistuGraph(ig.Graph):
             )
         return napistu_graph
 
+    def filter_by_species_type(
+        self,
+        species_types: list[str],
+        negate: bool = False,
+        remove_unused_vertices: bool = True,
+        inplace: bool = False,
+    ) -> "Optional[NapistuGraph]":
+        """Filter the graph to vertices whose species_type matches a list of valid types.
+
+        Returns the induced subgraph containing only vertices whose ``species_type``
+        vertex attribute is in *valid_species_types*, along with all edges between
+        those retained vertices.
+
+        Parameters
+        ----------
+        valid_species_types : list[str]
+            Species type values to keep (e.g. ``["protein", "metabolite"]``).
+            Vertices whose ``species_type`` is not in this list are removed.
+            Vertices that lack a ``species_type`` attribute are also removed.
+        negate: bool, default False
+            If False (default), keeps species whose `species_type` value is in the `species_types` arguments.
+            If True, keeps species whose `species_type` value is not in the `species_types` arguments.
+        remove_unused_vertices : bool, default True
+            Whether to remove vertices that are not used in any edges after filtering to the requested species types.
+        inplace : bool, default False
+            If True, modify this graph in place and return None.
+            If False (default), return a new NapistuGraph leaving this one unchanged.
+            Note: inplace=True is destructive — vertices are permanently deleted.
+
+        Returns
+        -------
+        Optional[NapistuGraph]
+            A new NapistuGraph (inplace=False) or None (inplace=True).
+
+        Raises
+        ------
+        KeyError
+            If the graph has no ``species_type`` vertex attribute.
+
+        Examples
+        --------
+        >>> ng.filter_by_species_type(["protein", "metabolite"], inplace=True)
+        """
+        if SBML_DFS_METHOD_DEFS.SPECIES_TYPE not in self.vertex_attributes():
+            raise KeyError(
+                "'species_type' vertex attribute not found. "
+                "Call add_vertex_data() or add_sbml_dfs_summaries() first."
+            )
+
+        invalid_species_types = set(species_types) - set(VALID_SPECIES_TYPES)
+        if invalid_species_types:
+            raise ValueError(
+                f"Invalid species types: {invalid_species_types}. Valid species types are: {VALID_SPECIES_TYPES}."
+            )
+
+        if negate:
+            valid_species_types = [
+                t for t in VALID_SPECIES_TYPES if t not in species_types
+            ]
+        else:
+            valid_species_types = species_types
+
+        species_types = self.vs[SBML_DFS_METHOD_DEFS.SPECIES_TYPE]
+        valid_set = set(valid_species_types)
+        keep_ids = [v.index for v in self.vs if species_types[v.index] in valid_set]
+
+        if inplace:
+            # Delete the complement — igraph delete_vertices is in-place
+            all_ids = set(range(self.vcount()))
+            remove_ids = sorted(all_ids - set(keep_ids))
+            self.delete_vertices(remove_ids)
+            if remove_unused_vertices:
+                self.remove_isolated_vertices(SBML_DFS.REACTIONS)
+                self.remove_isolated_vertices(SBML_DFS.SPECIES)
+
+            return None
+        else:
+            subgraph = self.induced_subgraph(keep_ids)
+            result = NapistuGraph.from_igraph(subgraph)
+            # Preserve metadata from the parent graph
+            result._metadata = self._metadata.copy()
+            if remove_unused_vertices:
+                result.remove_isolated_vertices(SBML_DFS.REACTIONS)
+                result.remove_isolated_vertices(SBML_DFS.SPECIES)
+            return result
+
     def get_edge_dataframe(self) -> pd.DataFrame:
         """
         Get edges as a Pandas DataFrame.
@@ -1309,7 +1397,9 @@ class NapistuGraph(ig.Graph):
 
         return None
 
-    def remove_isolated_vertices(self, node_types: str = SBML_DFS.REACTIONS):
+    def remove_isolated_vertices(
+        self, node_types: str = SBML_DFS.REACTIONS, verbose: bool = False
+    ):
         """
         Remove vertices that have no edges (degree 0) from the graph.
 
@@ -1325,6 +1415,8 @@ class NapistuGraph(ig.Graph):
             - "reactions": Remove only isolated reaction vertices (default)
             - "species": Remove only isolated species vertices
             - "all": Remove all isolated vertices regardless of type
+        verbose : bool, default=False
+            Whether to print verbose output
 
         Returns
         -------
@@ -1337,7 +1429,8 @@ class NapistuGraph(ig.Graph):
         isolated_vertices = self.vs.select(_degree=0)
 
         if len(isolated_vertices) == 0:
-            logger.info("No isolated vertices found to remove")
+            if verbose:
+                logger.info("No isolated vertices found to remove")
             return
 
         # Filter by node type if specified
@@ -1367,7 +1460,8 @@ class NapistuGraph(ig.Graph):
             )
 
         if len(filtered_vertices) == 0:
-            logger.info(f"No isolated {node_types} vertices found to remove")
+            if verbose:
+                logger.info(f"No isolated {node_types} vertices found to remove")
             return
 
         # Get vertex names/indices for logging (up to 5 examples)
@@ -1387,9 +1481,10 @@ class NapistuGraph(ig.Graph):
         if len(filtered_vertices) > 5:
             examples_str += f" (and {len(filtered_vertices) - 5} more)"
 
-        logger.info(
-            f"Removed {len(filtered_vertices)} isolated {node_types} vertices: [{examples_str}]"
-        )
+        if verbose:
+            logger.info(
+                f"Removed {len(filtered_vertices)} isolated {node_types} vertices: [{examples_str}]"
+            )
 
         # Remove the filtered isolated vertices
         self.delete_vertices(filtered_vertices)
