@@ -734,17 +734,16 @@ def vertex_ora(
     df = pd.DataFrame(rows)
 
     odds_ratios, p_values = fisher_exact_vectorized(
-        observed_members      =  df["k"].values,
-        missing_members       = (df["M"] - df["k"]).values,
-        observed_nonmembers   = (K - df["k"]).values,
-        nonobserved_nonmembers= (N - df["M"] - K + df["k"]).values,
+        observed_members=df["k"].values,
+        missing_members=(df["M"] - df["k"]).values,
+        observed_nonmembers=(K - df["k"]).values,
+        nonobserved_nonmembers=(N - df["M"] - K + df["k"]).values,
     )
 
     _, q_values, _, _ = multipletests_module.multipletests(p_values, method="fdr_bh")
 
     return (
-        df
-        .assign(
+        df.assign(
             overlap=df["k"].astype(str) + "/" + df["M"].astype(str),
             odds_ratio=odds_ratios,
             p_value=p_values,
@@ -752,8 +751,7 @@ def vertex_ora(
         )
         .drop(columns=["k", "M"])
         .sort_values("p_value")
-        .reset_index(drop=True)
-        [["term", "overlap", "odds_ratio", "p_value", "q_value"]]
+        .reset_index(drop=True)[["term", "overlap", "odds_ratio", "p_value", "q_value"]]
     )
 
 

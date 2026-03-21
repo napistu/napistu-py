@@ -957,19 +957,20 @@ class NapistuGraph(ig.Graph):
 
         invalid_species_types = set(species_types) - set(VALID_SPECIES_TYPES)
         if invalid_species_types:
-            raise ValueError(f"Invalid species types: {invalid_species_types}. Valid species types are: {VALID_SPECIES_TYPES}.")
+            raise ValueError(
+                f"Invalid species types: {invalid_species_types}. Valid species types are: {VALID_SPECIES_TYPES}."
+            )
 
         if negate:
-            valid_species_types = [t for t in VALID_SPECIES_TYPES if t not in species_types]
+            valid_species_types = [
+                t for t in VALID_SPECIES_TYPES if t not in species_types
+            ]
         else:
             valid_species_types = species_types
 
         species_types = self.vs[SBML_DFS_METHOD_DEFS.SPECIES_TYPE]
         valid_set = set(valid_species_types)
-        keep_ids = [
-            v.index for v in self.vs
-            if species_types[v.index] in valid_set
-        ]
+        keep_ids = [v.index for v in self.vs if species_types[v.index] in valid_set]
 
         if inplace:
             # Delete the complement — igraph delete_vertices is in-place
@@ -1396,7 +1397,9 @@ class NapistuGraph(ig.Graph):
 
         return None
 
-    def remove_isolated_vertices(self, node_types: str = SBML_DFS.REACTIONS, verbose: bool = False):
+    def remove_isolated_vertices(
+        self, node_types: str = SBML_DFS.REACTIONS, verbose: bool = False
+    ):
         """
         Remove vertices that have no edges (degree 0) from the graph.
 

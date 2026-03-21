@@ -1434,9 +1434,7 @@ def test_add_sbml_dfs_summaries(napistu_graph_metabolism, sbml_dfs_metabolism):
     assert expected_columns.issubset(new_vertex_attrs)
 
 
-def test_filter_by_species_type(
-    napistu_graph_metabolism, sbml_dfs_metabolism
-):
+def test_filter_by_species_type(napistu_graph_metabolism, sbml_dfs_metabolism):
     """Test filter_by_species_type including negate and inplace args."""
     graph_with_types = napistu_graph_metabolism.add_sbml_dfs_summaries(
         sbml_dfs_metabolism, inplace=False

@@ -7,10 +7,9 @@ run_infomap(graph, source_attr, target_attr, weight_attr, directed, two_level, n
     Run Infomap community detection on an igraph graph and return module assignments.
 """
 
-
-from typing import Optional
 import json
 import subprocess
+from typing import Optional
 
 import igraph as ig
 import pandas as pd
@@ -18,9 +17,10 @@ import pandas as pd
 from napistu.network.constants import (
     CLUSTERING_DEFS,
     INFOMAP_ARGS,
-    NAPISTU_GRAPH_VERTICES,
     NAPISTU_GRAPH_EDGES,
+    NAPISTU_GRAPH_VERTICES,
 )
+
 
 def run_infomap(
     graph: ig.Graph,
@@ -126,7 +126,7 @@ def run_infomap(
         [modules.get(i, None) for i in vertex_indices],
         index=index,
         name=CLUSTERING_DEFS.MODULE_ID,
-        dtype="Int64", # use Int64 to allow for missing values
+        dtype="Int64",  # use Int64 to allow for missing values
     )
 
 
@@ -186,7 +186,6 @@ def _run_infomap_local(
     im.add_links(edges)
     im.run()
     return {node.node_id: node.module_id for node in im.nodes}
-
 
 
 def _run_infomap_subprocess(

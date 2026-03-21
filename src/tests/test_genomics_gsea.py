@@ -228,12 +228,15 @@ def test_get_gmt_w_napistu_ids_species_and_cspecies(
         )
 
     # test with bad BQB terms
-    with pytest.raises(ValueError, match="Invalid bqb_terms: {'INVALID_BQB'}. Must be one of"):
+    with pytest.raises(
+        ValueError, match="Invalid bqb_terms: {'INVALID_BQB'}. Must be one of"
+    ):
         collection.get_gmt_w_napistu_ids(
             species_identifiers=species_identifiers,
             id_type=SBML_DFS.S_ID,
             bqb_terms="INVALID_BQB",
         )
+
 
 def test_prerank_with_napistu_genesets(sbml_dfs_w_entrez_ids, geneset_collection_h_all):
     """Test that napistu-centric geneset formats can be used with gseapy.prerank."""
