@@ -1699,6 +1699,52 @@ def test_add_attributes_to_graph_inplace_vertices(test_graph):
         assert vertex_locations[i] == vertex_data["vertex_location"].iloc[i]
 
 
+def test_add_attributes_df_entity_data_has_nonexistent_vertices(test_graph, caplog):
+    """Test _add_attributes_df warns when entity_data includes vertices not in graph.
+
+    Simulates the scenario: graph is filtered (e.g. filter_by_species_type), then
+    add_feature_abundances / _add_attributes_df is called with entity_data built from
+    the unfiltered species set. Entity_data may contain rows for vertices that were
+    removed by filtering. This should log a warning and proceed.
+    """
+    # Filter graph to subset of vertices (simulating filter_by_species_type)
+    filtered = test_graph.induced_subgraph([0, 1])  # keep A, B only
+    filtered_ng = NapistuGraph.from_igraph(filtered)
+    assert filtered_ng.vcount() == 2
+    assert set(filtered_ng.vs[NAPISTU_GRAPH_VERTICES.NAME]) == {"A", "B"}
+
+    # Entity_data has rows for A, B (exist) and Z (does not exist in filtered graph)
+    entity_data_extra = pd.DataFrame(
+        {"feature_attr": [1.0, 2.0, 99.0]},
+        index=pd.Index(["A", "B", "Z"], name=NAPISTU_GRAPH_VERTICES.NAME),
+    )
+    with caplog.at_level(logging.WARNING):
+        filtered_ng._add_attributes_df(
+            entity_data=entity_data_extra,
+            target_entity=NAPISTU_GRAPH.VERTICES,
+            overwrite=False,
+        )
+    assert "entity_data contains" in caplog.text
+    assert filtered_ng.vs[0]["feature_attr"] == 1.0
+    assert filtered_ng.vs[1]["feature_attr"] == 2.0
+
+    # Entity_data with ONLY non-existent vertices: all graph vertices get None
+    filtered2 = test_graph.induced_subgraph([0, 1])
+    filtered2_ng = NapistuGraph.from_igraph(filtered2)
+    entity_data_nonexistent = pd.DataFrame(
+        {"orphan_attr": [10.0, 20.0]},
+        index=pd.Index(["Z", "W"], name=NAPISTU_GRAPH_VERTICES.NAME),
+    )
+    with caplog.at_level(logging.WARNING):
+        filtered2_ng._add_attributes_df(
+            entity_data=entity_data_nonexistent,
+            target_entity=NAPISTU_GRAPH.VERTICES,
+            overwrite=False,
+        )
+    assert filtered2_ng.vs[0]["orphan_attr"] is None
+    assert filtered2_ng.vs[1]["orphan_attr"] is None
+
+
 def test_add_attributes_df_entities_not_in_df_get_none(test_graph):
     """Test that vertices and edges not in entity_data are assigned None (not np.nan)."""
     # Vertices: test_graph has A, B, C - only provide data for A and B
