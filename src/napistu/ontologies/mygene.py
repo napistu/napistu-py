@@ -23,7 +23,10 @@ logger = logging.getLogger(__name__)
 
 
 def create_python_mapping_tables(
-    mappings: Set[str], species: str = "Homo sapiens", test_mode: bool = False
+    mappings: Set[str],
+    species: str = "Homo sapiens",
+    test_mode: bool = False,
+    query_strategies: List[str] = MYGENE_DEFAULT_QUERIES,
 ) -> Dict[str, pd.DataFrame]:
     """Create genome-wide mapping tables between Entrez and other gene identifiers.
 
@@ -39,6 +42,8 @@ def create_python_mapping_tables(
         SPECIES_TO_TAXID or a valid NCBI taxonomy ID.
     test_mode : bool, default False
         If True, only fetch the first 1000 genes for testing purposes.
+    query_strategies : list of str, default ``MYGENE_DEFAULT_QUERIES``
+        MyGene.info query strings to run (see ``MYGENE_QUERY_DEFS_LIST``).
 
     Returns
     -------
@@ -77,7 +82,11 @@ def create_python_mapping_tables(
     # Fetch comprehensive gene data
     logger.info("Fetching genome-wide gene data from MyGene...")
     all_genes_df = _fetch_mygene_data_all_queries(
-        mg=mg, taxa_id=taxa_id, fields=mygene_fields, test_mode=test_mode
+        mg=mg,
+        taxa_id=taxa_id,
+        fields=mygene_fields,
+        query_strategies=query_strategies,
+        test_mode=test_mode,
     )
 
     if all_genes_df.empty:

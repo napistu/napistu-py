@@ -8,6 +8,8 @@ from typing import Dict, List, Optional, Set
 from pydantic import BaseModel, Field, field_validator
 
 from napistu.ontologies.constants import (
+    MYGENE_DEFAULT_QUERIES,
+    MYGENE_QUERY_DEFS_LIST,
     ONTOLOGIES,
     ONTOLOGIES_LIST,
     SPECIES_TYPE_ONTOLOGIES,
@@ -99,6 +101,8 @@ class GenodexitoConfig(BaseModel):
         Optional paths to R libraries
     test_mode: bool
         Whether to limit queries for testing
+    mygene_query_strategies: List[str]
+        MyGene query strings when using the Python mapper; defaults to MYGENE_DEFAULT_QUERIES
     """
 
     organismal_species: str = Field(
@@ -115,6 +119,10 @@ class GenodexitoConfig(BaseModel):
     )
     test_mode: bool = Field(
         default=False, description="Whether to limit queries for testing"
+    )
+    mygene_query_strategies: List[str] = Field(
+        default_factory=lambda: list(MYGENE_DEFAULT_QUERIES),
+        description="MyGene.info query strategies for the Python mapper",
     )
 
     @field_validator("preferred_method")
@@ -136,6 +144,18 @@ class GenodexitoConfig(BaseModel):
         """Validate that r_paths contains only strings."""
         if v is not None and not all(isinstance(path, str) for path in v):
             raise ValueError("All elements in r_paths must be strings")
+        return v
+
+    @field_validator("mygene_query_strategies")
+    @classmethod
+    def validate_mygene_query_strategies(cls, v: List[str]) -> List[str]:
+        """Validate MyGene query strategy strings."""
+        invalid = set(v) - set(MYGENE_QUERY_DEFS_LIST)
+        if invalid:
+            raise ValueError(
+                f"Invalid mygene_query_strategies: {', '.join(sorted(invalid))}. "
+                f"Valid queries are: {', '.join(MYGENE_QUERY_DEFS_LIST)}"
+            )
         return v
 
 
