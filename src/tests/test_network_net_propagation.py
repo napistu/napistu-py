@@ -1,3 +1,7 @@
+"""Test network propagation with alternative null strategies."""
+
+import logging
+
 import igraph as ig
 import numpy as np
 import pandas as pd
@@ -301,8 +305,11 @@ def test_all_null_generators_structure():
 
     for generator_name, generator_func in NULL_GENERATORS.items():
 
-        if generator_name == NULL_STRATEGIES.POOLED_VERTEX_PERMUTATION:
-            continue  # not supported because the attributes have different masks
+        if generator_name in (
+            NULL_STRATEGIES.POOLED_VERTEX_PERMUTATION,
+            NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION,
+        ):
+            continue  # not supported: these require identical masks; attr1/attr2 differ
 
         print(f"Testing {generator_name}")
 
@@ -387,6 +394,12 @@ def test_mask_application():
 
     for generator_name, generator_func in NULL_GENERATORS.items():
         print(f"Testing mask application for {generator_name}")
+
+        if generator_name in (
+            NULL_STRATEGIES.POOLED_VERTEX_PERMUTATION,
+            NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION,
+        ):
+            continue  # pooled methods are covered in test_pooled_null_methods
 
         if generator_name == NULL_STRATEGIES.UNIFORM:
             result = generator_func(graph, attributes, mask=mask_array)
@@ -474,6 +487,7 @@ def test_propagation_method_parameters():
 
     # Test that all generators accept method parameters
     for generator_name, generator_func in NULL_GENERATORS.items():
+
         if generator_name == NULL_STRATEGIES.UNIFORM:
             result = generator_func(
                 graph, ["attr1"], additional_propagation_args={"damping": 0.8}
@@ -616,3 +630,53 @@ def test_observed_scores_invariant_to_null_strategy():
         result_perm[NET_PROPAGATION_METRICS.OBSERVED].values,
         err_msg="Observed scores should be identical across null strategies",
     )
+
+
+def test_pooled_null_methods(caplog):
+    """Coverage for pooled_vertex_permutation and attr_pooled_vertex_permutation."""
+    graph = ig.Graph(6)
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C", "D", "E", "F"]
+    # Three attributes with different sparsity, all sharing the same mask
+    graph.vs["sparse"] = [10.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    graph.vs["medium"] = [1.0, 2.0, 0.0, 0.0, 0.0, 0.0]
+    graph.vs["dense"] = [1.0, 1.0, 1.0, 1.0, 0.0, 0.0]
+    graph.add_edges([(0, 1), (1, 2), (2, 3), (3, 4), (4, 5)])
+
+    attrs = ["sparse", "medium", "dense"]
+    shared_mask = np.array([True, True, True, True, False, False])
+
+    # Both methods produce expected shape with shared mask
+    for strategy in (
+        NULL_STRATEGIES.POOLED_VERTEX_PERMUTATION,
+        NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION,
+    ):
+        result = network_propagation_with_null(
+            graph, attrs, null_strategy=strategy, n_samples=12, mask=shared_mask
+        )
+        assert result.shape == (6, 9)  # 6 nodes, 3 metrics x 3 attrs
+        # Exact n_samples allocation matters for p-value resolution
+        null_rows = result[NET_PROPAGATION_METRICS.QUANTILE].notna().sum().sum()
+        assert null_rows > 0
+
+    # attr_pooled with n_samples not divisible by n_attributes — must hit n_samples exactly
+    n_samples = 10  # 10 // 3 = 3 base, remainder 1, so [4, 3, 3]
+    result_uneven = NULL_GENERATORS[NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION](
+        graph, attrs, n_samples=n_samples, mask=shared_mask
+    )
+    assert result_uneven.shape == (n_samples * 6, 3)
+
+    # attr_pooled warns and proceeds when n_samples < n_attributes
+    with caplog.at_level(logging.WARNING):
+        result_under = NULL_GENERATORS[NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION](
+            graph, attrs, n_samples=2, mask=shared_mask
+        )
+    assert "less than n_attributes" in caplog.text
+    assert result_under.shape == (2 * 6, 3)
+
+    # Both methods reject non-identical masks
+    for strategy in (
+        NULL_STRATEGIES.POOLED_VERTEX_PERMUTATION,
+        NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION,
+    ):
+        with pytest.raises(ValueError, match="different mask"):
+            NULL_GENERATORS[strategy](graph, attrs, n_samples=4)

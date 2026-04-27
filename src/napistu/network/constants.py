@@ -300,6 +300,7 @@ NET_PROPAGATION_METRICS = SimpleNamespace(
 
 # null distributions
 NULL_STRATEGIES = SimpleNamespace(
+    ATTR_POOLED_VERTEX_PERMUTATION="attr_pooled_vertex_permutation",
     EDGE_PERMUTATION="edge_permutation",
     PARAMETRIC="parametric",
     POOLED_VERTEX_PERMUTATION="pooled_vertex_permutation",
