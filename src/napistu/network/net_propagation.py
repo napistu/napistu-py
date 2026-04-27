@@ -41,6 +41,7 @@ from napistu.network.ig_utils import (
     _parse_mask_input,
 )
 from napistu.statistics.quantiles import calculate_quantiles
+from napistu.utils.pd_utils import downcast_float_dataframe
 
 logger = logging.getLogger(__name__)
 
@@ -310,6 +311,7 @@ def network_propagation_with_null(
             verbose=verbose,
             **null_kwargs,
         )
+        null_distribution = downcast_float_dataframe(null_distribution)
 
         # 4b. Sampled nulls: both quantile and log2 enrichment vs topology-matched baseline
         quantiles = calculate_quantiles(observed_scores, null_distribution)
