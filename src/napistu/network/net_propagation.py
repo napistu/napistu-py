@@ -395,7 +395,7 @@ def _build_pooled_universe(
     for attr in attributes:
         attr_values = np.array(graph.vs[attr])
         masked_values = attr_values[mask]
-        universe_parts.append(masked_values[masked_values > 0])
+        universe_parts.append(masked_values)
 
     universe = np.concatenate(universe_parts)
 
