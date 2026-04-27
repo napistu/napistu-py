@@ -40,11 +40,11 @@ def calculate_quantiles(
         DataFrame with null scores, features as index (multiple rows per feature)
         and attributes as columns.
     method : str
-        ``per_feature`` (default): one null block per feature, linear memory in
+        ``per_feature``: one null block per feature, linear memory in
         ``n_null_samples * n_attributes`` (no 3D tensor). Best for large graphs
         and many nulls when memory is the constraint.
 
-        ``dense``: materialize a padded 3D array
+        ``dense`` (default): materialize a padded 3D array
         ``(n_features, n_null_samples, n_attributes)`` and use vectorized
         comparisons. Faster when the full array fits in RAM, but can increase
         peak memory substantially.

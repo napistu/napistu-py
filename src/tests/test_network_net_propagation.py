@@ -230,6 +230,18 @@ def test_network_propagation_with_null():
         )
 
 
+def test_network_propagation_invalid_quantile_method():
+    """quantile_method is validated before null generation."""
+    graph = ig.Graph(3)
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C"]
+    graph.vs["attr1"] = [1.0, 0.0, 2.0]
+    graph.add_edges([(0, 1), (1, 2)])
+    with pytest.raises(ValueError, match="quantile_method must be one of"):
+        network_propagation_with_null(
+            graph, ["attr1"], quantile_method="bad", n_samples=3
+        )
+
+
 def test_net_propagate_attributes():
     """Test net_propagate_attributes with multiple attributes and various scenarios."""
     # Create test graph with edges for realistic propagation

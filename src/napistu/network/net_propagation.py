@@ -11,7 +11,7 @@ Public Functions
 ----------------
 melt_propagation_results(propagation_results, index_name, attribute_name)
     Melt results from network_propagation_with_null into a tall format.
-network_propagation_with_null(graph, attributes, null_strategy, ...)
+network_propagation_with_null(graph, attributes, null_strategy, ..., quantile_method=...)
     Apply network propagation and compare observed scores to a null distribution.
 net_propagate_attributes(graph, attributes, propagation_method, ...)
     Propagate multiple attributes over a network using a propagation method.
@@ -40,6 +40,7 @@ from napistu.network.ig_utils import (
     _get_attribute_masks,
     _parse_mask_input,
 )
+from napistu.statistics.constants import QUANTILE_METHODS, VALID_QUANTILE_METHODS
 from napistu.statistics.quantiles import calculate_quantiles
 from napistu.utils.pd_utils import downcast_float_dataframe
 
@@ -138,6 +139,7 @@ def network_propagation_with_null(
     ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
     additional_propagation_args: Optional[dict] = None,
     n_samples: int = 100,
+    quantile_method: str = QUANTILE_METHODS.DENSE,
     verbose: bool = False,
     **null_kwargs,
 ) -> pd.DataFrame:
@@ -228,6 +230,11 @@ def network_propagation_with_null(
         Additional arguments to pass to the network propagation method.
     n_samples : int
         Number of null samples to generate (ignored for uniform null).
+    quantile_method : str
+        Quantile implementation passed to :func:`~napistu.statistics.quantiles.calculate_quantiles`.
+        One of ``dense`` (default, vectorized; matches historical behavior) or
+        ``per_feature`` (linear memory when the null table is huge). Ignored when
+        ``null_strategy`` is uniform (quantiles are undefined there).
     verbose : bool, optional
         Extra reporting. Default is False.
     **null_kwargs
@@ -276,7 +283,20 @@ def network_propagation_with_null(
     ...     n_samples=1000,
     ...     mask='measured_features'
     ... )
+
+    >>> # Prefer memory-frugal quantile calculation on very large graphs
+    >>> result = network_propagation_with_null(
+    ...     graph, ['gene_score'],
+    ...     quantile_method='per_feature',
+    ...     null_strategy='vertex_permutation',
+    ... )
     """
+    if quantile_method not in VALID_QUANTILE_METHODS:
+        raise ValueError(
+            f"quantile_method must be one of {sorted(VALID_QUANTILE_METHODS)}, "
+            f"got {quantile_method!r}"
+        )
+
     # 1. Calculate observed propagated scores
     observed_scores = net_propagate_attributes(
         graph, attributes, propagation_method, additional_propagation_args
@@ -314,7 +334,9 @@ def network_propagation_with_null(
         null_distribution = downcast_float_dataframe(null_distribution)
 
         # 4b. Sampled nulls: both quantile and log2 enrichment vs topology-matched baseline
-        quantiles = calculate_quantiles(observed_scores, null_distribution)
+        quantiles = calculate_quantiles(
+            observed_scores, null_distribution, method=quantile_method
+        )
         log2_enrichment = _compute_log2_enrichment(observed_scores, null_distribution)
 
     # 5. Combine into MultiIndex DataFrame with metric as outer level
