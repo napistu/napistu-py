@@ -1,12 +1,40 @@
 import pandas as pd
 import pytest
+from pydantic import ValidationError
 
 from napistu.ontologies.constants import (
     GENODEXITO_DEFS,
     INTERCONVERTIBLE_GENIC_ONTOLOGIES,
+    MYGENE_DEFAULT_QUERIES,
+    MYGENE_QUERY_DEFS,
     PROTEIN_ONTOLOGIES,
 )
 from napistu.ontologies.genodexito import Genodexito
+
+
+def test_genodexito_mygene_query_strategies():
+    """Default list, custom list, and invalid strategies (Pydantic) behave as expected."""
+    geno_default = Genodexito(
+        preferred_method=GENODEXITO_DEFS.PYTHON,
+        allow_fallback=False,
+    )
+    assert geno_default.mygene_query_strategies == list(MYGENE_DEFAULT_QUERIES)
+
+    strategies = [MYGENE_QUERY_DEFS.PROTEIN_CODING]
+    geno_custom = Genodexito(
+        preferred_method=GENODEXITO_DEFS.PYTHON,
+        allow_fallback=False,
+        mygene_query_strategies=strategies,
+    )
+    assert geno_custom.mygene_query_strategies == strategies
+
+    with pytest.raises(ValidationError) as exc:
+        Genodexito(
+            preferred_method=GENODEXITO_DEFS.PYTHON,
+            allow_fallback=False,
+            mygene_query_strategies=["type_of_gene:invalid"],
+        )
+    assert "Invalid mygene_query_strategies" in str(exc.value)
 
 
 @pytest.skip_on_timeout(5)

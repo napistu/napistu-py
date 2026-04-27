@@ -912,6 +912,7 @@ class NapistuGraph(ig.Graph):
         negate: bool = False,
         remove_unused_vertices: bool = True,
         inplace: bool = False,
+        verbose: bool = False,
     ) -> "Optional[NapistuGraph]":
         """Filter the graph to vertices whose species_type matches a list of valid types.
 
@@ -934,6 +935,8 @@ class NapistuGraph(ig.Graph):
             If True, modify this graph in place and return None.
             If False (default), return a new NapistuGraph leaving this one unchanged.
             Note: inplace=True is destructive — vertices are permanently deleted.
+        verbose : bool, default False
+            Whether to print verbose output
 
         Returns
         -------
@@ -968,9 +971,23 @@ class NapistuGraph(ig.Graph):
         else:
             valid_species_types = species_types
 
+        if verbose:
+            logger.info(f"Keeping species types: {valid_species_types}")
+
         species_types = self.vs[SBML_DFS_METHOD_DEFS.SPECIES_TYPE]
         valid_set = set(valid_species_types)
         keep_ids = [v.index for v in self.vs if species_types[v.index] in valid_set]
+
+        n_removed_vertices = len(self.vs) - len(keep_ids)
+        if n_removed_vertices == 0:
+            logger.warning(
+                "No vertices matching the requested species types were found"
+            )
+        else:
+            if verbose:
+                logger.info(
+                    f"Removing {n_removed_vertices} vertices, retaining {len(keep_ids)} vertices"
+                )
 
         if inplace:
             # Delete the complement — igraph delete_vertices is in-place
@@ -978,8 +995,8 @@ class NapistuGraph(ig.Graph):
             remove_ids = sorted(all_ids - set(keep_ids))
             self.delete_vertices(remove_ids)
             if remove_unused_vertices:
-                self.remove_isolated_vertices(SBML_DFS.REACTIONS)
-                self.remove_isolated_vertices(SBML_DFS.SPECIES)
+                self.remove_isolated_vertices(SBML_DFS.REACTIONS, verbose=verbose)
+                self.remove_isolated_vertices(SBML_DFS.SPECIES, verbose=verbose)
 
             return None
         else:
@@ -988,8 +1005,8 @@ class NapistuGraph(ig.Graph):
             # Preserve metadata from the parent graph
             result._metadata = self._metadata.copy()
             if remove_unused_vertices:
-                result.remove_isolated_vertices(SBML_DFS.REACTIONS)
-                result.remove_isolated_vertices(SBML_DFS.SPECIES)
+                result.remove_isolated_vertices(SBML_DFS.REACTIONS, verbose=verbose)
+                result.remove_isolated_vertices(SBML_DFS.SPECIES, verbose=verbose)
             return result
 
     def get_edge_dataframe(self) -> pd.DataFrame:
@@ -2325,6 +2342,24 @@ class NapistuGraph(ig.Graph):
                     f"on graph {target_entity}. Use overwrite=True to replace them, or exclude "
                     f"these attributes from entity_data."
                 )
+
+        # Warn when entity_data references entities not in the graph
+        if isinstance(entity_data.index, pd.MultiIndex):
+            graph_entity_ids = set(zip(*(graph_df[k].values for k in merge_keys)))
+            entity_data_ids = set(entity_data.index)
+        else:
+            graph_entity_ids = set(graph_df[merge_keys[0]].dropna())
+            entity_data_ids = set(entity_data.index)
+        nonexistent = entity_data_ids - graph_entity_ids
+        if nonexistent:
+            n_extra = len(nonexistent)
+            sample = list(nonexistent)[:5]
+            logger.warning(
+                f"entity_data contains {n_extra} {target_entity} ID(s) not in the graph: "
+                f"{sample}{' ...' if n_extra > 5 else ''}. "
+                f"Filter entity_data to only include {target_entity} present in the graph, "
+                f"or ensure the graph was not filtered (e.g. filter_by_species_type) before adding."
+            )
 
         # Merge entity data with graph data
         graph_with_attrs = graph_df.merge(

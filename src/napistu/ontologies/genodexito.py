@@ -37,6 +37,9 @@ class Genodexito:
         Optional paths to R libraries for Bioconductor, by default None
     test_mode : bool, optional
         If True, limit queries to 1000 genes for testing purposes, by default False
+    mygene_query_strategies : list of str, optional
+        MyGene.info query strings when using the Python mapper; omitted uses
+        ``MYGENE_DEFAULT_QUERIES``
 
     Attributes
     ----------
@@ -92,6 +95,7 @@ class Genodexito:
         allow_fallback: bool = True,
         r_paths: Optional[List[str]] = None,
         test_mode: bool = False,
+        mygene_query_strategies: Optional[List[str]] = None,
     ) -> None:
         """
         Initialize unified gene mapper
@@ -108,21 +112,28 @@ class Genodexito:
             Optional paths to R libraries for Bioconductor, by default None
         test_mode : bool, optional
             If True, limit queries to 1000 genes for testing purposes, by default False
+        mygene_query_strategies : Optional[List[str]], optional
+            MyGene.info query strategies for the Python mapper; omitted uses
+            ``MYGENE_DEFAULT_QUERIES``
         """
         # Validate configuration using Pydantic model
-        config = GenodexitoConfig(
+        config_fields = dict(
             organismal_species=organismal_species,
             preferred_method=preferred_method,
             allow_fallback=allow_fallback,
             r_paths=r_paths,
             test_mode=test_mode,
         )
+        if mygene_query_strategies is not None:
+            config_fields["mygene_query_strategies"] = mygene_query_strategies
+        config = GenodexitoConfig(**config_fields)
 
         self.organismal_species = config.organismal_species
         self.preferred_method = config.preferred_method
         self.allow_fallback = config.allow_fallback
         self.r_paths = config.r_paths
         self.test_mode = config.test_mode
+        self.mygene_query_strategies = config.mygene_query_strategies
 
         # Initialize empty attributes
         self.mappings: Optional[Dict[str, pd.DataFrame]] = None
@@ -178,6 +189,7 @@ class Genodexito:
                         mappings=mappings,
                         species=self.organismal_species,
                         test_mode=self.test_mode,
+                        query_strategies=self.mygene_query_strategies,
                     )
                     self.mapper_used = GENODEXITO_DEFS.PYTHON
                 else:
@@ -192,6 +204,7 @@ class Genodexito:
                     mappings=mappings,
                     species=self.organismal_species,
                     test_mode=self.test_mode,
+                    query_strategies=self.mygene_query_strategies,
                 )
                 self.mapper_used = GENODEXITO_DEFS.PYTHON
             except Exception as e:
