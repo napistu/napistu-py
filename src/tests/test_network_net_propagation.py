@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 from napistu.network.constants import (
+    LOG2_ENRICHMENT_EPSILON,
     NAPISTU_GRAPH_VERTICES,
     NET_PROPAGATION_METRICS,
     NULL_STRATEGIES,
@@ -22,6 +23,7 @@ from napistu.network.net_propagation import (
     melt_propagation_results,
     net_propagate_attributes,
     network_propagation_with_null,
+    network_propagation_with_null_repeated,
 )
 
 
@@ -240,6 +242,56 @@ def test_network_propagation_invalid_quantile_method():
         network_propagation_with_null(
             graph, ["attr1"], quantile_method="bad", n_samples=3
         )
+
+
+def test_network_propagation_repeated_requires_ge_2_runs_and_rejects_uniform():
+    """Repeated propagation requires n_runs >= 2 and does not accept uniform null."""
+    graph = ig.Graph(2)
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["a", "b"]
+    graph.vs["attr1"] = [1.0, 0.0]
+    graph.add_edges([(0, 1)])
+
+    with pytest.raises(ValueError, match="n_runs must be >= 2"):
+        network_propagation_with_null_repeated(
+            graph,
+            ["attr1"],
+            null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
+            n_samples=2,
+            n_runs=0,
+        )
+    with pytest.raises(ValueError, match="n_runs must be >= 2"):
+        network_propagation_with_null_repeated(
+            graph,
+            ["attr1"],
+            null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
+            n_samples=2,
+            n_runs=1,
+        )
+
+    with pytest.raises(ValueError, match="null_strategy='uniform"):
+        network_propagation_with_null_repeated(
+            graph,
+            ["attr1"],
+            null_strategy=NULL_STRATEGIES.UNIFORM,
+            n_samples=2,
+            n_runs=2,
+        )
+
+
+def test_network_propagation_repeated_multiple_runs():
+    """Repeated calls produce merged outputs with consistent shape."""
+    graph = ig.Graph(4)
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C", "D"]
+    graph.vs["attr1"] = [1.0, 0.0, 2.0, 0.0]
+    graph.add_edges([(0, 1), (1, 2), (2, 3)])
+    merged = network_propagation_with_null_repeated(
+        graph, ["attr1"], n_samples=3, verbose=False
+    )
+    assert isinstance(merged.columns, pd.MultiIndex)
+    assert NET_PROPAGATION_METRICS.OBSERVED in merged.columns.get_level_values(0)
+    assert NET_PROPAGATION_METRICS.QUANTILE in merged.columns.get_level_values(0)
+    assert merged[NET_PROPAGATION_METRICS.OBSERVED].shape == (4, 1)
+    assert merged[NET_PROPAGATION_METRICS.LOG2_ENRICHMENT].notna().values.all()
 
 
 def test_net_propagate_attributes():
@@ -545,7 +597,7 @@ def test_compute_log2_enrichment():
 
     # Validate values manually for one feature
     null_mean_A = null_df.loc["A"].mean()
-    expected_A = np.log2(observed.loc["A"] / (null_mean_A + 1e-10))
+    expected_A = np.log2(observed.loc["A"] / (null_mean_A + LOG2_ENRICHMENT_EPSILON))
     pd.testing.assert_series_equal(result.loc["A"], expected_A.rename("A"))
 
     # Observed == null mean should give log2(1) == 0

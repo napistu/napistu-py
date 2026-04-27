@@ -11,10 +11,12 @@ Public Functions
 ----------------
 melt_propagation_results(propagation_results, index_name, attribute_name)
     Melt results from network_propagation_with_null into a tall format.
-network_propagation_with_null(graph, attributes, null_strategy, ..., quantile_method=...)
-    Apply network propagation and compare observed scores to a null distribution.
 net_propagate_attributes(graph, attributes, propagation_method, ...)
     Propagate multiple attributes over a network using a propagation method.
+network_propagation_with_null(graph, attributes, null_strategy, ..., quantile_method=...)
+    Apply network propagation and compare observed scores to a null distribution.
+network_propagation_with_null_repeated(..., n_runs=...)
+    Run network_propagation_with_null multiple times and merge summaries (lower peak null RAM).
 """
 
 import logging
@@ -27,12 +29,14 @@ import pandas as pd
 import scipy.stats as stats
 
 from napistu.network.constants import (
+    LOG2_ENRICHMENT_EPSILON,
     MASK_KEYWORDS,
     NAPISTU_GRAPH_VERTICES,
     NET_PROPAGATION_DEFS,
     NET_PROPAGATION_METRICS,
     NULL_STRATEGIES,
     PARAMETRIC_NULL_DEFAULT_DISTRIBUTION,
+    VALID_NET_PROPAGATION_METRICS,
     VALID_NULL_STRATEGIES,
 )
 from napistu.network.ig_utils import (
@@ -130,6 +134,64 @@ def melt_propagation_results(
     return tall[col_order]
 
 
+def net_propagate_attributes(
+    graph: ig.Graph,
+    attributes: List[str],
+    propagation_method: Union[
+        str, PropagationMethod
+    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
+    additional_propagation_args: Optional[dict] = None,
+) -> pd.DataFrame:
+    """
+    Propagate multiple attributes over a network using a network propagation method.
+
+    Parameters
+    ----------
+    graph : ig.Graph
+        The graph to propagate attributes over.
+    attributes : List[str]
+        List of attribute names to propagate.
+    propagation_method : str
+        The network propagation method to use (e.g., 'personalized_pagerank').
+    additional_propagation_args : dict, optional
+        Additional arguments to pass to the network propagation method.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with node names as index and attributes as columns,
+        containing the propagated attribute values.
+    """
+
+    propagation_method = _ensure_propagation_method(propagation_method)
+    _validate_vertex_attributes(graph, attributes, propagation_method)
+
+    if additional_propagation_args is None:
+        additional_propagation_args = {}
+
+    results = []
+    for attr in attributes:
+        # Validate attributes
+        attr_data = _ensure_valid_attribute(
+            graph, attr, non_negative=propagation_method.non_negative
+        )
+        # apply the propagation method
+        pr_attr = propagation_method.method(
+            graph, attr_data, **additional_propagation_args
+        )
+
+        results.append(pr_attr)
+
+    # Get node names once
+    names = (
+        graph.vs[NAPISTU_GRAPH_VERTICES.NAME]
+        if NAPISTU_GRAPH_VERTICES.NAME in graph.vs.attributes()
+        else list(range(graph.vcount()))
+    )
+
+    return pd.DataFrame(np.column_stack(results), index=names, columns=attributes)
+
+
 def network_propagation_with_null(
     graph: ig.Graph,
     attributes: List[str],
@@ -140,6 +202,7 @@ def network_propagation_with_null(
     additional_propagation_args: Optional[dict] = None,
     n_samples: int = 100,
     quantile_method: str = QUANTILE_METHODS.DENSE,
+    log2_enrichment_epsilon: float = LOG2_ENRICHMENT_EPSILON,
     verbose: bool = False,
     **null_kwargs,
 ) -> pd.DataFrame:
@@ -235,6 +298,9 @@ def network_propagation_with_null(
         One of ``dense`` (default, vectorized; matches historical behavior) or
         ``per_feature`` (linear memory when the null table is huge). Ignored when
         ``null_strategy`` is uniform (quantiles are undefined there).
+    log2_enrichment_epsilon : float
+        Small value added to null mean to avoid division by zero (defaults to
+        :data:`~napistu.network.constants.LOG2_ENRICHMENT_EPSILON`).
     verbose : bool, optional
         Extra reporting. Default is False.
     **null_kwargs
@@ -319,7 +385,9 @@ def network_propagation_with_null(
         quantiles = pd.DataFrame(
             np.nan, index=observed_scores.index, columns=observed_scores.columns
         )
-        log2_enrichment = _compute_log2_enrichment(observed_scores, null_distribution)
+        log2_enrichment = _compute_log2_enrichment(
+            observed_scores, null_distribution, epsilon=log2_enrichment_epsilon
+        )
 
     else:
         null_distribution = null_generator(
@@ -337,7 +405,9 @@ def network_propagation_with_null(
         quantiles = calculate_quantiles(
             observed_scores, null_distribution, method=quantile_method
         )
-        log2_enrichment = _compute_log2_enrichment(observed_scores, null_distribution)
+        log2_enrichment = _compute_log2_enrichment(
+            observed_scores, null_distribution, epsilon=log2_enrichment_epsilon
+        )
 
     # 5. Combine into MultiIndex DataFrame with metric as outer level
     results = {
@@ -357,62 +427,98 @@ def network_propagation_with_null(
     )
 
 
-def net_propagate_attributes(
+def network_propagation_with_null_repeated(
     graph: ig.Graph,
     attributes: List[str],
+    null_strategy: str = NULL_STRATEGIES.VERTEX_PERMUTATION,
     propagation_method: Union[
         str, PropagationMethod
     ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
     additional_propagation_args: Optional[dict] = None,
+    n_samples: int = 100,
+    quantile_method: str = QUANTILE_METHODS.DENSE,
+    verbose: bool = False,
+    n_runs: int = 2,
+    *,
+    log2_enrichment_epsilon: float = LOG2_ENRICHMENT_EPSILON,
+    **null_kwargs,
 ) -> pd.DataFrame:
-    """
-    Propagate multiple attributes over a network using a network propagation method.
+    """Call :func:`network_propagation_with_null` several times with the same inputs and merge.
+
+    Each run draws an independent Monte Carlo null of ``n_samples`` (unless the chosen
+    strategy ignores ``n_samples``). This trims **peak RAM** versus one call with very
+    large ``n_samples`` because intermediate null tables are not held simultaneously.
+
+    **log2 enrichment** is pooled from per-run summaries: inferred per-run mean-null
+    values recovered from observed and ``log2_enrichment`` are averaged across runs,
+    then ``log2(observed / (pooled_mean + epsilon))`` is recomputed — equivalent to a
+    single pooled null mean across all runs when each ``n_samples`` is equal.
+
+    **Quantiles** cannot be reconstructed from emitted scalars alone, so merged
+    quantiles use the sample mean of run-wise quantiles. That is generally close to the
+    fully pooled empirical midrank for large totals but is not identical to one run of
+    ``n_samples * n_runs`` draws (ties are negligible in most regimes).
 
     Parameters
     ----------
     graph : ig.Graph
-        The graph to propagate attributes over.
+        Input graph.
     attributes : List[str]
-        List of attribute names to propagate.
-    propagation_method : str
-        The network propagation method to use (e.g., 'personalized_pagerank').
+        Attribute names to propagate and test.
+    null_strategy : str
+        Same as :func:`network_propagation_with_null`, except ``uniform`` is not supported
+        (nothing to Monte Carlo-average); use :func:`network_propagation_with_null`.
+    propagation_method : str or PropagationMethod
+        Same as :func:`network_propagation_with_null`.
     additional_propagation_args : dict, optional
-        Additional arguments to pass to the network propagation method.
+        Same as :func:`network_propagation_with_null`.
+    n_samples : int
+        Null samples **per run** (same meaning as in :func:`network_propagation_with_null`).
+    quantile_method : str
+        Same as :func:`network_propagation_with_null`.
+    verbose : bool, optional
+        Same as :func:`network_propagation_with_null`.
+    n_runs : int
+        Must be ``>= 2``. Single-run callers should use :func:`network_propagation_with_null`.
+    log2_enrichment_epsilon : float
+        ``epsilon`` used when inferring mean-null from log2 and when recomputing merged
+        log2 (defaults to :data:`~napistu.network.constants.LOG2_ENRICHMENT_EPSILON`, same as
+        :func:`_compute_log2_enrichment`).
+    **null_kwargs
+        Forwarded to :func:`network_propagation_with_null` (e.g. ``mask``, ``burn_in_ratio``).
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with node names as index and attributes as columns,
-        containing the propagated attribute values.
+        Same MultiIndex column layout as :func:`network_propagation_with_null`.
     """
-
-    propagation_method = _ensure_propagation_method(propagation_method)
-    _validate_vertex_attributes(graph, attributes, propagation_method)
-
-    if additional_propagation_args is None:
-        additional_propagation_args = {}
-
-    results = []
-    for attr in attributes:
-        # Validate attributes
-        attr_data = _ensure_valid_attribute(
-            graph, attr, non_negative=propagation_method.non_negative
+    if n_runs <= 1:
+        raise ValueError(
+            "n_runs must be >= 2; for a single run use network_propagation_with_null(...)"
         )
-        # apply the propagation method
-        pr_attr = propagation_method.method(
-            graph, attr_data, **additional_propagation_args
+    if null_strategy == NULL_STRATEGIES.UNIFORM:
+        raise ValueError(
+            "null_strategy='uniform' is not supported for network_propagation_with_null_repeated "
+            "(use network_propagation_with_null for the uniform baseline)"
         )
 
-        results.append(pr_attr)
-
-    # Get node names once
-    names = (
-        graph.vs[NAPISTU_GRAPH_VERTICES.NAME]
-        if NAPISTU_GRAPH_VERTICES.NAME in graph.vs.attributes()
-        else list(range(graph.vcount()))
+    runs = [
+        network_propagation_with_null(
+            graph=graph,
+            attributes=attributes,
+            null_strategy=null_strategy,
+            propagation_method=propagation_method,
+            additional_propagation_args=additional_propagation_args,
+            n_samples=n_samples,
+            quantile_method=quantile_method,
+            verbose=verbose,
+            **null_kwargs,
+        )
+        for _ in range(n_runs)
+    ]
+    return _merge_propagation_null_run_outputs(
+        runs, log2_enrichment_epsilon=log2_enrichment_epsilon
     )
-
-    return pd.DataFrame(np.column_stack(results), index=names, columns=attributes)
 
 
 # setup propagation methods
@@ -642,7 +748,7 @@ def _build_pooled_universe(
 def _compute_log2_enrichment(
     observed: pd.DataFrame,
     null_df: pd.DataFrame,
-    epsilon: float = 1e-10,
+    epsilon: float = LOG2_ENRICHMENT_EPSILON,
 ) -> pd.DataFrame:
     """
     Compute log2 enrichment of observed scores relative to the mean null distribution.
@@ -656,7 +762,8 @@ def _compute_log2_enrichment(
         Stacked null samples with features as index (multiple rows per feature)
         and attributes as columns. Same format as output of null generator functions.
     epsilon : float
-        Small value added to null mean to avoid division by zero. Default 1e-10.
+        Small value added to null mean to avoid division by zero (defaults to
+        :data:`~napistu.network.constants.LOG2_ENRICHMENT_EPSILON`).
 
     Returns
     -------
@@ -862,6 +969,89 @@ def _get_distribution_object(distribution: Union[str, Any]) -> Any:
                 f"Must be a valid scipy.stats distribution name."
             )
     return distribution
+
+
+def _merge_propagation_null_run_outputs(
+    runs: List[pd.DataFrame],
+    *,
+    log2_enrichment_epsilon: float = LOG2_ENRICHMENT_EPSILON,
+) -> pd.DataFrame:
+    """Merge multiple ``network_propagation_with_null`` results from independent RNG runs."""
+    if len(runs) < 2:
+        raise ValueError(f"More than one run is required, but got {len(runs)}")
+
+    first = runs[0]
+    expected_metrics = set(VALID_NET_PROPAGATION_METRICS)
+    for run_idx, r in enumerate(runs):
+        metrics = set(r.columns.get_level_values(0))
+        if metrics != expected_metrics:
+            missing = sorted(expected_metrics - metrics)
+            extra = sorted(metrics - expected_metrics)
+            raise ValueError(
+                "Each run DataFrame must have exactly observed, quantile, and "
+                "log2_enrichment at column level 0; "
+                f"run {run_idx} has missing {missing} "
+                + (f"and extra {extra}" if extra else "")
+            )
+        if not r.columns.equals(first.columns):
+            raise ValueError(
+                f"column MultiIndex differs between run 0 and run {run_idx}"
+            )
+
+    ref_obs_vals = np.asarray(
+        first[NET_PROPAGATION_METRICS.OBSERVED].values, dtype=np.float64
+    )
+    for run_idx, r in enumerate(runs[1:], start=1):
+        o = np.asarray(r[NET_PROPAGATION_METRICS.OBSERVED].values, dtype=np.float64)
+        if not np.allclose(ref_obs_vals, o):
+            raise ValueError(
+                "Observed propagated scores must be identical across runs (same graph "
+                f"and settings); mismatch between run 0 and run {run_idx}"
+            )
+
+    observed = first[NET_PROPAGATION_METRICS.OBSERVED]
+    obs_vals = ref_obs_vals
+
+    log2_stack = np.stack(
+        [
+            np.asarray(
+                r[NET_PROPAGATION_METRICS.LOG2_ENRICHMENT].values, dtype=np.float64
+            )
+            for r in runs
+        ],
+        axis=0,
+    )
+    mean_null_each = (
+        obs_vals[np.newaxis, :, :] / np.power(2.0, log2_stack) - log2_enrichment_epsilon
+    )
+    pooled_mean = np.nanmean(mean_null_each, axis=0)
+    log2_merged = np.log2(obs_vals / (pooled_mean + log2_enrichment_epsilon))
+
+    q_stack = np.stack(
+        [
+            np.asarray(r[NET_PROPAGATION_METRICS.QUANTILE].values, dtype=np.float64)
+            for r in runs
+        ],
+        axis=0,
+    )
+
+    out: Dict[str, pd.DataFrame] = {
+        NET_PROPAGATION_METRICS.OBSERVED: observed,
+        NET_PROPAGATION_METRICS.QUANTILE: pd.DataFrame(
+            np.nanmean(q_stack, axis=0),
+            index=observed.index,
+            columns=observed.columns,
+        ),
+        NET_PROPAGATION_METRICS.LOG2_ENRICHMENT: pd.DataFrame(
+            log2_merged, index=observed.index, columns=observed.columns
+        ),
+    }
+    key_order = [
+        NET_PROPAGATION_METRICS.OBSERVED,
+        NET_PROPAGATION_METRICS.QUANTILE,
+        NET_PROPAGATION_METRICS.LOG2_ENRICHMENT,
+    ]
+    return pd.concat(out, axis=1).reindex(key_order, axis=1, level=0)
 
 
 def _parametric_null(
