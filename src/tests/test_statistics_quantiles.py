@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from napistu.statistics import quantiles
+from napistu.statistics.constants import QUANTILE_METHODS
+from napistu.statistics.quantiles import calculate_quantiles
 
 
 def test_calculate_quantiles_valid_inputs():
@@ -32,7 +33,7 @@ def test_calculate_quantiles_valid_inputs():
     )
 
     # Calculate quantiles
-    result = quantiles.calculate_quantiles(observed, null_data)
+    result = calculate_quantiles(observed, null_data)
 
     # Verify output structure
     assert result.shape == observed.shape
@@ -69,7 +70,7 @@ def test_calculate_quantiles_error_cases():
     )
 
     with pytest.raises((KeyError, ValueError)):
-        quantiles.calculate_quantiles(observed, null_wrong_cols)
+        calculate_quantiles(observed, null_wrong_cols)
 
     # Test 2: Missing features in null data
     null_missing_feature = pd.DataFrame(
@@ -79,7 +80,7 @@ def test_calculate_quantiles_error_cases():
     # Current implementation doesn't validate - it will likely fail in groupby or indexing
     # This test verifies current behavior (may change if validation added)
     try:
-        result = quantiles.calculate_quantiles(observed, null_missing_feature)
+        result = calculate_quantiles(observed, null_missing_feature)
         # If it succeeds, gene2 quantiles will be invalid/error
         assert True  # Just check it doesn't crash for now
     except (KeyError, ValueError, IndexError):
@@ -97,21 +98,21 @@ def test_calculate_quantiles_error_cases():
     )
 
     # This should still work but may give different results
-    result = quantiles.calculate_quantiles(observed, null_unequal_samples)
+    result = calculate_quantiles(observed, null_unequal_samples)
     assert result.shape == observed.shape
 
     # Test 4: Empty null data
     null_empty = pd.DataFrame(columns=["attr1", "attr2"])
 
     with pytest.raises((ValueError, IndexError)):
-        quantiles.calculate_quantiles(observed, null_empty)
+        calculate_quantiles(observed, null_empty)
 
     # Test 5: Single null sample (edge case)
     null_single = pd.DataFrame(
         [[0.1, 0.2], [0.5, 0.6]], index=["gene1", "gene2"], columns=["attr1", "attr2"]
     )
 
-    result = quantiles.calculate_quantiles(observed, null_single)
+    result = calculate_quantiles(observed, null_single)
     assert result.shape == observed.shape
     # With single sample, results should be binary (0 or 1)
     assert all(val in [0.0, 1.0] for val in result.values.flatten())
@@ -128,10 +129,10 @@ def test_calculate_quantiles_error_cases():
 
     # Should raise ValueError for NaN values
     with pytest.raises(ValueError, match="NaN values found in observed data"):
-        quantiles.calculate_quantiles(observed_with_nan, null_single)
+        calculate_quantiles(observed_with_nan, null_single)
 
     with pytest.raises(ValueError, match="NaN values found in null data"):
-        quantiles.calculate_quantiles(observed, null_with_nan)
+        calculate_quantiles(observed, null_with_nan)
 
 
 def test_midrank_tie_handling():
@@ -148,7 +149,7 @@ def test_midrank_tie_handling():
         columns=["attr1", "attr2"],
     )
 
-    result = quantiles.calculate_quantiles(observed, null_data)
+    result = calculate_quantiles(observed, null_data)
 
     # attr1: observed=0.0, nulls=[0.0, 0.0, 0.1] -> (0 + 2/2)/3 = 1/3
     assert result.loc["gene1", "attr1"] == pytest.approx(1 / 3)
@@ -164,7 +165,7 @@ def test_all_identical_returns_nan():
         [[0.5], [0.5], [0.5]], index=["gene1", "gene1", "gene1"], columns=["attr1"]
     )
 
-    result = quantiles.calculate_quantiles(observed, null_data)
+    result = calculate_quantiles(observed, null_data)
     assert pd.isna(result.loc["gene1", "attr1"])
 
 
@@ -177,6 +178,70 @@ def test_basic_functionality():
         columns=["attr1"],
     )
 
-    result = quantiles.calculate_quantiles(observed, null_data)
+    result = calculate_quantiles(observed, null_data)
     # 2 values < 0.5, so quantile = 2/4 = 0.5
     assert result.loc["gene1", "attr1"] == 0.5
+
+
+def test_per_feature_and_dense_match_float64():
+    """Dense (vectorized) and per_feature midrank should agree for float64."""
+    observed = pd.DataFrame(
+        [[0.8, 0.3, 0.9], [0.2, 0.7, 0.1], [0.5, 0.5, 0.5], [0.1, 0.9, 0.2]],
+        index=["gene1", "gene2", "gene3", "gene4"],
+        columns=["attr1", "attr2", "attr3"],
+    )
+    null_index = ["gene1", "gene2", "gene3", "gene4"] * 2
+    null_data = pd.DataFrame(
+        [
+            [0.1, 0.2, 0.3],
+            [0.4, 0.5, 0.6],
+            [0.7, 0.8, 0.9],
+            [0.0, 0.1, 0.2],
+            [0.2, 0.3, 0.4],
+            [0.5, 0.6, 0.7],
+            [0.8, 0.9, 1.0],
+            [0.1, 0.2, 0.3],
+        ],
+        index=null_index,
+        columns=["attr1", "attr2", "attr3"],
+    )
+    a = calculate_quantiles(
+        observed,
+        null_data,
+        method=QUANTILE_METHODS.PER_FEATURE,
+        comparison_dtype=np.float64,
+    )
+    b = calculate_quantiles(
+        observed, null_data, method=QUANTILE_METHODS.DENSE, comparison_dtype=np.float64
+    )
+    pd.testing.assert_frame_equal(a, b)
+
+
+def test_unequal_null_counts_per_and_dense():
+    """Unequal per-feature null counts: both methods should agree in float64."""
+    observed = pd.DataFrame(
+        [[0.8, 0.2], [0.3, 0.4]], index=["a", "b"], columns=["x", "y"]
+    )
+    null = pd.DataFrame(
+        [
+            [0.1, 0.1],
+            [0.2, 0.2],
+            [0.3, 0.3],
+        ],
+        index=["a", "a", "b"],
+        columns=["x", "y"],
+    )
+    a = calculate_quantiles(
+        observed, null, method=QUANTILE_METHODS.PER_FEATURE, comparison_dtype=np.float64
+    )
+    b = calculate_quantiles(
+        observed, null, method=QUANTILE_METHODS.DENSE, comparison_dtype=np.float64
+    )
+    pd.testing.assert_frame_equal(a, b, check_exact=False, rtol=1e-12, atol=1e-12)
+
+
+def test_method_invalid():
+    obs = pd.DataFrame([[1.0]], index=[0], columns=["c"])
+    null = pd.DataFrame([[0.0]], index=[0], columns=["c"])
+    with pytest.raises(ValueError, match="Invalid method: other. Valid methods are:"):
+        calculate_quantiles(obs, null, method="other")

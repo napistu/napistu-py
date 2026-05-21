@@ -10,6 +10,8 @@ Public Functions
 ----------------
 check_unique_index(df: pd.DataFrame, label: str = "") -> None:
     Validate that each index value only maps to a single row.
+downcast_float_dataframe(df: pd.DataFrame, dtype: Any = np.float32, copy: bool = True) -> pd.DataFrame:
+    Coerce DataFrame values to a narrower float dtype to reduce in-memory size.
 drop_extra_cols(df_in: pd.DataFrame, df_out: pd.DataFrame, always_include: Optional[List[str]] = None) -> pd.DataFrame:
     Remove columns in df_out that are not in df_in, except those specified in always_include.
 ensure_pd_df(pd_df_or_series: pd.DataFrame | pd.Series) -> pd.DataFrame:
@@ -36,7 +38,7 @@ from __future__ import annotations
 
 import logging
 from itertools import starmap
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -135,6 +137,32 @@ def check_unique_index(df, label=""):
         raise ValueError(f"{label} index entries are not unique")
 
     return None
+
+
+def downcast_float_dataframe(
+    df: pd.DataFrame, dtype: Any = np.float32, copy: bool = True
+) -> pd.DataFrame:
+    """Coerce values to a narrower float dtype (default float32) to cut RAM usage.
+
+    Typical use is large all-numeric tables (e.g. stacked propagation scores)
+    where float64 is unnecessary. Uses :meth:`pandas.DataFrame.astype` with
+    the given ``dtype`` and ``copy`` semantics.
+
+    Parameters
+    ----------
+    df
+        DataFrame to coerce.
+    dtype
+        Numpy float dtype, commonly ``np.float32`` to halve size versus float64.
+    copy
+        If True (default), always returns a new object even when dtype matches.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with values in ``dtype``.
+    """
+    return df.astype(dtype, copy=copy)
 
 
 def drop_extra_cols(

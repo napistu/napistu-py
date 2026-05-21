@@ -11,10 +11,12 @@ Public Functions
 ----------------
 melt_propagation_results(propagation_results, index_name, attribute_name)
     Melt results from network_propagation_with_null into a tall format.
-network_propagation_with_null(graph, attributes, null_strategy, ...)
-    Apply network propagation and compare observed scores to a null distribution.
 net_propagate_attributes(graph, attributes, propagation_method, ...)
     Propagate multiple attributes over a network using a propagation method.
+network_propagation_with_null(graph, attributes, null_strategy, ..., quantile_method=...)
+    Apply network propagation and compare observed scores to a null distribution.
+network_propagation_with_null_repeated(..., n_runs=...)
+    Run network_propagation_with_null multiple times and merge summaries (lower peak null RAM).
 """
 
 import logging
@@ -27,12 +29,14 @@ import pandas as pd
 import scipy.stats as stats
 
 from napistu.network.constants import (
+    LOG2_ENRICHMENT_EPSILON,
     MASK_KEYWORDS,
     NAPISTU_GRAPH_VERTICES,
     NET_PROPAGATION_DEFS,
     NET_PROPAGATION_METRICS,
     NULL_STRATEGIES,
     PARAMETRIC_NULL_DEFAULT_DISTRIBUTION,
+    VALID_NET_PROPAGATION_METRICS,
     VALID_NULL_STRATEGIES,
 )
 from napistu.network.ig_utils import (
@@ -40,7 +44,9 @@ from napistu.network.ig_utils import (
     _get_attribute_masks,
     _parse_mask_input,
 )
+from napistu.statistics.constants import QUANTILE_METHODS, VALID_QUANTILE_METHODS
 from napistu.statistics.quantiles import calculate_quantiles
+from napistu.utils.pd_utils import downcast_float_dataframe
 
 logger = logging.getLogger(__name__)
 
@@ -128,180 +134,6 @@ def melt_propagation_results(
     return tall[col_order]
 
 
-def network_propagation_with_null(
-    graph: ig.Graph,
-    attributes: List[str],
-    null_strategy: str = NULL_STRATEGIES.VERTEX_PERMUTATION,
-    propagation_method: Union[
-        str, PropagationMethod
-    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
-    additional_propagation_args: Optional[dict] = None,
-    n_samples: int = 100,
-    verbose: bool = False,
-    **null_kwargs,
-) -> pd.DataFrame:
-    """
-    Apply network propagation to attributes and compare against null distributions.
-
-    This is the main orchestrator function that:
-    1. Calculates observed propagated scores
-    2. Generates null distribution using specified strategy
-    3. Returns a MultiIndex DataFrame with observed scores, quantiles, and log2 enrichment
-
-    Null Strategy Selection
-    ----------------------
-    Two main approaches are used in network biology:
-
-    **Vertex permutation** ('vertex_permutation'): Permutes node labels/attributes while
-    preserving network topology. This tests whether individual nodes are significant
-    given the network structure. Standard approach for gene prioritization and
-    network-based gene set enrichment analysis.
-    Reference: Schulte-Sasse et al. (2019) BMC Bioinformatics 20:587
-
-    **Edge permutation** ('edge_permutation'): Rewires network edges while preserving
-    degree distribution. This tests whether network topology itself is significant.
-    Used when testing subnetwork patterns or connectivity significance.
-    Reference: Leiserson et al. (2015) Nature Genetics (HotNet2 methodology)
-
-    For vertex-level significance testing (gene prioritization), node permutation
-    is the appropriate null model as it preserves network structure while
-    randomizing signal assignment.
-
-    Other supported null strategies:
-
-    **Uniform ('uniform'):** A quick, qualitative readout. Generates a uniform null distribution over masked nodes and
-    takes the ratio of observed network propagation score.
-
-    **Parametric ('parametric'):** Similar to node permutation but rather than sampling observed values sample
-    draws from a distribution fit to the observed values. First fits a parametric distribution to the observed scores
-    and then samples `n_samples` null samples for each vertex to compare observed to null quantiles.
-
-    **Pooled vertex permutation** ('pooled_vertex_permutation'): Vertex permutation of statistically exchangeable attribute
-    to pool null samples across attributes. This is much faster than vertex permutation since attribute-level permutations
-    are not performed but it is only valid when attributes are exchangeable and its only supported when all attributes share
-    an identical mask.
-
-    Creating Masks
-    --------------
-    Most null strategies benefit from including a mask which indicates which nodes are being tested.
-    For vertex permutation the parametric null only masked nodes will be considered for sampling.
-    Using a mask with uniform null strategy means that numeric reset probabilities will be compared to
-    constant ones by default. Masking is an important consideration for mitigating ascertainment bias.
-    If we are only sampling a subset of vertices like metabolites, we'll only consider those as sources
-    of signals in the null.
-
-    Parameters
-    ----------
-    graph : ig.Graph
-        Input graph.
-    attributes : List[str]
-        Attribute names to propagate and test.
-    null_strategy : str
-        Null distribution strategy. One of: 'uniform', 'parametric', 'vertex_permutation', 'edge_permutation'.
-    propagation_method : str or PropagationMethod
-        Network propagation method to apply.
-    additional_propagation_args : dict, optional
-        Additional arguments to pass to the network propagation method.
-    n_samples : int
-        Number of null samples to generate (ignored for uniform null).
-    verbose : bool, optional
-        Extra reporting. Default is False.
-    **null_kwargs
-        Additional arguments to pass to the null generator (e.g., mask, burn_in_ratio, etc.).
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with a 2-level MultiIndex on columns (metric, attribute) where
-        metric is one of ['observed', 'quantile', 'log2_enrichment'].
-
-        - 'observed': raw propagated scores for each attribute
-        - 'quantile': proportion of null values <= observed values (NaN for uniform null)
-        - 'log2_enrichment': log2(observed / mean_null). For vertex permutation null this
-            is enrichment relative to a topology-matched baseline; for uniform null this is
-            enrichment relative to a flat baseline.
-
-        Example access:
-            result["observed"]["gene_score"]
-            result["quantile"]["gene_score"]
-            result["log2_enrichment"]["gene_score"]
-
-    Examples
-    --------
-    >>> # Node permutation test with custom mask
-    >>> result = network_propagation_with_null(
-    ...     graph, ['gene_score'],
-    ...     null_strategy='vertex_permutation',
-    ...     n_samples=1000,
-    ...     mask='measured_genes'
-    ... )
-
-    >>> # Edge permutation test
-    >>> result = network_propagation_with_null(
-    ...     graph, ['pathway_score'],
-    ...     null_strategy='edge_permutation',
-    ...     n_samples=100,
-    ...     burn_in_ratio=10,
-    ...     sampling_ratio=0.1
-    ... )
-    """
-    # 1. Calculate observed propagated scores
-    observed_scores = net_propagate_attributes(
-        graph, attributes, propagation_method, additional_propagation_args
-    )
-
-    # 2. Get null generator function
-    null_generator = _get_null_generator(null_strategy)
-
-    # 3. Generate null distribution
-    if null_strategy == NULL_STRATEGIES.UNIFORM:
-        null_distribution = null_generator(
-            graph=graph,
-            attributes=attributes,
-            propagation_method=propagation_method,
-            additional_propagation_args=additional_propagation_args,
-            **null_kwargs,
-        )
-
-        # 4a. Uniform null: log2 enrichment vs flat baseline; quantile is not defined
-        quantiles = pd.DataFrame(
-            np.nan, index=observed_scores.index, columns=observed_scores.columns
-        )
-        log2_enrichment = _compute_log2_enrichment(observed_scores, null_distribution)
-
-    else:
-        null_distribution = null_generator(
-            graph=graph,
-            attributes=attributes,
-            propagation_method=propagation_method,
-            additional_propagation_args=additional_propagation_args,
-            n_samples=n_samples,
-            verbose=verbose,
-            **null_kwargs,
-        )
-
-        # 4b. Sampled nulls: both quantile and log2 enrichment vs topology-matched baseline
-        quantiles = calculate_quantiles(observed_scores, null_distribution)
-        log2_enrichment = _compute_log2_enrichment(observed_scores, null_distribution)
-
-    # 5. Combine into MultiIndex DataFrame with metric as outer level
-    results = {
-        NET_PROPAGATION_METRICS.OBSERVED: observed_scores,
-        NET_PROPAGATION_METRICS.LOG2_ENRICHMENT: log2_enrichment,
-    }
-    if null_strategy != NULL_STRATEGIES.UNIFORM:
-        results[NET_PROPAGATION_METRICS.QUANTILE] = quantiles
-
-    key_order = [
-        NET_PROPAGATION_METRICS.OBSERVED,
-        NET_PROPAGATION_METRICS.QUANTILE,
-        NET_PROPAGATION_METRICS.LOG2_ENRICHMENT,
-    ]
-    return pd.concat(results, axis=1).reindex(
-        [k for k in key_order if k in results], axis=1, level=0
-    )
-
-
 def net_propagate_attributes(
     graph: ig.Graph,
     attributes: List[str],
@@ -360,6 +192,335 @@ def net_propagate_attributes(
     return pd.DataFrame(np.column_stack(results), index=names, columns=attributes)
 
 
+def network_propagation_with_null(
+    graph: ig.Graph,
+    attributes: List[str],
+    null_strategy: str = NULL_STRATEGIES.VERTEX_PERMUTATION,
+    propagation_method: Union[
+        str, PropagationMethod
+    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
+    additional_propagation_args: Optional[dict] = None,
+    n_samples: int = 100,
+    quantile_method: str = QUANTILE_METHODS.DENSE,
+    log2_enrichment_epsilon: float = LOG2_ENRICHMENT_EPSILON,
+    verbose: bool = False,
+    **null_kwargs,
+) -> pd.DataFrame:
+    """
+    Apply network propagation to attributes and compare against null distributions.
+
+    This is the main orchestrator function that:
+    1. Calculates observed propagated scores
+    2. Generates null distribution using specified strategy
+    3. Returns a MultiIndex DataFrame with observed scores, quantiles, and log2 enrichment
+
+    Null Strategy Selection
+    ----------------------
+    Two main approaches are used in network biology:
+
+    **Vertex permutation** ('vertex_permutation'): Permutes node labels/attributes while
+    preserving network topology. This tests whether individual nodes are significant
+    given the network structure. Standard approach for gene prioritization and
+    network-based gene set enrichment analysis.
+    Reference: Schulte-Sasse et al. (2019) BMC Bioinformatics 20:587
+
+    **Edge permutation** ('edge_permutation'): Rewires network edges while preserving
+    degree distribution. This tests whether network topology itself is significant.
+    Used when testing subnetwork patterns or connectivity significance.
+    Reference: Leiserson et al. (2015) Nature Genetics (HotNet2 methodology)
+
+    For vertex-level significance testing (gene prioritization), node permutation
+    is the appropriate null model as it preserves network structure while
+    randomizing signal assignment.
+
+    Other supported null strategies:
+
+    **Uniform ('uniform'):** A quick, qualitative readout. Generates a uniform null
+    distribution over masked nodes and takes the ratio of observed network propagation
+    score.
+
+    **Parametric ('parametric'):** Similar to vertex permutation but rather than sampling
+    observed values, samples are drawn from a distribution fit to the observed values.
+    First fits a parametric distribution to the observed scores and then samples
+    `n_samples` null samples for each vertex to compare observed to null quantiles.
+
+    **Pooled vertex permutation** ('pooled_vertex_permutation'): Constructs a single
+    empirical universe by merging all masked values across attributes (including zeros)
+    and draws null reset vectors from it. The propagated null is broadcast across all
+    attribute columns, so every attribute is compared against the same shared null.
+    This reduces the propagation cost from `n_samples * n_attributes` to `n_samples`,
+    but assumes attributes are exchangeable in both magnitude and sparsity. Only
+    supported when all attributes share an identical mask. When attributes differ
+    meaningfully in sparsity, this strategy can introduce systematic shifts in log2
+    enrichment because propagation methods like personalized PageRank respond
+    nonlinearly to reset concentration; in that case, prefer
+    'attr_pooled_vertex_permutation'.
+
+    **Attribute-pooled vertex permutation** ('attr_pooled_vertex_permutation'): Each
+    null sample is generated by selecting one attribute, permuting its masked values
+    without replacement, propagating, and broadcasting the result across all attribute
+    columns. Total samples are distributed across attributes as evenly as possible
+    (with the first `n_samples % n_attributes` attributes receiving one extra sample).
+    This preserves each attribute's own sparsity and magnitude profile in the null
+    while still pooling propagated outputs across attributes for variance reduction.
+    Total propagation cost is `n_samples`, matching pooled vertex permutation. Only
+    supported when all attributes share an identical mask. Prefer this over
+    'pooled_vertex_permutation' when attributes share a measurable subgraph but
+    differ in sparsity or magnitude profile.
+
+    Creating Masks
+    --------------
+    Most null strategies benefit from including a mask which indicates which nodes are being tested.
+    For vertex permutation the parametric null only masked nodes will be considered for sampling.
+    Using a mask with uniform null strategy means that numeric reset probabilities will be compared to
+    constant ones by default. Masking is an important consideration for mitigating ascertainment bias.
+    If we are only sampling a subset of vertices like metabolites, we'll only consider those as sources
+    of signals in the null.
+
+    Parameters
+    ----------
+    graph : ig.Graph
+        Input graph.
+    attributes : List[str]
+        Attribute names to propagate and test.
+    null_strategy : str
+        Null distribution strategy. One of: 'uniform', 'parametric',
+        'vertex_permutation', 'pooled_vertex_permutation',
+        'attr_pooled_vertex_permutation', 'edge_permutation'.
+    propagation_method : str or PropagationMethod
+        Network propagation method to apply.
+    additional_propagation_args : dict, optional
+        Additional arguments to pass to the network propagation method.
+    n_samples : int
+        Number of null samples to generate (ignored for uniform null).
+    quantile_method : str
+        Quantile implementation passed to :func:`~napistu.statistics.quantiles.calculate_quantiles`.
+        One of ``dense`` (default, vectorized; matches historical behavior) or
+        ``per_feature`` (linear memory when the null table is huge). Ignored when
+        ``null_strategy`` is uniform (quantiles are undefined there).
+    log2_enrichment_epsilon : float
+        Small value added to null mean to avoid division by zero (defaults to
+        :data:`~napistu.network.constants.LOG2_ENRICHMENT_EPSILON`).
+    verbose : bool, optional
+        Extra reporting. Default is False.
+    **null_kwargs
+        Additional arguments to pass to the null generator (e.g., mask, burn_in_ratio, etc.).
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with a 2-level MultiIndex on columns (metric, attribute) where
+        metric is one of ['observed', 'quantile', 'log2_enrichment'].
+
+        - 'observed': raw propagated scores for each attribute
+        - 'quantile': proportion of null values <= observed values (NaN for uniform null)
+        - 'log2_enrichment': log2(observed / mean_null). For vertex permutation null this
+            is enrichment relative to a topology-matched baseline; for uniform null this is
+            enrichment relative to a flat baseline.
+
+        Example access:
+            result["observed"]["gene_score"]
+            result["quantile"]["gene_score"]
+            result["log2_enrichment"]["gene_score"]
+
+    Examples
+    --------
+    >>> # Node permutation test with custom mask
+    >>> result = network_propagation_with_null(
+    ...     graph, ['gene_score'],
+    ...     null_strategy='vertex_permutation',
+    ...     n_samples=1000,
+    ...     mask='measured_genes'
+    ... )
+
+    >>> # Edge permutation test
+    >>> result = network_propagation_with_null(
+    ...     graph, ['pathway_score'],
+    ...     null_strategy='edge_permutation',
+    ...     n_samples=100,
+    ...     burn_in_ratio=10,
+    ...     sampling_ratio=0.1
+    ... )
+
+    >>> # Attribute-pooled null for many patient-level signals with varying sparsity
+    >>> result = network_propagation_with_null(
+    ...     graph, patient_attrs,
+    ...     null_strategy='attr_pooled_vertex_permutation',
+    ...     n_samples=1000,
+    ...     mask='measured_features'
+    ... )
+
+    >>> # Prefer memory-frugal quantile calculation on very large graphs
+    >>> result = network_propagation_with_null(
+    ...     graph, ['gene_score'],
+    ...     quantile_method='per_feature',
+    ...     null_strategy='vertex_permutation',
+    ... )
+    """
+    if quantile_method not in VALID_QUANTILE_METHODS:
+        raise ValueError(
+            f"quantile_method must be one of {sorted(VALID_QUANTILE_METHODS)}, "
+            f"got {quantile_method!r}"
+        )
+
+    # 1. Calculate observed propagated scores
+    observed_scores = net_propagate_attributes(
+        graph, attributes, propagation_method, additional_propagation_args
+    )
+
+    # 2. Get null generator function
+    null_generator = _get_null_generator(null_strategy)
+
+    # 3. Generate null distribution
+    if null_strategy == NULL_STRATEGIES.UNIFORM:
+        null_distribution = null_generator(
+            graph=graph,
+            attributes=attributes,
+            propagation_method=propagation_method,
+            additional_propagation_args=additional_propagation_args,
+            **null_kwargs,
+        )
+
+        # 4a. Uniform null: log2 enrichment vs flat baseline; quantile is not defined
+        quantiles = pd.DataFrame(
+            np.nan, index=observed_scores.index, columns=observed_scores.columns
+        )
+        log2_enrichment = _compute_log2_enrichment(
+            observed_scores, null_distribution, epsilon=log2_enrichment_epsilon
+        )
+
+    else:
+        null_distribution = null_generator(
+            graph=graph,
+            attributes=attributes,
+            propagation_method=propagation_method,
+            additional_propagation_args=additional_propagation_args,
+            n_samples=n_samples,
+            verbose=verbose,
+            **null_kwargs,
+        )
+        null_distribution = downcast_float_dataframe(null_distribution)
+
+        # 4b. Sampled nulls: both quantile and log2 enrichment vs topology-matched baseline
+        quantiles = calculate_quantiles(
+            observed_scores, null_distribution, method=quantile_method
+        )
+        log2_enrichment = _compute_log2_enrichment(
+            observed_scores, null_distribution, epsilon=log2_enrichment_epsilon
+        )
+
+    # 5. Combine into MultiIndex DataFrame with metric as outer level
+    results = {
+        NET_PROPAGATION_METRICS.OBSERVED: observed_scores,
+        NET_PROPAGATION_METRICS.LOG2_ENRICHMENT: log2_enrichment,
+    }
+    if null_strategy != NULL_STRATEGIES.UNIFORM:
+        results[NET_PROPAGATION_METRICS.QUANTILE] = quantiles
+
+    key_order = [
+        NET_PROPAGATION_METRICS.OBSERVED,
+        NET_PROPAGATION_METRICS.QUANTILE,
+        NET_PROPAGATION_METRICS.LOG2_ENRICHMENT,
+    ]
+    return pd.concat(results, axis=1).reindex(
+        [k for k in key_order if k in results], axis=1, level=0
+    )
+
+
+def network_propagation_with_null_repeated(
+    graph: ig.Graph,
+    attributes: List[str],
+    null_strategy: str = NULL_STRATEGIES.VERTEX_PERMUTATION,
+    propagation_method: Union[
+        str, PropagationMethod
+    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
+    additional_propagation_args: Optional[dict] = None,
+    n_samples: int = 100,
+    quantile_method: str = QUANTILE_METHODS.DENSE,
+    verbose: bool = False,
+    n_runs: int = 2,
+    *,
+    log2_enrichment_epsilon: float = LOG2_ENRICHMENT_EPSILON,
+    **null_kwargs,
+) -> pd.DataFrame:
+    """Call :func:`network_propagation_with_null` several times with the same inputs and merge.
+
+    Each run draws an independent Monte Carlo null of ``n_samples`` (unless the chosen
+    strategy ignores ``n_samples``). This trims **peak RAM** versus one call with very
+    large ``n_samples`` because intermediate null tables are not held simultaneously.
+
+    **log2 enrichment** is pooled from per-run summaries: inferred per-run mean-null
+    values recovered from observed and ``log2_enrichment`` are averaged across runs,
+    then ``log2(observed / (pooled_mean + epsilon))`` is recomputed — equivalent to a
+    single pooled null mean across all runs when each ``n_samples`` is equal.
+
+    **Quantiles** cannot be reconstructed from emitted scalars alone, so merged
+    quantiles use the sample mean of run-wise quantiles. That is generally close to the
+    fully pooled empirical midrank for large totals but is not identical to one run of
+    ``n_samples * n_runs`` draws (ties are negligible in most regimes).
+
+    Parameters
+    ----------
+    graph : ig.Graph
+        Input graph.
+    attributes : List[str]
+        Attribute names to propagate and test.
+    null_strategy : str
+        Same as :func:`network_propagation_with_null`, except ``uniform`` is not supported
+        (nothing to Monte Carlo-average); use :func:`network_propagation_with_null`.
+    propagation_method : str or PropagationMethod
+        Same as :func:`network_propagation_with_null`.
+    additional_propagation_args : dict, optional
+        Same as :func:`network_propagation_with_null`.
+    n_samples : int
+        Null samples **per run** (same meaning as in :func:`network_propagation_with_null`).
+    quantile_method : str
+        Same as :func:`network_propagation_with_null`.
+    verbose : bool, optional
+        Same as :func:`network_propagation_with_null`.
+    n_runs : int
+        Must be ``>= 2``. Single-run callers should use :func:`network_propagation_with_null`.
+    log2_enrichment_epsilon : float
+        ``epsilon`` used when inferring mean-null from log2 and when recomputing merged
+        log2 (defaults to :data:`~napistu.network.constants.LOG2_ENRICHMENT_EPSILON`, same as
+        :func:`_compute_log2_enrichment`).
+    **null_kwargs
+        Forwarded to :func:`network_propagation_with_null` (e.g. ``mask``, ``burn_in_ratio``).
+
+    Returns
+    -------
+    pd.DataFrame
+        Same MultiIndex column layout as :func:`network_propagation_with_null`.
+    """
+    if n_runs <= 1:
+        raise ValueError(
+            "n_runs must be >= 2; for a single run use network_propagation_with_null(...)"
+        )
+    if null_strategy == NULL_STRATEGIES.UNIFORM:
+        raise ValueError(
+            "null_strategy='uniform' is not supported for network_propagation_with_null_repeated "
+            "(use network_propagation_with_null for the uniform baseline)"
+        )
+
+    runs = [
+        network_propagation_with_null(
+            graph=graph,
+            attributes=attributes,
+            null_strategy=null_strategy,
+            propagation_method=propagation_method,
+            additional_propagation_args=additional_propagation_args,
+            n_samples=n_samples,
+            quantile_method=quantile_method,
+            verbose=verbose,
+            **null_kwargs,
+        )
+        for _ in range(n_runs)
+    ]
+    return _merge_propagation_null_run_outputs(
+        runs, log2_enrichment_epsilon=log2_enrichment_epsilon
+    )
+
+
 # setup propagation methods
 
 
@@ -387,22 +548,198 @@ def _ensure_propagation_method(
 # other private methods
 
 
+def _allocate_samples_across_attributes(n_samples: int, n_attributes: int) -> List[int]:
+    """Distribute n_samples across n_attributes as evenly as possible.
+
+    Each attribute receives base = n_samples // n_attributes samples. The
+    first (n_samples % n_attributes) attributes receive one additional sample,
+    so the total returned matches n_samples exactly.
+
+    If n_samples < n_attributes, a warning is issued and only the first
+    n_samples attributes contribute one sample each. The remainder receive
+    zero samples.
+
+    Parameters
+    ----------
+    n_samples : int
+        Total samples to distribute.
+    n_attributes : int
+        Number of attributes to distribute across.
+
+    Returns
+    -------
+    List[int]
+        Per-attribute sample counts, summing to min(n_samples, n_attributes)
+        in the underflow case or n_samples otherwise.
+    """
+    if n_samples < n_attributes:
+        logger.warning(
+            f"n_samples ({n_samples}) is less than n_attributes ({n_attributes}). "
+            f"Only the first {n_samples} attributes will contribute to the null. "
+            f"Consider increasing n_samples or using vertex_permutation_null."
+        )
+        return [1 if i < n_samples else 0 for i in range(n_attributes)]
+
+    base = n_samples // n_attributes
+    remainder = n_samples % n_attributes
+    return [base + (1 if i < remainder else 0) for i in range(n_attributes)]
+
+
+def _attr_pooled_vertex_permutation_null(
+    graph: ig.Graph,
+    attributes: List[str],
+    propagation_method: Union[
+        str, PropagationMethod
+    ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
+    additional_propagation_args: Optional[dict] = None,
+    mask: Optional[Union[str, np.ndarray, List, Dict]] = MASK_KEYWORDS.ATTR,
+    n_samples: int = 100,
+    verbose: bool = False,
+) -> pd.DataFrame:
+    """
+    Generate null distribution by permuting each attribute's values within its
+    mask, propagating, and pooling the resulting propagated vectors across
+    attributes into a shared null distribution.
+
+    Each null sample is generated by selecting one attribute, permuting its
+    masked values without replacement, propagating the resulting reset vector,
+    and broadcasting the propagated result across all attribute columns. This
+    preserves per-attribute sparsity and magnitude profile (each null draw
+    inherits the exact non-zero pattern of its source attribute) while still
+    pooling propagated outputs across attributes for variance reduction in the
+    null estimate.
+
+    The total number of propagation calls is n_samples, matching the cost of
+    pooled_vertex_permutation_null and avoiding the n_samples * n_attributes
+    cost of plain vertex_permutation_null.
+
+    Sample allocation
+    -----------------
+    n_samples is distributed across attributes as evenly as possible:
+    base = n_samples // n_attributes samples per attribute, with the first
+    (n_samples % n_attributes) attributes receiving one additional sample.
+    The total number of samples returned exactly equals n_samples, which is
+    important for p-value resolution downstream.
+
+    If n_samples < n_attributes, a warning is issued and only the first
+    n_samples attributes contribute one sample each. Consider increasing
+    n_samples or switching to vertex_permutation_null in this regime.
+
+    Assumptions
+    -----------
+    All attributes must share an identical mask. Attributes are assumed to
+    occupy the same subgraph (same set of measurable vertices), so pooling
+    propagated outputs across attributes produces a meaningful shared null.
+    Unlike pooled_vertex_permutation_null, this method does not assume
+    attributes are exchangeable in magnitude or sparsity — each null draw
+    preserves the source attribute's own profile.
+
+    When to prefer this over pooled_vertex_permutation_null
+    -------------------------------------------------------
+    When attributes share a mask (same measurable subgraph) but differ in
+    sparsity or magnitude profile. pooled_vertex_permutation_null mixes values
+    across attributes indiscriminately, which causes systematic shifts in
+    log2 enrichment for atypical attributes when propagation is nonlinear in
+    reset concentration (as with personalized PageRank). This method
+    eliminates that bias by keeping each null draw's reset profile faithful
+    to a real attribute, while still benefiting from cross-attribute pooling
+    at the propagated-output stage.
+
+    Parameters
+    ----------
+    graph : ig.Graph
+        Input graph.
+    attributes : List[str]
+        Attribute names to generate nulls for. All must share the same mask.
+    propagation_method : str or PropagationMethod
+        Network propagation method to apply.
+    additional_propagation_args : dict, optional
+        Additional arguments to pass to the network propagation method.
+    mask : str, np.ndarray, List, Dict, or None
+        Mask specification. Default is "attr" (use each attribute as its own
+        mask). All attributes must resolve to the same mask.
+    n_samples : int
+        Total number of null samples to generate, distributed across
+        attributes.
+    verbose : bool, optional
+        Extra reporting. Default is False.
+
+    Returns
+    -------
+    pd.DataFrame
+        Propagated null samples with shape (n_samples * n_nodes, n_attributes).
+        Each block of n_nodes rows corresponds to one null sample, with the
+        same propagated vector broadcast across all attribute columns.
+    """
+    propagation_method, shared_mask, node_names, null_graph = (
+        _setup_vertex_permutation_null(
+            graph,
+            attributes,
+            propagation_method,
+            mask,
+            verbose,
+            require_shared_mask=True,
+        )
+    )
+
+    masked_indices = np.where(shared_mask)[0]
+    n_attributes = len(attributes)
+
+    samples_per_attr = _allocate_samples_across_attributes(n_samples, n_attributes)
+
+    original_values = {attr: np.array(graph.vs[attr]) for attr in attributes}
+    all_results = []
+
+    for attr, n_attr_samples in zip(attributes, samples_per_attr):
+        if n_attr_samples == 0:
+            continue
+
+        attr_values = original_values[attr]
+        masked_values = attr_values[masked_indices]
+
+        for _ in range(n_attr_samples):
+            permuted_values = np.random.permutation(masked_values)
+
+            null_attr_values = attr_values.copy()
+            null_attr_values[masked_indices] = permuted_values
+            null_graph.vs[attr] = null_attr_values.tolist()
+
+            broadcast = _propagate_and_broadcast(
+                null_graph,
+                attr,
+                n_attributes,
+                propagation_method,
+                additional_propagation_args,
+            )
+            all_results.append(broadcast)
+
+    full_index = node_names * n_samples
+    all_data = np.vstack(all_results)
+    return pd.DataFrame(all_data, index=full_index, columns=attributes)
+
+
 def _build_pooled_universe(
     graph: ig.Graph, attributes: List[str], mask: np.ndarray
 ) -> np.ndarray:
-    """Collect all masked, non-zero values across all attributes into a single array."""
+    """Collect all masked values across all attributes into a single array.
+
+    Includes zeros so that the pooled universe reflects the joint distribution of
+    magnitude and sparsity across attributes. Sampling from this universe yields
+    null reset vectors whose expected sparsity matches the pooled population
+    average, rather than forcing every masked position to be non-zero.
+    """
     universe_parts = []
     for attr in attributes:
         attr_values = np.array(graph.vs[attr])
         masked_values = attr_values[mask]
-        universe_parts.append(masked_values[masked_values > 0])
+        universe_parts.append(masked_values)
 
     universe = np.concatenate(universe_parts)
 
-    if len(universe) == 0:
+    if not np.any(universe > 0):
         raise ValueError(
-            "No non-zero values found across any attribute within the mask. "
-            "Cannot construct pooled universe."
+            "All masked values are zero across every attribute. "
+            "Cannot construct a meaningful pooled null."
         )
 
     return universe
@@ -411,7 +748,7 @@ def _build_pooled_universe(
 def _compute_log2_enrichment(
     observed: pd.DataFrame,
     null_df: pd.DataFrame,
-    epsilon: float = 1e-10,
+    epsilon: float = LOG2_ENRICHMENT_EPSILON,
 ) -> pd.DataFrame:
     """
     Compute log2 enrichment of observed scores relative to the mean null distribution.
@@ -425,7 +762,8 @@ def _compute_log2_enrichment(
         Stacked null samples with features as index (multiple rows per feature)
         and attributes as columns. Same format as output of null generator functions.
     epsilon : float
-        Small value added to null mean to avoid division by zero. Default 1e-10.
+        Small value added to null mean to avoid division by zero (defaults to
+        :data:`~napistu.network.constants.LOG2_ENRICHMENT_EPSILON`).
 
     Returns
     -------
@@ -633,6 +971,89 @@ def _get_distribution_object(distribution: Union[str, Any]) -> Any:
     return distribution
 
 
+def _merge_propagation_null_run_outputs(
+    runs: List[pd.DataFrame],
+    *,
+    log2_enrichment_epsilon: float = LOG2_ENRICHMENT_EPSILON,
+) -> pd.DataFrame:
+    """Merge multiple ``network_propagation_with_null`` results from independent RNG runs."""
+    if len(runs) < 2:
+        raise ValueError(f"More than one run is required, but got {len(runs)}")
+
+    first = runs[0]
+    expected_metrics = set(VALID_NET_PROPAGATION_METRICS)
+    for run_idx, r in enumerate(runs):
+        metrics = set(r.columns.get_level_values(0))
+        if metrics != expected_metrics:
+            missing = sorted(expected_metrics - metrics)
+            extra = sorted(metrics - expected_metrics)
+            raise ValueError(
+                "Each run DataFrame must have exactly observed, quantile, and "
+                "log2_enrichment at column level 0; "
+                f"run {run_idx} has missing {missing} "
+                + (f"and extra {extra}" if extra else "")
+            )
+        if not r.columns.equals(first.columns):
+            raise ValueError(
+                f"column MultiIndex differs between run 0 and run {run_idx}"
+            )
+
+    ref_obs_vals = np.asarray(
+        first[NET_PROPAGATION_METRICS.OBSERVED].values, dtype=np.float64
+    )
+    for run_idx, r in enumerate(runs[1:], start=1):
+        o = np.asarray(r[NET_PROPAGATION_METRICS.OBSERVED].values, dtype=np.float64)
+        if not np.allclose(ref_obs_vals, o):
+            raise ValueError(
+                "Observed propagated scores must be identical across runs (same graph "
+                f"and settings); mismatch between run 0 and run {run_idx}"
+            )
+
+    observed = first[NET_PROPAGATION_METRICS.OBSERVED]
+    obs_vals = ref_obs_vals
+
+    log2_stack = np.stack(
+        [
+            np.asarray(
+                r[NET_PROPAGATION_METRICS.LOG2_ENRICHMENT].values, dtype=np.float64
+            )
+            for r in runs
+        ],
+        axis=0,
+    )
+    mean_null_each = (
+        obs_vals[np.newaxis, :, :] / np.power(2.0, log2_stack) - log2_enrichment_epsilon
+    )
+    pooled_mean = np.nanmean(mean_null_each, axis=0)
+    log2_merged = np.log2(obs_vals / (pooled_mean + log2_enrichment_epsilon))
+
+    q_stack = np.stack(
+        [
+            np.asarray(r[NET_PROPAGATION_METRICS.QUANTILE].values, dtype=np.float64)
+            for r in runs
+        ],
+        axis=0,
+    )
+
+    out: Dict[str, pd.DataFrame] = {
+        NET_PROPAGATION_METRICS.OBSERVED: observed,
+        NET_PROPAGATION_METRICS.QUANTILE: pd.DataFrame(
+            np.nanmean(q_stack, axis=0),
+            index=observed.index,
+            columns=observed.columns,
+        ),
+        NET_PROPAGATION_METRICS.LOG2_ENRICHMENT: pd.DataFrame(
+            log2_merged, index=observed.index, columns=observed.columns
+        ),
+    }
+    key_order = [
+        NET_PROPAGATION_METRICS.OBSERVED,
+        NET_PROPAGATION_METRICS.QUANTILE,
+        NET_PROPAGATION_METRICS.LOG2_ENRICHMENT,
+    ]
+    return pd.concat(out, axis=1).reindex(key_order, axis=1, level=0)
+
+
 def _parametric_null(
     graph: ig.Graph,
     attributes: List[str],
@@ -765,10 +1186,12 @@ def _pooled_vertex_permutation_null(
     all attributes and applying the propagation method.
 
     Rather than permuting each attribute independently (as in vertex_permutation_null),
-    this strategy constructs a single empirical universe by merging all masked, non-zero
-    values across all attributes. Each null sample draws from this universe once,
-    propagates a single synthetic attribute vector, and broadcasts the result across
-    all attribute columns.
+    this strategy constructs a single empirical universe by merging all masked values
+    (including zeros) across all attributes. Each null sample draws n_masked values
+    from this universe with replacement, assigns them to masked vertices, and
+    propagates the resulting synthetic attribute vector. The propagated result is
+    broadcast across all attribute columns so that every attribute is compared
+    against the same shared null distribution.
 
     This reduces propagation calls from n_attributes * n_samples to n_samples,
     making it suitable for large attribute sets (e.g. 200+ patient-level summaries).
@@ -776,10 +1199,28 @@ def _pooled_vertex_permutation_null(
     Assumptions
     -----------
     All attributes must share an identical mask. Attributes are assumed to be
-    exchangeable and on comparable scales — this is a caller contract, not validated
-    beyond mask equality. If attributes have meaningfully different scales or
-    interpretations, pooling is not appropriate and vertex_permutation_null should
-    be used instead.
+    exchangeable in both magnitude and sparsity — the pooled universe mixes values
+    across attributes indiscriminately, so the null implicitly treats any
+    (value, zero/nonzero) pattern as equally likely for any attribute. This is a
+    caller contract, validated only for mask equality.
+
+    When this assumption is appropriate
+    -----------------------------------
+    Use this strategy when attributes have similar magnitude profiles and similar
+    sparsity (similar fraction of non-zero values per attribute). In that regime,
+    pooled sampling provides variance reduction in the null estimate without
+    introducing systematic bias.
+
+    When to prefer an alternative
+    -----------------------------
+    If attributes differ meaningfully in sparsity, the pooled null's expected
+    sparsity is the population average and will not match attributes that are much
+    sparser or denser than typical. For personalized PageRank specifically, this
+    causes systematic shifts in log2 enrichment for atypical attributes (sparser
+    attributes shift left, denser shift right) because PPR responds nonlinearly to
+    reset concentration. In that case, prefer attr_pooled_vertex_permutation,
+    which preserves per-attribute sparsity while still pooling propagated outputs
+    across attributes for variance reduction.
 
     Parameters
     ----------
@@ -806,21 +1247,138 @@ def _pooled_vertex_permutation_null(
         Each block of n_nodes rows corresponds to one null sample, with the same
         propagated vector broadcast across all attribute columns.
     """
-    # Validate attributes
+    propagation_method, shared_mask, node_names, null_graph = (
+        _setup_vertex_permutation_null(
+            graph,
+            attributes,
+            propagation_method,
+            mask,
+            verbose,
+            require_shared_mask=True,
+        )
+    )
+
+    universe = _build_pooled_universe(graph, attributes, shared_mask)
+    n_masked = shared_mask.sum()
+    n_attributes = len(attributes)
+    _POOLED_ATTR = "__pooled_null__"
+
+    all_results = []
+
+    for _ in range(n_samples):
+        sampled_values = np.random.choice(universe, size=n_masked, replace=True)
+
+        null_attr_values = np.zeros(graph.vcount())
+        null_attr_values[shared_mask] = sampled_values
+        null_graph.vs[_POOLED_ATTR] = null_attr_values.tolist()
+
+        broadcast = _propagate_and_broadcast(
+            null_graph,
+            _POOLED_ATTR,
+            n_attributes,
+            propagation_method,
+            additional_propagation_args,
+        )
+        all_results.append(broadcast)
+
+    full_index = node_names * n_samples
+    all_data = np.vstack(all_results)
+    return pd.DataFrame(all_data, index=full_index, columns=attributes)
+
+
+def _propagate_and_broadcast(
+    null_graph: ig.Graph,
+    source_attr: str,
+    n_attributes: int,
+    propagation_method: PropagationMethod,
+    additional_propagation_args: Optional[dict],
+) -> np.ndarray:
+    """Propagate a single attribute on the null graph and broadcast across columns.
+
+    Used by null generators that produce one propagated vector per sample and
+    share it across all attribute columns of the output null tensor.
+
+    Parameters
+    ----------
+    null_graph : ig.Graph
+        Graph with the source attribute already set to the null reset values.
+    source_attr : str
+        Name of the attribute to propagate.
+    n_attributes : int
+        Number of columns to broadcast across in the output.
+    propagation_method : PropagationMethod
+        Normalized propagation method.
+    additional_propagation_args : dict, optional
+        Forwarded to net_propagate_attributes.
+
+    Returns
+    -------
+    np.ndarray
+        Array of shape (n_nodes, n_attributes) where every column is a copy
+        of the propagated vector.
+    """
+    result = net_propagate_attributes(
+        null_graph, [source_attr], propagation_method, additional_propagation_args
+    )
+    propagated = result[source_attr].values
+    return np.column_stack([propagated] * n_attributes)
+
+
+def _setup_vertex_permutation_null(
+    graph: ig.Graph,
+    attributes: List[str],
+    propagation_method: Union[str, PropagationMethod],
+    mask: Optional[Union[str, np.ndarray, List, Dict]],
+    verbose: bool,
+    require_shared_mask: bool,
+) -> tuple:
+    """Shared setup for vertex-permutation-style null generators.
+
+    Validates the propagation method and attributes, parses masks, copies the
+    graph, and resolves node names. Optionally enforces that all attributes
+    share an identical mask, which is required by null generators that pool
+    propagation outputs across attributes.
+
+    Parameters
+    ----------
+    graph : ig.Graph
+        Input graph.
+    attributes : List[str]
+        Attribute names to validate and resolve masks for.
+    propagation_method : str or PropagationMethod
+        Propagation method, normalized via _ensure_propagation_method.
+    mask : str, np.ndarray, List, Dict, or None
+        Mask specification, parsed via _parse_mask_input.
+    verbose : bool
+        Forwarded to _parse_mask_input.
+    require_shared_mask : bool
+        If True, validate that all attribute masks are identical and return
+        a single shared mask. If False, return the full per-attribute mask
+        dictionary.
+
+    Returns
+    -------
+    propagation_method : PropagationMethod
+        Normalized propagation method.
+    masks : np.ndarray or Dict[str, np.ndarray]
+        If require_shared_mask is True, a single boolean array. Otherwise a
+        dict mapping attribute names to their boolean masks.
+    node_names : list
+        Vertex names from the graph, falling back to integer indices if the
+        name attribute is absent.
+    null_graph : ig.Graph
+        A fresh copy of the input graph for the caller to mutate.
+    """
     propagation_method = _ensure_propagation_method(propagation_method)
     _validate_vertex_attributes(graph, attributes, propagation_method)
 
-    # Parse and validate masks - all attributes must share the same mask
     mask_specs = _parse_mask_input(mask, attributes, verbose=verbose)
     masks = _get_attribute_masks(graph, mask_specs)
 
-    _validate_masks_identical(masks, attributes)
-    shared_mask = masks[attributes[0]]
+    if require_shared_mask:
+        _validate_masks_identical(masks, attributes)
+        masks = masks[attributes[0]]
 
-    # Build empirical universe from all masked, non-zero values across all attributes
-    universe = _build_pooled_universe(graph, attributes, shared_mask)
-
-    # Get node names
     node_names = (
         graph.vs[NAPISTU_GRAPH_VERTICES.NAME]
         if NAPISTU_GRAPH_VERTICES.NAME in graph.vs.attributes()
@@ -828,34 +1386,8 @@ def _pooled_vertex_permutation_null(
     )
 
     null_graph = graph.copy()
-    # Use a single synthetic attribute name to avoid collisions
-    _POOLED_ATTR = "__pooled_null__"
-    all_results = []
 
-    n_masked = shared_mask.sum()
-
-    for _ in range(n_samples):
-        # Sample from empirical universe with replacement
-        sampled_values = np.random.choice(universe, size=n_masked, replace=True)
-
-        null_attr_values = np.zeros(graph.vcount())
-        null_attr_values[shared_mask] = sampled_values
-        null_graph.vs[_POOLED_ATTR] = null_attr_values.tolist()
-
-        # Single propagation per sample
-        result = net_propagate_attributes(
-            null_graph, [_POOLED_ATTR], propagation_method, additional_propagation_args
-        )
-
-        # Broadcast single propagated vector across all attribute columns
-        propagated = result[_POOLED_ATTR].values
-        broadcast = np.column_stack([propagated] * len(attributes))
-        all_results.append(broadcast)
-
-    full_index = node_names * n_samples
-    all_data = np.vstack(all_results)
-
-    return pd.DataFrame(all_data, index=full_index, columns=attributes)
+    return propagation_method, masks, node_names, null_graph
 
 
 def _uniform_null(
@@ -1003,71 +1535,49 @@ def _vertex_permutation_null(
         Propagated null samples with permuted attribute values.
         Shape: (n_samples * n_nodes, n_attributes)
     """
-    # Validate attributes
-    propagation_method = _ensure_propagation_method(propagation_method)
-    _validate_vertex_attributes(graph, attributes, propagation_method)
-
-    # Parse mask input
-    mask_specs = _parse_mask_input(mask, attributes, verbose=verbose)
-    masks = _get_attribute_masks(graph, mask_specs)
-
-    # Get original attribute values
-    original_values = {}
-    for attr in attributes:
-        original_values[attr] = np.array(graph.vs[attr])
-
-    # Get node names
-    node_names = (
-        graph.vs[NAPISTU_GRAPH_VERTICES.NAME]
-        if NAPISTU_GRAPH_VERTICES.NAME in graph.vs.attributes()
-        else list(range(graph.vcount()))
+    propagation_method, masks, node_names, null_graph = _setup_vertex_permutation_null(
+        graph,
+        attributes,
+        propagation_method,
+        mask,
+        verbose,
+        require_shared_mask=False,
     )
 
-    # Pre-allocate for results
+    original_values = {attr: np.array(graph.vs[attr]) for attr in attributes}
     all_results = []
 
-    # Generate samples
-    # we'll only do this once and overwrite the attributes in each sample
-    null_graph = graph.copy()
-
     for _ in range(n_samples):
-
-        # Permute values among masked nodes for each attribute
-        for _, attr in enumerate(attributes):
+        for attr in attributes:
             attr_mask = masks[attr]
             masked_indices = np.where(attr_mask)[0]
             masked_values = original_values[attr][masked_indices]
 
-            # Start with original values
             null_attr_values = original_values[attr].copy()
 
             if replace:
-                # Sample with replacement
                 permuted_values = np.random.choice(
                     masked_values, size=len(masked_values), replace=True
                 )
             else:
-                # Permute without replacement
                 permuted_values = np.random.permutation(masked_values)
 
             null_attr_values[masked_indices] = permuted_values
             null_graph.vs[attr] = null_attr_values.tolist()
 
-        # Apply propagation method to null graph
         result = net_propagate_attributes(
             null_graph, attributes, propagation_method, additional_propagation_args
         )
         all_results.append(result)
 
-    # Combine all results
     full_index = node_names * n_samples
     all_data = np.vstack([result.values for result in all_results])
-
     return pd.DataFrame(all_data, index=full_index, columns=attributes)
 
 
 # Null generator registry
 NULL_GENERATORS = {
+    NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION: _attr_pooled_vertex_permutation_null,
     NULL_STRATEGIES.EDGE_PERMUTATION: _edge_permutation_null,
     NULL_STRATEGIES.PARAMETRIC: _parametric_null,
     NULL_STRATEGIES.POOLED_VERTEX_PERMUTATION: _pooled_vertex_permutation_null,

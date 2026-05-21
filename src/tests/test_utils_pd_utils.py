@@ -7,6 +7,7 @@ import pytest
 from napistu.constants import SBML_DFS
 from napistu.utils.pd_utils import (
     _merge_and_log_overwrites,
+    downcast_float_dataframe,
     drop_extra_cols,
     ensure_pd_df,
     format_identifiers_as_edgelist,
@@ -18,6 +19,14 @@ from napistu.utils.pd_utils import (
     update_pathological_names,
     validate_merge,
 )
+
+
+def test_downcast_float_dataframe():
+    df = pd.DataFrame(np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float64))
+    out = downcast_float_dataframe(df)
+    assert out.dtypes[0] == np.float32
+    assert out.dtypes[1] == np.float32
+    np.testing.assert_array_almost_equal(out.values, df.values, decimal=5)
 
 
 def test_match_pd_vars():

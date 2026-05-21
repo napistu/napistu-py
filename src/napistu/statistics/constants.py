@@ -1,3 +1,5 @@
+"""Constants for the statistics subpackage."""
+
 from types import SimpleNamespace
 
 CONTINGENCY_TABLE = SimpleNamespace(
@@ -16,3 +18,10 @@ ENRICHMENT_TESTS = SimpleNamespace(
 )
 
 VALID_ENRICHMENT_TESTS = ENRICHMENT_TESTS.__dict__.values()
+
+QUANTILE_METHODS = SimpleNamespace(
+    PER_FEATURE="per_feature",
+    DENSE="dense",
+)
+
+VALID_QUANTILE_METHODS = QUANTILE_METHODS.__dict__.values()

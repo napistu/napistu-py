@@ -75,6 +75,7 @@ from napistu.utils.path_utils import (
 from napistu.utils.pd_utils import (
     _merge_and_log_overwrites,
     check_unique_index,
+    downcast_float_dataframe,
     drop_extra_cols,
     ensure_pd_df,
     format_identifiers_as_edgelist,
@@ -124,6 +125,7 @@ __all__ = [
     "path_exists",
     # Pandas utilities
     "check_unique_index",
+    "downcast_float_dataframe",
     "drop_extra_cols",
     "ensure_pd_df",
     "format_identifiers_as_edgelist",

@@ -298,8 +298,13 @@ NET_PROPAGATION_METRICS = SimpleNamespace(
     LOG2_ENRICHMENT="log2_enrichment",
 )
 
+VALID_NET_PROPAGATION_METRICS = list(NET_PROPAGATION_METRICS.__dict__.values())
+
+LOG2_ENRICHMENT_EPSILON = 1e-10  # default for calculating observed / null enrichments
+
 # null distributions
 NULL_STRATEGIES = SimpleNamespace(
+    ATTR_POOLED_VERTEX_PERMUTATION="attr_pooled_vertex_permutation",
     EDGE_PERMUTATION="edge_permutation",
     PARAMETRIC="parametric",
     POOLED_VERTEX_PERMUTATION="pooled_vertex_permutation",

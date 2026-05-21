@@ -1,9 +1,14 @@
+"""Test network propagation with alternative null strategies."""
+
+import logging
+
 import igraph as ig
 import numpy as np
 import pandas as pd
 import pytest
 
 from napistu.network.constants import (
+    LOG2_ENRICHMENT_EPSILON,
     NAPISTU_GRAPH_VERTICES,
     NET_PROPAGATION_METRICS,
     NULL_STRATEGIES,
@@ -18,6 +23,7 @@ from napistu.network.net_propagation import (
     melt_propagation_results,
     net_propagate_attributes,
     network_propagation_with_null,
+    network_propagation_with_null_repeated,
 )
 
 
@@ -226,6 +232,68 @@ def test_network_propagation_with_null():
         )
 
 
+def test_network_propagation_invalid_quantile_method():
+    """quantile_method is validated before null generation."""
+    graph = ig.Graph(3)
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C"]
+    graph.vs["attr1"] = [1.0, 0.0, 2.0]
+    graph.add_edges([(0, 1), (1, 2)])
+    with pytest.raises(ValueError, match="quantile_method must be one of"):
+        network_propagation_with_null(
+            graph, ["attr1"], quantile_method="bad", n_samples=3
+        )
+
+
+def test_network_propagation_repeated_requires_ge_2_runs_and_rejects_uniform():
+    """Repeated propagation requires n_runs >= 2 and does not accept uniform null."""
+    graph = ig.Graph(2)
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["a", "b"]
+    graph.vs["attr1"] = [1.0, 0.0]
+    graph.add_edges([(0, 1)])
+
+    with pytest.raises(ValueError, match="n_runs must be >= 2"):
+        network_propagation_with_null_repeated(
+            graph,
+            ["attr1"],
+            null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
+            n_samples=2,
+            n_runs=0,
+        )
+    with pytest.raises(ValueError, match="n_runs must be >= 2"):
+        network_propagation_with_null_repeated(
+            graph,
+            ["attr1"],
+            null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
+            n_samples=2,
+            n_runs=1,
+        )
+
+    with pytest.raises(ValueError, match="null_strategy='uniform"):
+        network_propagation_with_null_repeated(
+            graph,
+            ["attr1"],
+            null_strategy=NULL_STRATEGIES.UNIFORM,
+            n_samples=2,
+            n_runs=2,
+        )
+
+
+def test_network_propagation_repeated_multiple_runs():
+    """Repeated calls produce merged outputs with consistent shape."""
+    graph = ig.Graph(4)
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C", "D"]
+    graph.vs["attr1"] = [1.0, 0.0, 2.0, 0.0]
+    graph.add_edges([(0, 1), (1, 2), (2, 3)])
+    merged = network_propagation_with_null_repeated(
+        graph, ["attr1"], n_samples=3, verbose=False
+    )
+    assert isinstance(merged.columns, pd.MultiIndex)
+    assert NET_PROPAGATION_METRICS.OBSERVED in merged.columns.get_level_values(0)
+    assert NET_PROPAGATION_METRICS.QUANTILE in merged.columns.get_level_values(0)
+    assert merged[NET_PROPAGATION_METRICS.OBSERVED].shape == (4, 1)
+    assert merged[NET_PROPAGATION_METRICS.LOG2_ENRICHMENT].notna().values.all()
+
+
 def test_net_propagate_attributes():
     """Test net_propagate_attributes with multiple attributes and various scenarios."""
     # Create test graph with edges for realistic propagation
@@ -301,8 +369,11 @@ def test_all_null_generators_structure():
 
     for generator_name, generator_func in NULL_GENERATORS.items():
 
-        if generator_name == NULL_STRATEGIES.POOLED_VERTEX_PERMUTATION:
-            continue  # not supported because the attributes have different masks
+        if generator_name in (
+            NULL_STRATEGIES.POOLED_VERTEX_PERMUTATION,
+            NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION,
+        ):
+            continue  # not supported: these require identical masks; attr1/attr2 differ
 
         print(f"Testing {generator_name}")
 
@@ -387,6 +458,12 @@ def test_mask_application():
 
     for generator_name, generator_func in NULL_GENERATORS.items():
         print(f"Testing mask application for {generator_name}")
+
+        if generator_name in (
+            NULL_STRATEGIES.POOLED_VERTEX_PERMUTATION,
+            NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION,
+        ):
+            continue  # pooled methods are covered in test_pooled_null_methods
 
         if generator_name == NULL_STRATEGIES.UNIFORM:
             result = generator_func(graph, attributes, mask=mask_array)
@@ -474,6 +551,7 @@ def test_propagation_method_parameters():
 
     # Test that all generators accept method parameters
     for generator_name, generator_func in NULL_GENERATORS.items():
+
         if generator_name == NULL_STRATEGIES.UNIFORM:
             result = generator_func(
                 graph, ["attr1"], additional_propagation_args={"damping": 0.8}
@@ -519,7 +597,7 @@ def test_compute_log2_enrichment():
 
     # Validate values manually for one feature
     null_mean_A = null_df.loc["A"].mean()
-    expected_A = np.log2(observed.loc["A"] / (null_mean_A + 1e-10))
+    expected_A = np.log2(observed.loc["A"] / (null_mean_A + LOG2_ENRICHMENT_EPSILON))
     pd.testing.assert_series_equal(result.loc["A"], expected_A.rename("A"))
 
     # Observed == null mean should give log2(1) == 0
@@ -616,3 +694,53 @@ def test_observed_scores_invariant_to_null_strategy():
         result_perm[NET_PROPAGATION_METRICS.OBSERVED].values,
         err_msg="Observed scores should be identical across null strategies",
     )
+
+
+def test_pooled_null_methods(caplog):
+    """Coverage for pooled_vertex_permutation and attr_pooled_vertex_permutation."""
+    graph = ig.Graph(6)
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C", "D", "E", "F"]
+    # Three attributes with different sparsity, all sharing the same mask
+    graph.vs["sparse"] = [10.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    graph.vs["medium"] = [1.0, 2.0, 0.0, 0.0, 0.0, 0.0]
+    graph.vs["dense"] = [1.0, 1.0, 1.0, 1.0, 0.0, 0.0]
+    graph.add_edges([(0, 1), (1, 2), (2, 3), (3, 4), (4, 5)])
+
+    attrs = ["sparse", "medium", "dense"]
+    shared_mask = np.array([True, True, True, True, False, False])
+
+    # Both methods produce expected shape with shared mask
+    for strategy in (
+        NULL_STRATEGIES.POOLED_VERTEX_PERMUTATION,
+        NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION,
+    ):
+        result = network_propagation_with_null(
+            graph, attrs, null_strategy=strategy, n_samples=12, mask=shared_mask
+        )
+        assert result.shape == (6, 9)  # 6 nodes, 3 metrics x 3 attrs
+        # Exact n_samples allocation matters for p-value resolution
+        null_rows = result[NET_PROPAGATION_METRICS.QUANTILE].notna().sum().sum()
+        assert null_rows > 0
+
+    # attr_pooled with n_samples not divisible by n_attributes — must hit n_samples exactly
+    n_samples = 10  # 10 // 3 = 3 base, remainder 1, so [4, 3, 3]
+    result_uneven = NULL_GENERATORS[NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION](
+        graph, attrs, n_samples=n_samples, mask=shared_mask
+    )
+    assert result_uneven.shape == (n_samples * 6, 3)
+
+    # attr_pooled warns and proceeds when n_samples < n_attributes
+    with caplog.at_level(logging.WARNING):
+        result_under = NULL_GENERATORS[NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION](
+            graph, attrs, n_samples=2, mask=shared_mask
+        )
+    assert "less than n_attributes" in caplog.text
+    assert result_under.shape == (2 * 6, 3)
+
+    # Both methods reject non-identical masks
+    for strategy in (
+        NULL_STRATEGIES.POOLED_VERTEX_PERMUTATION,
+        NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION,
+    ):
+        with pytest.raises(ValueError, match="different mask"):
+            NULL_GENERATORS[strategy](graph, attrs, n_samples=4)
