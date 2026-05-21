@@ -2,10 +2,16 @@
 Utilities for scanning and analyzing the Napistu codebase.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
-from typing import Any, Dict, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, Optional, Set
+
+if TYPE_CHECKING:
+    from bs4 import BeautifulSoup
+    from bs4.element import Tag
 
 from napistu.mcp import utils as mcp_utils
 from napistu.mcp.constants import (
@@ -15,12 +21,9 @@ from napistu.mcp.constants import (
     SEARCH_RESULT_DEFS,
     SEARCH_TYPES,
 )
-
-logger = logging.getLogger(__name__)
-
 from napistu.utils.optional import import_beautifulsoup
 
-BeautifulSoup = import_beautifulsoup().BeautifulSoup
+logger = logging.getLogger(__name__)
 
 
 def add_stripped_names(functions: dict, classes: dict) -> None:
@@ -178,10 +181,7 @@ async def read_read_the_docs(package_toc_url: str, request_delay: float = 0.5) -
     return docs_dict
 
 
-# private utils
-
-
-def _extract_module_docstring(soup, h1):
+def _extract_module_docstring(soup: BeautifulSoup, h1: Tag) -> str | None:
     """
     Extract module-level docstring from ReadTheDocs HTML.
 
@@ -192,14 +192,14 @@ def _extract_module_docstring(soup, h1):
     Parameters
     ----------
     soup : BeautifulSoup
-        Parsed HTML soup of the module page
+        Parsed HTML soup of the module page.
     h1 : Tag
-        The <h1> tag containing the module name
+        The <h1> tag containing the module name.
 
     Returns
     -------
     str or None
-        The extracted module docstring, or None if no docstring found
+        The extracted module docstring, or None if no docstring found.
     """
     # Find stop points (rubric, class, or function definitions)
     first_rubric = soup.select_one("p.rubric")
@@ -322,7 +322,7 @@ def _format_function(sig_dt, doc_dd) -> Dict[str, Any]:
     }
 
 
-def _format_submodules(soup) -> dict:
+def _format_submodules(soup: BeautifulSoup) -> dict:
     """
     Extract submodules from a ReadTheDocs module page soup object.
     Looks for a 'Modules' rubric and parses the following table or list for submodule names, URLs, and descriptions.
@@ -353,7 +353,7 @@ def _format_submodules(soup) -> dict:
     return submodules
 
 
-def _get_element_index(element, soup):
+def _get_element_index(element: Tag, soup: BeautifulSoup) -> float:
     """Get the index position of an element in the document."""
     try:
         return list(soup.descendants).index(element)
@@ -380,7 +380,7 @@ def _parse_rtd_module_page(html: str, url: Optional[str] = None) -> dict:
             'submodules': Dict[str, dict]
         }
     """
-    soup = BeautifulSoup(html, "html.parser")
+    soup = import_beautifulsoup().BeautifulSoup(html, "html.parser")
     result = {
         "module": None,
         "url": url,
@@ -420,7 +420,7 @@ async def _process_rtd_package_toc(
     Parse the ReadTheDocs package TOC and return a dict of {name: url}.
     """
     page_html = await mcp_utils.load_html_page(url)
-    soup = BeautifulSoup(page_html, "html.parser")
+    soup = import_beautifulsoup().BeautifulSoup(page_html, "html.parser")
     selected = soup.select(css_selector)
     return _parse_module_tags(selected)
 

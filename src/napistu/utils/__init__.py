@@ -2,30 +2,15 @@
 """
 Napistu utilities package.
 
-This package provides utilities organized into logical submodules:
-- io_utils: File I/O and download operations
-- path_utils: Path and URI operations
-- pd_utils: Pandas DataFrame operations
-- string_utils: String and text processing
-- ig_utils: igraph operations
-- display_utils: Display and formatting utilities
-- optional: Optional dependency handling and lazy loading
+Submodules provide focused helpers (``io_utils``, ``path_utils``, ``pd_utils``, etc.).
+Optional dependencies are imported via ``napistu.utils.optional``, not re-exported here.
 """
 
 # Import display utilities from display_utils
-from napistu.utils.display_utils import (
-    # Private/helper functions
-    _create_left_align_formatters,
-    _in_jupyter_environment,
-    _show_as_string,
-    # Display utilities
-    show,
-)
+from napistu.utils.display_utils import show
 
 # Import igraph utilities from ig_utils
-from napistu.utils.ig_utils import (
-    find_weakly_connected_subgraphs,
-)
+from napistu.utils.ig_utils import find_weakly_connected_subgraphs
 
 # Import I/O functions from io_utils
 from napistu.utils.io_utils import (
@@ -45,22 +30,6 @@ from napistu.utils.io_utils import (
     write_file_contents_to_path,
 )
 
-# Import optional dependency utilities from optional
-from napistu.utils.optional import (
-    create_package_importer,
-    import_anndata,
-    import_gseapy,
-    import_mudata,
-    import_omnipath,
-    import_omnipath_interactions,
-    import_package,
-    require_anndata,
-    require_gseapy,
-    require_mudata,
-    require_omnipath,
-    require_package,
-)
-
 # Import path utilities from path_utils
 from napistu.utils.path_utils import (
     copy_uri,
@@ -73,7 +42,6 @@ from napistu.utils.path_utils import (
 
 # Import pandas utilities from pd_utils
 from napistu.utils.pd_utils import (
-    _merge_and_log_overwrites,
     check_unique_index,
     downcast_float_dataframe,
     drop_extra_cols,
@@ -88,8 +56,6 @@ from napistu.utils.pd_utils import (
 
 # Import string utilities from string_utils
 from napistu.utils.string_utils import (
-    _add_nameness_score,
-    _add_nameness_score_wrapper,
     extract_regex_match,
     extract_regex_search,
     match_regex_dict,
@@ -99,7 +65,7 @@ from napistu.utils.string_utils import (
     score_nameness,
 )
 
-# Public API - excludes private functions by convention
+# Public names for ``from napistu import utils`` (legacy barrel); prefer submodule imports.
 __all__ = [
     # File I/O and downloads
     "download_and_extract",
@@ -146,24 +112,4 @@ __all__ = [
     "find_weakly_connected_subgraphs",
     # Display utilities
     "show",
-    # Optional dependency utilities
-    "create_package_importer",
-    "import_omnipath",
-    "import_omnipath_interactions",
-    "import_package",
-    "import_anndata",
-    "import_gseapy",
-    "import_mudata",
-    "require_anndata",
-    "require_gseapy",
-    "require_mudata",
-    "require_omnipath",
-    "require_package",
-    # Private/helper functions (included for backwards compatibility)
-    "_add_nameness_score",
-    "_add_nameness_score_wrapper",
-    "_create_left_align_formatters",
-    "_in_jupyter_environment",
-    "_merge_and_log_overwrites",
-    "_show_as_string",
 ]

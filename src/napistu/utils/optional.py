@@ -120,7 +120,7 @@ def import_package(package_name: str) -> Any:
     ------
     ImportError
         If the package cannot be imported, with a helpful message about
-        which extra to install if the package is in PACKAGE_TO_EXTRA.
+        which extras can satisfy the dependency if the package is in PACKAGE_TO_EXTRA.
     """
     try:
         # Configure logging before import
@@ -136,13 +136,12 @@ def import_package(package_name: str) -> Any:
 
     except ImportError:
         if package_name in PACKAGE_TO_EXTRA:
-            extra = PACKAGE_TO_EXTRA[package_name]
+            extras = PACKAGE_TO_EXTRA[package_name]
+            hint = " or ".join(f"pip install napistu[{e}]" for e in extras)
             raise ImportError(
-                f"Package {package_name} is required. "
-                f"Install with: pip install napistu[{extra}]"
+                f"Package {package_name} is required. Install with: {hint}"
             )
-        else:
-            raise ImportError(f"Package {package_name} is not available")
+        raise ImportError(f"Package {package_name} is not available")
 
 
 def require_package(package_name: str):
@@ -184,10 +183,14 @@ def require_package(package_name: str):
 
 
 # Create import functions for packages using create_package_importer
+# ETL / MCP extras (pathways, SBML, HTML parsing)
 import_omnipath = create_package_importer(IMPORTABLE_PACKAGES.OMNIPATH)
 import_omnipath_interactions = create_package_importer(
     f"{IMPORTABLE_PACKAGES.OMNIPATH}.interactions"
 )
+import_libsbml = create_package_importer(IMPORTABLE_PACKAGES.LIBSBML)
+import_beautifulsoup = create_package_importer(IMPORTABLE_PACKAGES.BEAUTIFULSOUP)
+# Genomics extras
 import_anndata = create_package_importer(IMPORTABLE_PACKAGES.ANNDATA)
 import_mudata = create_package_importer(IMPORTABLE_PACKAGES.MUDATA)
 import_gseapy = create_package_importer(IMPORTABLE_PACKAGES.GSEAPY)
@@ -195,8 +198,6 @@ import_statsmodels = create_package_importer(IMPORTABLE_PACKAGES.STATSMODELS)
 import_statsmodels_multitest = create_package_importer(
     f"{IMPORTABLE_PACKAGES.STATSMODELS}.stats.multitest"
 )
-import_libsbml = create_package_importer(IMPORTABLE_PACKAGES.LIBSBML)
-import_beautifulsoup = create_package_importer(IMPORTABLE_PACKAGES.BEAUTIFULSOUP)
 
 # Convenience decorators
 require_anndata = require_package(IMPORTABLE_PACKAGES.ANNDATA)

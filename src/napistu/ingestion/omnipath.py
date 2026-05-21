@@ -31,8 +31,6 @@ from napistu.ontologies.genodexito import Genodexito
 from napistu.ontologies.mirbase import load_mirbase_xrefs
 from napistu.ontologies.pubchem import map_pubchem_ids
 from napistu.source import Source
-
-# import lazy-loaded omnipath and interactions
 from napistu.utils.optional import (
     import_omnipath,
     import_omnipath_interactions,
