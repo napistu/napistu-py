@@ -3,9 +3,9 @@ from typing import Dict, Optional
 
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
 
 from napistu.ontologies.constants import MIRBASE_TABLE_SPECS, MIRBASE_TABLES
+from napistu.utils.optional import import_beautifulsoup
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +90,8 @@ def load_mirbase_table(
     logger.info(f"Reading miRBase {table_type} data from {url}")
 
     try:
+        bs4 = import_beautifulsoup()
+        BeautifulSoup = bs4.BeautifulSoup
         # Read HTML directly from URL
         response = requests.get(url, timeout=timeout)
         response.raise_for_status()  # Raises an HTTPError for bad responses

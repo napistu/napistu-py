@@ -18,13 +18,9 @@ from napistu.mcp.constants import (
 
 logger = logging.getLogger(__name__)
 
-# Import optional dependencies with error handling
-try:
-    from bs4 import BeautifulSoup
-except ImportError:
-    raise ImportError(
-        "Documentation utilities require additional dependencies. Install with 'pip install napistu[mcp]'"
-    )
+from napistu.utils.optional import import_beautifulsoup
+
+BeautifulSoup = import_beautifulsoup().BeautifulSoup
 
 
 def add_stripped_names(functions: dict, classes: dict) -> None:

@@ -18,8 +18,12 @@ Convenience Functions
 ---------------------
 import_anndata:
     Import and return anndata, raising an informative error if missing.
+import_beautifulsoup:
+    Import and return bs4, raising an informative error if missing.
 import_gseapy:
     Import and return gseapy, raising an informative error if missing.
+import_libsbml:
+    Import and return libsbml, raising an informative error if missing.
 import_mudata:
     Import and return mudata, raising an informative error if missing.
 import_omnipath:
@@ -35,8 +39,12 @@ Decorators
 ----------
 require_anndata:
     Decorator ensuring anndata is available before calling a function.
+require_beautifulsoup:
+    Decorator ensuring bs4 is available before calling a function.
 require_gseapy:
     Decorator ensuring gseapy is available before calling a function.
+require_libsbml:
+    Decorator ensuring libsbml is available before calling a function.
 require_mudata:
     Decorator ensuring mudata is available before calling a function.
 require_omnipath:
@@ -187,6 +195,8 @@ import_statsmodels = create_package_importer(IMPORTABLE_PACKAGES.STATSMODELS)
 import_statsmodels_multitest = create_package_importer(
     f"{IMPORTABLE_PACKAGES.STATSMODELS}.stats.multitest"
 )
+import_libsbml = create_package_importer(IMPORTABLE_PACKAGES.LIBSBML)
+import_beautifulsoup = create_package_importer(IMPORTABLE_PACKAGES.BEAUTIFULSOUP)
 
 # Convenience decorators
 require_anndata = require_package(IMPORTABLE_PACKAGES.ANNDATA)
@@ -194,6 +204,8 @@ require_gseapy = require_package(IMPORTABLE_PACKAGES.GSEAPY)
 require_mudata = require_package(IMPORTABLE_PACKAGES.MUDATA)
 require_omnipath = require_package(IMPORTABLE_PACKAGES.OMNIPATH)
 require_statsmodels = require_package(IMPORTABLE_PACKAGES.STATSMODELS)
+require_libsbml = require_package(IMPORTABLE_PACKAGES.LIBSBML)
+require_beautifulsoup = require_package(IMPORTABLE_PACKAGES.BEAUTIFULSOUP)
 
 
 def _configure_package_logging(package_name: str) -> Any:
