@@ -18,8 +18,12 @@ Convenience Functions
 ---------------------
 import_anndata:
     Import and return anndata, raising an informative error if missing.
+import_beautifulsoup:
+    Import and return bs4, raising an informative error if missing.
 import_gseapy:
     Import and return gseapy, raising an informative error if missing.
+import_libsbml:
+    Import and return libsbml, raising an informative error if missing.
 import_mudata:
     Import and return mudata, raising an informative error if missing.
 import_omnipath:
@@ -35,8 +39,12 @@ Decorators
 ----------
 require_anndata:
     Decorator ensuring anndata is available before calling a function.
+require_beautifulsoup:
+    Decorator ensuring bs4 is available before calling a function.
 require_gseapy:
     Decorator ensuring gseapy is available before calling a function.
+require_libsbml:
+    Decorator ensuring libsbml is available before calling a function.
 require_mudata:
     Decorator ensuring mudata is available before calling a function.
 require_omnipath:
@@ -112,7 +120,7 @@ def import_package(package_name: str) -> Any:
     ------
     ImportError
         If the package cannot be imported, with a helpful message about
-        which extra to install if the package is in PACKAGE_TO_EXTRA.
+        which extras can satisfy the dependency if the package is in PACKAGE_TO_EXTRA.
     """
     try:
         # Configure logging before import
@@ -128,13 +136,12 @@ def import_package(package_name: str) -> Any:
 
     except ImportError:
         if package_name in PACKAGE_TO_EXTRA:
-            extra = PACKAGE_TO_EXTRA[package_name]
+            extras = PACKAGE_TO_EXTRA[package_name]
+            hint = " or ".join(f"pip install napistu[{e}]" for e in extras)
             raise ImportError(
-                f"Package {package_name} is required. "
-                f"Install with: pip install napistu[{extra}]"
+                f"Package {package_name} is required. Install with: {hint}"
             )
-        else:
-            raise ImportError(f"Package {package_name} is not available")
+        raise ImportError(f"Package {package_name} is not available")
 
 
 def require_package(package_name: str):
@@ -176,10 +183,14 @@ def require_package(package_name: str):
 
 
 # Create import functions for packages using create_package_importer
+# ETL / MCP extras (pathways, SBML, HTML parsing)
 import_omnipath = create_package_importer(IMPORTABLE_PACKAGES.OMNIPATH)
 import_omnipath_interactions = create_package_importer(
     f"{IMPORTABLE_PACKAGES.OMNIPATH}.interactions"
 )
+import_libsbml = create_package_importer(IMPORTABLE_PACKAGES.LIBSBML)
+import_beautifulsoup = create_package_importer(IMPORTABLE_PACKAGES.BEAUTIFULSOUP)
+# Genomics extras
 import_anndata = create_package_importer(IMPORTABLE_PACKAGES.ANNDATA)
 import_mudata = create_package_importer(IMPORTABLE_PACKAGES.MUDATA)
 import_gseapy = create_package_importer(IMPORTABLE_PACKAGES.GSEAPY)
@@ -194,6 +205,8 @@ require_gseapy = require_package(IMPORTABLE_PACKAGES.GSEAPY)
 require_mudata = require_package(IMPORTABLE_PACKAGES.MUDATA)
 require_omnipath = require_package(IMPORTABLE_PACKAGES.OMNIPATH)
 require_statsmodels = require_package(IMPORTABLE_PACKAGES.STATSMODELS)
+require_libsbml = require_package(IMPORTABLE_PACKAGES.LIBSBML)
+require_beautifulsoup = require_package(IMPORTABLE_PACKAGES.BEAUTIFULSOUP)
 
 
 def _configure_package_logging(package_name: str) -> Any:

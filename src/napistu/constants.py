@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import libsbml
 import pandas as pd
 
 PACKAGE_DEFS = SimpleNamespace(
@@ -315,14 +314,6 @@ BQB_PRIORITIES = pd.DataFrame(
     ]
 )
 
-
-def get_biological_qualifier_codes():
-    bio_qualifier_codes = {getattr(libsbml, bqb): bqb for bqb in VALID_BQB_TERMS}
-
-    return bio_qualifier_codes
-
-
-BIOLOGICAL_QUALIFIER_CODES = get_biological_qualifier_codes()
 
 # Systems biology ontology
 SBOTERM_NAMES = SimpleNamespace(

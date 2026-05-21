@@ -3,19 +3,18 @@ from __future__ import annotations
 import logging
 import os
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import fsspec
-import libsbml
 import pandas as pd
 from pydantic import RootModel, field_validator
 
 from napistu.constants import (
-    BIOLOGICAL_QUALIFIER_CODES,
     BQB,
     SBML_DFS,
     SBML_DFS_SCHEMA,
     SCHEMA_DEFS,
+    VALID_BQB_TERMS,
 )
 from napistu.identifiers import Identifiers
 from napistu.ingestion.constants import (
@@ -34,9 +33,29 @@ from napistu.ontologies.standardization import (
 from napistu.sbml_dfs_utils import id_formatter, stub_compartments
 from napistu.source import Source
 from napistu.utils.display_utils import show
+from napistu.utils.optional import import_libsbml
 from napistu.utils.pd_utils import update_pathological_names
 
+if TYPE_CHECKING:
+    import libsbml
+
 logger = logging.getLogger(__name__)
+
+_libsbml_module = None
+
+
+def _libsbml():
+    """Import libsbml or raise ImportError with install hint (``pip install napistu[etl]``)."""
+    global _libsbml_module
+    if _libsbml_module is None:
+        _libsbml_module = import_libsbml()
+    return _libsbml_module
+
+
+def _get_biological_qualifier_codes() -> dict:
+    """Lazily build the libsbml integer to BQB string mapping."""
+    ls = _libsbml()
+    return {getattr(ls, bqb): bqb for bqb in VALID_BQB_TERMS}
 
 
 class SBML:
@@ -80,7 +99,8 @@ class SBML:
         verbose: bool = False,
     ) -> None:
         """Initializes the SBML object by reading and validating an SBML file."""
-        reader = libsbml.SBMLReader()
+        ls = _libsbml()
+        reader = ls.SBMLReader()
         if os.path.exists(sbml_path):
             self.document = reader.readSBML(sbml_path)
         else:
@@ -697,13 +717,15 @@ def _cv_to_Identifiers(
         An Identifiers object containing the CV terms
     """
 
+    ls = _libsbml()
+    biological_qualifier_codes = _get_biological_qualifier_codes()
     cv_list = list()
     for cv in entity.getCVTerms():
-        if cv.getQualifierType() != libsbml.BIOLOGICAL_QUALIFIER:
+        if cv.getQualifierType() != ls.BIOLOGICAL_QUALIFIER:
             # only care about biological annotations
             continue
 
-        biological_qualifier_type = BIOLOGICAL_QUALIFIER_CODES[
+        biological_qualifier_type = biological_qualifier_codes[
             cv.getBiologicalQualifierType()
         ]
         out_list = list()

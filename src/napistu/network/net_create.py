@@ -7,7 +7,7 @@ from typing import Optional
 import igraph as ig
 import pandas as pd
 
-from napistu import sbml_dfs_core, utils
+from napistu import sbml_dfs_core
 from napistu.constants import (
     MINI_SBO_FROM_NAME,
     SBML_DFS,
@@ -32,6 +32,7 @@ from napistu.network.ng_core import (
     _apply_edge_reversal_mapping,
     _handle_special_reversal_cases,
 )
+from napistu.utils.pd_utils import _merge_and_log_overwrites
 
 logger = logging.getLogger(__name__)
 
@@ -448,7 +449,7 @@ def _augment_network_nodes(
         )
 
     # include matching s_ids and c_ids of sc_ids
-    network_nodes_sid = utils._merge_and_log_overwrites(
+    network_nodes_sid = _merge_and_log_overwrites(
         network_nodes,
         sbml_dfs.compartmentalized_species[[SBML_DFS.S_ID, SBML_DFS.C_ID]],
         "network nodes",
@@ -470,7 +471,7 @@ def _augment_network_nodes(
 
     if species_graph_data is not None:
         # add species_graph_data to the network_nodes df, based on s_id
-        network_nodes_wdata = utils._merge_and_log_overwrites(
+        network_nodes_wdata = _merge_and_log_overwrites(
             network_nodes_sid,
             species_graph_data,
             "species graph data",
