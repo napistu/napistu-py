@@ -50,20 +50,22 @@ def discretize_expression_data(
 
     """
 
-    expression_data_types = expression_data.dtypes
     if metadata_attributes is None:
         metadata_attributes = [
             col
-            for col in expression_data_types.index
-            if expression_data_types[col] == "object"
+            for col in expression_data.columns
+            if pd.api.types.is_string_dtype(expression_data[col])
         ]
 
     expression_numpy_df = expression_data.drop(columns=metadata_attributes)
     # ensure that all variables are numeric
     invalid_variables = [
-        x
-        for x, y in zip(expression_numpy_df.columns, expression_numpy_df.dtypes)
-        if y not in ["int64", "float64"]
+        col
+        for col in expression_numpy_df.columns
+        if not (
+            pd.api.types.is_integer_dtype(expression_numpy_df[col])
+            or pd.api.types.is_float_dtype(expression_numpy_df[col])
+        )
     ]
 
     if len(invalid_variables) > 0:

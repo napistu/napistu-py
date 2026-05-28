@@ -886,7 +886,7 @@ def _ensure_source_total_counts(
         source_total_counts.index.name = SOURCE_SPEC.PATHWAY_ID
 
     # index should be character and values should be integerish
-    if not source_total_counts.index.dtype == "object":
+    if not pd.api.types.is_string_dtype(source_total_counts.index):
         raise ValueError(
             f"source_total_counts index must be a string, but got {source_total_counts.index.dtype}"
         )

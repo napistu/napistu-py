@@ -371,9 +371,9 @@ def _binarize_species_data(species_data: pd.DataFrame) -> pd.DataFrame:
     """
     binary_series = []
     for c in species_data.columns:
-        if species_data[c].dtype == "bool":
+        if pd.api.types.is_bool_dtype(species_data[c]):
             binary_series.append(species_data[c].astype(int))
-        elif species_data[c].dtype == "int64":
+        elif pd.api.types.is_integer_dtype(species_data[c]):
             if species_data[c].isin([0, 1]).all():
                 binary_series.append(species_data[c])
             else:
