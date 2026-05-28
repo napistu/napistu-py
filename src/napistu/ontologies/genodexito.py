@@ -420,7 +420,7 @@ class Genodexito:
         # Check that all identifiers are strings
         for ontology, df in self.mappings.items():
             # Check index (which should be NCBI_ENTREZ_GENE)
-            if not df.index.dtype == "object":
+            if not pd.api.types.is_string_dtype(df.index):
                 raise TypeError(
                     f"Index of mapping table for {ontology} contains non-string values. "
                     f"Found type: {df.index.dtype}"
@@ -428,7 +428,7 @@ class Genodexito:
 
             # Check all columns
             for col in df.columns:
-                if not df[col].dtype == "object":
+                if not pd.api.types.is_string_dtype(df[col]):
                     raise TypeError(
                         f"Column {col} in mapping table for {ontology} contains non-string values. "
                         f"Found type: {df[col].dtype}"

@@ -169,7 +169,7 @@ def _create_left_align_formatters(df):
     formatters = {}
     for col in df.columns:
         # Only apply to object/string columns
-        if df[col].dtype == "object":
+        if pd.api.types.is_string_dtype(df[col]):
             # Calculate max width for this column
             if len(df) > 0:
                 content_max = df[col].astype(str).str.len().max()
