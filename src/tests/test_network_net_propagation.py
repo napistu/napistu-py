@@ -63,6 +63,7 @@ def test_melt_propagation_results():
     )
 
 
+@pytest.mark.requires_torch
 def test_network_propagation_with_null():
     """Test the main orchestrator function with different null strategies."""
     # Create test graph
@@ -278,6 +279,7 @@ def test_network_propagation_repeated_requires_ge_2_runs_and_rejects_uniform():
         )
 
 
+@pytest.mark.requires_torch
 def test_network_propagation_repeated_multiple_runs():
     """Repeated calls produce merged outputs with consistent shape."""
     graph = ig.Graph(4)
@@ -355,6 +357,21 @@ def test_net_propagate_attributes():
         net_propagate_attributes(graph, ["zero_attr"])
 
 
+def test_net_propagate_attributes_verbose(caplog):
+    graph = ig.Graph(3)
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C"]
+    graph.vs["attr1"] = [1.0, 0.0, 2.0]
+    graph.vs["attr2"] = [0.5, 1.5, 0.0]
+    graph.add_edges([(0, 1), (1, 2)])
+
+    with caplog.at_level(logging.INFO):
+        net_propagate_attributes(graph, ["attr1", "attr2"], verbose=True)
+
+    assert "Propagating attribute 1/2: 'attr1'" in caplog.text
+    assert "Propagating attribute 2/2: 'attr2'" in caplog.text
+
+
+@pytest.mark.requires_torch
 def test_all_null_generators_structure():
     """Test all null generators with default options and validate output structure."""
     # Create test graph with edges for realistic propagation
@@ -441,6 +458,7 @@ def test_all_null_generators_structure():
                 ), f"{generator_name} sample {i} doesn't sum to 1"
 
 
+@pytest.mark.requires_torch
 def test_mask_application():
     """Test that masks are correctly applied across all null generators."""
     # Create test graph
@@ -488,6 +506,7 @@ def test_mask_application():
             assert result.shape == (12, 2)  # 2 samples * 6 nodes
 
 
+@pytest.mark.requires_torch
 def test_edge_cases_and_errors():
     """Test edge cases and error conditions for null generators."""
     # Create minimal test graph
@@ -531,6 +550,7 @@ def test_edge_cases_and_errors():
     assert result_no_replace.shape == result_replace.shape
 
 
+@pytest.mark.requires_torch
 def test_propagation_method_parameters():
     """Test that propagation method and additional arguments are properly passed through."""
     # Create test graph
@@ -647,6 +667,7 @@ def test_compute_log2_enrichment():
         _compute_log2_enrichment(observed, null_with_nan)
 
 
+@pytest.mark.requires_torch
 def test_log2_enrichment_reflects_signal_concentration():
     """Vertices receiving concentrated signal should have higher log2_enrichment."""
     graph = ig.Graph(6, directed=True)
@@ -672,6 +693,7 @@ def test_log2_enrichment_reflects_signal_concentration():
     ), "Convergence point should be more enriched than conduit"
 
 
+@pytest.mark.requires_torch
 def test_observed_scores_invariant_to_null_strategy():
     """Observed scores should be identical regardless of null strategy."""
     graph = ig.Graph(5)
@@ -696,6 +718,7 @@ def test_observed_scores_invariant_to_null_strategy():
     )
 
 
+@pytest.mark.requires_torch
 def test_pooled_null_methods(caplog):
     """Coverage for pooled_vertex_permutation and attr_pooled_vertex_permutation."""
     graph = ig.Graph(6)

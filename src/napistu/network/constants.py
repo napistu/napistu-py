@@ -292,6 +292,12 @@ SOURCE_VARS_DICT = {"string_wt": 10}
 # network propagation
 NET_PROPAGATION_DEFS = SimpleNamespace(PERSONALIZED_PAGERANK="personalized_pagerank")
 
+NET_PROPAGATION_BACKENDS = SimpleNamespace(
+    IGRAPH="igraph",
+    TORCH="torch",
+)
+VALID_NET_PROPAGATION_BACKENDS = list(NET_PROPAGATION_BACKENDS.__dict__.values())
+
 NET_PROPAGATION_METRICS = SimpleNamespace(
     OBSERVED="observed",
     QUANTILE="quantile",

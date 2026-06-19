@@ -15,4 +15,5 @@ lint.ignore = ["E501"]
 [tool.pytest.ini_options]
 filterwarnings = [
     "ignore:Deprecated call to `pkg_resources.declare_namespace.*:DeprecationWarning",
+    "ignore:Sparse CSR tensor support is in beta state.*:UserWarning",
 ]

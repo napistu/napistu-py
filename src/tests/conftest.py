@@ -565,6 +565,9 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "unix_only: mark test to run only on Unix/Linux systems"
     )
+    config.addinivalue_line(
+        "markers", "requires_torch: mark test to skip if torch is not installed"
+    )
 
 
 # Define platform conditions
@@ -588,6 +591,13 @@ def pytest_runtest_setup(item):
     # Skip tests that should run only on Unix
     if not is_unix and any(mark.name == "unix_only" for mark in item.iter_markers()):
         skip("Test runs only on Unix systems")
+
+    # Skip tests that require torch when it is not installed
+    if any(mark.name == "requires_torch" for mark in item.iter_markers()):
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            skip("torch not installed (pip install napistu[torch])")
 
 
 def skip_on_timeout(timeout_seconds):
