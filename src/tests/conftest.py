@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import os
+import pickle
 import sys
 import threading
 from datetime import datetime
@@ -59,14 +60,23 @@ def sbml_path(test_data_path):
 
 @fixture
 def sbml_model(sbml_path):
-    sbml_model = SBML(sbml_path)
-    return sbml_model
+    try:
+        return SBML(sbml_path)
+    except ImportError:
+        skip("libsbml required for sbml_model fixture (pip install napistu[etl])")
 
 
 @fixture
-def sbml_dfs(sbml_model, model_source_stub):
-    sbml_dfs = SBML_dfs(sbml_model, model_source=model_source_stub)
-    return sbml_dfs
+def sbml_dfs(test_data_path, model_source_stub):
+    """Single-pathway SBML_dfs from R-HSA-1237044, with pickle fallback when libsbml is absent."""
+    pickle_path = os.path.join(test_data_path, "sbml_dfs.pkl")
+    sbml_path = os.path.join(test_data_path, "R-HSA-1237044.sbml")
+    try:
+        return SBML_dfs(SBML(sbml_path), model_source=model_source_stub)
+    except ImportError:
+        if not os.path.isfile(pickle_path):
+            raise
+        return SBML_dfs.from_pickle(pickle_path)
 
 
 @fixture
@@ -117,25 +127,41 @@ def pw_index_metabolism(test_data_path):
 
 
 @fixture
-def sbml_dfs_dict_metabolism(pw_index_metabolism):
-    """Create a dictionary of SBML_dfs objects from metabolism test data."""
-    return construct_sbml_dfs_dict(pw_index_metabolism)
+def sbml_dfs_dict_metabolism(pw_index_metabolism, test_data_path):
+    """Dictionary of SBML_dfs objects from metabolism test data."""
+    pickle_path = os.path.join(test_data_path, "sbml_dfs_dict_metabolism.pkl")
+    try:
+        return construct_sbml_dfs_dict(pw_index_metabolism)
+    except ImportError:
+        if not os.path.isfile(pickle_path):
+            raise
+        with open(pickle_path, "rb") as f:
+            return pickle.load(f)
 
 
 @fixture
-def sbml_dfs_metabolism(sbml_dfs_dict_metabolism, pw_index_metabolism):
-    """Create a consensus SBML_dfs model from metabolism test data."""
-    return construct_consensus_model(sbml_dfs_dict_metabolism, pw_index_metabolism)
+def sbml_dfs_metabolism(pw_index_metabolism, test_data_path):
+    """Consensus SBML_dfs model from metabolism test data."""
+    pickle_path = os.path.join(test_data_path, "sbml_dfs_metabolism.pkl")
+    try:
+        sbml_dfs_dict = construct_sbml_dfs_dict(pw_index_metabolism)
+        return construct_consensus_model(sbml_dfs_dict, pw_index_metabolism)
+    except ImportError:
+        if not os.path.isfile(pickle_path):
+            raise
+        return SBML_dfs.from_pickle(pickle_path)
 
 
 @fixture
 def sbml_dfs_glucose_metabolism(test_data_path, model_source_stub):
+    pickle_path = os.path.join(test_data_path, "sbml_dfs_glucose_metabolism.pkl")
     sbml_path = os.path.join(test_data_path, "reactome_glucose_metabolism.sbml")
-
-    sbml_model = SBML(sbml_path)
-    sbml_dfs = SBML_dfs(sbml_model, model_source_stub)
-
-    return sbml_dfs
+    try:
+        return SBML_dfs(SBML(sbml_path), model_source_stub)
+    except ImportError:
+        if not os.path.isfile(pickle_path):
+            raise
+        return SBML_dfs.from_pickle(pickle_path)
 
 
 @pytest.fixture
