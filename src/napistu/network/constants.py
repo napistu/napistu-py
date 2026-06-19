@@ -292,6 +292,14 @@ SOURCE_VARS_DICT = {"string_wt": 10}
 # network propagation
 NET_PROPAGATION_DEFS = SimpleNamespace(PERSONALIZED_PAGERANK="personalized_pagerank")
 
+NETPROPAGATION_ADDITIONAL_ARGS = SimpleNamespace(
+    DAMPING="damping",
+)
+
+NETPROPAGATION_DEFAULTS = SimpleNamespace(
+    DAMPING=0.85,
+)
+
 NET_PROPAGATION_BACKENDS = SimpleNamespace(
     IGRAPH="igraph",
     TORCH="torch",

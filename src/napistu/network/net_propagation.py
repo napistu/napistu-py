@@ -36,9 +36,10 @@ from napistu.network.constants import (
     NET_PROPAGATION_BACKENDS,
     NET_PROPAGATION_DEFS,
     NET_PROPAGATION_METRICS,
+    NETPROPAGATION_ADDITIONAL_ARGS,
+    NETPROPAGATION_DEFAULTS,
     NULL_STRATEGIES,
     PARAMETRIC_NULL_DEFAULT_DISTRIBUTION,
-    VALID_NET_PROPAGATION_BACKENDS,
     VALID_NET_PROPAGATION_METRICS,
     VALID_NULL_STRATEGIES,
 )
@@ -381,10 +382,11 @@ def network_propagation_with_null(
             f"got {quantile_method!r}"
         )
 
-    if backend not in VALID_NET_PROPAGATION_BACKENDS:
+    propagation_method = _ensure_propagation_method(propagation_method)
+    if backend not in propagation_method.supported_backends:
         raise ValueError(
-            f"backend must be one of {sorted(VALID_NET_PROPAGATION_BACKENDS)}, "
-            f"got {backend!r}"
+            f"backend={backend!r} is not supported by this propagation method. "
+            f"Supported backends: {sorted(propagation_method.supported_backends)}"
         )
 
     # 1. Calculate observed propagated scores
@@ -686,6 +688,97 @@ def _batch_ppr_propagate(
     return _batch_ppr_propagate_torch(WT, P, damping, dangling_mask, tol, max_iter, device)
 
 
+def _prepare_torch_batch(
+    graph: ig.Graph,
+    propagation_method: "PropagationMethod",
+    backend: str,
+    additional_propagation_args: Optional[dict],
+) -> Optional[tuple]:
+    """Validate backend and prepare torch batch inputs if applicable.
+
+    Parameters
+    ----------
+    graph : ig.Graph
+        Graph to extract the transition matrix from.
+    propagation_method : PropagationMethod
+        Already-resolved propagation method.
+    backend : str
+        Requested backend. Must appear in propagation_method.supported_backends.
+    additional_propagation_args : dict, optional
+        Propagation kwargs; used to extract the damping factor.
+
+    Returns
+    -------
+    None
+        When backend is 'igraph' — caller should use the serial path.
+    (WT, dangling_mask, damping) : tuple
+        When backend is 'torch' and the method is fully wired.
+
+    Raises
+    ------
+    ValueError
+        If backend is not in propagation_method.supported_backends.
+    NotImplementedError
+        If backend is 'torch' but extract_transition_matrix or batch_method
+        are not implemented on the propagation method.
+    """
+    if backend not in propagation_method.supported_backends:
+        raise ValueError(
+            f"backend={backend!r} is not supported by this propagation method. "
+            f"Supported backends: {sorted(propagation_method.supported_backends)}"
+        )
+    if backend == NET_PROPAGATION_BACKENDS.IGRAPH:
+        return None
+    if backend == NET_PROPAGATION_BACKENDS.TORCH:
+        if (
+            propagation_method.extract_transition_matrix is None
+            or propagation_method.batch_method is None
+        ):
+            raise NotImplementedError(
+                f"backend={backend!r} is listed in supported_backends but "
+                "extract_transition_matrix or batch_method is not implemented "
+                "on this propagation method."
+            )
+        WT, dangling_mask = propagation_method.extract_transition_matrix(graph)
+        damping = (additional_propagation_args or {}).get(
+            NETPROPAGATION_ADDITIONAL_ARGS.DAMPING, NETPROPAGATION_DEFAULTS.DAMPING
+        )
+        return WT, dangling_mask, damping
+    raise NotImplementedError(
+        f"No batch preparation is implemented for backend={backend!r}."
+    )
+
+
+def _null_df_from_blocks(
+    blocks: list,
+    node_names: list,
+    n_samples: int,
+    attributes: List[str],
+) -> pd.DataFrame:
+    """Assemble a null DataFrame from a list of (n_nodes, n_attributes) blocks."""
+    return pd.DataFrame(
+        np.vstack(blocks), index=node_names * n_samples, columns=attributes
+    )
+
+
+def _null_df_from_R_broadcast(
+    R: np.ndarray,
+    n_samples: int,
+    n_attributes: int,
+    node_names: list,
+    attributes: List[str],
+) -> pd.DataFrame:
+    """Assemble a null DataFrame by tiling each single column of R across n_attributes.
+
+    Used by null generators that produce one propagated vector per sample and
+    broadcast it across all attribute columns (pooled and attr-pooled variants).
+    """
+    blocks = [np.tile(R[:, s : s + 1], (1, n_attributes)) for s in range(n_samples)]
+    return pd.DataFrame(
+        np.vstack(blocks), index=node_names * n_samples, columns=attributes
+    )
+
+
 _pagerank_method = PropagationMethod(
     method=_pagerank_wrapper,
     non_negative=True,
@@ -855,10 +948,9 @@ def _attr_pooled_vertex_permutation_null(
 
     original_values = {attr: np.array(graph.vs[attr]) for attr in attributes}
 
-    if NET_PROPAGATION_BACKENDS.TORCH in propagation_method.supported_backends and backend == NET_PROPAGATION_BACKENDS.TORCH:
-        WT, dangling_mask = propagation_method.extract_transition_matrix(graph)
-        damping = (additional_propagation_args or {}).get("damping", 0.85)
-        n_nodes = graph.vcount()
+    batch_ctx = _prepare_torch_batch(graph, propagation_method, backend, additional_propagation_args)
+    if batch_ctx is not None:
+        WT, dangling_mask, damping = batch_ctx
         columns = []
         for attr, n_attr_samples in zip(attributes, samples_per_attr):
             if n_attr_samples == 0:
@@ -871,9 +963,7 @@ def _attr_pooled_vertex_permutation_null(
                 columns.append(null_attr_values.astype(np.float32))
         P = np.column_stack(columns)
         R = propagation_method.batch_method(WT, P, damping, dangling_mask, device=device)
-        blocks = [np.tile(R[:, s:s+1], (1, n_attributes)) for s in range(n_samples)]
-        full_index = node_names * n_samples
-        return pd.DataFrame(np.vstack(blocks), index=full_index, columns=attributes)
+        return _null_df_from_R_broadcast(R, n_samples, n_attributes, node_names, attributes)
 
     all_results = []
 
@@ -1337,12 +1427,11 @@ def _parametric_null(
     # Create null graph once (will overwrite attributes in each sample)
     null_graph = graph.copy()
 
-    if NET_PROPAGATION_BACKENDS.TORCH in propagation_method.supported_backends and backend == NET_PROPAGATION_BACKENDS.TORCH:
-        WT, dangling_mask = propagation_method.extract_transition_matrix(graph)
-        damping = (additional_propagation_args or {}).get("damping", 0.85)
-        n_nodes = graph.vcount()
+    batch_ctx = _prepare_torch_batch(graph, propagation_method, backend, additional_propagation_args)
+    if batch_ctx is not None:
+        WT, dangling_mask, damping = batch_ctx
         n_attributes = len(attributes)
-        samples_per_chunk = max(1, _batch_ppr_chunk_size(n_nodes) // n_attributes)
+        samples_per_chunk = max(1, _batch_ppr_chunk_size(graph.vcount()) // n_attributes)
 
         all_blocks = []
         for chunk_start in range(0, n_samples, samples_per_chunk):
@@ -1357,11 +1446,9 @@ def _parametric_null(
                     columns.append(np.array(null_graph.vs[attr], dtype=np.float32))
             P = np.column_stack(columns)
             R = propagation_method.batch_method(WT, P, damping, dangling_mask, device=device)
-            for s in range(chunk_n):
-                all_blocks.append(R[:, s * n_attributes:(s + 1) * n_attributes])
+            all_blocks.extend(R[:, s * n_attributes:(s + 1) * n_attributes] for s in range(chunk_n))
 
-        full_index = node_names * n_samples
-        return pd.DataFrame(np.vstack(all_blocks), index=full_index, columns=attributes)
+        return _null_df_from_blocks(all_blocks, node_names, n_samples, attributes)
 
     all_results = []
 
@@ -1483,22 +1570,19 @@ def _pooled_vertex_permutation_null(
     n_attributes = len(attributes)
     _POOLED_ATTR = "__pooled_null__"
 
-    if NET_PROPAGATION_BACKENDS.TORCH in propagation_method.supported_backends and backend == NET_PROPAGATION_BACKENDS.TORCH:
-        WT, dangling_mask = propagation_method.extract_transition_matrix(graph)
-        damping = (additional_propagation_args or {}).get("damping", 0.85)
-        n_nodes = graph.vcount()
+    batch_ctx = _prepare_torch_batch(graph, propagation_method, backend, additional_propagation_args)
+    if batch_ctx is not None:
+        WT, dangling_mask, damping = batch_ctx
         masked_indices = np.where(shared_mask)[0]
         columns = []
         for _ in range(n_samples):
             sampled_values = np.random.choice(universe, size=n_masked, replace=True)
-            p = np.zeros(n_nodes, dtype=np.float32)
+            p = np.zeros(graph.vcount(), dtype=np.float32)
             p[masked_indices] = sampled_values
             columns.append(p)
         P = np.column_stack(columns)
         R = propagation_method.batch_method(WT, P, damping, dangling_mask, device=device)
-        blocks = [np.tile(R[:, s:s+1], (1, n_attributes)) for s in range(n_samples)]
-        full_index = node_names * n_samples
-        return pd.DataFrame(np.vstack(blocks), index=full_index, columns=attributes)
+        return _null_df_from_R_broadcast(R, n_samples, n_attributes, node_names, attributes)
 
     all_results = []
 
@@ -1787,12 +1871,11 @@ def _vertex_permutation_null(
 
     original_values = {attr: np.array(graph.vs[attr]) for attr in attributes}
 
-    if NET_PROPAGATION_BACKENDS.TORCH in propagation_method.supported_backends and backend == NET_PROPAGATION_BACKENDS.TORCH:
-        WT, dangling_mask = propagation_method.extract_transition_matrix(graph)
-        damping = (additional_propagation_args or {}).get("damping", 0.85)
-        n_nodes = graph.vcount()
+    batch_ctx = _prepare_torch_batch(graph, propagation_method, backend, additional_propagation_args)
+    if batch_ctx is not None:
+        WT, dangling_mask, damping = batch_ctx
         n_attributes = len(attributes)
-        samples_per_chunk = max(1, _batch_ppr_chunk_size(n_nodes) // n_attributes)
+        samples_per_chunk = max(1, _batch_ppr_chunk_size(graph.vcount()) // n_attributes)
 
         all_blocks = []
         for chunk_start in range(0, n_samples, samples_per_chunk):
@@ -1803,19 +1886,18 @@ def _vertex_permutation_null(
                     masked_indices = np.where(masks[attr])[0]
                     masked_values = original_values[attr][masked_indices]
                     null_attr_values = original_values[attr].copy()
-                    if replace:
-                        permuted = np.random.choice(masked_values, size=len(masked_values), replace=True)
-                    else:
-                        permuted = np.random.permutation(masked_values)
+                    permuted = (
+                        np.random.choice(masked_values, size=len(masked_values), replace=True)
+                        if replace
+                        else np.random.permutation(masked_values)
+                    )
                     null_attr_values[masked_indices] = permuted
                     columns.append(null_attr_values.astype(np.float32))
             P = np.column_stack(columns)
             R = propagation_method.batch_method(WT, P, damping, dangling_mask, device=device)
-            for s in range(chunk_n):
-                all_blocks.append(R[:, s * n_attributes:(s + 1) * n_attributes])
+            all_blocks.extend(R[:, s * n_attributes:(s + 1) * n_attributes] for s in range(chunk_n))
 
-        full_index = node_names * n_samples
-        return pd.DataFrame(np.vstack(all_blocks), index=full_index, columns=attributes)
+        return _null_df_from_blocks(all_blocks, node_names, n_samples, attributes)
 
     all_results = []
 
