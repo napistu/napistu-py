@@ -39,6 +39,7 @@ from igraph import Graph
 from napistu.network.constants import (
     IGRAPH_DEFS,
     NAPISTU_GRAPH_EDGES,
+    NET_PROPAGATION_DEFAULTS,
     UNIVERSE_GATES,
     VALID_UNIVERSE_GATES,
 )
@@ -1031,6 +1032,17 @@ def _print_mask_input_result(masks):
     Shows each attribute and its corresponding mask specification.
     """
 
-    logger.info("Mask input parsing result:")
-    for attr, spec in masks.items():
-        logger.info(f"  Attribute: {attr!r} -> Mask spec: {repr(spec)}")
+    attrs = list(masks.items())
+    n_attributes = len(attrs)
+    logger.info(f"Mask input parsing result ({n_attributes} attributes):")
+    for i, (attr, spec) in enumerate(attrs):
+        step = i + 1
+        message = f"  Attribute: {attr!r} -> Mask spec: {repr(spec)}"
+        if (
+            step == 1
+            or step == n_attributes
+            or step % NET_PROPAGATION_DEFAULTS.LOG_PROGRESS_INTERVAL == 0
+        ):
+            logger.info(message)
+        else:
+            logger.debug(message)

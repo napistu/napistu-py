@@ -292,12 +292,13 @@ SOURCE_VARS_DICT = {"string_wt": 10}
 # network propagation
 NET_PROPAGATION_DEFS = SimpleNamespace(PERSONALIZED_PAGERANK="personalized_pagerank")
 
-NETPROPAGATION_ADDITIONAL_ARGS = SimpleNamespace(
+NET_PROPAGATION_ADDITIONAL_ARGS = SimpleNamespace(
     DAMPING="damping",
 )
 
-NETPROPAGATION_DEFAULTS = SimpleNamespace(
+NET_PROPAGATION_DEFAULTS = SimpleNamespace(
     DAMPING=0.85,
+    LOG_PROGRESS_INTERVAL=10,
 )
 
 NET_PROPAGATION_BACKENDS = SimpleNamespace(
