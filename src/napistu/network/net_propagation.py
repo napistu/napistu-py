@@ -20,6 +20,7 @@ network_propagation_with_null_repeated(..., n_runs=...)
 """
 
 import logging
+import warnings
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
 
@@ -33,11 +34,11 @@ from napistu.network.constants import (
     LOG2_ENRICHMENT_EPSILON,
     MASK_KEYWORDS,
     NAPISTU_GRAPH_VERTICES,
+    NET_PROPAGATION_ADDITIONAL_ARGS,
     NET_PROPAGATION_BACKENDS,
+    NET_PROPAGATION_DEFAULTS,
     NET_PROPAGATION_DEFS,
     NET_PROPAGATION_METRICS,
-    NETPROPAGATION_ADDITIONAL_ARGS,
-    NETPROPAGATION_DEFAULTS,
     NULL_STRATEGIES,
     PARAMETRIC_NULL_DEFAULT_DISTRIBUTION,
     VALID_NET_PROPAGATION_METRICS,
@@ -55,6 +56,23 @@ from napistu.utils.pd_utils import downcast_float_dataframe
 from napistu.utils.torch_utils import ensure_device, memory_manager
 
 logger = logging.getLogger(__name__)
+
+
+def _log_step_progress(
+    verbose: bool,
+    step: int,
+    total: int,
+    message: str,
+    *,
+    info_interval: int = NET_PROPAGATION_DEFAULTS.LOG_PROGRESS_INTERVAL,
+) -> None:
+    """Log at INFO on first, last, and every info_interval steps; otherwise DEBUG."""
+    if not verbose:
+        return
+    if step == 1 or step == total or step % info_interval == 0:
+        logger.info(message)
+    else:
+        logger.debug(message)
 
 
 @dataclass
@@ -169,7 +187,8 @@ def net_propagate_attributes(
     additional_propagation_args : dict, optional
         Additional arguments to pass to the network propagation method.
     verbose : bool, optional
-        If True, log one message per attribute as it is propagated. Default is False.
+        If True, log propagation progress. Emits INFO for the first, last, and every
+        10th attribute; intermediate attributes are logged at DEBUG. Default is False.
 
     Returns
     -------
@@ -187,10 +206,12 @@ def net_propagate_attributes(
     results = []
     n_attributes = len(attributes)
     for i, attr in enumerate(attributes):
-        if verbose:
-            logger.info(
-                f"Propagating attribute {i + 1}/{n_attributes}: {attr!r}"
-            )
+        _log_step_progress(
+            verbose,
+            i + 1,
+            n_attributes,
+            f"Propagating attribute {i + 1}/{n_attributes}: {attr!r}",
+        )
         # Validate attributes
         attr_data = _ensure_valid_attribute(
             graph, attr, non_negative=propagation_method.non_negative
@@ -425,6 +446,11 @@ def network_propagation_with_null(
         )
 
     else:
+        if verbose:
+            logger.info(
+                f"Generating null distribution ({null_strategy}, "
+                f"n_samples={n_samples}, n_attributes={len(attributes)})"
+            )
         null_distribution = null_generator(
             graph=graph,
             attributes=attributes,
@@ -702,11 +728,18 @@ def _attr_pooled_vertex_permutation_null(
 
     samples_per_attr = _allocate_samples_across_attributes(n_samples, n_attributes)
 
-    original_values = {attr: np.array(graph.vs[attr]) for attr in attributes}
+    original_values = {attr: _attr_to_array(graph, attr) for attr in attributes}
 
-    batch_ctx = _prepare_torch_batch(graph, propagation_method, backend, additional_propagation_args)
+    batch_ctx = _prepare_torch_batch(
+        graph, propagation_method, backend, additional_propagation_args
+    )
     if batch_ctx is not None:
         WT, dangling_mask, damping = batch_ctx
+        if verbose:
+            logger.info(
+                f"Null attr-pooled permutation: generating {n_samples} samples "
+                f"across {n_attributes} attributes (torch batch)"
+            )
         columns = []
         for attr, n_attr_samples in zip(attributes, samples_per_attr):
             if n_attr_samples == 0:
@@ -718,14 +751,28 @@ def _attr_pooled_vertex_permutation_null(
                 null_attr_values[masked_indices] = np.random.permutation(masked_values)
                 columns.append(null_attr_values.astype(np.float32))
         P = np.column_stack(columns)
-        R = propagation_method.batch_method(WT, P, damping, dangling_mask, device=device)
-        return _null_df_from_R_broadcast(R, n_samples, n_attributes, node_names, attributes)
+        R = propagation_method.batch_method(
+            WT, P, damping, dangling_mask, device=device
+        )
+        return _null_df_from_R_broadcast(
+            R, n_samples, n_attributes, node_names, attributes
+        )
 
     all_results = []
 
-    for attr, n_attr_samples in zip(attributes, samples_per_attr):
+    for attr_idx, (attr, n_attr_samples) in enumerate(
+        zip(attributes, samples_per_attr), start=1
+    ):
         if n_attr_samples == 0:
             continue
+
+        _log_step_progress(
+            verbose,
+            attr_idx,
+            n_attributes,
+            f"Null attr-pooled permutation: attribute {attr_idx}/{n_attributes}: "
+            f"{attr!r} ({n_attr_samples} samples)",
+        )
 
         attr_values = original_values[attr]
         masked_values = attr_values[masked_indices]
@@ -749,6 +796,11 @@ def _attr_pooled_vertex_permutation_null(
     full_index = node_names * n_samples
     all_data = np.vstack(all_results)
     return pd.DataFrame(all_data, index=full_index, columns=attributes)
+
+
+def _attr_to_array(graph: ig.Graph, attr: str) -> np.ndarray:
+    """Return a vertex attribute as a float64 array, replacing None with 0.0."""
+    return np.array([v if v is not None else 0.0 for v in graph.vs[attr]], dtype=float)
 
 
 def _batch_ppr_chunk_size(n_nodes: int, target_bytes: int = 400 * 1024 * 1024) -> int:
@@ -801,7 +853,9 @@ def _batch_ppr_propagate(
     col_sums = np.where(col_sums == 0, 1.0, col_sums)
     P = P / col_sums[np.newaxis, :]
 
-    return _batch_ppr_propagate_torch(WT, P, damping, dangling_mask, tol, max_iter, device)
+    return _batch_ppr_propagate_torch(
+        WT, P, damping, dangling_mask, tol, max_iter, device
+    )
 
 
 @require_torch
@@ -821,12 +875,18 @@ def _batch_ppr_propagate_torch(
     one_minus_d = float(1.0 - damping)
     has_dangling = dangling_mask.any()
 
-    WT_torch = torch.sparse_csr_tensor(
-        torch.from_numpy(WT.indptr.astype(np.int64)),
-        torch.from_numpy(WT.indices.astype(np.int64)),
-        torch.from_numpy(WT.data.astype(np.float32)),
-        size=WT.shape,
-    )
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="Sparse CSR tensor support is in beta state.*",
+            category=UserWarning,
+        )
+        WT_torch = torch.sparse_csr_tensor(
+            torch.from_numpy(WT.indptr.astype(np.int64)),
+            torch.from_numpy(WT.indices.astype(np.int64)),
+            torch.from_numpy(WT.data.astype(np.float32)),
+            size=WT.shape,
+        )
 
     with memory_manager(dev):
         P_dev = torch.from_numpy(P).to(dev)
@@ -839,7 +899,11 @@ def _batch_ppr_propagate_torch(
             WTR = torch.sparse.mm(WT_torch, R_dev.cpu()).to(dev)
             if has_dangling:
                 dangling_sum = R_dev[dangling_idx].sum(dim=0)
-                R_new = damping * WTR + damping * P_dev * dangling_sum.unsqueeze(0) + one_minus_d * P_dev
+                R_new = (
+                    damping * WTR
+                    + damping * P_dev * dangling_sum.unsqueeze(0)
+                    + one_minus_d * P_dev
+                )
             else:
                 R_new = damping * WTR + one_minus_d * P_dev
 
@@ -863,7 +927,7 @@ def _build_pooled_universe(
     """
     universe_parts = []
     for attr in attributes:
-        attr_values = np.array(graph.vs[attr])
+        attr_values = _attr_to_array(graph, attr)
         masked_values = attr_values[mask]
         universe_parts.append(masked_values)
 
@@ -1001,7 +1065,13 @@ def _edge_permutation_null(
     all_results = []
 
     # Generate samples
-    for _ in range(n_samples):
+    for sample_idx in range(1, n_samples + 1):
+        _log_step_progress(
+            verbose,
+            sample_idx,
+            n_samples,
+            f"Null edge permutation: sample {sample_idx}/{n_samples}",
+        )
         # Incremental rewiring
         null_graph.rewire(n=int(sampling_ratio * n_edges))
 
@@ -1066,7 +1136,7 @@ def _fit_distribution_parameters(
 
     for attr in attributes:
         attr_mask = masks[attr]
-        attr_values = np.array(graph.vs[attr])
+        attr_values = _attr_to_array(graph, attr)
         masked_values = attr_values[attr_mask]
         masked_nonzero = masked_values[masked_values > 0]
 
@@ -1362,33 +1432,59 @@ def _parametric_null(
     # Create null graph once (will overwrite attributes in each sample)
     null_graph = graph.copy()
 
-    batch_ctx = _prepare_torch_batch(graph, propagation_method, backend, additional_propagation_args)
+    batch_ctx = _prepare_torch_batch(
+        graph, propagation_method, backend, additional_propagation_args
+    )
     if batch_ctx is not None:
         WT, dangling_mask, damping = batch_ctx
         n_attributes = len(attributes)
-        samples_per_chunk = max(1, _batch_ppr_chunk_size(graph.vcount()) // n_attributes)
+        samples_per_chunk = max(
+            1, _batch_ppr_chunk_size(graph.vcount()) // n_attributes
+        )
 
         all_blocks = []
-        for chunk_start in range(0, n_samples, samples_per_chunk):
+        n_chunks = (n_samples + samples_per_chunk - 1) // samples_per_chunk
+        for chunk_idx, chunk_start in enumerate(
+            range(0, n_samples, samples_per_chunk), start=1
+        ):
             chunk_n = min(samples_per_chunk, n_samples - chunk_start)
+            _log_step_progress(
+                verbose,
+                chunk_idx,
+                n_chunks,
+                f"Null parametric distribution: chunk {chunk_idx}/{n_chunks} "
+                f"(samples {chunk_start + 1}-{chunk_start + chunk_n} of {n_samples})",
+            )
             columns = []
             for _ in range(chunk_n):
                 _generate_parametric_null_sample(
-                    null_graph, attributes, params,
+                    null_graph,
+                    attributes,
+                    params,
                     ensure_nonnegative=propagation_method.non_negative,
                 )
                 for attr in attributes:
                     columns.append(np.array(null_graph.vs[attr], dtype=np.float32))
             P = np.column_stack(columns)
-            R = propagation_method.batch_method(WT, P, damping, dangling_mask, device=device)
-            all_blocks.extend(R[:, s * n_attributes:(s + 1) * n_attributes] for s in range(chunk_n))
+            R = propagation_method.batch_method(
+                WT, P, damping, dangling_mask, device=device
+            )
+            all_blocks.extend(
+                R[:, s * n_attributes : (s + 1) * n_attributes] for s in range(chunk_n)
+            )
 
         return _null_df_from_blocks(all_blocks, node_names, n_samples, attributes)
 
     all_results = []
 
     # Generate samples
-    for i in range(n_samples):
+    for sample_idx in range(1, n_samples + 1):
+        _log_step_progress(
+            verbose,
+            sample_idx,
+            n_samples,
+            f"Null parametric distribution: sample {sample_idx}/{n_samples}",
+        )
         # Generate null sample (modifies null_graph in-place)
         _generate_parametric_null_sample(
             null_graph,
@@ -1505,9 +1601,16 @@ def _pooled_vertex_permutation_null(
     n_attributes = len(attributes)
     _POOLED_ATTR = "__pooled_null__"
 
-    batch_ctx = _prepare_torch_batch(graph, propagation_method, backend, additional_propagation_args)
+    batch_ctx = _prepare_torch_batch(
+        graph, propagation_method, backend, additional_propagation_args
+    )
     if batch_ctx is not None:
         WT, dangling_mask, damping = batch_ctx
+        if verbose:
+            logger.info(
+                f"Null pooled vertex permutation: generating {n_samples} samples "
+                f"(torch batch)"
+            )
         masked_indices = np.where(shared_mask)[0]
         columns = []
         for _ in range(n_samples):
@@ -1516,12 +1619,22 @@ def _pooled_vertex_permutation_null(
             p[masked_indices] = sampled_values
             columns.append(p)
         P = np.column_stack(columns)
-        R = propagation_method.batch_method(WT, P, damping, dangling_mask, device=device)
-        return _null_df_from_R_broadcast(R, n_samples, n_attributes, node_names, attributes)
+        R = propagation_method.batch_method(
+            WT, P, damping, dangling_mask, device=device
+        )
+        return _null_df_from_R_broadcast(
+            R, n_samples, n_attributes, node_names, attributes
+        )
 
     all_results = []
 
-    for _ in range(n_samples):
+    for sample_idx in range(1, n_samples + 1):
+        _log_step_progress(
+            verbose,
+            sample_idx,
+            n_samples,
+            f"Null pooled vertex permutation: sample {sample_idx}/{n_samples}",
+        )
         sampled_values = np.random.choice(universe, size=n_masked, replace=True)
 
         null_attr_values = np.zeros(graph.vcount())
@@ -1595,7 +1708,7 @@ def _prepare_torch_batch(
             )
         WT, dangling_mask = propagation_method.extract_transition_matrix(graph)
         damping = (additional_propagation_args or {}).get(
-            NETPROPAGATION_ADDITIONAL_ARGS.DAMPING, NETPROPAGATION_DEFAULTS.DAMPING
+            NET_PROPAGATION_ADDITIONAL_ARGS.DAMPING, NET_PROPAGATION_DEFAULTS.DAMPING
         )
         return WT, dangling_mask, damping
     raise NotImplementedError(
@@ -1765,7 +1878,7 @@ def _uniform_null(
 
         # Check for constant attribute values when mask is the same as attribute
         if isinstance(mask_specs[attr], str) and mask_specs[attr] == attr:
-            attr_values = np.array(graph.vs[attr])
+            attr_values = _attr_to_array(graph, attr)
             nonzero_values = attr_values[attr_values > 0]
             if len(np.unique(nonzero_values)) == 1:
                 logger.warning(
@@ -1865,17 +1978,31 @@ def _vertex_permutation_null(
         require_shared_mask=False,
     )
 
-    original_values = {attr: np.array(graph.vs[attr]) for attr in attributes}
+    original_values = {attr: _attr_to_array(graph, attr) for attr in attributes}
 
-    batch_ctx = _prepare_torch_batch(graph, propagation_method, backend, additional_propagation_args)
+    batch_ctx = _prepare_torch_batch(
+        graph, propagation_method, backend, additional_propagation_args
+    )
     if batch_ctx is not None:
         WT, dangling_mask, damping = batch_ctx
         n_attributes = len(attributes)
-        samples_per_chunk = max(1, _batch_ppr_chunk_size(graph.vcount()) // n_attributes)
+        samples_per_chunk = max(
+            1, _batch_ppr_chunk_size(graph.vcount()) // n_attributes
+        )
 
         all_blocks = []
-        for chunk_start in range(0, n_samples, samples_per_chunk):
+        n_chunks = (n_samples + samples_per_chunk - 1) // samples_per_chunk
+        for chunk_idx, chunk_start in enumerate(
+            range(0, n_samples, samples_per_chunk), start=1
+        ):
             chunk_n = min(samples_per_chunk, n_samples - chunk_start)
+            _log_step_progress(
+                verbose,
+                chunk_idx,
+                n_chunks,
+                f"Null vertex permutation: chunk {chunk_idx}/{n_chunks} "
+                f"(samples {chunk_start + 1}-{chunk_start + chunk_n} of {n_samples})",
+            )
             columns = []
             for _ in range(chunk_n):
                 for attr in attributes:
@@ -1883,21 +2010,33 @@ def _vertex_permutation_null(
                     masked_values = original_values[attr][masked_indices]
                     null_attr_values = original_values[attr].copy()
                     permuted = (
-                        np.random.choice(masked_values, size=len(masked_values), replace=True)
+                        np.random.choice(
+                            masked_values, size=len(masked_values), replace=True
+                        )
                         if replace
                         else np.random.permutation(masked_values)
                     )
                     null_attr_values[masked_indices] = permuted
                     columns.append(null_attr_values.astype(np.float32))
             P = np.column_stack(columns)
-            R = propagation_method.batch_method(WT, P, damping, dangling_mask, device=device)
-            all_blocks.extend(R[:, s * n_attributes:(s + 1) * n_attributes] for s in range(chunk_n))
+            R = propagation_method.batch_method(
+                WT, P, damping, dangling_mask, device=device
+            )
+            all_blocks.extend(
+                R[:, s * n_attributes : (s + 1) * n_attributes] for s in range(chunk_n)
+            )
 
         return _null_df_from_blocks(all_blocks, node_names, n_samples, attributes)
 
     all_results = []
 
-    for _ in range(n_samples):
+    for sample_idx in range(1, n_samples + 1):
+        _log_step_progress(
+            verbose,
+            sample_idx,
+            n_samples,
+            f"Null vertex permutation: sample {sample_idx}/{n_samples}",
+        )
         for attr in attributes:
             attr_mask = masks[attr]
             masked_indices = np.where(attr_mask)[0]
@@ -1932,7 +2071,10 @@ _pagerank_method = PropagationMethod(
     non_negative=True,
     extract_transition_matrix=_extract_ppr_transition_matrix,
     batch_method=_batch_ppr_propagate,
-    supported_backends=(NET_PROPAGATION_BACKENDS.IGRAPH, NET_PROPAGATION_BACKENDS.TORCH),
+    supported_backends=(
+        NET_PROPAGATION_BACKENDS.IGRAPH,
+        NET_PROPAGATION_BACKENDS.TORCH,
+    ),
 )
 NET_PROPAGATION_METHODS: dict[str, PropagationMethod] = {
     NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK: _pagerank_method

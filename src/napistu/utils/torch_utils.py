@@ -19,7 +19,10 @@ select_device(mps_valid)
 import gc
 import logging
 from contextlib import contextmanager
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
+
+if TYPE_CHECKING:
+    import torch
 
 from napistu.utils.constants import DEVICES
 
