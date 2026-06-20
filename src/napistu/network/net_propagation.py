@@ -20,18 +20,23 @@ network_propagation_with_null_repeated(..., n_runs=...)
 """
 
 import logging
+import warnings
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
 
 import igraph as ig
 import numpy as np
 import pandas as pd
+import scipy.sparse
 import scipy.stats as stats
 
 from napistu.network.constants import (
     LOG2_ENRICHMENT_EPSILON,
     MASK_KEYWORDS,
     NAPISTU_GRAPH_VERTICES,
+    NET_PROPAGATION_ADDITIONAL_ARGS,
+    NET_PROPAGATION_BACKENDS,
+    NET_PROPAGATION_DEFAULTS,
     NET_PROPAGATION_DEFS,
     NET_PROPAGATION_METRICS,
     NULL_STRATEGIES,
@@ -46,15 +51,40 @@ from napistu.network.ig_utils import (
 )
 from napistu.statistics.constants import QUANTILE_METHODS, VALID_QUANTILE_METHODS
 from napistu.statistics.quantiles import calculate_quantiles
+from napistu.utils.optional import require_torch
 from napistu.utils.pd_utils import downcast_float_dataframe
+from napistu.utils.torch_utils import ensure_device, memory_manager
 
 logger = logging.getLogger(__name__)
+
+
+def _log_step_progress(
+    verbose: bool,
+    step: int,
+    total: int,
+    message: str,
+    *,
+    info_interval: int = NET_PROPAGATION_DEFAULTS.LOG_PROGRESS_INTERVAL,
+) -> None:
+    """Log at INFO on first, last, and every info_interval steps; otherwise DEBUG."""
+    if not verbose:
+        return
+    if step == 1 or step == total or step % info_interval == 0:
+        logger.info(message)
+    else:
+        logger.debug(message)
 
 
 @dataclass
 class PropagationMethod:
     method: callable
     non_negative: bool
+    extract_transition_matrix: Optional[callable] = None
+    batch_method: Optional[callable] = None
+    supported_backends: tuple = (NET_PROPAGATION_BACKENDS.IGRAPH,)
+
+
+# Public functions
 
 
 def melt_propagation_results(
@@ -141,6 +171,7 @@ def net_propagate_attributes(
         str, PropagationMethod
     ] = NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK,
     additional_propagation_args: Optional[dict] = None,
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
     Propagate multiple attributes over a network using a network propagation method.
@@ -155,6 +186,9 @@ def net_propagate_attributes(
         The network propagation method to use (e.g., 'personalized_pagerank').
     additional_propagation_args : dict, optional
         Additional arguments to pass to the network propagation method.
+    verbose : bool, optional
+        If True, log propagation progress. Emits INFO for the first, last, and every
+        10th attribute; intermediate attributes are logged at DEBUG. Default is False.
 
     Returns
     -------
@@ -170,7 +204,14 @@ def net_propagate_attributes(
         additional_propagation_args = {}
 
     results = []
-    for attr in attributes:
+    n_attributes = len(attributes)
+    for i, attr in enumerate(attributes):
+        _log_step_progress(
+            verbose,
+            i + 1,
+            n_attributes,
+            f"Propagating attribute {i + 1}/{n_attributes}: {attr!r}",
+        )
         # Validate attributes
         attr_data = _ensure_valid_attribute(
             graph, attr, non_negative=propagation_method.non_negative
@@ -204,6 +245,8 @@ def network_propagation_with_null(
     quantile_method: str = QUANTILE_METHODS.DENSE,
     log2_enrichment_epsilon: float = LOG2_ENRICHMENT_EPSILON,
     verbose: bool = False,
+    backend: str = NET_PROPAGATION_BACKENDS.TORCH,
+    device: Optional[str] = None,
     **null_kwargs,
 ) -> pd.DataFrame:
     """
@@ -363,9 +406,20 @@ def network_propagation_with_null(
             f"got {quantile_method!r}"
         )
 
+    propagation_method = _ensure_propagation_method(propagation_method)
+    if backend not in propagation_method.supported_backends:
+        raise ValueError(
+            f"backend={backend!r} is not supported by this propagation method. "
+            f"Supported backends: {sorted(propagation_method.supported_backends)}"
+        )
+
     # 1. Calculate observed propagated scores
     observed_scores = net_propagate_attributes(
-        graph, attributes, propagation_method, additional_propagation_args
+        graph,
+        attributes,
+        propagation_method,
+        additional_propagation_args,
+        verbose=verbose,
     )
 
     # 2. Get null generator function
@@ -378,6 +432,8 @@ def network_propagation_with_null(
             attributes=attributes,
             propagation_method=propagation_method,
             additional_propagation_args=additional_propagation_args,
+            backend=backend,
+            device=device,
             **null_kwargs,
         )
 
@@ -390,6 +446,11 @@ def network_propagation_with_null(
         )
 
     else:
+        if verbose:
+            logger.info(
+                f"Generating null distribution ({null_strategy}, "
+                f"n_samples={n_samples}, n_attributes={len(attributes)})"
+            )
         null_distribution = null_generator(
             graph=graph,
             attributes=attributes,
@@ -397,6 +458,8 @@ def network_propagation_with_null(
             additional_propagation_args=additional_propagation_args,
             n_samples=n_samples,
             verbose=verbose,
+            backend=backend,
+            device=device,
             **null_kwargs,
         )
         null_distribution = downcast_float_dataframe(null_distribution)
@@ -521,31 +584,7 @@ def network_propagation_with_null_repeated(
     )
 
 
-# setup propagation methods
-
-
-def _pagerank_wrapper(graph: ig.Graph, attr_data: np.ndarray, **kwargs):
-    return graph.personalized_pagerank(reset=attr_data.tolist(), **kwargs)
-
-
-_pagerank_method = PropagationMethod(method=_pagerank_wrapper, non_negative=True)
-NET_PROPAGATION_METHODS: dict[str, PropagationMethod] = {
-    NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK: _pagerank_method
-}
-VALID_NET_PROPAGATION_METHODS = NET_PROPAGATION_METHODS.keys()
-
-
-def _ensure_propagation_method(
-    propagation_method: Union[str, PropagationMethod],
-) -> PropagationMethod:
-    if isinstance(propagation_method, str):
-        if propagation_method not in VALID_NET_PROPAGATION_METHODS:
-            raise ValueError(f"Invalid propagation method: {propagation_method}")
-        return NET_PROPAGATION_METHODS[propagation_method]
-    return propagation_method
-
-
-# other private methods
+# Private functions
 
 
 def _allocate_samples_across_attributes(n_samples: int, n_attributes: int) -> List[int]:
@@ -595,6 +634,8 @@ def _attr_pooled_vertex_permutation_null(
     mask: Optional[Union[str, np.ndarray, List, Dict]] = MASK_KEYWORDS.ATTR,
     n_samples: int = 100,
     verbose: bool = False,
+    backend: str = NET_PROPAGATION_BACKENDS.TORCH,
+    device: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Generate null distribution by permuting each attribute's values within its
@@ -687,12 +728,51 @@ def _attr_pooled_vertex_permutation_null(
 
     samples_per_attr = _allocate_samples_across_attributes(n_samples, n_attributes)
 
-    original_values = {attr: np.array(graph.vs[attr]) for attr in attributes}
+    original_values = {attr: _attr_to_array(graph, attr) for attr in attributes}
+
+    batch_ctx = _prepare_torch_batch(
+        graph, propagation_method, backend, additional_propagation_args
+    )
+    if batch_ctx is not None:
+        WT, dangling_mask, damping = batch_ctx
+        if verbose:
+            logger.info(
+                f"Null attr-pooled permutation: generating {n_samples} samples "
+                f"across {n_attributes} attributes (torch batch)"
+            )
+        columns = []
+        for attr, n_attr_samples in zip(attributes, samples_per_attr):
+            if n_attr_samples == 0:
+                continue
+            attr_values = original_values[attr]
+            masked_values = attr_values[masked_indices]
+            for _ in range(n_attr_samples):
+                null_attr_values = attr_values.copy()
+                null_attr_values[masked_indices] = np.random.permutation(masked_values)
+                columns.append(null_attr_values.astype(np.float32))
+        P = np.column_stack(columns)
+        R = propagation_method.batch_method(
+            WT, P, damping, dangling_mask, device=device
+        )
+        return _null_df_from_R_broadcast(
+            R, n_samples, n_attributes, node_names, attributes
+        )
+
     all_results = []
 
-    for attr, n_attr_samples in zip(attributes, samples_per_attr):
+    for attr_idx, (attr, n_attr_samples) in enumerate(
+        zip(attributes, samples_per_attr), start=1
+    ):
         if n_attr_samples == 0:
             continue
+
+        _log_step_progress(
+            verbose,
+            attr_idx,
+            n_attributes,
+            f"Null attr-pooled permutation: attribute {attr_idx}/{n_attributes}: "
+            f"{attr!r} ({n_attr_samples} samples)",
+        )
 
         attr_values = original_values[attr]
         masked_values = attr_values[masked_indices]
@@ -718,6 +798,123 @@ def _attr_pooled_vertex_permutation_null(
     return pd.DataFrame(all_data, index=full_index, columns=attributes)
 
 
+def _attr_to_array(graph: ig.Graph, attr: str) -> np.ndarray:
+    """Return a vertex attribute as a float64 array, replacing None with 0.0."""
+    return np.array([v if v is not None else 0.0 for v in graph.vs[attr]], dtype=float)
+
+
+def _batch_ppr_chunk_size(n_nodes: int, target_bytes: int = 400 * 1024 * 1024) -> int:
+    """Number of float32 personalization vectors that fit within target_bytes."""
+    return max(1, target_bytes // (n_nodes * 4))
+
+
+def _batch_ppr_propagate(
+    WT: scipy.sparse.csr_matrix,
+    P: np.ndarray,
+    damping: float,
+    dangling_mask: np.ndarray,
+    tol: float = 1e-6,
+    max_iter: int = 200,
+    device: Optional[str] = None,
+) -> np.ndarray:
+    """Batched personalized PageRank via power iteration.
+
+    Solves R_{t+1} = d*(WT @ R_t) + (1-d)*P simultaneously for all columns
+    of P, amortizing the sparse matmul cost across many personalization vectors.
+    Dangling nodes (zero out-degree) redistribute their probability mass to P,
+    matching igraph's default behavior. Columns of P are normalized to sum to 1
+    internally to match igraph's behavior.
+
+    Parameters
+    ----------
+    WT : scipy.sparse.csr_matrix
+        Transpose of row-stochastic transition matrix, from _extract_ppr_transition_matrix.
+    P : np.ndarray
+        Personalization matrix, shape (n_nodes, n_rhs).
+    damping : float
+        Damping factor (same as igraph's damping parameter).
+    dangling_mask : np.ndarray
+        Boolean mask for zero-out-degree nodes, from _extract_ppr_transition_matrix.
+    tol : float
+        Convergence tolerance on max absolute change per iteration.
+    max_iter : int
+        Maximum power iterations.
+    device : str, optional
+        Forwarded to ensure_device; None auto-selects best available device.
+        Requires pip install napistu[torch].
+
+    Returns
+    -------
+    np.ndarray
+        Propagated scores, shape (n_nodes, n_rhs), same column order as P.
+    """
+    P = P.astype(np.float32)
+    col_sums = P.sum(axis=0)
+    col_sums = np.where(col_sums == 0, 1.0, col_sums)
+    P = P / col_sums[np.newaxis, :]
+
+    return _batch_ppr_propagate_torch(
+        WT, P, damping, dangling_mask, tol, max_iter, device
+    )
+
+
+@require_torch
+def _batch_ppr_propagate_torch(
+    WT: scipy.sparse.csr_matrix,
+    P: np.ndarray,
+    damping: float,
+    dangling_mask: np.ndarray,
+    tol: float,
+    max_iter: int,
+    device: Optional[str] = None,
+) -> np.ndarray:
+    """Batched PPR power iteration via torch."""
+    import torch
+
+    dev = ensure_device(device, allow_autoselect=True)
+    one_minus_d = float(1.0 - damping)
+    has_dangling = dangling_mask.any()
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="Sparse CSR tensor support is in beta state.*",
+            category=UserWarning,
+        )
+        WT_torch = torch.sparse_csr_tensor(
+            torch.from_numpy(WT.indptr.astype(np.int64)),
+            torch.from_numpy(WT.indices.astype(np.int64)),
+            torch.from_numpy(WT.data.astype(np.float32)),
+            size=WT.shape,
+        )
+
+    with memory_manager(dev):
+        P_dev = torch.from_numpy(P).to(dev)
+        R_dev = P_dev.clone()
+
+        if has_dangling:
+            dangling_idx = torch.from_numpy(np.where(dangling_mask)[0]).to(dev)
+
+        for _ in range(max_iter):
+            WTR = torch.sparse.mm(WT_torch, R_dev.cpu()).to(dev)
+            if has_dangling:
+                dangling_sum = R_dev[dangling_idx].sum(dim=0)
+                R_new = (
+                    damping * WTR
+                    + damping * P_dev * dangling_sum.unsqueeze(0)
+                    + one_minus_d * P_dev
+                )
+            else:
+                R_new = damping * WTR + one_minus_d * P_dev
+
+            if (R_new - R_dev).abs().max().item() < tol:
+                R_dev = R_new
+                break
+            R_dev = R_new
+
+        return R_dev.cpu().numpy()
+
+
 def _build_pooled_universe(
     graph: ig.Graph, attributes: List[str], mask: np.ndarray
 ) -> np.ndarray:
@@ -730,7 +927,7 @@ def _build_pooled_universe(
     """
     universe_parts = []
     for attr in attributes:
-        attr_values = np.array(graph.vs[attr])
+        attr_values = _attr_to_array(graph, attr)
         masked_values = attr_values[mask]
         universe_parts.append(masked_values)
 
@@ -814,6 +1011,8 @@ def _edge_permutation_null(
     sampling_ratio: float = 0.1,
     n_samples: int = 100,
     verbose: bool = False,
+    backend: str = NET_PROPAGATION_BACKENDS.TORCH,
+    device: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Generate null distribution by edge rewiring and apply propagation method.
@@ -866,7 +1065,13 @@ def _edge_permutation_null(
     all_results = []
 
     # Generate samples
-    for _ in range(n_samples):
+    for sample_idx in range(1, n_samples + 1):
+        _log_step_progress(
+            verbose,
+            sample_idx,
+            n_samples,
+            f"Null edge permutation: sample {sample_idx}/{n_samples}",
+        )
         # Incremental rewiring
         null_graph.rewire(n=int(sampling_ratio * n_edges))
 
@@ -883,6 +1088,42 @@ def _edge_permutation_null(
     return pd.DataFrame(all_data, index=full_index, columns=attributes)
 
 
+def _ensure_propagation_method(
+    propagation_method: Union[str, PropagationMethod],
+) -> PropagationMethod:
+    if isinstance(propagation_method, str):
+        if propagation_method not in VALID_NET_PROPAGATION_METHODS:
+            raise ValueError(f"Invalid propagation method: {propagation_method}")
+        return NET_PROPAGATION_METHODS[propagation_method]
+    return propagation_method
+
+
+def _extract_ppr_transition_matrix(graph: ig.Graph) -> tuple:
+    """Extract the row-stochastic transition matrix transpose and dangling mask.
+
+    igraph PPR formula: pr[v] = d * sum_{u->v} pr[u]/out_degree(u) + (1-d)*reset[v]
+    Equivalently: PR = d * W.T @ PR + (1-d) * reset
+    where W[u,v] = 1/out_degree(u) if edge u->v (row-stochastic outgoing).
+
+    Returns WT (= W.T) in CSR format for power iteration and a boolean mask of
+    zero-out-degree (dangling) nodes.
+
+    Returns
+    -------
+    WT : scipy.sparse.csr_matrix
+        Transpose of row-stochastic adjacency, shape (n_nodes, n_nodes).
+    dangling_mask : np.ndarray
+        Boolean array of length n_nodes, True for zero-out-degree nodes.
+    """
+    A = graph.get_adjacency_sparse()
+    row_sums = np.asarray(A.sum(axis=1)).flatten()
+    dangling_mask = row_sums == 0
+    safe_sums = row_sums.copy()
+    safe_sums[dangling_mask] = 1.0
+    W = (scipy.sparse.diags(1.0 / safe_sums) @ A).tocsr()
+    return W.T.tocsr(), dangling_mask
+
+
 def _fit_distribution_parameters(
     graph: ig.Graph,
     attributes: List[str],
@@ -895,7 +1136,7 @@ def _fit_distribution_parameters(
 
     for attr in attributes:
         attr_mask = masks[attr]
-        attr_values = np.array(graph.vs[attr])
+        attr_values = _attr_to_array(graph, attr)
         masked_values = attr_values[attr_mask]
         masked_nonzero = masked_values[masked_values > 0]
 
@@ -969,6 +1210,15 @@ def _get_distribution_object(distribution: Union[str, Any]) -> Any:
                 f"Must be a valid scipy.stats distribution name."
             )
     return distribution
+
+
+def _get_null_generator(strategy: str):
+    """Get null generator function by name."""
+    if strategy not in VALID_NULL_STRATEGIES:
+        raise ValueError(
+            f"Unknown null strategy: {strategy}. Available: {VALID_NULL_STRATEGIES}"
+        )
+    return NULL_GENERATORS[strategy]
 
 
 def _merge_propagation_null_run_outputs(
@@ -1054,6 +1304,40 @@ def _merge_propagation_null_run_outputs(
     return pd.concat(out, axis=1).reindex(key_order, axis=1, level=0)
 
 
+def _null_df_from_blocks(
+    blocks: list,
+    node_names: list,
+    n_samples: int,
+    attributes: List[str],
+) -> pd.DataFrame:
+    """Assemble a null DataFrame from a list of (n_nodes, n_attributes) blocks."""
+    return pd.DataFrame(
+        np.vstack(blocks), index=node_names * n_samples, columns=attributes
+    )
+
+
+def _null_df_from_R_broadcast(
+    R: np.ndarray,
+    n_samples: int,
+    n_attributes: int,
+    node_names: list,
+    attributes: List[str],
+) -> pd.DataFrame:
+    """Assemble a null DataFrame by tiling each single column of R across n_attributes.
+
+    Used by null generators that produce one propagated vector per sample and
+    broadcast it across all attribute columns (pooled and attr-pooled variants).
+    """
+    blocks = [np.tile(R[:, s : s + 1], (1, n_attributes)) for s in range(n_samples)]
+    return pd.DataFrame(
+        np.vstack(blocks), index=node_names * n_samples, columns=attributes
+    )
+
+
+def _pagerank_wrapper(graph: ig.Graph, attr_data: np.ndarray, **kwargs):
+    return graph.personalized_pagerank(reset=attr_data.tolist(), **kwargs)
+
+
 def _parametric_null(
     graph: ig.Graph,
     attributes: List[str],
@@ -1066,6 +1350,8 @@ def _parametric_null(
     n_samples: int = 100,
     fit_kwargs: Optional[dict] = None,
     verbose: bool = False,
+    backend: str = NET_PROPAGATION_BACKENDS.TORCH,
+    device: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Generate parametric null distribution by fitting scipy.stats distribution to observed values.
@@ -1145,10 +1431,60 @@ def _parametric_null(
 
     # Create null graph once (will overwrite attributes in each sample)
     null_graph = graph.copy()
+
+    batch_ctx = _prepare_torch_batch(
+        graph, propagation_method, backend, additional_propagation_args
+    )
+    if batch_ctx is not None:
+        WT, dangling_mask, damping = batch_ctx
+        n_attributes = len(attributes)
+        samples_per_chunk = max(
+            1, _batch_ppr_chunk_size(graph.vcount()) // n_attributes
+        )
+
+        all_blocks = []
+        n_chunks = (n_samples + samples_per_chunk - 1) // samples_per_chunk
+        for chunk_idx, chunk_start in enumerate(
+            range(0, n_samples, samples_per_chunk), start=1
+        ):
+            chunk_n = min(samples_per_chunk, n_samples - chunk_start)
+            _log_step_progress(
+                verbose,
+                chunk_idx,
+                n_chunks,
+                f"Null parametric distribution: chunk {chunk_idx}/{n_chunks} "
+                f"(samples {chunk_start + 1}-{chunk_start + chunk_n} of {n_samples})",
+            )
+            columns = []
+            for _ in range(chunk_n):
+                _generate_parametric_null_sample(
+                    null_graph,
+                    attributes,
+                    params,
+                    ensure_nonnegative=propagation_method.non_negative,
+                )
+                for attr in attributes:
+                    columns.append(np.array(null_graph.vs[attr], dtype=np.float32))
+            P = np.column_stack(columns)
+            R = propagation_method.batch_method(
+                WT, P, damping, dangling_mask, device=device
+            )
+            all_blocks.extend(
+                R[:, s * n_attributes : (s + 1) * n_attributes] for s in range(chunk_n)
+            )
+
+        return _null_df_from_blocks(all_blocks, node_names, n_samples, attributes)
+
     all_results = []
 
     # Generate samples
-    for i in range(n_samples):
+    for sample_idx in range(1, n_samples + 1):
+        _log_step_progress(
+            verbose,
+            sample_idx,
+            n_samples,
+            f"Null parametric distribution: sample {sample_idx}/{n_samples}",
+        )
         # Generate null sample (modifies null_graph in-place)
         _generate_parametric_null_sample(
             null_graph,
@@ -1180,6 +1516,8 @@ def _pooled_vertex_permutation_null(
     mask: Optional[Union[str, np.ndarray, List, Dict]] = MASK_KEYWORDS.ATTR,
     n_samples: int = 100,
     verbose: bool = False,
+    backend: str = NET_PROPAGATION_BACKENDS.TORCH,
+    device: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Generate null distribution by sampling from a pooled empirical universe across
@@ -1263,9 +1601,40 @@ def _pooled_vertex_permutation_null(
     n_attributes = len(attributes)
     _POOLED_ATTR = "__pooled_null__"
 
+    batch_ctx = _prepare_torch_batch(
+        graph, propagation_method, backend, additional_propagation_args
+    )
+    if batch_ctx is not None:
+        WT, dangling_mask, damping = batch_ctx
+        if verbose:
+            logger.info(
+                f"Null pooled vertex permutation: generating {n_samples} samples "
+                f"(torch batch)"
+            )
+        masked_indices = np.where(shared_mask)[0]
+        columns = []
+        for _ in range(n_samples):
+            sampled_values = np.random.choice(universe, size=n_masked, replace=True)
+            p = np.zeros(graph.vcount(), dtype=np.float32)
+            p[masked_indices] = sampled_values
+            columns.append(p)
+        P = np.column_stack(columns)
+        R = propagation_method.batch_method(
+            WT, P, damping, dangling_mask, device=device
+        )
+        return _null_df_from_R_broadcast(
+            R, n_samples, n_attributes, node_names, attributes
+        )
+
     all_results = []
 
-    for _ in range(n_samples):
+    for sample_idx in range(1, n_samples + 1):
+        _log_step_progress(
+            verbose,
+            sample_idx,
+            n_samples,
+            f"Null pooled vertex permutation: sample {sample_idx}/{n_samples}",
+        )
         sampled_values = np.random.choice(universe, size=n_masked, replace=True)
 
         null_attr_values = np.zeros(graph.vcount())
@@ -1284,6 +1653,67 @@ def _pooled_vertex_permutation_null(
     full_index = node_names * n_samples
     all_data = np.vstack(all_results)
     return pd.DataFrame(all_data, index=full_index, columns=attributes)
+
+
+def _prepare_torch_batch(
+    graph: ig.Graph,
+    propagation_method: "PropagationMethod",
+    backend: str,
+    additional_propagation_args: Optional[dict],
+) -> Optional[tuple]:
+    """Validate backend and prepare torch batch inputs if applicable.
+
+    Parameters
+    ----------
+    graph : ig.Graph
+        Graph to extract the transition matrix from.
+    propagation_method : PropagationMethod
+        Already-resolved propagation method.
+    backend : str
+        Requested backend. Must appear in propagation_method.supported_backends.
+    additional_propagation_args : dict, optional
+        Propagation kwargs; used to extract the damping factor.
+
+    Returns
+    -------
+    None
+        When backend is 'igraph' — caller should use the serial path.
+    (WT, dangling_mask, damping) : tuple
+        When backend is 'torch' and the method is fully wired.
+
+    Raises
+    ------
+    ValueError
+        If backend is not in propagation_method.supported_backends.
+    NotImplementedError
+        If backend is 'torch' but extract_transition_matrix or batch_method
+        are not implemented on the propagation method.
+    """
+    if backend not in propagation_method.supported_backends:
+        raise ValueError(
+            f"backend={backend!r} is not supported by this propagation method. "
+            f"Supported backends: {sorted(propagation_method.supported_backends)}"
+        )
+    if backend == NET_PROPAGATION_BACKENDS.IGRAPH:
+        return None
+    if backend == NET_PROPAGATION_BACKENDS.TORCH:
+        if (
+            propagation_method.extract_transition_matrix is None
+            or propagation_method.batch_method is None
+        ):
+            raise NotImplementedError(
+                f"backend={backend!r} is listed in supported_backends but "
+                "extract_transition_matrix or batch_method is not implemented "
+                "on this propagation method."
+            )
+        WT, dangling_mask = propagation_method.extract_transition_matrix(graph)
+        damping = (additional_propagation_args or {}).get(
+            NET_PROPAGATION_ADDITIONAL_ARGS.DAMPING, NET_PROPAGATION_DEFAULTS.DAMPING
+        )
+        return WT, dangling_mask, damping
+    raise NotImplementedError(
+        f"No batch preparation is implemented for backend={backend!r}."
+    )
 
 
 def _propagate_and_broadcast(
@@ -1399,6 +1829,8 @@ def _uniform_null(
     additional_propagation_args: Optional[dict] = None,
     mask: Optional[Union[str, np.ndarray, List, Dict]] = MASK_KEYWORDS.ATTR,
     verbose: bool = False,
+    backend: str = NET_PROPAGATION_BACKENDS.TORCH,
+    device: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Generate uniform null distribution over masked nodes and apply propagation method.
@@ -1446,7 +1878,7 @@ def _uniform_null(
 
         # Check for constant attribute values when mask is the same as attribute
         if isinstance(mask_specs[attr], str) and mask_specs[attr] == attr:
-            attr_values = np.array(graph.vs[attr])
+            attr_values = _attr_to_array(graph, attr)
             nonzero_values = attr_values[attr_values > 0]
             if len(np.unique(nonzero_values)) == 1:
                 logger.warning(
@@ -1506,6 +1938,8 @@ def _vertex_permutation_null(
     replace: bool = False,
     n_samples: int = 100,
     verbose: bool = False,
+    backend: str = NET_PROPAGATION_BACKENDS.TORCH,
+    device: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Generate null distribution by permuting vertex attribute values and apply propagation method.
@@ -1544,10 +1978,65 @@ def _vertex_permutation_null(
         require_shared_mask=False,
     )
 
-    original_values = {attr: np.array(graph.vs[attr]) for attr in attributes}
+    original_values = {attr: _attr_to_array(graph, attr) for attr in attributes}
+
+    batch_ctx = _prepare_torch_batch(
+        graph, propagation_method, backend, additional_propagation_args
+    )
+    if batch_ctx is not None:
+        WT, dangling_mask, damping = batch_ctx
+        n_attributes = len(attributes)
+        samples_per_chunk = max(
+            1, _batch_ppr_chunk_size(graph.vcount()) // n_attributes
+        )
+
+        all_blocks = []
+        n_chunks = (n_samples + samples_per_chunk - 1) // samples_per_chunk
+        for chunk_idx, chunk_start in enumerate(
+            range(0, n_samples, samples_per_chunk), start=1
+        ):
+            chunk_n = min(samples_per_chunk, n_samples - chunk_start)
+            _log_step_progress(
+                verbose,
+                chunk_idx,
+                n_chunks,
+                f"Null vertex permutation: chunk {chunk_idx}/{n_chunks} "
+                f"(samples {chunk_start + 1}-{chunk_start + chunk_n} of {n_samples})",
+            )
+            columns = []
+            for _ in range(chunk_n):
+                for attr in attributes:
+                    masked_indices = np.where(masks[attr])[0]
+                    masked_values = original_values[attr][masked_indices]
+                    null_attr_values = original_values[attr].copy()
+                    permuted = (
+                        np.random.choice(
+                            masked_values, size=len(masked_values), replace=True
+                        )
+                        if replace
+                        else np.random.permutation(masked_values)
+                    )
+                    null_attr_values[masked_indices] = permuted
+                    columns.append(null_attr_values.astype(np.float32))
+            P = np.column_stack(columns)
+            R = propagation_method.batch_method(
+                WT, P, damping, dangling_mask, device=device
+            )
+            all_blocks.extend(
+                R[:, s * n_attributes : (s + 1) * n_attributes] for s in range(chunk_n)
+            )
+
+        return _null_df_from_blocks(all_blocks, node_names, n_samples, attributes)
+
     all_results = []
 
-    for _ in range(n_samples):
+    for sample_idx in range(1, n_samples + 1):
+        _log_step_progress(
+            verbose,
+            sample_idx,
+            n_samples,
+            f"Null vertex permutation: sample {sample_idx}/{n_samples}",
+        )
         for attr in attributes:
             attr_mask = masks[attr]
             masked_indices = np.where(attr_mask)[0]
@@ -1575,7 +2064,22 @@ def _vertex_permutation_null(
     return pd.DataFrame(all_data, index=full_index, columns=attributes)
 
 
-# Null generator registry
+# Module-level registries
+
+_pagerank_method = PropagationMethod(
+    method=_pagerank_wrapper,
+    non_negative=True,
+    extract_transition_matrix=_extract_ppr_transition_matrix,
+    batch_method=_batch_ppr_propagate,
+    supported_backends=(
+        NET_PROPAGATION_BACKENDS.IGRAPH,
+        NET_PROPAGATION_BACKENDS.TORCH,
+    ),
+)
+NET_PROPAGATION_METHODS: dict[str, PropagationMethod] = {
+    NET_PROPAGATION_DEFS.PERSONALIZED_PAGERANK: _pagerank_method
+}
+VALID_NET_PROPAGATION_METHODS = NET_PROPAGATION_METHODS.keys()
 NULL_GENERATORS = {
     NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION: _attr_pooled_vertex_permutation_null,
     NULL_STRATEGIES.EDGE_PERMUTATION: _edge_permutation_null,
@@ -1584,12 +2088,3 @@ NULL_GENERATORS = {
     NULL_STRATEGIES.UNIFORM: _uniform_null,
     NULL_STRATEGIES.VERTEX_PERMUTATION: _vertex_permutation_null,
 }
-
-
-def _get_null_generator(strategy: str):
-    """Get null generator function by name."""
-    if strategy not in VALID_NULL_STRATEGIES:
-        raise ValueError(
-            f"Unknown null strategy: {strategy}. Available: {VALID_NULL_STRATEGIES}"
-        )
-    return NULL_GENERATORS[strategy]

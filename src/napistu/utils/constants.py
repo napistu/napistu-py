@@ -30,12 +30,20 @@ IMPORTABLE_PACKAGES = SimpleNamespace(
     MUDATA="mudata",
     OMNIPATH="omnipath",
     STATSMODELS="statsmodels",
+    TORCH="torch",
 )
 
 NAPISTU_EXTRAS = SimpleNamespace(
     ETL="etl",
     GENOMICS="genomics",
     MCP="mcp",
+    TORCH="torch",
+)
+
+DEVICES = SimpleNamespace(
+    CPU="cpu",
+    CUDA="cuda",
+    MPS="mps",
 )
 
 # Mapping of import package names to setuptools extras that install them (use multiple when applicable)
@@ -50,6 +58,7 @@ PACKAGE_TO_EXTRA: dict[str, list[str]] = {
     IMPORTABLE_PACKAGES.MUDATA: [NAPISTU_EXTRAS.GENOMICS],
     IMPORTABLE_PACKAGES.OMNIPATH: [NAPISTU_EXTRAS.ETL],
     IMPORTABLE_PACKAGES.STATSMODELS: [NAPISTU_EXTRAS.GENOMICS],
+    IMPORTABLE_PACKAGES.TORCH: [NAPISTU_EXTRAS.TORCH],
 }
 
 CRITICAL_LOGGING_ONLY_PACKAGES = [

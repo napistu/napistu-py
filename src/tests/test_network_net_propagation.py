@@ -10,6 +10,8 @@ import pytest
 from napistu.network.constants import (
     LOG2_ENRICHMENT_EPSILON,
     NAPISTU_GRAPH_VERTICES,
+    NET_PROPAGATION_ADDITIONAL_ARGS,
+    NET_PROPAGATION_BACKENDS,
     NET_PROPAGATION_METRICS,
     NULL_STRATEGIES,
 )
@@ -105,6 +107,7 @@ def test_network_propagation_with_null():
         attributes,
         null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
         n_samples=10,
+        backend=NET_PROPAGATION_BACKENDS.IGRAPH,
     )
 
     assert_multiindex_structure(
@@ -147,7 +150,11 @@ def test_network_propagation_with_null():
 
     # Test 4: Parametric null — includes quantile level
     result_parametric = network_propagation_with_null(
-        graph, attributes, null_strategy=NULL_STRATEGIES.PARAMETRIC, n_samples=8
+        graph,
+        attributes,
+        null_strategy=NULL_STRATEGIES.PARAMETRIC,
+        n_samples=8,
+        backend=NET_PROPAGATION_BACKENDS.IGRAPH,
     )
 
     assert_multiindex_structure(
@@ -168,7 +175,7 @@ def test_network_propagation_with_null():
         graph,
         attributes,
         null_strategy=NULL_STRATEGIES.UNIFORM,
-        additional_propagation_args={"damping": 0.7},
+        additional_propagation_args={NET_PROPAGATION_ADDITIONAL_ARGS.DAMPING: 0.7},
     )
 
     assert not np.allclose(
@@ -184,6 +191,7 @@ def test_network_propagation_with_null():
         null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
         n_samples=5,
         mask=mask_array,
+        backend=NET_PROPAGATION_BACKENDS.IGRAPH,
     )
 
     assert_multiindex_structure(
@@ -209,6 +217,7 @@ def test_network_propagation_with_null():
         null_strategy=NULL_STRATEGIES.POOLED_VERTEX_PERMUTATION,
         n_samples=10,
         mask=shared_mask,
+        backend=NET_PROPAGATION_BACKENDS.IGRAPH,
     )
 
     assert_multiindex_structure(
@@ -285,7 +294,11 @@ def test_network_propagation_repeated_multiple_runs():
     graph.vs["attr1"] = [1.0, 0.0, 2.0, 0.0]
     graph.add_edges([(0, 1), (1, 2), (2, 3)])
     merged = network_propagation_with_null_repeated(
-        graph, ["attr1"], n_samples=3, verbose=False
+        graph,
+        ["attr1"],
+        n_samples=3,
+        verbose=False,
+        backend=NET_PROPAGATION_BACKENDS.IGRAPH,
     )
     assert isinstance(merged.columns, pd.MultiIndex)
     assert NET_PROPAGATION_METRICS.OBSERVED in merged.columns.get_level_values(0)
@@ -338,7 +351,11 @@ def test_net_propagate_attributes():
     # Test 5: Additional arguments (test damping parameter)
     result_default = net_propagate_attributes(graph, ["attr1"])
     result_damped = net_propagate_attributes(
-        graph, ["attr1"], additional_propagation_args={"damping": 0.5}  # Lower damping
+        graph,
+        ["attr1"],
+        additional_propagation_args={
+            NET_PROPAGATION_ADDITIONAL_ARGS.DAMPING: 0.5
+        },  # Lower damping
     )
 
     # Results should be different with different damping
@@ -353,6 +370,37 @@ def test_net_propagate_attributes():
     graph.vs["zero_attr"] = [0.0, 0.0, 0.0, 0.0]
     with pytest.raises(ValueError, match="zero for all vertices"):
         net_propagate_attributes(graph, ["zero_attr"])
+
+
+def test_net_propagate_attributes_verbose(caplog):
+    graph = ig.Graph(3)
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C"]
+    graph.vs["attr1"] = [1.0, 0.0, 2.0]
+    graph.vs["attr2"] = [0.5, 1.5, 0.0]
+    graph.add_edges([(0, 1), (1, 2)])
+
+    with caplog.at_level(logging.INFO):
+        net_propagate_attributes(graph, ["attr1", "attr2"], verbose=True)
+
+    assert "Propagating attribute 1/2: 'attr1'" in caplog.text
+    assert "Propagating attribute 2/2: 'attr2'" in caplog.text
+
+
+def test_net_propagate_attributes_verbose_throttles_info(caplog):
+    graph = ig.Graph(3)
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C"]
+    graph.add_edges([(0, 1), (1, 2)])
+    attributes = [f"attr{i}" for i in range(15)]
+    for attr in attributes:
+        graph.vs[attr] = [1.0, 0.0, 2.0]
+
+    with caplog.at_level(logging.INFO):
+        net_propagate_attributes(graph, attributes, verbose=True)
+
+    assert "Propagating attribute 1/15: 'attr0'" in caplog.text
+    assert "Propagating attribute 10/15: 'attr9'" in caplog.text
+    assert "Propagating attribute 15/15: 'attr14'" in caplog.text
+    assert "Propagating attribute 2/15: 'attr1'" not in caplog.text
 
 
 def test_all_null_generators_structure():
@@ -379,15 +427,27 @@ def test_all_null_generators_structure():
 
         if generator_name == NULL_STRATEGIES.UNIFORM:
             # Uniform null doesn't take n_samples
-            result = generator_func(graph, attributes)
+            result = generator_func(
+                graph, attributes, backend=NET_PROPAGATION_BACKENDS.IGRAPH
+            )
             expected_rows = 5  # One row per node
         elif generator_name == NULL_STRATEGIES.EDGE_PERMUTATION:
             # Edge permutation has different parameters
-            result = generator_func(graph, attributes, n_samples=n_samples)
+            result = generator_func(
+                graph,
+                attributes,
+                n_samples=n_samples,
+                backend=NET_PROPAGATION_BACKENDS.IGRAPH,
+            )
             expected_rows = n_samples * 5  # n_samples rows per node
         else:
             # Gaussian and vertex_permutation
-            result = generator_func(graph, attributes, n_samples=n_samples)
+            result = generator_func(
+                graph,
+                attributes,
+                n_samples=n_samples,
+                backend=NET_PROPAGATION_BACKENDS.IGRAPH,
+            )
             expected_rows = n_samples * 5  # n_samples rows per node
 
         # Validate structure
@@ -466,7 +526,12 @@ def test_mask_application():
             continue  # pooled methods are covered in test_pooled_null_methods
 
         if generator_name == NULL_STRATEGIES.UNIFORM:
-            result = generator_func(graph, attributes, mask=mask_array)
+            result = generator_func(
+                graph,
+                attributes,
+                mask=mask_array,
+                backend=NET_PROPAGATION_BACKENDS.IGRAPH,
+            )
 
             # For uniform null with mask, verify structure is correct
             assert result.shape == (6, 2), f"{generator_name} wrong shape with mask"
@@ -477,12 +542,20 @@ def test_mask_application():
 
         elif generator_name == NULL_STRATEGIES.EDGE_PERMUTATION:
             # Edge permutation ignores mask, just test it doesn't crash
-            result = generator_func(graph, attributes, n_samples=2)
+            result = generator_func(
+                graph, attributes, n_samples=2, backend=NET_PROPAGATION_BACKENDS.IGRAPH
+            )
             assert result.shape[0] == 12  # 2 samples * 6 nodes
 
         else:
             # Gaussian and vertex_permutation with mask
-            result = generator_func(graph, attributes, mask=mask_array, n_samples=2)
+            result = generator_func(
+                graph,
+                attributes,
+                mask=mask_array,
+                n_samples=2,
+                backend=NET_PROPAGATION_BACKENDS.IGRAPH,
+            )
 
             # Check that structure is maintained
             assert result.shape == (12, 2)  # 2 samples * 6 nodes
@@ -521,10 +594,18 @@ def test_edge_cases_and_errors():
 
     # Test 4: Replace parameter in node permutation
     result_no_replace = _vertex_permutation_null(
-        graph, ["attr1"], replace=False, n_samples=2
+        graph,
+        ["attr1"],
+        replace=False,
+        n_samples=2,
+        backend=NET_PROPAGATION_BACKENDS.IGRAPH,
     )
     result_replace = _vertex_permutation_null(
-        graph, ["attr1"], replace=True, n_samples=2
+        graph,
+        ["attr1"],
+        replace=True,
+        n_samples=2,
+        backend=NET_PROPAGATION_BACKENDS.IGRAPH,
     )
 
     # Both should have same structure
@@ -541,7 +622,9 @@ def test_propagation_method_parameters():
     # Test different damping parameters produce different results
     result_default = _uniform_null(graph, ["attr1"])
     result_damped = _uniform_null(
-        graph, ["attr1"], additional_propagation_args={"damping": 0.5}
+        graph,
+        ["attr1"],
+        additional_propagation_args={NET_PROPAGATION_ADDITIONAL_ARGS.DAMPING: 0.5},
     )
 
     # Results should be different with different damping
@@ -554,14 +637,22 @@ def test_propagation_method_parameters():
 
         if generator_name == NULL_STRATEGIES.UNIFORM:
             result = generator_func(
-                graph, ["attr1"], additional_propagation_args={"damping": 0.8}
+                graph,
+                ["attr1"],
+                additional_propagation_args={
+                    NET_PROPAGATION_ADDITIONAL_ARGS.DAMPING: 0.8
+                },
+                backend=NET_PROPAGATION_BACKENDS.IGRAPH,
             )
         else:
             result = generator_func(
                 graph,
                 ["attr1"],
-                additional_propagation_args={"damping": 0.8},
+                additional_propagation_args={
+                    NET_PROPAGATION_ADDITIONAL_ARGS.DAMPING: 0.8
+                },
                 n_samples=2,
+                backend=NET_PROPAGATION_BACKENDS.IGRAPH,
             )
 
         # Should produce valid results
@@ -663,6 +754,7 @@ def test_log2_enrichment_reflects_signal_concentration():
         ["attr1"],
         null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
         n_samples=100,
+        backend=NET_PROPAGATION_BACKENDS.IGRAPH,
     )
 
     # F receives signal from all paths — should have highest log2_enrichment
@@ -680,13 +772,17 @@ def test_observed_scores_invariant_to_null_strategy():
     graph.add_edges([(0, 1), (1, 2), (2, 3), (3, 4)])
 
     result_uniform = network_propagation_with_null(
-        graph, ["attr1"], null_strategy=NULL_STRATEGIES.UNIFORM
+        graph,
+        ["attr1"],
+        null_strategy=NULL_STRATEGIES.UNIFORM,
+        backend=NET_PROPAGATION_BACKENDS.IGRAPH,
     )
     result_perm = network_propagation_with_null(
         graph,
         ["attr1"],
         null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
         n_samples=10,
+        backend=NET_PROPAGATION_BACKENDS.IGRAPH,
     )
 
     np.testing.assert_array_equal(
@@ -715,7 +811,12 @@ def test_pooled_null_methods(caplog):
         NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION,
     ):
         result = network_propagation_with_null(
-            graph, attrs, null_strategy=strategy, n_samples=12, mask=shared_mask
+            graph,
+            attrs,
+            null_strategy=strategy,
+            n_samples=12,
+            mask=shared_mask,
+            backend=NET_PROPAGATION_BACKENDS.IGRAPH,
         )
         assert result.shape == (6, 9)  # 6 nodes, 3 metrics x 3 attrs
         # Exact n_samples allocation matters for p-value resolution
@@ -725,14 +826,22 @@ def test_pooled_null_methods(caplog):
     # attr_pooled with n_samples not divisible by n_attributes — must hit n_samples exactly
     n_samples = 10  # 10 // 3 = 3 base, remainder 1, so [4, 3, 3]
     result_uneven = NULL_GENERATORS[NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION](
-        graph, attrs, n_samples=n_samples, mask=shared_mask
+        graph,
+        attrs,
+        n_samples=n_samples,
+        mask=shared_mask,
+        backend=NET_PROPAGATION_BACKENDS.IGRAPH,
     )
     assert result_uneven.shape == (n_samples * 6, 3)
 
     # attr_pooled warns and proceeds when n_samples < n_attributes
     with caplog.at_level(logging.WARNING):
         result_under = NULL_GENERATORS[NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION](
-            graph, attrs, n_samples=2, mask=shared_mask
+            graph,
+            attrs,
+            n_samples=2,
+            mask=shared_mask,
+            backend=NET_PROPAGATION_BACKENDS.IGRAPH,
         )
     assert "less than n_attributes" in caplog.text
     assert result_under.shape == (2 * 6, 3)
@@ -743,4 +852,80 @@ def test_pooled_null_methods(caplog):
         NULL_STRATEGIES.ATTR_POOLED_VERTEX_PERMUTATION,
     ):
         with pytest.raises(ValueError, match="different mask"):
-            NULL_GENERATORS[strategy](graph, attrs, n_samples=4)
+            NULL_GENERATORS[strategy](
+                graph, attrs, n_samples=4, backend=NET_PROPAGATION_BACKENDS.IGRAPH
+            )
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        NET_PROPAGATION_BACKENDS.IGRAPH,
+        pytest.param(NET_PROPAGATION_BACKENDS.TORCH, marks=pytest.mark.requires_torch),
+    ],
+)
+def test_null_distribution_with_none_attribute_values(backend):
+    """Null generation handles None attribute values at non-masked vertices.
+
+    Reproduces: NaN in null data when mask={attr: mask_key} is used (dict mask
+    with a string key pointing to a vertex attribute) and the signal attribute
+    has None at non-masked vertices.  This is the common case when attributes
+    are only assigned for measured nodes and left unset elsewhere in the graph.
+
+    The igraph path is robust because _ensure_valid_attribute replaces None with
+    0.0 before PPR.  The torch path is the failure site: original_values is built
+    via np.array(graph.vs[attr]), which produces an object array when None values
+    are present.  Calling .astype(np.float32) on that object array converts None
+    to NaN, which then propagates through the batched sparse matmul and contaminates
+    the null distribution.
+    """
+    graph = ig.Graph(6)
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C", "D", "E", "F"]
+    graph.add_edges([(0, 1), (1, 2), (2, 3), (3, 4), (4, 5)])
+
+    # Signal is only set for measured vertices; unset vertices hold None
+    graph.vs["signal"] = [2.5, 1.3, None, None, None, None]
+    # Separate boolean mask: 1 = measured, 0 = not measured
+    graph.vs["is_measured"] = [1, 1, 0, 0, 0, 0]
+
+    result = network_propagation_with_null(
+        graph,
+        attributes=["signal"],
+        mask={"signal": "is_measured"},
+        null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
+        n_samples=10,
+        backend=backend,
+    )
+    assert not result.isnull().any().any(), f"{backend} backend produced NaN in result"
+    assert result.shape[0] == 6
+
+
+@pytest.mark.requires_torch
+def test_torch_backend_ppr():
+    """Torch backend produces identical observed scores to igraph and valid null shape."""
+    graph = ig.Graph(5)
+    graph.vs[NAPISTU_GRAPH_VERTICES.NAME] = ["A", "B", "C", "D", "E"]
+    graph.vs["attr1"] = [1.0, 0.0, 2.0, 0.0, 1.5]
+    graph.add_edges([(0, 1), (1, 2), (2, 3), (3, 4)])
+
+    result_igraph = network_propagation_with_null(
+        graph,
+        ["attr1"],
+        null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
+        n_samples=5,
+        backend=NET_PROPAGATION_BACKENDS.IGRAPH,
+    )
+    result_torch = network_propagation_with_null(
+        graph,
+        ["attr1"],
+        null_strategy=NULL_STRATEGIES.VERTEX_PERMUTATION,
+        n_samples=5,
+        backend=NET_PROPAGATION_BACKENDS.TORCH,
+    )
+
+    # Observed PPR scores always use igraph — must be identical regardless of backend
+    np.testing.assert_array_almost_equal(
+        result_igraph[NET_PROPAGATION_METRICS.OBSERVED].values,
+        result_torch[NET_PROPAGATION_METRICS.OBSERVED].values,
+    )
+    assert result_igraph.shape == result_torch.shape

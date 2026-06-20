@@ -34,6 +34,8 @@ import_statsmodels:
     Import and return statsmodels, raising an informative error if missing.
 import_statsmodels_multitest:
     Import and return statsmodels.stats.multitest.multipletests, raising an informative error if missing.
+import_torch:
+    Import and return torch, raising an informative error if missing.
 
 Decorators
 ----------
@@ -51,6 +53,8 @@ require_omnipath:
     Decorator ensuring omnipath is available before calling a function.
 require_statsmodels:
     Decorator ensuring statsmodels is available before calling a function.
+require_torch:
+    Decorator ensuring torch is available before calling a function.
 """
 
 from __future__ import annotations
@@ -198,6 +202,7 @@ import_statsmodels = create_package_importer(IMPORTABLE_PACKAGES.STATSMODELS)
 import_statsmodels_multitest = create_package_importer(
     f"{IMPORTABLE_PACKAGES.STATSMODELS}.stats.multitest"
 )
+import_torch = create_package_importer(IMPORTABLE_PACKAGES.TORCH)
 
 # Convenience decorators
 require_anndata = require_package(IMPORTABLE_PACKAGES.ANNDATA)
@@ -207,6 +212,7 @@ require_omnipath = require_package(IMPORTABLE_PACKAGES.OMNIPATH)
 require_statsmodels = require_package(IMPORTABLE_PACKAGES.STATSMODELS)
 require_libsbml = require_package(IMPORTABLE_PACKAGES.LIBSBML)
 require_beautifulsoup = require_package(IMPORTABLE_PACKAGES.BEAUTIFULSOUP)
+require_torch = require_package(IMPORTABLE_PACKAGES.TORCH)
 
 
 def _configure_package_logging(package_name: str) -> Any:
